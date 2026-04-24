@@ -31,6 +31,8 @@ spring:
     open-in-view: false
     properties:
       hibernate:
+        naming:
+          physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
