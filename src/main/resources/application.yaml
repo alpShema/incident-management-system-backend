@@ -21,21 +21,22 @@ spring:
   # ──────────────────────────────────────────
   # JPA / Hibernate
   # ──────────────────────────────────────────
-  jpa:
-    hibernate:
-      # Validate entities match the existing Prisma-managed database
-      ddl-auto: validate
-      naming:
-        # Preserve PascalCase table names from Prisma (User, AgentGroup, etc.)
-        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
-    show-sql: false
-    open-in-view: false
-    properties:
+
+    jpa:
       hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        jdbc:
-          time_zone: UTC
+        # Validate entities match the existing Prisma-managed database
+        ddl-auto: validate
+        naming:
+          # Preserve PascalCase table names from Prisma (User, AgentGroup, etc.)
+          physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+      show-sql: false
+      open-in-view: false
+      properties:
+        hibernate:
+          format_sql: true
+          dialect: org.hibernate.dialect.PostgreSQLDialect
+          jdbc:
+            time_zone: UTC
 
   # ──────────────────────────────────────────
   # Flyway (Database Migration)
