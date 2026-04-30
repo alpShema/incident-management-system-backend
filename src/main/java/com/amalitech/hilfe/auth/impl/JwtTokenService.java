@@ -1,177 +1,112 @@
 package com.amalitech.hilfe.auth.impl;
 
 import com.amalitech.hilfe.auth.TokenService;
-import com.amalitech.hilfe.models.Admin;
-import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.UserRepository;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import javax.crypto.SecretKey;
-import java.time.Instant;
-import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Owner: Basit
- * Depends on: JJWT configuration, secret management, and role mapping.
+ * Real implementation of TokenService using JJWT 0.12.x.
+ * Presence of this bean suppresses StubTokenService via @ConditionalOnMissingBean.
+ *
+ * JWT claims:
+ *   sub   = user.getId() (ARMS user_id, which is the local PK)
+ *   email = user.getEmail()
+ *   type  = "access" | "refresh"
  */
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class JwtTokenService implements TokenService {
-    private static final String CLAIM_EMAIL = "email";
-    private static final String CLAIM_ROLES = "roles";
 
-    @Value("${app.jwt.secret}")
-    private String jwtSecret;
+    private final SecretKey signingKey;
+    private final long accessTokenTtlMs;
+    private final long refreshTokenTtlMs;
+    private final UserRepository userRepository;
 
-    @Value("${app.jwt.issuer}")
-    private String jwtIssuer;
-
-    @Value("${app.jwt.audience}")
-    private String jwtAudience;
-
-    @Value("${app.jwt.access-ttl-seconds}")
-    private long accessTokenTtlSeconds;
-
-    @Value("${app.jwt.refresh-ttl-seconds}")
-    private long refreshTokenTtlSeconds;
+    public JwtTokenService(
+            @Value("${jwt.secret}") String jwtSecret,
+            @Value("${jwt.expiry-ms:3600000}") long accessTokenTtlMs,
+            UserRepository userRepository
+    ) {
+        // hmacShaKeyFor throws WeakKeyException if secret < 32 bytes — fast startup failure
+        this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        this.accessTokenTtlMs = accessTokenTtlMs;
+        this.refreshTokenTtlMs = 86_400_000L; // 24 hours
+        this.userRepository = userRepository;
+    }
 
     @Override
     public String generateAccessToken(User user) {
-        Instant now = Instant.now();
-        Instant expiry = now.plusSeconds(accessTokenTtlSeconds);
-
-        return Jwts.builder()
-            .subject(user.getId())
-            .issuer(jwtIssuer)
-            .audience().add(jwtAudience).and()
-            .issuedAt(java.util.Date.from(now))
-            .expiration(java.util.Date.from(expiry))
-            .claim(CLAIM_EMAIL, user.getEmail())
-            .claim(CLAIM_ROLES, resolveRoles(user))
-            .signWith(signingKey(), Jwts.SIG.HS256)
-            .compact();
+        return buildToken(user, "access", accessTokenTtlMs);
     }
 
     @Override
     public String generateRefreshToken(User user) {
-        Instant now = Instant.now();
-        Instant expiry = now.plusSeconds(refreshTokenTtlSeconds);
-
-        return Jwts.builder()
-            .subject(user.getId())
-            .issuer(jwtIssuer)
-            .audience().add(jwtAudience).and()
-            .issuedAt(java.util.Date.from(now))
-            .expiration(java.util.Date.from(expiry))
-            .claim(CLAIM_EMAIL, user.getEmail())
-            .signWith(signingKey(), Jwts.SIG.HS256)
-            .compact();
+        return buildToken(user, "refresh", refreshTokenTtlMs);
     }
 
     @Override
     public Optional<Authentication> authenticateAccessToken(String token) {
         try {
-            Jws<Claims> parsed = Jwts.parser()
-                .verifyWith(signingKey())
-                .build()
-                .parseSignedClaims(token);
+            Claims claims = Jwts.parser()
+                    .verifyWith(signingKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
 
-            Claims claims = parsed.getPayload();
-            String subject = claims.getSubject();
-            String email = claims.get(CLAIM_EMAIL, String.class);
-            List<String> roles = extractRoles(claims.get(CLAIM_ROLES));
-
-            List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-            if (roles != null) {
-                roles.forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
-            }
-
-            AuthPrincipal principal = new AuthPrincipal(subject, email, roles);
-            return Optional.of(new UsernamePasswordAuthenticationToken(principal, null, authorities));
-        } catch (JwtException | IllegalArgumentException ex) {
-            return Optional.empty();
-        }
-    }
-
-    @Override
-    public Optional<RefreshPrincipal> authenticateRefreshToken(String token) {
-        try {
-            Jws<Claims> parsed = Jwts.parser()
-                .verifyWith(signingKey())
-                .build()
-                .parseSignedClaims(token);
-
-            Claims claims = parsed.getPayload();
-            String subject = claims.getSubject();
-            String email = claims.get(CLAIM_EMAIL, String.class);
-
-            if (subject == null || email == null) {
+            // Reject refresh tokens presented as access tokens
+            if (!"access".equals(claims.get("type", String.class))) {
                 return Optional.empty();
             }
 
-            return Optional.of(new RefreshPrincipal(subject, email));
-        } catch (JwtException | IllegalArgumentException ex) {
+            String userId = claims.getSubject();
+            return userRepository.findById(userId)
+                    .map(user -> (Authentication) new UsernamePasswordAuthenticationToken(
+                            user,
+                            null,
+                            List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                    ));
+
+        } catch (JwtException | IllegalArgumentException e) {
+            log.debug("Access token validation failed: {}", e.getMessage());
             return Optional.empty();
         }
     }
 
     @Override
     public long getAccessTokenTtlSeconds() {
-        return accessTokenTtlSeconds;
+        return accessTokenTtlMs / 1000;
     }
 
     @Override
     public long getRefreshTokenTtlSeconds() {
-        return refreshTokenTtlSeconds;
+        return refreshTokenTtlMs / 1000;
     }
 
-    private SecretKey signingKey() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    private String buildToken(User user, String type, long ttlMs) {
+        long now = System.currentTimeMillis();
+        return Jwts.builder()
+                .subject(user.getId())
+                .claim("email", user.getEmail())
+                .claim("type", type)
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + ttlMs))
+                .signWith(signingKey)
+                .compact();
     }
-
-    private List<String> resolveRoles(User user) {
-        List<String> roles = new ArrayList<>();
-        roles.add("ROLE_CLIENT");
-
-        Agent agent = user.getAgent();
-        if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
-            roles.add("ROLE_AGENT");
-        }
-
-        Admin admin = user.getAdmin();
-        if (admin != null && admin.isStatus()) {
-            roles.add("ROLE_ADMIN");
-        }
-
-        return roles;
-    }
-
-    private List<String> extractRoles(Object rolesClaim) {
-        if (!(rolesClaim instanceof List<?> rawRoles)) {
-            return new ArrayList<>();
-        }
-
-        List<String> roles = new ArrayList<>();
-        for (Object role : rawRoles) {
-            if (role != null) {
-                roles.add(role.toString());
-            }
-        }
-        return roles;
-    }
-
-    public record AuthPrincipal(String userId, String email, List<String> roles) {}
 }
