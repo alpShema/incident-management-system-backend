@@ -1,19 +1,15 @@
-package com.amalitech.hilfe.auth;
+package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.auth.dto.ArmsUserInfo;
-import com.amalitech.hilfe.auth.dto.LoginRequest;
-import com.amalitech.hilfe.auth.dto.RefreshTokenRequest;
-import com.amalitech.hilfe.auth.dto.TokenResponse;
+import com.amalitech.hilfe.dto.ArmsUserInfo;
+import com.amalitech.hilfe.dto.LoginRequest;
+import com.amalitech.hilfe.dto.RefreshTokenRequest;
+import com.amalitech.hilfe.dto.TokenResponse;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/**
- * Owner: Lawson
- * Depends on: ArmsClient (Alphone), TokenService (Basit), UserRepository.
- */
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -21,15 +17,10 @@ public class AuthService {
     private final TokenService tokenService;
     private final UserRepository userRepository;
 
-    /**
-     * Owner: Lawson
-     * Depends on: ArmsClient.getUserByToken, UserRepository, TokenService.
-     */
     @Transactional
     public TokenResponse login(LoginRequest request) {
         ArmsUserInfo armsUser = armsClient.getUserByToken(request.armsToken());
 
-        // Atomic upsert — avoids the race condition of find-then-save on concurrent logins.
         userRepository.upsert(
                 armsUser.userId(),
                 armsUser.email(),
@@ -52,18 +43,10 @@ public class AuthService {
             .build();
     }
 
-    /**
-     * Owner: Lawson
-     * Depends on: refresh token storage and TokenService.
-     */
     public TokenResponse refresh(RefreshTokenRequest request) {
         throw new UnsupportedOperationException("Refresh token flow not implemented yet");
     }
 
-    /**
-     * Owner: Lawson
-     * Depends on: refresh token revocation implementation.
-     */
     public void logout(RefreshTokenRequest request) {
         // TODO: Revoke refresh token when storage is implemented.
     }

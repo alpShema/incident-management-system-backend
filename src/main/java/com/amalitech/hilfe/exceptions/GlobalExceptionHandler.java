@@ -1,6 +1,5 @@
 package com.amalitech.hilfe.exceptions;
 
-import com.amalitech.hilfe.auth.ArmsAuthException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -14,20 +13,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ArmsAuthException.class)
     public ResponseEntity<ProblemDetail> handleArmsAuth(ArmsAuthException ex) {
-        HttpStatus status = ex.getHttpStatus() == 401
-                ? HttpStatus.UNAUTHORIZED
-                : HttpStatus.BAD_GATEWAY;
-        log.warn("ARMS auth error [{}]: {}", status.value(), ex.getMessage());
-        return ResponseEntity.status(status)
-                .body(ProblemDetail.forStatusAndDetail(status, ex.getMessage()));
+        log.warn("ARMS auth error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage()));
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)
     public ResponseEntity<ProblemDetail> handleNotImplemented(UnsupportedOperationException ex) {
         log.warn("Not implemented: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-                .body(ProblemDetail.forStatusAndDetail(
-                        HttpStatus.NOT_IMPLEMENTED, ex.getMessage()));
+                .body(ProblemDetail.forStatusAndDetail(HttpStatus.NOT_IMPLEMENTED, ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

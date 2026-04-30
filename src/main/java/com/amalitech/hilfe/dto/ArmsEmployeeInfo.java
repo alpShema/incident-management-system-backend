@@ -1,4 +1,4 @@
-package com.amalitech.hilfe.auth.dto;
+package com.amalitech.hilfe.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -10,5 +10,4 @@ public record ArmsEmployeeInfo(
         @JsonProperty("active")        boolean active,
         @JsonProperty("location")      String location,
         @JsonProperty("profile_image") String profileImage
-
 ) {}

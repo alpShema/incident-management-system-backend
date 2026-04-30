@@ -1,8 +1,9 @@
-package com.amalitech.hilfe.auth;
+package com.amalitech.hilfe.controllers;
 
-import com.amalitech.hilfe.auth.dto.LoginRequest;
-import com.amalitech.hilfe.auth.dto.RefreshTokenRequest;
-import com.amalitech.hilfe.auth.dto.TokenResponse;
+import com.amalitech.hilfe.dto.LoginRequest;
+import com.amalitech.hilfe.dto.RefreshTokenRequest;
+import com.amalitech.hilfe.dto.TokenResponse;
+import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.utils.CookieUtils;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -14,10 +15,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Owner: Lawson
- * Depends on: AuthService and CookieUtils.
- */
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -27,7 +24,6 @@ public class AuthController {
     @Value("${cookie.secure:false}")
     private boolean cookieSecure;
 
-    /** Owner: Lawson. Depends on: AuthService.login, CookieUtils. */
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(
         @RequestBody LoginRequest request,
@@ -40,7 +36,6 @@ public class AuthController {
         return ResponseEntity.ok(tokens);
     }
 
-    /** Owner: Lawson. Depends on: AuthService.refresh, CookieUtils. */
     @PostMapping("/refresh-token")
     public ResponseEntity<TokenResponse> refresh(
         @RequestBody RefreshTokenRequest request,
@@ -51,7 +46,6 @@ public class AuthController {
         return ResponseEntity.ok(tokens);
     }
 
-    /** Owner: Lawson. Depends on: AuthService.logout, CookieUtils. */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
         @RequestBody RefreshTokenRequest request,

@@ -1,9 +1,8 @@
-package com.amalitech.hilfe.auth.impl;
+package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.auth.ArmsClient;
-import com.amalitech.hilfe.auth.ArmsProperties;
-import com.amalitech.hilfe.auth.dto.ArmsEmployeeInfo;
-import com.amalitech.hilfe.auth.dto.ArmsUserInfo;
+import com.amalitech.hilfe.config.ArmsProperties;
+import com.amalitech.hilfe.dto.ArmsEmployeeInfo;
+import com.amalitech.hilfe.dto.ArmsUserInfo;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +16,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class RealArmsClient implements ArmsClient {
+public class ArmsClientImpl implements ArmsClient {
     @Qualifier("armsRestClient")
     private final RestClient restClient;
     private final ArmsProperties properties;
@@ -47,21 +46,17 @@ public class RealArmsClient implements ArmsClient {
         } catch (HttpClientErrorException e) {
             log.error("Invalid or expired ARMS token: {}", e.getMessage());
             throw new ArmsAuthException("Invalid or expired ARMS token", e);
-
         } catch (ResourceAccessException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS service unreachable: {}", e.getMessage());
             throw new ArmsAuthException("ARMS service is unreachable", e);
-        }catch (HttpServerErrorException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+        } catch (HttpServerErrorException e) {
+            log.error("ARMS service error: {}", e.getMessage());
             throw new ArmsAuthException("ARMS service is unavailable", e);
         }
-
-
     }
 
     @Override
     public List<ArmsEmployeeInfo> getAllUsers() {
-        // 1. Build the GraphQL query string
         String query = """
         query ListEmployeeInfosWithFilters {
             listEmployeeInfosWithFilters {
@@ -78,7 +73,6 @@ public class RealArmsClient implements ArmsClient {
         }
     """;
 
-        // 2. POST to employeeInfoUrl with x-api-key header
         try {
             EmployeeListResponse response = restClient
                     .post()
@@ -96,21 +90,19 @@ public class RealArmsClient implements ArmsClient {
             return response.data().listEmployeeInfosWithFilters().employeeInfo();
 
         } catch (HttpClientErrorException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS rejected employee list request: {}", e.getMessage());
             throw new ArmsAuthException("ARMS rejected the employee list request", e);
         } catch (HttpServerErrorException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS service error: {}", e.getMessage());
             throw new ArmsAuthException("ARMS service is unavailable", e);
         } catch (ResourceAccessException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS service unreachable: {}", e.getMessage());
             throw new ArmsAuthException("ARMS service is unreachable", e);
         }
-
     }
 
     @Override
     public ArmsUserInfo getUserById(String userId) {
-        // 1. Build GraphQL query with userId as variable
         String query = """
         query GetEmployeeBioForExternalService($id: ID!) {
             getEmployeeBioForExternalService(id: $id) {
@@ -142,16 +134,15 @@ public class RealArmsClient implements ArmsClient {
             );
 
         } catch (HttpClientErrorException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS rejected user lookup: {}", e.getMessage());
             throw new ArmsAuthException("ARMS rejected the user lookup request", e);
         } catch (HttpServerErrorException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS service error: {}", e.getMessage());
             throw new ArmsAuthException("ARMS service is unavailable", e);
         } catch (ResourceAccessException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS service unreachable: {}", e.getMessage());
             throw new ArmsAuthException("ARMS service is unreachable", e);
         }
-
     }
 
     private record ArmsRawResponse(
@@ -161,14 +152,10 @@ public class RealArmsClient implements ArmsClient {
             @JsonProperty("email")         String email,
             @JsonProperty("profile_image") String profileImage
     ) {}
-    private record GraphQlRequest(
-            String query,
-            Object variables
-    ) {}
 
-    private record EmployeeListResponse(
-            @JsonProperty("data") EmployeeListData data
-    ) {}
+    private record GraphQlRequest(String query, Object variables) {}
+
+    private record EmployeeListResponse(@JsonProperty("data") EmployeeListData data) {}
 
     private record EmployeeListData(
             @JsonProperty("listEmployeeInfosWithFilters") EmployeeListWrapper listEmployeeInfosWithFilters
@@ -177,9 +164,8 @@ public class RealArmsClient implements ArmsClient {
     private record EmployeeListWrapper(
             @JsonProperty("EmployeeInfo") List<ArmsEmployeeInfo> employeeInfo
     ) {}
-    private record UserByIdResponse(
-            @JsonProperty("data") UserByIdData data
-    ) {}
+
+    private record UserByIdResponse(@JsonProperty("data") UserByIdData data) {}
 
     private record UserByIdData(
             @JsonProperty("getEmployeeBioForExternalService") ArmsRawResponse user
