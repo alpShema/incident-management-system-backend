@@ -16,8 +16,13 @@ public interface TokenService {
     String generateRefreshToken(User user);
     /** Owner: Basit. Depends on: JWT validation and user role mapping. */
     Optional<Authentication> authenticateAccessToken(String token);
+    /** Owner: Basit. Depends on: refresh token validation and claim parsing. */
+    Optional<RefreshPrincipal> authenticateRefreshToken(String token);
     /** Owner: Basit. */
     long getAccessTokenTtlSeconds();
     /** Owner: Basit. */
     long getRefreshTokenTtlSeconds();
+
+    /** Owner: Basit. */
+    record RefreshPrincipal(String userId, String email) {}
 }
