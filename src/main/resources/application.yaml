@@ -117,13 +117,6 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
 # ──────────────────────────────────────────
-# JWT
-# ──────────────────────────────────────────
-jwt:
-  secret: ${JWT_SECRET}
-  expiry-ms: ${JWT_EXPIRY_MS:3600000}
-
-# ──────────────────────────────────────────
 # ARMS SSO Integration
 # ──────────────────────────────────────────
 arms:
