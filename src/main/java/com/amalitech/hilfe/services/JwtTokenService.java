@@ -1,6 +1,5 @@
-package com.amalitech.hilfe.auth.impl;
+package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.auth.TokenService;
 import com.amalitech.hilfe.models.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
@@ -17,27 +16,17 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 
-/**
- * Owner: Basit
- * Depends on: app.jwt config and JJWT 0.12.x.
- *
- * JWT claims:
- *   sub   = user.getId() (ARMS user_id, which is the local PK)
- *   email = user.getEmail()
- *   type  = "access" | "refresh"
- *   roles = list of ROLE_* values (access tokens only)
- */
 @Slf4j
 @Service
 public class JwtTokenService implements TokenService {
     private static final String CLAIM_EMAIL = "email";
     private static final String CLAIM_ROLES = "roles";
-    private static final String CLAIM_TYPE = "type";
+    private static final String CLAIM_TYPE  = "type";
 
     private final SecretKey signingKey;
     private final String jwtIssuer;
@@ -52,7 +41,6 @@ public class JwtTokenService implements TokenService {
             @Value("${app.jwt.access-ttl-seconds:3600}") long accessTokenTtlSeconds,
             @Value("${app.jwt.refresh-ttl-seconds:86400}") long refreshTokenTtlSeconds
     ) {
-        // hmacShaKeyFor throws WeakKeyException if secret < 32 bytes — fast startup failure
         this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
         this.jwtIssuer = jwtIssuer;
         this.jwtAudience = jwtAudience;
@@ -80,13 +68,12 @@ public class JwtTokenService implements TokenService {
 
             Claims claims = parsed.getPayload();
 
-            // Reject refresh tokens presented as access tokens
             if (!"access".equals(claims.get(CLAIM_TYPE, String.class))) {
                 return Optional.empty();
             }
 
             String userId = claims.getSubject();
-            String email = claims.get(CLAIM_EMAIL, String.class);
+            String email  = claims.get(CLAIM_EMAIL, String.class);
             List<String> roles = extractRoles(claims.get(CLAIM_ROLES));
 
             List<SimpleGrantedAuthority> authorities = new ArrayList<>();
@@ -115,7 +102,7 @@ public class JwtTokenService implements TokenService {
             }
 
             String userId = claims.getSubject();
-            String email = claims.get(CLAIM_EMAIL, String.class);
+            String email  = claims.get(CLAIM_EMAIL, String.class);
             if (userId == null || email == null) {
                 return Optional.empty();
             }
@@ -138,7 +125,7 @@ public class JwtTokenService implements TokenService {
     }
 
     private String buildToken(User user, String type, long ttlSeconds, boolean includeRoles) {
-        Instant now = Instant.now();
+        Instant now    = Instant.now();
         Instant expiry = now.plusSeconds(ttlSeconds);
 
         var builder = Jwts.builder()
@@ -154,9 +141,7 @@ public class JwtTokenService implements TokenService {
             builder.claim(CLAIM_ROLES, resolveRoles(user));
         }
 
-        return builder
-            .signWith(signingKey, Jwts.SIG.HS256)
-            .compact();
+        return builder.signWith(signingKey, Jwts.SIG.HS256).compact();
     }
 
     private List<String> resolveRoles(User user) {
@@ -166,7 +151,6 @@ public class JwtTokenService implements TokenService {
         if (user.getAgent() != null && Boolean.TRUE.equals(user.getAgent().getStatus())) {
             roles.add("ROLE_AGENT");
         }
-
         if (user.getAdmin() != null && user.getAdmin().isStatus()) {
             roles.add("ROLE_ADMIN");
         }
@@ -178,12 +162,9 @@ public class JwtTokenService implements TokenService {
         if (!(rolesClaim instanceof List<?> rawRoles)) {
             return new ArrayList<>();
         }
-
         List<String> roles = new ArrayList<>();
         for (Object role : rawRoles) {
-            if (role != null) {
-                roles.add(role.toString());
-            }
+            if (role != null) roles.add(role.toString());
         }
         return roles;
     }

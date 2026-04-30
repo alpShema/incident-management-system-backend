@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.utils;
 
-import com.amalitech.hilfe.auth.dto.TokenResponse;
+import com.amalitech.hilfe.dto.TokenResponse;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

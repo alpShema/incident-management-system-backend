@@ -1,10 +1,8 @@
-package com.amalitech.hilfe.auth;
+package com.amalitech.hilfe.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 @ConfigurationProperties(prefix = "arms")
-@Component
 public record ArmsProperties(
         String ssoUrl,
         String authUrl,

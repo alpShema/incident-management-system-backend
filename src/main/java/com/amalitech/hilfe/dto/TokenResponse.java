@@ -1,14 +1,10 @@
-package com.amalitech.hilfe.auth.dto;
+package com.amalitech.hilfe.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Owner: Lawson
- * Depends on: TokenService TTL values and refresh token strategy.
- */
 @Data
 @Builder
 @NoArgsConstructor

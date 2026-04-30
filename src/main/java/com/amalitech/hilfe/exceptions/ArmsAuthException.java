@@ -8,4 +8,3 @@ public class ArmsAuthException extends RuntimeException {
         super(message, cause);
     }
 }
-
