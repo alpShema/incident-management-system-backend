@@ -1,4 +1,13 @@
 package com.amalitech.hilfe.auth;
 
-public class ArmsProperties {
-}
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+
+@ConfigurationProperties(prefix = "arms")
+@Component
+public record ArmsProperties(
+        String ssoUrl,
+        String authUrl,
+        String employeeInfoUrl,
+        String apiKey
+) {}
