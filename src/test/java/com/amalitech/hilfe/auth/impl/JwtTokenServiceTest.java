@@ -1,100 +1,124 @@
 package com.amalitech.hilfe.auth.impl;
 
-import com.amalitech.hilfe.models.Admin;
-import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
-import java.lang.reflect.Field;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
-/**
- * Owner: Basit
- * Depends on: JwtTokenService implementation and JJWT config fields.
- */
+@ExtendWith(MockitoExtension.class)
 class JwtTokenServiceTest {
 
-    @Test
-    void generateAndAuthenticateAccessToken_withRoles() {
-        JwtTokenService tokenService = new JwtTokenService();
-        setField(tokenService, "jwtSecret", "change-me-change-me-change-me-32chars");
-        setField(tokenService, "jwtIssuer", "hilfe");
-        setField(tokenService, "jwtAudience", "hilfe-web");
-        setField(tokenService, "accessTokenTtlSeconds", 3600L);
-        setField(tokenService, "refreshTokenTtlSeconds", 86400L);
+    private static final String SECRET = "test-secret-must-be-at-least-32-bytes-long!";
+    private static final long TTL_MS = 3_600_000L;
 
-        User user = User.builder()
-            .id("user-1")
-            .email("user@amalitech.com")
-            .fullName("Test User")
-            .build();
+    @Mock UserRepository userRepository;
 
-        Agent agent = Agent.builder().status(true).build();
-        Admin admin = Admin.builder().status(true).build();
-        user.setAgent(agent);
-        user.setAdmin(admin);
+    JwtTokenService tokenService;
+    User testUser;
 
-        String token = tokenService.generateAccessToken(user);
-        assertNotNull(token);
-
-        Optional<Authentication> authentication = tokenService.authenticateAccessToken(token);
-        assertTrue(authentication.isPresent());
-
-        Set<String> roles = authentication.get().getAuthorities().stream()
-            .map(auth -> auth.getAuthority())
-            .collect(Collectors.toSet());
-
-        assertTrue(roles.containsAll(List.of("ROLE_CLIENT", "ROLE_AGENT", "ROLE_ADMIN")));
+    @BeforeEach
+    void setUp() {
+        tokenService = new JwtTokenService(SECRET, TTL_MS, userRepository);
+        testUser = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
     }
 
     @Test
-    void authenticateAccessToken_withInvalidToken_returnsEmpty() {
-        JwtTokenService tokenService = new JwtTokenService();
-        setField(tokenService, "jwtSecret", "change-me-change-me-change-me-32chars");
-        setField(tokenService, "jwtIssuer", "hilfe");
-        setField(tokenService, "jwtAudience", "hilfe-web");
-        setField(tokenService, "accessTokenTtlSeconds", 3600L);
-        setField(tokenService, "refreshTokenTtlSeconds", 86400L);
-
-        Optional<Authentication> authentication = tokenService.authenticateAccessToken("bad.token.value");
-        assertFalse(authentication.isPresent());
+    void generateAccessToken_producesNonBlankToken() {
+        String token = tokenService.generateAccessToken(testUser);
+        assertThat(token).isNotBlank();
     }
 
     @Test
-    void authenticateAccessToken_withExpiredToken_returnsEmpty() {
-        JwtTokenService tokenService = new JwtTokenService();
-        setField(tokenService, "jwtSecret", "change-me-change-me-change-me-32chars");
-        setField(tokenService, "jwtIssuer", "hilfe");
-        setField(tokenService, "jwtAudience", "hilfe-web");
-        setField(tokenService, "accessTokenTtlSeconds", -1L);
-        setField(tokenService, "refreshTokenTtlSeconds", 86400L);
-
-        User user = User.builder()
-            .id("user-2")
-            .email("expired@amalitech.com")
-            .fullName("Expired User")
-            .build();
-
-        String token = tokenService.generateAccessToken(user);
-        Optional<Authentication> authentication = tokenService.authenticateAccessToken(token);
-        assertFalse(authentication.isPresent());
+    void generateRefreshToken_producesNonBlankToken() {
+        String token = tokenService.generateRefreshToken(testUser);
+        assertThat(token).isNotBlank();
     }
 
-    private void setField(Object target, String fieldName, Object value) {
-        try {
-            Field field = target.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException("Failed to set field: " + fieldName, ex);
-        }
+    @Test
+    void authenticateAccessToken_validToken_returnsAuthenticationWithCorrectPrincipal() {
+        String token = tokenService.generateAccessToken(testUser);
+        when(userRepository.findById("u1")).thenReturn(Optional.of(testUser));
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isPresent();
+        assertThat(auth.get().getPrincipal()).isEqualTo(testUser);
+        assertThat(auth.get().getAuthorities()).isNotEmpty();
+    }
+
+    @Test
+    void authenticateAccessToken_refreshTokenPresentedAsAccess_returnsEmpty() {
+        String refreshToken = tokenService.generateRefreshToken(testUser);
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(refreshToken);
+
+        assertThat(auth).isEmpty();
+    }
+
+    @Test
+    void authenticateAccessToken_tamperedToken_returnsEmpty() {
+        String token = tokenService.generateAccessToken(testUser) + "x";
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
+    }
+
+    @Test
+    void authenticateAccessToken_tokenSignedWithDifferentKey_returnsEmpty() {
+        JwtTokenService otherService = new JwtTokenService(
+                "different-secret-also-at-least-32-bytes-!", TTL_MS, userRepository);
+        String foreignToken = otherService.generateAccessToken(testUser);
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(foreignToken);
+
+        assertThat(auth).isEmpty();
+    }
+
+    @Test
+    void authenticateAccessToken_userNotInDb_returnsEmpty() {
+        String token = tokenService.generateAccessToken(testUser);
+        when(userRepository.findById("u1")).thenReturn(Optional.empty());
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
+    }
+
+    @Test
+    void authenticateAccessToken_expiredToken_returnsEmpty() throws InterruptedException {
+        JwtTokenService shortLived = new JwtTokenService(SECRET, 1L, userRepository);
+        String token = shortLived.generateAccessToken(testUser);
+        Thread.sleep(10);
+
+        Optional<Authentication> auth = shortLived.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
+    }
+
+    @Test
+    void getAccessTokenTtlSeconds_returnsTtlMsDividedBy1000() {
+        assertThat(tokenService.getAccessTokenTtlSeconds()).isEqualTo(TTL_MS / 1000);
+    }
+
+    @Test
+    void getRefreshTokenTtlSeconds_returns86400() {
+        assertThat(tokenService.getRefreshTokenTtlSeconds()).isEqualTo(86_400L);
+    }
+
+    @Test
+    void shortSecret_throwsAtConstruction() {
+        assertThatThrownBy(() -> new JwtTokenService("short", TTL_MS, userRepository))
+                .isInstanceOf(Exception.class);
     }
 }

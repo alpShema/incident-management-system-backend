@@ -6,6 +6,7 @@ import com.amalitech.hilfe.auth.dto.RefreshTokenRequest;
 import com.amalitech.hilfe.auth.dto.TokenResponse;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,20 +25,21 @@ public class AuthService {
      * Owner: Lawson
      * Depends on: ArmsClient.getUserByToken, UserRepository, TokenService.
      */
+    @Transactional
     public TokenResponse login(LoginRequest request) {
         ArmsUserInfo armsUser = armsClient.getUserByToken(request.armsToken());
 
+        // Atomic upsert — avoids the race condition of find-then-save on concurrent logins.
+        userRepository.upsert(
+                armsUser.userId(),
+                armsUser.email(),
+                armsUser.firstName() + " " + armsUser.lastName(),
+                armsUser.profileImage()
+        );
+
         User user = userRepository.findById(armsUser.userId())
-            .orElseGet(() -> User.builder().id(armsUser.userId()).build());
-
-        user.setEmail(armsUser.email());
-        user.setFullName(armsUser.firstName() + " " + armsUser.lastName());
-        user.setProfileImg(armsUser.profileImage());
-        if (user.getStatus() == null) {
-            user.setStatus(true);
-        }
-
-        userRepository.save(user);
+                .orElseThrow(() -> new IllegalStateException(
+                        "User not found after upsert for id=" + armsUser.userId()));
 
         String accessToken = tokenService.generateAccessToken(user);
         String refreshToken = tokenService.generateRefreshToken(user);
