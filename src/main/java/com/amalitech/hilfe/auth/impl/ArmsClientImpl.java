@@ -1,14 +1,17 @@
 package com.amalitech.hilfe.auth.impl;
 
-import com.amalitech.hilfe.auth.ArmsAuthException;
 import com.amalitech.hilfe.auth.ArmsClient;
+import com.amalitech.hilfe.auth.dto.ArmsEmployeeInfo;
 import com.amalitech.hilfe.auth.dto.ArmsUserInfo;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+
+import java.util.List;
 
 /**
  * Real implementation of ArmsClient.
@@ -22,6 +25,7 @@ import org.springframework.web.client.RestClient;
 public class ArmsClientImpl implements ArmsClient {
 
     private final RestClient armsRestClient;
+    private final RealArmsClient realArmsClient;
 
     @Override
     public ArmsUserInfo getUserByToken(String armsToken) {
@@ -30,16 +34,16 @@ public class ArmsClientImpl implements ArmsClient {
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
                     log.warn("ARMS returned {} for token validation", res.getStatusCode());
-                    throw new ArmsAuthException("Invalid or expired ARMS token", 401);
+                    throw new ArmsAuthException("Invalid or expired ARMS token");
                 })
                 .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
                     log.error("ARMS returned {} during token validation", res.getStatusCode());
-                    throw new ArmsAuthException("ARMS service unavailable", 502);
+                    throw new ArmsAuthException("ARMS service unavailable");
                 })
                 .body(ArmsResponse.class);
 
         if (raw == null) {
-            throw new ArmsAuthException("Empty response from ARMS", 502);
+            throw new ArmsAuthException("Empty response from ARMS");
         }
 
         return new ArmsUserInfo(
@@ -49,6 +53,16 @@ public class ArmsClientImpl implements ArmsClient {
                 raw.email(),
                 raw.profileImage()
         );
+    }
+
+    @Override
+    public List<ArmsEmployeeInfo> getAllUsers() {
+        return realArmsClient.getAllUsers();
+    }
+
+    @Override
+    public ArmsUserInfo getUserById(String userId) {
+        return realArmsClient.getUserById(userId);
     }
 
     /** Internal DTO that handles the snake_case JSON field names from ARMS. */
