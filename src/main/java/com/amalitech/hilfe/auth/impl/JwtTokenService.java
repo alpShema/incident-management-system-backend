@@ -8,7 +8,6 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,7 +61,7 @@ public class JwtTokenService implements TokenService {
             .expiration(java.util.Date.from(expiry))
             .claim(CLAIM_EMAIL, user.getEmail())
             .claim(CLAIM_ROLES, resolveRoles(user))
-            .signWith(signingKey(), SignatureAlgorithm.HS256)
+            .signWith(signingKey(), Jwts.SIG.HS256)
             .compact();
     }
 
@@ -78,7 +77,7 @@ public class JwtTokenService implements TokenService {
             .issuedAt(java.util.Date.from(now))
             .expiration(java.util.Date.from(expiry))
             .claim(CLAIM_EMAIL, user.getEmail())
-            .signWith(signingKey(), SignatureAlgorithm.HS256)
+            .signWith(signingKey(), Jwts.SIG.HS256)
             .compact();
     }
 
@@ -93,7 +92,7 @@ public class JwtTokenService implements TokenService {
             Claims claims = parsed.getPayload();
             String subject = claims.getSubject();
             String email = claims.get(CLAIM_EMAIL, String.class);
-            List<String> roles = claims.get(CLAIM_ROLES, List.class);
+            List<String> roles = extractRoles(claims.get(CLAIM_ROLES));
 
             List<SimpleGrantedAuthority> authorities = new ArrayList<>();
             if (roles != null) {
@@ -102,6 +101,28 @@ public class JwtTokenService implements TokenService {
 
             AuthPrincipal principal = new AuthPrincipal(subject, email, roles);
             return Optional.of(new UsernamePasswordAuthenticationToken(principal, null, authorities));
+        } catch (JwtException | IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public Optional<RefreshPrincipal> authenticateRefreshToken(String token) {
+        try {
+            Jws<Claims> parsed = Jwts.parser()
+                .verifyWith(signingKey())
+                .build()
+                .parseSignedClaims(token);
+
+            Claims claims = parsed.getPayload();
+            String subject = claims.getSubject();
+            String email = claims.get(CLAIM_EMAIL, String.class);
+
+            if (subject == null || email == null) {
+                return Optional.empty();
+            }
+
+            return Optional.of(new RefreshPrincipal(subject, email));
         } catch (JwtException | IllegalArgumentException ex) {
             return Optional.empty();
         }
@@ -135,6 +156,20 @@ public class JwtTokenService implements TokenService {
             roles.add("ROLE_ADMIN");
         }
 
+        return roles;
+    }
+
+    private List<String> extractRoles(Object rolesClaim) {
+        if (!(rolesClaim instanceof List<?> rawRoles)) {
+            return new ArrayList<>();
+        }
+
+        List<String> roles = new ArrayList<>();
+        for (Object role : rawRoles) {
+            if (role != null) {
+                roles.add(role.toString());
+            }
+        }
         return roles;
     }
 
