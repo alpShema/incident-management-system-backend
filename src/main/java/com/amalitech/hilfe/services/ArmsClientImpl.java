@@ -5,46 +5,83 @@ import com.amalitech.hilfe.dto.ArmsEmployeeInfo;
 import com.amalitech.hilfe.dto.ArmsUserInfo;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.*;
 
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ArmsClientImpl implements ArmsClient {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     @Qualifier("armsRestClient")
     private final RestClient restClient;
     private final ArmsProperties properties;
 
     @Override
     public ArmsUserInfo getUserByToken(String armsToken) {
+        String userId = extractUserIdFromToken(armsToken);
+        log.debug("Extracted user_id from ARMS token: {}", userId);
+
+        String query = """
+            query GetEmployeeBio($id: ID!) {
+                getEmployeeBio(id: $id) {
+                    user_id
+                    first_name
+                    last_name
+                    profile_image
+                    user {
+                        email
+                    }
+                }
+            }
+        """;
+
         try {
-            ArmsRawResponse raw = restClient
-                    .get()
+            String raw = restClient
+                    .post()
                     .uri(properties.ssoUrl())
                     .header("Authorization", "Bearer " + armsToken)
+                    .body(new GraphQlRequest(query, Map.of("id", userId)))
                     .retrieve()
-                    .body(ArmsRawResponse.class);
+                    .body(String.class);
 
-            if (raw == null) {
-                throw new ArmsAuthException("ARMS returned empty response");
+            log.info("ARMS getEmployeeBio raw response: {}", raw);
+
+            EmployeeBioResponse response;
+            try {
+                response = OBJECT_MAPPER.readValue(raw, EmployeeBioResponse.class);
+            } catch (Exception e) {
+                throw new ArmsAuthException("Failed to parse ARMS response", e);
             }
 
+            if (response == null || response.data() == null || response.data().employeeBio() == null) {
+                throw new ArmsAuthException("ARMS returned empty employee bio for user: " + userId);
+            }
+
+            EmployeeBio bio = response.data().employeeBio();
+            String email = bio.user() != null ? bio.user().email() : "";
+
             return new ArmsUserInfo(
-                    raw.userId(),
-                    raw.firstName(),
-                    raw.lastName(),
-                    raw.email(),
-                    raw.profileImage()
+                    bio.userId(),
+                    bio.firstName(),
+                    bio.lastName(),
+                    email,
+                    bio.profileImage()
             );
 
         } catch (HttpClientErrorException e) {
-            log.error("Invalid or expired ARMS token: {}", e.getMessage());
+            log.error("ARMS rejected request for user {}: {}", userId, e.getMessage());
             throw new ArmsAuthException("Invalid or expired ARMS token", e);
         } catch (ResourceAccessException e) {
             log.error("ARMS service unreachable: {}", e.getMessage());
@@ -55,23 +92,44 @@ public class ArmsClientImpl implements ArmsClient {
         }
     }
 
+    private String extractUserIdFromToken(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) {
+                throw new ArmsAuthException("Invalid ARMS token: expected JWT format");
+            }
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
+            JsonNode claims = OBJECT_MAPPER.readTree(payloadBytes);
+
+            String userId = claims.path("user_id").asText(null);
+            if (userId == null || userId.isBlank()) {
+                throw new ArmsAuthException("ARMS token is missing user_id claim");
+            }
+            return userId;
+        } catch (ArmsAuthException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ArmsAuthException("Failed to decode ARMS token", e);
+        }
+    }
+
     @Override
     public List<ArmsEmployeeInfo> getAllUsers() {
         String query = """
-        query ListEmployeeInfosWithFilters {
-            listEmployeeInfosWithFilters {
-                EmployeeInfo {
-                    user_id
-                    active
-                    employee_bio { full_name profile_image
-                        employee_contacts { work_email }
+            query ListEmployeeInfosWithFilters {
+                listEmployeeInfosWithFilters {
+                    EmployeeInfo {
+                        user_id
+                        active
+                        employee_bio { full_name profile_image
+                            employee_contacts { work_email }
+                        }
+                        position { position_name }
+                        location { town }
                     }
-                    position { position_name }
-                    location { town }
                 }
             }
-        }
-    """;
+        """;
 
         try {
             EmployeeListResponse response = restClient
@@ -104,19 +162,20 @@ public class ArmsClientImpl implements ArmsClient {
     @Override
     public ArmsUserInfo getUserById(String userId) {
         String query = """
-        query GetEmployeeBioForExternalService($id: ID!) {
-            getEmployeeBioForExternalService(id: $id) {
-                user_id full_name email profile_image deleted
+            query GetEmployeeBioForExternalService($id: ID!) {
+                getEmployeeBioForExternalService(id: $id) {
+                    user_id full_name email profile_image deleted
+                }
             }
-        }
-    """;
+        """;
+
         try {
             UserByIdResponse response = restClient
                     .post()
                     .uri(properties.employeeInfoUrl())
                     .header("Authorization", "Bearer " + properties.apiKey())
                     .header("x-api-key", properties.apiKey())
-                    .body(new GraphQlRequest(query, java.util.Map.of("id", userId)))
+                    .body(new GraphQlRequest(query, Map.of("id", userId)))
                     .retrieve()
                     .body(UserByIdResponse.class);
 
@@ -124,11 +183,12 @@ public class ArmsClientImpl implements ArmsClient {
                 throw new ArmsAuthException("User not found in ARMS: " + userId);
             }
 
-            ArmsRawResponse raw = response.data().user();
+            UserByIdRaw raw = response.data().user();
+            String[] nameParts = (raw.fullName() != null ? raw.fullName() : " ").split(" ", 2);
             return new ArmsUserInfo(
                     raw.userId(),
-                    raw.firstName(),
-                    raw.lastName(),
+                    nameParts[0],
+                    nameParts.length > 1 ? nameParts[1] : "",
                     raw.email(),
                     raw.profileImage()
             );
@@ -145,29 +205,43 @@ public class ArmsClientImpl implements ArmsClient {
         }
     }
 
-    private record ArmsRawResponse(
-            @JsonProperty("user_id")       String userId,
-            @JsonProperty("first_name")    String firstName,
-            @JsonProperty("last_name")     String lastName,
-            @JsonProperty("email")         String email,
-            @JsonProperty("profile_image") String profileImage
-    ) {}
+    // ── GraphQL request wrapper ───────────────────────────────────────────────
 
     private record GraphQlRequest(String query, Object variables) {}
 
-    private record EmployeeListResponse(@JsonProperty("data") EmployeeListData data) {}
+    // ── getEmployeeBio response ───────────────────────────────────────────────
 
+    private record EmployeeBioResponse(@JsonProperty("data") EmployeeBioData data) {}
+    private record EmployeeBioData(@JsonProperty("getEmployeeBio") EmployeeBio employeeBio) {}
+    private record EmployeeBio(
+            @JsonProperty("user_id")       String userId,
+            @JsonProperty("first_name")    String firstName,
+            @JsonProperty("last_name")     String lastName,
+            @JsonProperty("profile_image") String profileImage,
+            @JsonProperty("user")          EmployeeBioUser user
+    ) {}
+    private record EmployeeBioUser(@JsonProperty("email") String email) {}
+
+    // ── getAllUsers response ───────────────────────────────────────────────────
+
+    private record EmployeeListResponse(@JsonProperty("data") EmployeeListData data) {}
     private record EmployeeListData(
             @JsonProperty("listEmployeeInfosWithFilters") EmployeeListWrapper listEmployeeInfosWithFilters
     ) {}
-
     private record EmployeeListWrapper(
             @JsonProperty("EmployeeInfo") List<ArmsEmployeeInfo> employeeInfo
     ) {}
 
-    private record UserByIdResponse(@JsonProperty("data") UserByIdData data) {}
+    // ── getUserById response ──────────────────────────────────────────────────
 
+    private record UserByIdResponse(@JsonProperty("data") UserByIdData data) {}
     private record UserByIdData(
-            @JsonProperty("getEmployeeBioForExternalService") ArmsRawResponse user
+            @JsonProperty("getEmployeeBioForExternalService") UserByIdRaw user
+    ) {}
+    private record UserByIdRaw(
+            @JsonProperty("user_id")       String userId,
+            @JsonProperty("full_name")     String fullName,
+            @JsonProperty("email")         String email,
+            @JsonProperty("profile_image") String profileImage
     ) {}
 }
