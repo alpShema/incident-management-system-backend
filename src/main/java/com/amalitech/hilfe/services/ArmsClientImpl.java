@@ -31,7 +31,6 @@ public class ArmsClientImpl implements ArmsClient {
     @Override
     public ArmsUserInfo getUserByToken(String armsToken) {
         String userId = extractUserIdFromToken(armsToken);
-        log.debug("Extracted user_id from ARMS token: {}", userId);
 
         String query = """
             query GetEmployeeBio($id: ID!) {
@@ -55,8 +54,6 @@ public class ArmsClientImpl implements ArmsClient {
                     .body(new GraphQlRequest(query, Map.of("id", userId)))
                     .retrieve()
                     .body(String.class);
-
-            log.info("ARMS getEmployeeBio raw response: {}", raw);
 
             EmployeeBioResponse response;
             try {

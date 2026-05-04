@@ -6,7 +6,6 @@ import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -21,7 +20,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
-@Slf4j
 @Service
 public class JwtTokenService implements TokenService {
     private static final String CLAIM_EMAIL = "email";
@@ -83,7 +81,6 @@ public class JwtTokenService implements TokenService {
             return Optional.of(new UsernamePasswordAuthenticationToken(principal, null, authorities));
 
         } catch (JwtException | IllegalArgumentException e) {
-            log.debug("Access token validation failed: {}", e.getMessage());
             return Optional.empty();
         }
     }
@@ -109,7 +106,6 @@ public class JwtTokenService implements TokenService {
 
             return Optional.of(new RefreshPrincipal(userId, email));
         } catch (JwtException | IllegalArgumentException e) {
-            log.debug("Refresh token validation failed: {}", e.getMessage());
             return Optional.empty();
         }
     }
