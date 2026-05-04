@@ -1,6 +1,10 @@
 package com.amalitech.hilfe.auth.impl;
 
+import com.amalitech.hilfe.models.Admin;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.services.JwtTokenService;
+import com.amalitech.hilfe.services.TokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -94,7 +98,6 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    @Test
     void authenticateAccessToken_expiredToken_returnsEmpty() throws InterruptedException {
         JwtTokenService shortLived = new JwtTokenService(
                 SECRET,
@@ -104,7 +107,7 @@ class JwtTokenServiceTest {
                 REFRESH_TTL_SECONDS
         );
         String token = shortLived.generateAccessToken(testUser);
-        Thread.sleep(10);
+        Thread.sleep(1100);
 
         Optional<Authentication> auth = shortLived.authenticateAccessToken(token);
 
@@ -131,5 +134,77 @@ class JwtTokenServiceTest {
             REFRESH_TTL_SECONDS
         ))
                 .isInstanceOf(Exception.class);
+    }
+
+    // ── authenticateRefreshToken ───────────────────────────────────────────────
+
+    @Test
+    void authenticateRefreshToken_validToken_returnsRefreshPrincipal() {
+        String token = tokenService.generateRefreshToken(testUser);
+
+        Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(token);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().userId()).isEqualTo("u1");
+        assertThat(result.get().email()).isEqualTo("john@test.com");
+    }
+
+    @Test
+    void authenticateRefreshToken_accessTokenPresentedAsRefresh_returnsEmpty() {
+        String accessToken = tokenService.generateAccessToken(testUser);
+
+        Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(accessToken);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void authenticateRefreshToken_tamperedToken_returnsEmpty() {
+        String token = tokenService.generateRefreshToken(testUser) + "x";
+
+        Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(token);
+
+        assertThat(result).isEmpty();
+    }
+
+    // ── role resolution ────────────────────────────────────────────────────────
+
+    @Test
+    void generateAccessToken_userWithActiveAgent_includesRoleAgent() {
+        Agent agent = Agent.builder().status(true).build();
+        User userWithAgent = User.builder().id("u2").email("agent@test.com").fullName("Agent User").agent(agent).build();
+
+        String token = tokenService.generateAccessToken(userWithAgent);
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isPresent();
+        JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
+        assertThat(principal.roles()).contains("ROLE_AGENT");
+    }
+
+    @Test
+    void generateAccessToken_userWithAdmin_includesRoleAdmin() {
+        Admin admin = Admin.builder().status(true).build();
+        User userWithAdmin = User.builder().id("u3").email("admin@test.com").fullName("Admin User").admin(admin).build();
+
+        String token = tokenService.generateAccessToken(userWithAdmin);
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isPresent();
+        JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
+        assertThat(principal.roles()).contains("ROLE_ADMIN");
+    }
+
+    @Test
+    void generateAccessToken_userWithInactiveAgent_omitsRoleAgent() {
+        Agent inactiveAgent = Agent.builder().status(false).build();
+        User user = User.builder().id("u4").email("u4@test.com").fullName("Inactive Agent").agent(inactiveAgent).build();
+
+        String token = tokenService.generateAccessToken(user);
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isPresent();
+        JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
+        assertThat(principal.roles()).doesNotContain("ROLE_AGENT");
     }
 }

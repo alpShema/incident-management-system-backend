@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.utils;
 
-import com.amalitech.hilfe.auth.dto.TokenResponse;
+import com.amalitech.hilfe.dto.TokenResponse;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;

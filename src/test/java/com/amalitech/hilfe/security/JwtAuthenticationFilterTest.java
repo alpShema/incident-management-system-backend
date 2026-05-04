@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.security;
 
-import com.amalitech.hilfe.auth.TokenService;
+import com.amalitech.hilfe.services.TokenService;
 import com.amalitech.hilfe.models.User;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.Cookie;
