@@ -1,11 +1,15 @@
 package com.amalitech.hilfe.auth;
 
-import com.amalitech.hilfe.auth.dto.ArmsUserInfo;
-import com.amalitech.hilfe.auth.dto.LoginRequest;
-import com.amalitech.hilfe.auth.dto.RefreshTokenRequest;
-import com.amalitech.hilfe.auth.dto.TokenResponse;
+import com.amalitech.hilfe.dto.ArmsUserInfo;
+import com.amalitech.hilfe.dto.LoginRequest;
+import com.amalitech.hilfe.dto.RefreshTokenRequest;
+import com.amalitech.hilfe.dto.TokenResponse;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.services.ArmsClient;
+import com.amalitech.hilfe.services.AuthService;
+import com.amalitech.hilfe.services.TokenService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

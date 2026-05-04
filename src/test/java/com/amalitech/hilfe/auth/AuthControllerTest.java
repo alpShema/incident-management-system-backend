@@ -1,22 +1,22 @@
 package com.amalitech.hilfe.auth;
 
-import com.amalitech.hilfe.auth.dto.LoginRequest;
-import com.amalitech.hilfe.auth.dto.RefreshTokenRequest;
-import com.amalitech.hilfe.auth.dto.TokenResponse;
+import com.amalitech.hilfe.controllers.AuthController;
+import com.amalitech.hilfe.dto.LoginRequest;
+import com.amalitech.hilfe.dto.RefreshTokenRequest;
+import com.amalitech.hilfe.dto.TokenResponse;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
+import com.amalitech.hilfe.services.AuthService;
+import com.amalitech.hilfe.services.TokenService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
-import org.springframework.context.annotation.Bean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,22 +27,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AuthController.class)
-@Import({AuthControllerTest.OpenSecurityConfig.class, GlobalExceptionHandler.class})
+@Import(GlobalExceptionHandler.class)
+@TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class AuthControllerTest {
 
     @Autowired MockMvc mvc;
-    @Autowired ObjectMapper objectMapper;
-    @MockBean AuthService authService;
-
-    @TestConfiguration
-    static class OpenSecurityConfig {
-        @Bean
-        SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-            http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(a -> a.anyRequest().permitAll());
-            return http.build();
-        }
-    }
+    final ObjectMapper objectMapper = new ObjectMapper();
+    @MockitoBean AuthService authService;
+    @MockitoBean TokenService tokenService;
 
     @Test
     void login_validRequest_returns200WithTokensAndThreeCookies() throws Exception {

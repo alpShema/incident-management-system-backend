@@ -1,6 +1,5 @@
 package com.amalitech.hilfe.exceptions;
 
-import com.amalitech.hilfe.auth.ArmsAuthException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;

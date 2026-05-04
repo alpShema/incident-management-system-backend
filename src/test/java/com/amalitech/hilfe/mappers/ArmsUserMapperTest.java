@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.mappers;
 
-import com.amalitech.hilfe.auth.dto.ArmsUserInfo;
+import com.amalitech.hilfe.dto.ArmsUserInfo;
 import com.amalitech.hilfe.models.User;
 import org.junit.jupiter.api.Test;
 

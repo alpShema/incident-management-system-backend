@@ -14,8 +14,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ArmsAuthException.class)
     public ResponseEntity<ProblemDetail> handleArmsAuth(ArmsAuthException ex) {
         log.warn("ARMS auth error: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage()));
+        HttpStatus status = HttpStatus.resolve(ex.getHttpStatus());
+        if (status == null) status = HttpStatus.BAD_GATEWAY;
+        return ResponseEntity.status(status)
+                .body(ProblemDetail.forStatusAndDetail(status, ex.getMessage()));
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)
