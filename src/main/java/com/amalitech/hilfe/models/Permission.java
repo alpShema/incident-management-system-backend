@@ -26,10 +26,6 @@ public class Permission {
 
     private String description;
 
-    @Column(name = "system_defined", nullable = false)
-    @Builder.Default
-    private boolean systemDefined = true;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

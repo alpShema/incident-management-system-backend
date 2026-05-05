@@ -3,7 +3,9 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.AuthSessionResponse;
+import com.amalitech.hilfe.dto.UserPermissionsResponse;
 import com.amalitech.hilfe.services.AuthService;
+import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.utils.CookieUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -57,5 +61,12 @@ public class AuthController {
         authService.logout();
         CookieUtils.clearAuthCookies(response, cookieSecure);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    @GetMapping("/permissions")
+    public ResponseEntity<UserPermissionsResponse> permissions(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
+    ) {
+        return ResponseEntity.ok(authService.getUserPermissions(principal.userId()));
     }
 }

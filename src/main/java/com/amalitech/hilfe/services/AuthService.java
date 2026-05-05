@@ -5,13 +5,18 @@ import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.AuthSessionResponse;
 import com.amalitech.hilfe.dto.AuthTokens;
 import com.amalitech.hilfe.dto.LoginRequest;
+import com.amalitech.hilfe.dto.UserPermissionsResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
+
+import java.util.Comparator;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -90,6 +95,22 @@ public class AuthService {
         // TODO: Revoke refresh token when storage is implemented.
     }
 
+    public UserPermissionsResponse getUserPermissions(String userId) {
+        UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolveByUserId(userId)
+                .orElseThrow(() -> new ArmsAuthException("Authenticated user not found", 401));
+
+        List<String> permissions = resolvedAuthorities.authorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> !authority.startsWith("ROLE_"))
+                .sorted(Comparator.naturalOrder())
+                .toList();
+
+        return UserPermissionsResponse.builder()
+                .userId(resolvedAuthorities.userId())
+                .permissions(permissions)
+                .build();
+    }
+
     private void validateRefreshPrincipal(TokenService.RefreshPrincipal refreshPrincipal, ArmsUserInfo armsUser) {
         if (!refreshPrincipal.userId().equals(armsUser.userId())
                 || !refreshPrincipal.email().equals(armsUser.email())) {
@@ -98,13 +119,11 @@ public class AuthService {
     }
 
     private AuthSessionResponse toSessionResponse(User user) {
-        UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
         return AuthSessionResponse.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .profileImg(user.getProfileImg())
-                .roleCode(resolvedAuthorities.roleCode())
                 .build();
     }
 

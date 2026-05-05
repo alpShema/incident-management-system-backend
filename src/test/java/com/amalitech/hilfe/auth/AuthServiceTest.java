@@ -3,6 +3,7 @@ package com.amalitech.hilfe.auth;
 import com.amalitech.hilfe.dto.ArmsUserInfo;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.LoginRequest;
+import com.amalitech.hilfe.dto.UserPermissionsResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
@@ -50,7 +51,6 @@ class AuthServiceTest {
         when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
         when(tokenService.generateRefreshToken(user, 7200L)).thenReturn("refresh-jwt");
         when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
-        mockResolvedRole(user, RoleCode.CLIENT);
 
         AuthResult result = authService.login(new LoginRequest("arms-token"));
 
@@ -60,7 +60,6 @@ class AuthServiceTest {
         assertThat(result.tokens().getRefreshTokenExpiresIn()).isEqualTo(7200L);
         assertThat(result.session().getUserId()).isEqualTo("u1");
         assertThat(result.session().getEmail()).isEqualTo("john@test.com");
-        assertThat(result.session().getRoleCode()).isEqualTo(RoleCode.CLIENT);
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", "http://img.png");
     }
 
@@ -74,7 +73,6 @@ class AuthServiceTest {
         when(userRepository.findAuthUserById("u2")).thenReturn(Optional.of(user));
         when(tokenService.generateAccessToken(any())).thenReturn("at");
         when(tokenService.generateRefreshToken(any(), anyLong())).thenReturn("rt");
-        mockResolvedRole(user, RoleCode.CLIENT);
 
         authService.login(new LoginRequest("token"));
 
@@ -116,7 +114,6 @@ class AuthServiceTest {
         when(tokenService.generateRefreshToken(user, 1800L)).thenReturn("new-refresh");
         when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
 
-        mockResolvedRole(user, RoleCode.CLIENT);
         AuthResult result = authService.refresh("rt", "arms-token");
 
         assertThat(result.tokens().getAccessToken()).isEqualTo("new-access");
@@ -155,12 +152,24 @@ class AuthServiceTest {
                 .doesNotThrowAnyException();
     }
 
-    private void mockResolvedRole(User user, RoleCode roleCode) {
-        when(userAuthorityService.resolve(user)).thenReturn(new UserAuthorityService.ResolvedAuthorities(
-                user.getId(),
-                user.getEmail(),
-                roleCode,
-                List.of()
+    @Test
+    void getUserPermissions_returnsNonRoleAuthorities() {
+        when(userAuthorityService.resolveByUserId("u1")).thenReturn(Optional.of(
+                new UserAuthorityService.ResolvedAuthorities(
+                        "u1",
+                        "john@test.com",
+                        RoleCode.CLIENT,
+                        List.of(
+                                () -> "ROLE_CLIENT",
+                                () -> "incident.create",
+                                () -> "incident.read.own"
+                        )
+                )
         ));
+
+        UserPermissionsResponse response = authService.getUserPermissions("u1");
+
+        assertThat(response.getUserId()).isEqualTo("u1");
+        assertThat(response.getPermissions()).containsExactly("incident.create", "incident.read.own");
     }
 }
