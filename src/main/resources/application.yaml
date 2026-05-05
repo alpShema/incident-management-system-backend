@@ -39,8 +39,8 @@ spring:
   # Flyway (Database Migration)
   # ──────────────────────────────────────────
   flyway:
-    # Disabled — connecting to existing Prisma-managed database
-    enabled: false
+    enabled: true
+    baseline-on-migrate: true
 
 # ──────────────────────────────────────────
 # Server

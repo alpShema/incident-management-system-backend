@@ -202,11 +202,9 @@ public class ArmsClientImpl implements ArmsClient {
         }
     }
 
-    // ── GraphQL request wrapper ───────────────────────────────────────────────
 
     private record GraphQlRequest(String query, Object variables) {}
 
-    // ── getEmployeeBio response ───────────────────────────────────────────────
 
     private record EmployeeBioResponse(@JsonProperty("data") EmployeeBioData data) {}
     private record EmployeeBioData(@JsonProperty("getEmployeeBio") EmployeeBio employeeBio) {}
@@ -219,7 +217,7 @@ public class ArmsClientImpl implements ArmsClient {
     ) {}
     private record EmployeeBioUser(@JsonProperty("email") String email) {}
 
-    // ── getAllUsers response ───────────────────────────────────────────────────
+
 
     private record EmployeeListResponse(@JsonProperty("data") EmployeeListData data) {}
     private record EmployeeListData(
@@ -229,7 +227,6 @@ public class ArmsClientImpl implements ArmsClient {
             @JsonProperty("EmployeeInfo") List<ArmsEmployeeInfo> employeeInfo
     ) {}
 
-    // ── getUserById response ──────────────────────────────────────────────────
 
     private record UserByIdResponse(@JsonProperty("data") UserByIdData data) {}
     private record UserByIdData(
