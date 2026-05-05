@@ -6,6 +6,7 @@ import com.amalitech.hilfe.dto.RefreshTokenRequest;
 import com.amalitech.hilfe.dto.TokenResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.services.ArmsTokenExpiryService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ArmsClient;
 import com.amalitech.hilfe.services.AuthService;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +31,7 @@ import static org.mockito.Mockito.when;
 class AuthServiceTest {
 
     @Mock ArmsClient armsClient;
+    @Mock ArmsTokenExpiryService armsTokenExpiryService;
     @Mock TokenService tokenService;
     @Mock UserRepository userRepository;
     @InjectMocks AuthService authService;
@@ -39,18 +42,18 @@ class AuthServiceTest {
         User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
 
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
+        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(7200L);
         when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
         when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
-        when(tokenService.generateRefreshToken(user)).thenReturn("refresh-jwt");
+        when(tokenService.generateRefreshToken(user, 7200L)).thenReturn("refresh-jwt");
         when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
-        when(tokenService.getRefreshTokenTtlSeconds()).thenReturn(86400L);
 
         TokenResponse result = authService.login(new LoginRequest("arms-token"));
 
         assertThat(result.getAccessToken()).isEqualTo("access-jwt");
         assertThat(result.getRefreshToken()).isEqualTo("refresh-jwt");
         assertThat(result.getAccessTokenExpiresIn()).isEqualTo(3600L);
-        assertThat(result.getRefreshTokenExpiresIn()).isEqualTo(86400L);
+        assertThat(result.getRefreshTokenExpiresIn()).isEqualTo(7200L);
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", "http://img.png");
     }
 
@@ -60,9 +63,10 @@ class AuthServiceTest {
         User user = User.builder().id("u2").email("alice@test.com").fullName("Alice Smith").build();
 
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
+        when(armsTokenExpiryService.getRemainingLifetimeSeconds("token")).thenReturn(5400L);
         when(userRepository.findAuthUserById("u2")).thenReturn(Optional.of(user));
         when(tokenService.generateAccessToken(any())).thenReturn("at");
-        when(tokenService.generateRefreshToken(any())).thenReturn("rt");
+        when(tokenService.generateRefreshToken(any(), anyLong())).thenReturn("rt");
 
         authService.login(new LoginRequest("token"));
 
@@ -91,9 +95,48 @@ class AuthServiceTest {
     }
 
     @Test
-    void refresh_throwsUnsupportedOperation() {
-        assertThatThrownBy(() -> authService.refresh(new RefreshTokenRequest("rt")))
-                .isInstanceOf(UnsupportedOperationException.class);
+    void refresh_happyPath_reissuesTokensUsingArmsExpiry() {
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png");
+        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
+
+        when(tokenService.authenticateRefreshToken("rt"))
+                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com")));
+        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
+        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(1800L);
+        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
+        when(tokenService.generateAccessToken(user)).thenReturn("new-access");
+        when(tokenService.generateRefreshToken(user, 1800L)).thenReturn("new-refresh");
+        when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
+
+        TokenResponse result = authService.refresh(new RefreshTokenRequest("rt"), "arms-token");
+
+        assertThat(result.getAccessToken()).isEqualTo("new-access");
+        assertThat(result.getRefreshToken()).isEqualTo("new-refresh");
+        assertThat(result.getAccessTokenExpiresIn()).isEqualTo(3600L);
+        assertThat(result.getRefreshTokenExpiresIn()).isEqualTo(1800L);
+        verify(userRepository).upsert("u1", "john@test.com", "John Doe", "http://img.png");
+    }
+
+    @Test
+    void refresh_invalidRefreshToken_throwsUnauthorized() {
+        when(tokenService.authenticateRefreshToken("rt")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshTokenRequest("rt"), "arms-token"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Invalid refresh token");
+    }
+
+    @Test
+    void refresh_mismatchedArmsUser_throwsUnauthorized() {
+        ArmsUserInfo armsUser = new ArmsUserInfo("u2", "John", "Doe", "john@test.com", null);
+
+        when(tokenService.authenticateRefreshToken("rt"))
+                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com")));
+        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshTokenRequest("rt"), "arms-token"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Refresh token does not match the authenticated ARMS user");
     }
 
     @Test

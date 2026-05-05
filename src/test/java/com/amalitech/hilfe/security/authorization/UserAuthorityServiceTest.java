@@ -2,9 +2,7 @@ package com.amalitech.hilfe.security.authorization;
 
 import com.amalitech.hilfe.models.Admin;
 import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.models.Permission;
 import com.amalitech.hilfe.models.RoleCode;
-import com.amalitech.hilfe.models.RolePermission;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
@@ -43,14 +41,9 @@ class UserAuthorityServiceTest {
             .roleCode(RoleCode.ADMIN)
             .permissions(List.of("create-agent"))
             .build();
-        Permission permission = Permission.builder().id(1L).code("agent.read").name("Agent Read").build();
-        RolePermission rolePermission = RolePermission.builder()
-            .id(1L)
-            .roleCode(RoleCode.ADMIN)
-            .permission(permission)
-            .build();
 
-        when(rolePermissionRepository.findAllByRoleCode(RoleCode.ADMIN)).thenReturn(List.of(rolePermission));
+        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.ADMIN))
+                .thenReturn(List.of("agent.read"));
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 
@@ -68,7 +61,7 @@ class UserAuthorityServiceTest {
             .admin(Admin.builder().status(true).build())
             .build();
 
-        when(rolePermissionRepository.findAllByRoleCode(RoleCode.ADMIN)).thenReturn(List.of());
+        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.ADMIN)).thenReturn(List.of());
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 
@@ -86,7 +79,7 @@ class UserAuthorityServiceTest {
             .agent(Agent.builder().status(true).build())
             .build();
 
-        when(rolePermissionRepository.findAllByRoleCode(RoleCode.AGENT)).thenReturn(List.of());
+        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.AGENT)).thenReturn(List.of());
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 
@@ -104,7 +97,7 @@ class UserAuthorityServiceTest {
             .roleCode(RoleCode.CLIENT)
             .build();
 
-        when(rolePermissionRepository.findAllByRoleCode(RoleCode.SUPER_ADMIN)).thenReturn(List.of());
+        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.SUPER_ADMIN)).thenReturn(List.of());
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 

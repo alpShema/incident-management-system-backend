@@ -43,7 +43,7 @@ public final class CookieUtils {
     /**
      * Stores the original ARMS token in its own httpOnly cookie.
      * The backend uses this for subsequent server-to-server ARMS calls on behalf of the user.
-     * TTL matches the access token so both expire together.
+     * TTL should match the remaining ARMS token lifetime.
      */
     public static void addArmsTokenCookie(HttpServletResponse response, String armsToken,
                                           boolean secure, long ttlSeconds) {
