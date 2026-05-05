@@ -1,8 +1,8 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.LoginRequest;
-import com.amalitech.hilfe.dto.RefreshTokenRequest;
-import com.amalitech.hilfe.dto.TokenResponse;
+import com.amalitech.hilfe.dto.AuthResult;
+import com.amalitech.hilfe.dto.AuthSessionResponse;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.utils.CookieUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,36 +26,35 @@ public class AuthController {
     private boolean cookieSecure;
 
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(
+    public ResponseEntity<AuthSessionResponse> login(
             @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
-        TokenResponse tokens = authService.login(request);
-        CookieUtils.addAuthCookies(response, tokens, cookieSecure);
+        AuthResult authResult = authService.login(request);
+        CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
         CookieUtils.addArmsTokenCookie(response, request.armsToken(), cookieSecure,
-                tokens.getRefreshTokenExpiresIn());
-        return ResponseEntity.ok(tokens);
+                authResult.tokens().getRefreshTokenExpiresIn());
+        return ResponseEntity.ok(authResult.session());
     }
 
     @PostMapping("/refresh-token")
-    public ResponseEntity<TokenResponse> refresh(
-            @RequestBody RefreshTokenRequest request,
+    public ResponseEntity<AuthSessionResponse> refresh(
             HttpServletRequest servletRequest,
             HttpServletResponse response
     ) {
         String armsToken = CookieUtils.getCookieValue(servletRequest, CookieUtils.ARMS_TOKEN_COOKIE);
-        TokenResponse tokens = authService.refresh(request, armsToken);
-        CookieUtils.addAuthCookies(response, tokens, cookieSecure);
-        CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, tokens.getRefreshTokenExpiresIn());
-        return ResponseEntity.ok(tokens);
+        String refreshToken = CookieUtils.getCookieValue(servletRequest, CookieUtils.REFRESH_TOKEN_COOKIE);
+        AuthResult authResult = authService.refresh(refreshToken, armsToken);
+        CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
+        CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, authResult.tokens().getRefreshTokenExpiresIn());
+        return ResponseEntity.ok(authResult.session());
     }
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
-            @RequestBody RefreshTokenRequest request,
             HttpServletResponse response
     ) {
-        authService.logout(request);
+        authService.logout();
         CookieUtils.clearAuthCookies(response, cookieSecure);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }

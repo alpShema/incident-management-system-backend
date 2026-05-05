@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.utils;
 
-import com.amalitech.hilfe.dto.TokenResponse;
+import com.amalitech.hilfe.dto.AuthTokens;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -9,7 +9,7 @@ import org.springframework.http.ResponseCookie;
 
 /**
  * Owner: Lawson
- * Depends on: TokenResponse cookie TTL values.
+ * Depends on: AuthTokens cookie TTL values.
  */
 public final class CookieUtils {
     public static final String ACCESS_TOKEN_COOKIE = "access_token";
@@ -19,7 +19,7 @@ public final class CookieUtils {
     private CookieUtils() {
     }
 
-    public static void addAuthCookies(HttpServletResponse response, TokenResponse tokens, boolean secure) {
+    public static void addAuthCookies(HttpServletResponse response, AuthTokens tokens, boolean secure) {
         ResponseCookie accessCookie = ResponseCookie.from(ACCESS_TOKEN_COOKIE, tokens.getAccessToken())
                 .httpOnly(true)
                 .secure(secure)

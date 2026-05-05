@@ -1,11 +1,13 @@
 package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.ArmsUserInfo;
+import com.amalitech.hilfe.dto.AuthResult;
+import com.amalitech.hilfe.dto.AuthSessionResponse;
+import com.amalitech.hilfe.dto.AuthTokens;
 import com.amalitech.hilfe.dto.LoginRequest;
-import com.amalitech.hilfe.dto.RefreshTokenRequest;
-import com.amalitech.hilfe.dto.TokenResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -18,9 +20,10 @@ public class AuthService {
     private final ArmsTokenExpiryService armsTokenExpiryService;
     private final TokenService tokenService;
     private final UserRepository userRepository;
+    private final UserAuthorityService userAuthorityService;
 
     @Transactional
-    public TokenResponse login(LoginRequest request) {
+    public AuthResult login(LoginRequest request) {
         ArmsUserInfo armsUser = armsClient.getUserByToken(request.armsToken());
 
         userRepository.upsert(
@@ -38,17 +41,20 @@ public class AuthService {
         String accessToken = tokenService.generateAccessToken(user);
         String refreshToken = tokenService.generateRefreshToken(user, refreshTokenTtlSeconds);
 
-        return TokenResponse.builder()
+        return new AuthResult(
+                AuthTokens.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .accessTokenExpiresIn(tokenService.getAccessTokenTtlSeconds())
                 .refreshTokenExpiresIn(refreshTokenTtlSeconds)
-                .build();
+                .build(),
+                toSessionResponse(user)
+        );
     }
 
     @Transactional
-    public TokenResponse refresh(RefreshTokenRequest request, String armsToken) {
-        TokenService.RefreshPrincipal refreshPrincipal = tokenService.authenticateRefreshToken(request.refreshToken())
+    public AuthResult refresh(String refreshToken, String armsToken) {
+        TokenService.RefreshPrincipal refreshPrincipal = tokenService.authenticateRefreshToken(refreshToken)
                 .orElseThrow(() -> new ArmsAuthException("Invalid refresh token", 401));
 
         long refreshTokenTtlSeconds = armsTokenExpiryService.getRemainingLifetimeSeconds(armsToken);
@@ -67,17 +73,20 @@ public class AuthService {
                         "User not found after upsert for id=" + armsUser.userId()));
 
         String accessToken = tokenService.generateAccessToken(user);
-        String refreshToken = tokenService.generateRefreshToken(user, refreshTokenTtlSeconds);
+        String newRefreshToken = tokenService.generateRefreshToken(user, refreshTokenTtlSeconds);
 
-        return TokenResponse.builder()
+        return new AuthResult(
+                AuthTokens.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken)
+                .refreshToken(newRefreshToken)
                 .accessTokenExpiresIn(tokenService.getAccessTokenTtlSeconds())
                 .refreshTokenExpiresIn(refreshTokenTtlSeconds)
-                .build();
+                .build(),
+                toSessionResponse(user)
+        );
     }
 
-    public void logout(RefreshTokenRequest request) {
+    public void logout() {
         // TODO: Revoke refresh token when storage is implemented.
     }
 
@@ -86,6 +95,17 @@ public class AuthService {
                 || !refreshPrincipal.email().equals(armsUser.email())) {
             throw new ArmsAuthException("Refresh token does not match the authenticated ARMS user", 401);
         }
+    }
+
+    private AuthSessionResponse toSessionResponse(User user) {
+        UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
+        return AuthSessionResponse.builder()
+                .userId(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .profileImg(user.getProfileImg())
+                .roleCode(resolvedAuthorities.roleCode())
+                .build();
     }
 
 }

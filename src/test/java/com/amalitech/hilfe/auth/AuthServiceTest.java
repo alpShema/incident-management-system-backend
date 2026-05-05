@@ -1,22 +1,24 @@
 package com.amalitech.hilfe.auth;
 
 import com.amalitech.hilfe.dto.ArmsUserInfo;
+import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.LoginRequest;
-import com.amalitech.hilfe.dto.RefreshTokenRequest;
-import com.amalitech.hilfe.dto.TokenResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.services.ArmsTokenExpiryService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ArmsClient;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.services.TokenService;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,6 +36,7 @@ class AuthServiceTest {
     @Mock ArmsTokenExpiryService armsTokenExpiryService;
     @Mock TokenService tokenService;
     @Mock UserRepository userRepository;
+    @Mock UserAuthorityService userAuthorityService;
     @InjectMocks AuthService authService;
 
     @Test
@@ -47,13 +50,17 @@ class AuthServiceTest {
         when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
         when(tokenService.generateRefreshToken(user, 7200L)).thenReturn("refresh-jwt");
         when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
+        mockResolvedRole(user, RoleCode.CLIENT);
 
-        TokenResponse result = authService.login(new LoginRequest("arms-token"));
+        AuthResult result = authService.login(new LoginRequest("arms-token"));
 
-        assertThat(result.getAccessToken()).isEqualTo("access-jwt");
-        assertThat(result.getRefreshToken()).isEqualTo("refresh-jwt");
-        assertThat(result.getAccessTokenExpiresIn()).isEqualTo(3600L);
-        assertThat(result.getRefreshTokenExpiresIn()).isEqualTo(7200L);
+        assertThat(result.tokens().getAccessToken()).isEqualTo("access-jwt");
+        assertThat(result.tokens().getRefreshToken()).isEqualTo("refresh-jwt");
+        assertThat(result.tokens().getAccessTokenExpiresIn()).isEqualTo(3600L);
+        assertThat(result.tokens().getRefreshTokenExpiresIn()).isEqualTo(7200L);
+        assertThat(result.session().getUserId()).isEqualTo("u1");
+        assertThat(result.session().getEmail()).isEqualTo("john@test.com");
+        assertThat(result.session().getRoleCode()).isEqualTo(RoleCode.CLIENT);
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", "http://img.png");
     }
 
@@ -67,6 +74,7 @@ class AuthServiceTest {
         when(userRepository.findAuthUserById("u2")).thenReturn(Optional.of(user));
         when(tokenService.generateAccessToken(any())).thenReturn("at");
         when(tokenService.generateRefreshToken(any(), anyLong())).thenReturn("rt");
+        mockResolvedRole(user, RoleCode.CLIENT);
 
         authService.login(new LoginRequest("token"));
 
@@ -108,12 +116,14 @@ class AuthServiceTest {
         when(tokenService.generateRefreshToken(user, 1800L)).thenReturn("new-refresh");
         when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
 
-        TokenResponse result = authService.refresh(new RefreshTokenRequest("rt"), "arms-token");
+        mockResolvedRole(user, RoleCode.CLIENT);
+        AuthResult result = authService.refresh("rt", "arms-token");
 
-        assertThat(result.getAccessToken()).isEqualTo("new-access");
-        assertThat(result.getRefreshToken()).isEqualTo("new-refresh");
-        assertThat(result.getAccessTokenExpiresIn()).isEqualTo(3600L);
-        assertThat(result.getRefreshTokenExpiresIn()).isEqualTo(1800L);
+        assertThat(result.tokens().getAccessToken()).isEqualTo("new-access");
+        assertThat(result.tokens().getRefreshToken()).isEqualTo("new-refresh");
+        assertThat(result.tokens().getAccessTokenExpiresIn()).isEqualTo(3600L);
+        assertThat(result.tokens().getRefreshTokenExpiresIn()).isEqualTo(1800L);
+        assertThat(result.session().getUserId()).isEqualTo("u1");
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", "http://img.png");
     }
 
@@ -121,7 +131,7 @@ class AuthServiceTest {
     void refresh_invalidRefreshToken_throwsUnauthorized() {
         when(tokenService.authenticateRefreshToken("rt")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authService.refresh(new RefreshTokenRequest("rt"), "arms-token"))
+        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Invalid refresh token");
     }
@@ -134,14 +144,23 @@ class AuthServiceTest {
                 .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com")));
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
 
-        assertThatThrownBy(() -> authService.refresh(new RefreshTokenRequest("rt"), "arms-token"))
+        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Refresh token does not match the authenticated ARMS user");
     }
 
     @Test
     void logout_completesWithoutException() {
-        assertThatCode(() -> authService.logout(new RefreshTokenRequest("rt")))
+        assertThatCode(() -> authService.logout())
                 .doesNotThrowAnyException();
+    }
+
+    private void mockResolvedRole(User user, RoleCode roleCode) {
+        when(userAuthorityService.resolve(user)).thenReturn(new UserAuthorityService.ResolvedAuthorities(
+                user.getId(),
+                user.getEmail(),
+                roleCode,
+                List.of()
+        ));
     }
 }
