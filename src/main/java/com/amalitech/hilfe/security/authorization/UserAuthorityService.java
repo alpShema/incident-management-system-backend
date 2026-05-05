@@ -1,8 +1,6 @@
 package com.amalitech.hilfe.security.authorization;
 
-import com.amalitech.hilfe.models.Permission;
 import com.amalitech.hilfe.models.RoleCode;
-import com.amalitech.hilfe.models.RolePermission;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
@@ -64,9 +62,7 @@ public class UserAuthorityService {
         Set<String> authorities = new LinkedHashSet<>();
 
         authorities.add(toRoleAuthority(roleCode));
-        loadRolePermissions(roleCode).stream()
-                .map(Permission::getCode)
-                .forEach(authorities::add);
+        authorities.addAll(loadRolePermissionCodes(roleCode));
         mapLegacyPermissions(user).forEach(authorities::add);
 
         return new ResolvedAuthorities(
@@ -112,12 +108,8 @@ public class UserAuthorityService {
         return permissions;
     }
 
-    private Set<Permission> loadRolePermissions(RoleCode roleCode) {
-        Set<Permission> permissions = new LinkedHashSet<>();
-        for (RolePermission rolePermission : rolePermissionRepository.findAllByRoleCode(roleCode)) {
-            permissions.add(rolePermission.getPermission());
-        }
-        return permissions;
+    private Set<String> loadRolePermissionCodes(RoleCode roleCode) {
+        return new LinkedHashSet<>(rolePermissionRepository.findPermissionCodesByRoleCode(roleCode));
     }
 
     private String toRoleAuthority(RoleCode roleCode) {

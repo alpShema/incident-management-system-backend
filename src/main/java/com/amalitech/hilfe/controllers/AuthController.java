@@ -5,6 +5,7 @@ import com.amalitech.hilfe.dto.RefreshTokenRequest;
 import com.amalitech.hilfe.dto.TokenResponse;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.utils.CookieUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,17 +33,20 @@ public class AuthController {
         TokenResponse tokens = authService.login(request);
         CookieUtils.addAuthCookies(response, tokens, cookieSecure);
         CookieUtils.addArmsTokenCookie(response, request.armsToken(), cookieSecure,
-                tokens.getAccessTokenExpiresIn());
+                tokens.getRefreshTokenExpiresIn());
         return ResponseEntity.ok(tokens);
     }
 
     @PostMapping("/refresh-token")
     public ResponseEntity<TokenResponse> refresh(
             @RequestBody RefreshTokenRequest request,
+            HttpServletRequest servletRequest,
             HttpServletResponse response
     ) {
-        TokenResponse tokens = authService.refresh(request);
+        String armsToken = CookieUtils.getCookieValue(servletRequest, CookieUtils.ARMS_TOKEN_COOKIE);
+        TokenResponse tokens = authService.refresh(request, armsToken);
         CookieUtils.addAuthCookies(response, tokens, cookieSecure);
+        CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, tokens.getRefreshTokenExpiresIn());
         return ResponseEntity.ok(tokens);
     }
 

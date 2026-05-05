@@ -15,6 +15,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockCookie;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -81,13 +82,29 @@ class AuthControllerTest {
     }
 
     @Test
-    void refresh_notImplemented_returns501() throws Exception {
-        when(authService.refresh(any())).thenThrow(new UnsupportedOperationException("Not yet implemented"));
+    void refresh_validRequest_returns200WithUpdatedCookies() throws Exception {
+        TokenResponse tokens = TokenResponse.builder()
+                .accessToken("new-access")
+                .refreshToken("new-refresh")
+                .accessTokenExpiresIn(3600L)
+                .refreshTokenExpiresIn(1800L)
+                .build();
+        when(authService.refresh(any(), any())).thenReturn(tokens);
 
-        mvc.perform(post("/auth/refresh-token")
+        var result = mvc.perform(post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .cookie(new MockCookie("arms_token", "arms-cookie-token"))
                         .content(objectMapper.writeValueAsString(new RefreshTokenRequest("rt"))))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new-access"))
+                .andExpect(jsonPath("$.refreshToken").value("new-refresh"))
+                .andReturn();
+
+        var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(cookies).hasSize(3);
+        assertThat(cookies).anyMatch(c -> c.startsWith("access_token="));
+        assertThat(cookies).anyMatch(c -> c.startsWith("refresh_token="));
+        assertThat(cookies).anyMatch(c -> c.startsWith("arms_token=arms-cookie-token"));
     }
 
     @Test

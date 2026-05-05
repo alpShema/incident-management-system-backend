@@ -59,6 +59,11 @@ public class JwtTokenService implements TokenService {
     }
 
     @Override
+    public String generateRefreshToken(User user, long ttlSeconds) {
+        return buildToken(user, "refresh", ttlSeconds, false);
+    }
+
+    @Override
     public Optional<Authentication> authenticateAccessToken(String token) {
         try {
             Jws<Claims> parsed = Jwts.parser()

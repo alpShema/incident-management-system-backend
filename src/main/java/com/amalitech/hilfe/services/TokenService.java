@@ -10,6 +10,8 @@ public interface TokenService {
 
     String generateRefreshToken(User user);
 
+    String generateRefreshToken(User user, long ttlSeconds);
+
     Optional<Authentication> authenticateAccessToken(String token);
 
     Optional<RefreshPrincipal> authenticateRefreshToken(String token);
