@@ -1,20 +1,24 @@
 package com.amalitech.hilfe.auth.impl;
 
-import com.amalitech.hilfe.models.Admin;
-import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class JwtTokenServiceTest {
@@ -22,6 +26,9 @@ class JwtTokenServiceTest {
     private static final String SECRET = "test-secret-must-be-at-least-32-bytes-long!";
     private static final long ACCESS_TTL_SECONDS = 3600L;
     private static final long REFRESH_TTL_SECONDS = 86400L;
+
+    @Mock
+    UserAuthorityService userAuthorityService;
 
     JwtTokenService tokenService;
     User testUser;
@@ -33,9 +40,15 @@ class JwtTokenServiceTest {
                 "hilfe",
                 "hilfe-web",
                 ACCESS_TTL_SECONDS,
-                REFRESH_TTL_SECONDS
+                REFRESH_TTL_SECONDS,
+                userAuthorityService
         );
-        testUser = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
+        testUser = User.builder()
+            .id("u1")
+            .email("john@test.com")
+            .fullName("John Doe")
+            .roleCode(RoleCode.CLIENT)
+            .build();
     }
 
     @Test
@@ -53,6 +66,7 @@ class JwtTokenServiceTest {
     @Test
     void authenticateAccessToken_validToken_returnsAuthenticationWithCorrectPrincipal() {
         String token = tokenService.generateAccessToken(testUser);
+        mockResolvedAuthorities("u1", "john@test.com", RoleCode.CLIENT, "ROLE_CLIENT");
 
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
@@ -60,6 +74,7 @@ class JwtTokenServiceTest {
         JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
         assertThat(principal.userId()).isEqualTo("u1");
         assertThat(principal.email()).isEqualTo("john@test.com");
+        assertThat(principal.roleCode()).isEqualTo(RoleCode.CLIENT);
         assertThat(auth.get().getAuthorities()).isNotEmpty();
     }
 
@@ -88,7 +103,8 @@ class JwtTokenServiceTest {
             "hilfe",
             "hilfe-web",
             ACCESS_TTL_SECONDS,
-            REFRESH_TTL_SECONDS
+            REFRESH_TTL_SECONDS,
+            userAuthorityService
         );
         String foreignToken = otherService.generateAccessToken(testUser);
 
@@ -104,7 +120,8 @@ class JwtTokenServiceTest {
                 "hilfe",
                 "hilfe-web",
                 1L,
-                REFRESH_TTL_SECONDS
+                REFRESH_TTL_SECONDS,
+                userAuthorityService
         );
         String token = shortLived.generateAccessToken(testUser);
         Thread.sleep(1100);
@@ -131,7 +148,8 @@ class JwtTokenServiceTest {
             "hilfe",
             "hilfe-web",
             ACCESS_TTL_SECONDS,
-            REFRESH_TTL_SECONDS
+            REFRESH_TTL_SECONDS,
+            userAuthorityService
         ))
                 .isInstanceOf(Exception.class);
     }
@@ -167,44 +185,74 @@ class JwtTokenServiceTest {
         assertThat(result).isEmpty();
     }
 
-    // ── role resolution ────────────────────────────────────────────────────────
+    // ── authority resolution ───────────────────────────────────────────────────
 
     @Test
-    void generateAccessToken_userWithActiveAgent_includesRoleAgent() {
-        Agent agent = Agent.builder().status(true).build();
-        User userWithAgent = User.builder().id("u2").email("agent@test.com").fullName("Agent User").agent(agent).build();
+    void authenticateAccessToken_userWithAgentRole_returnsRoleAgent() {
+        User userWithAgentRole = User.builder()
+            .id("u2")
+            .email("agent@test.com")
+            .fullName("Agent User")
+            .roleCode(RoleCode.AGENT)
+            .build();
 
-        String token = tokenService.generateAccessToken(userWithAgent);
+        String token = tokenService.generateAccessToken(userWithAgentRole);
+        mockResolvedAuthorities("u2", "agent@test.com", RoleCode.AGENT, "ROLE_AGENT", "incident.assign");
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
         assertThat(auth).isPresent();
         JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
-        assertThat(principal.roles()).contains("ROLE_AGENT");
+        assertThat(principal.roleCode()).isEqualTo(RoleCode.AGENT);
+        assertThat(auth.get().getAuthorities())
+            .extracting(Object::toString)
+            .contains("ROLE_AGENT", "incident.assign");
     }
 
     @Test
-    void generateAccessToken_userWithAdmin_includesRoleAdmin() {
-        Admin admin = Admin.builder().status(true).build();
-        User userWithAdmin = User.builder().id("u3").email("admin@test.com").fullName("Admin User").admin(admin).build();
+    void authenticateAccessToken_userWithAdminRole_returnsRoleAdmin() {
+        User userWithAdminRole = User.builder()
+            .id("u3")
+            .email("admin@test.com")
+            .fullName("Admin User")
+            .roleCode(RoleCode.ADMIN)
+            .build();
 
-        String token = tokenService.generateAccessToken(userWithAdmin);
+        String token = tokenService.generateAccessToken(userWithAdminRole);
+        mockResolvedAuthorities("u3", "admin@test.com", RoleCode.ADMIN, "ROLE_ADMIN", "agent.create");
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
         assertThat(auth).isPresent();
         JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
-        assertThat(principal.roles()).contains("ROLE_ADMIN");
+        assertThat(principal.roleCode()).isEqualTo(RoleCode.ADMIN);
     }
 
     @Test
-    void generateAccessToken_userWithInactiveAgent_omitsRoleAgent() {
-        Agent inactiveAgent = Agent.builder().status(false).build();
-        User user = User.builder().id("u4").email("u4@test.com").fullName("Inactive Agent").agent(inactiveAgent).build();
+    void authenticateAccessToken_userMissingFromAuthorityService_returnsEmpty() {
+        User user = User.builder()
+            .id("u4")
+            .email("u4@test.com")
+            .fullName("Missing User")
+            .roleCode(RoleCode.CLIENT)
+            .build();
 
         String token = tokenService.generateAccessToken(user);
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
-        assertThat(auth).isPresent();
-        JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
-        assertThat(principal.roles()).doesNotContain("ROLE_AGENT");
+        assertThat(auth).isEmpty();
+    }
+
+    private void mockResolvedAuthorities(
+        String userId,
+        String email,
+        RoleCode roleCode,
+        String... authorities
+    ) {
+        List<SimpleGrantedAuthority> grantedAuthorities = List.of(authorities).stream()
+            .map(SimpleGrantedAuthority::new)
+            .toList();
+
+        when(userAuthorityService.resolveByUserId(userId)).thenReturn(Optional.of(
+            new UserAuthorityService.ResolvedAuthorities(userId, email, roleCode, grantedAuthorities)
+        ));
     }
 }

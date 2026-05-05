@@ -18,6 +18,15 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     Optional<User> findByEmail(String email);
 
+    @Query("""
+            SELECT user
+            FROM User user
+            LEFT JOIN FETCH user.admin
+            LEFT JOIN FETCH user.agent
+            WHERE user.id = :id
+            """)
+    Optional<User> findAuthUserById(@Param("id") String id);
+
     /**
      * Atomic upsert by ARMS user id (which is the local PK).
      * INSERT on first login, UPDATE profile fields on every subsequent login.

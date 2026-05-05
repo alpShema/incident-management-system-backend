@@ -38,6 +38,10 @@ public class User {
 
     private String signature;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role_code")
+    private RoleCode roleCode;
+
     @Column(name = "location_id")
     private String locationId;
 
