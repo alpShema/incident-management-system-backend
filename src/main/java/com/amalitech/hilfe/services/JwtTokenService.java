@@ -22,7 +22,8 @@ import java.util.Optional;
 @Service
 public class JwtTokenService implements TokenService {
     private static final String CLAIM_EMAIL = "email";
-    private static final String CLAIM_TYPE  = "type";
+    private static final String CLAIM_ROLE = "role";
+    private static final String CLAIM_TYPE = "type";
 
     private final SecretKey signingKey;
     private final String jwtIssuer;
@@ -72,21 +73,23 @@ public class JwtTokenService implements TokenService {
             }
 
             String userId = claims.getSubject();
-            String email  = claims.get(CLAIM_EMAIL, String.class);
+            String email = claims.get(CLAIM_EMAIL, String.class);
+            String claimedRole = claims.get(CLAIM_ROLE, String.class);
             return userAuthorityService.resolveByUserId(userId)
-                .filter(resolvedAuthorities -> email.equals(resolvedAuthorities.email()))
-                .map(resolvedAuthorities -> {
-                    AuthPrincipal principal = new AuthPrincipal(
-                        resolvedAuthorities.userId(),
-                        resolvedAuthorities.email(),
-                        resolvedAuthorities.roleCode()
-                    );
-                    return new UsernamePasswordAuthenticationToken(
-                        principal,
-                        null,
-                        resolvedAuthorities.authorities()
-                    );
-                });
+                    .filter(resolvedAuthorities -> email.equals(resolvedAuthorities.email()))
+                    .filter(resolvedAuthorities -> hasMatchingRoleClaim(claimedRole, resolvedAuthorities.roleCode()))
+                    .map(resolvedAuthorities -> {
+                        AuthPrincipal principal = new AuthPrincipal(
+                                resolvedAuthorities.userId(),
+                                resolvedAuthorities.email(),
+                                resolvedAuthorities.roleCode()
+                        );
+                        return new UsernamePasswordAuthenticationToken(
+                                principal,
+                                null,
+                                resolvedAuthorities.authorities()
+                        );
+                    });
 
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
@@ -97,17 +100,17 @@ public class JwtTokenService implements TokenService {
     public Optional<RefreshPrincipal> authenticateRefreshToken(String token) {
         try {
             Claims claims = Jwts.parser()
-                .verifyWith(signingKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                    .verifyWith(signingKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
 
             if (!"refresh".equals(claims.get(CLAIM_TYPE, String.class))) {
                 return Optional.empty();
             }
 
             String userId = claims.getSubject();
-            String email  = claims.get(CLAIM_EMAIL, String.class);
+            String email = claims.get(CLAIM_EMAIL, String.class);
             if (userId == null || email == null) {
                 return Optional.empty();
             }
@@ -129,7 +132,7 @@ public class JwtTokenService implements TokenService {
     }
 
     private String buildToken(User user, String type, long ttlSeconds, boolean includeRoleClaim) {
-        Instant now    = Instant.now();
+        Instant now = Instant.now();
         Instant expiry = now.plusSeconds(ttlSeconds);
 
         var builder = Jwts.builder()
@@ -141,12 +144,18 @@ public class JwtTokenService implements TokenService {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry));
 
-        if (includeRoleClaim && user.getRoleCode() != null) {
-            builder.claim("role", user.getRoleCode().name());
+        if (includeRoleClaim) {
+            RoleCode resolvedRoleCode = userAuthorityService.resolve(user).roleCode();
+            builder.claim(CLAIM_ROLE, resolvedRoleCode.name());
         }
 
         return builder.signWith(signingKey, Jwts.SIG.HS256).compact();
     }
 
-    public record AuthPrincipal(String userId, String email, RoleCode roleCode) {}
+    private boolean hasMatchingRoleClaim(String claimedRole, RoleCode resolvedRoleCode) {
+        return claimedRole != null && claimedRole.equals(resolvedRoleCode.name());
+    }
+
+    public record AuthPrincipal(String userId, String email, RoleCode roleCode) {
+    }
 }

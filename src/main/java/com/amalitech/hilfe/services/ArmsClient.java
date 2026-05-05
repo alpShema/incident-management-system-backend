@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface ArmsClient {
     ArmsUserInfo getUserByToken(String armsToken);
+
     List<ArmsEmployeeInfo> getAllUsers();
+
     ArmsUserInfo getUserById(String userId);
 }

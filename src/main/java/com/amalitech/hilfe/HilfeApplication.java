@@ -8,8 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 @ConfigurationPropertiesScan
 public class HilfeApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(HilfeApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(HilfeApplication.class, args);
+    }
 
 }

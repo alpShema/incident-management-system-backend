@@ -7,11 +7,17 @@ import java.util.Optional;
 
 public interface TokenService {
     String generateAccessToken(User user);
+
     String generateRefreshToken(User user);
+
     Optional<Authentication> authenticateAccessToken(String token);
+
     Optional<RefreshPrincipal> authenticateRefreshToken(String token);
+
     long getAccessTokenTtlSeconds();
+
     long getRefreshTokenTtlSeconds();
 
-    record RefreshPrincipal(String userId, String email) {}
+    record RefreshPrincipal(String userId, String email) {
+    }
 }

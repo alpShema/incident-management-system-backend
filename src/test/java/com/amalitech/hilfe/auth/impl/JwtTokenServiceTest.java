@@ -53,6 +53,7 @@ class JwtTokenServiceTest {
 
     @Test
     void generateAccessToken_producesNonBlankToken() {
+        mockResolvedRole(testUser, RoleCode.CLIENT);
         String token = tokenService.generateAccessToken(testUser);
         assertThat(token).isNotBlank();
     }
@@ -65,6 +66,7 @@ class JwtTokenServiceTest {
 
     @Test
     void authenticateAccessToken_validToken_returnsAuthenticationWithCorrectPrincipal() {
+        mockResolvedRole(testUser, RoleCode.CLIENT);
         String token = tokenService.generateAccessToken(testUser);
         mockResolvedAuthorities("u1", "john@test.com", RoleCode.CLIENT, "ROLE_CLIENT");
 
@@ -89,6 +91,7 @@ class JwtTokenServiceTest {
 
     @Test
     void authenticateAccessToken_tamperedToken_returnsEmpty() {
+        mockResolvedRole(testUser, RoleCode.CLIENT);
         String token = tokenService.generateAccessToken(testUser) + "x";
 
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
@@ -106,6 +109,7 @@ class JwtTokenServiceTest {
             REFRESH_TTL_SECONDS,
             userAuthorityService
         );
+        mockResolvedRole(testUser, RoleCode.CLIENT);
         String foreignToken = otherService.generateAccessToken(testUser);
 
         Optional<Authentication> auth = tokenService.authenticateAccessToken(foreignToken);
@@ -123,6 +127,7 @@ class JwtTokenServiceTest {
                 REFRESH_TTL_SECONDS,
                 userAuthorityService
         );
+        mockResolvedRole(testUser, RoleCode.CLIENT);
         String token = shortLived.generateAccessToken(testUser);
         Thread.sleep(1100);
 
@@ -169,6 +174,7 @@ class JwtTokenServiceTest {
 
     @Test
     void authenticateRefreshToken_accessTokenPresentedAsRefresh_returnsEmpty() {
+        mockResolvedRole(testUser, RoleCode.CLIENT);
         String accessToken = tokenService.generateAccessToken(testUser);
 
         Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(accessToken);
@@ -196,6 +202,7 @@ class JwtTokenServiceTest {
             .roleCode(RoleCode.AGENT)
             .build();
 
+        mockResolvedRole(userWithAgentRole, RoleCode.AGENT);
         String token = tokenService.generateAccessToken(userWithAgentRole);
         mockResolvedAuthorities("u2", "agent@test.com", RoleCode.AGENT, "ROLE_AGENT", "incident.assign");
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
@@ -217,6 +224,7 @@ class JwtTokenServiceTest {
             .roleCode(RoleCode.ADMIN)
             .build();
 
+        mockResolvedRole(userWithAdminRole, RoleCode.ADMIN);
         String token = tokenService.generateAccessToken(userWithAdminRole);
         mockResolvedAuthorities("u3", "admin@test.com", RoleCode.ADMIN, "ROLE_ADMIN", "agent.create");
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
@@ -235,7 +243,26 @@ class JwtTokenServiceTest {
             .roleCode(RoleCode.CLIENT)
             .build();
 
+        mockResolvedRole(user, RoleCode.CLIENT);
         String token = tokenService.generateAccessToken(user);
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
+    }
+
+    @Test
+    void authenticateAccessToken_mismatchedRoleClaim_returnsEmpty() {
+        User userWithAdminRole = User.builder()
+            .id("u5")
+            .email("u5@test.com")
+            .fullName("Role Drift User")
+            .roleCode(RoleCode.ADMIN)
+            .build();
+
+        mockResolvedRole(userWithAdminRole, RoleCode.ADMIN);
+        String token = tokenService.generateAccessToken(userWithAdminRole);
+        mockResolvedAuthorities("u5", "u5@test.com", RoleCode.AGENT, "ROLE_AGENT");
+
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
         assertThat(auth).isEmpty();
@@ -254,5 +281,16 @@ class JwtTokenServiceTest {
         when(userAuthorityService.resolveByUserId(userId)).thenReturn(Optional.of(
             new UserAuthorityService.ResolvedAuthorities(userId, email, roleCode, grantedAuthorities)
         ));
+    }
+
+    private void mockResolvedRole(User user, RoleCode roleCode) {
+        when(userAuthorityService.resolve(user)).thenReturn(
+            new UserAuthorityService.ResolvedAuthorities(
+                user.getId(),
+                user.getEmail(),
+                roleCode,
+                List.of(new SimpleGrantedAuthority("ROLE_" + roleCode.name()))
+            )
+        );
     }
 }

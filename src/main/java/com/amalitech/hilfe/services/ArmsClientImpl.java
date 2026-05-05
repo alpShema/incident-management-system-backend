@@ -11,7 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.*;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
 
 import java.util.Base64;
 import java.util.List;
@@ -33,18 +36,18 @@ public class ArmsClientImpl implements ArmsClient {
         String userId = extractUserIdFromToken(armsToken);
 
         String query = """
-            query GetEmployeeBio($id: ID!) {
-                getEmployeeBio(id: $id) {
-                    user_id
-                    first_name
-                    last_name
-                    profile_image
-                    user {
-                        email
+                    query GetEmployeeBio($id: ID!) {
+                        getEmployeeBio(id: $id) {
+                            user_id
+                            first_name
+                            last_name
+                            profile_image
+                            user {
+                                email
+                            }
+                        }
                     }
-                }
-            }
-        """;
+                """;
 
         try {
             String raw = restClient
@@ -113,20 +116,20 @@ public class ArmsClientImpl implements ArmsClient {
     @Override
     public List<ArmsEmployeeInfo> getAllUsers() {
         String query = """
-            query ListEmployeeInfosWithFilters {
-                listEmployeeInfosWithFilters {
-                    EmployeeInfo {
-                        user_id
-                        active
-                        employee_bio { full_name profile_image
-                            employee_contacts { work_email }
+                    query ListEmployeeInfosWithFilters {
+                        listEmployeeInfosWithFilters {
+                            EmployeeInfo {
+                                user_id
+                                active
+                                employee_bio { full_name profile_image
+                                    employee_contacts { work_email }
+                                }
+                                position { position_name }
+                                location { town }
+                            }
                         }
-                        position { position_name }
-                        location { town }
                     }
-                }
-            }
-        """;
+                """;
 
         try {
             EmployeeListResponse response = restClient
@@ -159,12 +162,12 @@ public class ArmsClientImpl implements ArmsClient {
     @Override
     public ArmsUserInfo getUserById(String userId) {
         String query = """
-            query GetEmployeeBioForExternalService($id: ID!) {
-                getEmployeeBioForExternalService(id: $id) {
-                    user_id full_name email profile_image deleted
-                }
-            }
-        """;
+                    query GetEmployeeBioForExternalService($id: ID!) {
+                        getEmployeeBioForExternalService(id: $id) {
+                            user_id full_name email profile_image deleted
+                        }
+                    }
+                """;
 
         try {
             UserByIdResponse response = restClient
@@ -203,39 +206,56 @@ public class ArmsClientImpl implements ArmsClient {
     }
 
 
-    private record GraphQlRequest(String query, Object variables) {}
+    private record GraphQlRequest(String query, Object variables) {
+    }
 
 
-    private record EmployeeBioResponse(@JsonProperty("data") EmployeeBioData data) {}
-    private record EmployeeBioData(@JsonProperty("getEmployeeBio") EmployeeBio employeeBio) {}
+    private record EmployeeBioResponse(@JsonProperty("data") EmployeeBioData data) {
+    }
+
+    private record EmployeeBioData(@JsonProperty("getEmployeeBio") EmployeeBio employeeBio) {
+    }
+
     private record EmployeeBio(
-            @JsonProperty("user_id")       String userId,
-            @JsonProperty("first_name")    String firstName,
-            @JsonProperty("last_name")     String lastName,
+            @JsonProperty("user_id") String userId,
+            @JsonProperty("first_name") String firstName,
+            @JsonProperty("last_name") String lastName,
             @JsonProperty("profile_image") String profileImage,
-            @JsonProperty("user")          EmployeeBioUser user
-    ) {}
-    private record EmployeeBioUser(@JsonProperty("email") String email) {}
+            @JsonProperty("user") EmployeeBioUser user
+    ) {
+    }
+
+    private record EmployeeBioUser(@JsonProperty("email") String email) {
+    }
 
 
+    private record EmployeeListResponse(@JsonProperty("data") EmployeeListData data) {
+    }
 
-    private record EmployeeListResponse(@JsonProperty("data") EmployeeListData data) {}
     private record EmployeeListData(
             @JsonProperty("listEmployeeInfosWithFilters") EmployeeListWrapper listEmployeeInfosWithFilters
-    ) {}
+    ) {
+    }
+
     private record EmployeeListWrapper(
             @JsonProperty("EmployeeInfo") List<ArmsEmployeeInfo> employeeInfo
-    ) {}
+    ) {
+    }
 
 
-    private record UserByIdResponse(@JsonProperty("data") UserByIdData data) {}
+    private record UserByIdResponse(@JsonProperty("data") UserByIdData data) {
+    }
+
     private record UserByIdData(
             @JsonProperty("getEmployeeBioForExternalService") UserByIdRaw user
-    ) {}
+    ) {
+    }
+
     private record UserByIdRaw(
-            @JsonProperty("user_id")       String userId,
-            @JsonProperty("full_name")     String fullName,
-            @JsonProperty("email")         String email,
+            @JsonProperty("user_id") String userId,
+            @JsonProperty("full_name") String fullName,
+            @JsonProperty("email") String email,
             @JsonProperty("profile_image") String profileImage
-    ) {}
+    ) {
+    }
 }

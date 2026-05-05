@@ -7,11 +7,11 @@ import java.time.Instant;
 
 @Entity
 @Table(
-    name = "role_permissions",
-    uniqueConstraints = @UniqueConstraint(name = "uk_role_permissions_role_code_permission_id", columnNames = {
-        "role_code",
-        "permission_id"
-    })
+        name = "role_permissions",
+        uniqueConstraints = @UniqueConstraint(name = "uk_role_permissions_role_code_permission_id", columnNames = {
+                "role_code",
+                "permission_id"
+        })
 )
 @Getter
 @Setter
