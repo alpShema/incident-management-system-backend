@@ -21,22 +21,19 @@ spring:
   # ──────────────────────────────────────────
   # JPA / Hibernate
   # ──────────────────────────────────────────
-
-    jpa:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: com.amalitech.hilfe.config.PrismaPhysicalNamingStrategy
+    show-sql: false
+    open-in-view: false
+    properties:
       hibernate:
-        # Validate entities match the existing Prisma-managed database
-        ddl-auto: validate
-        naming:
-          # Preserve PascalCase table names from Prisma (User, AgentGroup, etc.)
-          physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
-      show-sql: false
-      open-in-view: false
-      properties:
-        hibernate:
-          format_sql: true
-          dialect: org.hibernate.dialect.PostgreSQLDialect
-          jdbc:
-            time_zone: UTC
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
 
   # ──────────────────────────────────────────
   # Flyway (Database Migration)
@@ -94,6 +91,17 @@ info:
     description: "Hilfe API - Amalitech"
 
 # ──────────────────────────────────────────
+# Auth / JWT
+# ──────────────────────────────────────────
+app:
+  jwt:
+    issuer: ${JWT_ISSUER:hilfe}
+    audience: ${JWT_AUDIENCE:hilfe-web}
+    secret: ${JWT_SECRET:change-me}
+    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:3600}
+    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:86400}
+
+# ──────────────────────────────────────────
 # Logging
 # ──────────────────────────────────────────
 logging:
@@ -104,3 +112,21 @@ logging:
     org.flywaydb: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# ──────────────────────────────────────────
+# ARMS SSO Integration
+# ──────────────────────────────────────────
+arms:
+  sso-url: ${ARMS_SSO_URL}
+
+# ──────────────────────────────────────────
+# Cookie
+# ──────────────────────────────────────────
+cookie:
+  secure: ${COOKIE_SECURE:false}
+
+# ──────────────────────────────────────────
+# CORS
+# ──────────────────────────────────────────
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:[*]}
