@@ -63,7 +63,7 @@ public class UserAuthorityService {
 
         authorities.add(toRoleAuthority(roleCode));
         authorities.addAll(loadRolePermissionCodes(roleCode));
-        mapLegacyPermissions(user).forEach(authorities::add);
+        authorities.addAll(mapLegacyPermissions(user));
 
         return new ResolvedAuthorities(
                 user.getId(),
