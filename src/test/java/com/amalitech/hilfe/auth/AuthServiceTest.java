@@ -39,7 +39,7 @@ class AuthServiceTest {
         User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
 
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
-        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
         when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
         when(tokenService.generateRefreshToken(user)).thenReturn("refresh-jwt");
         when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
@@ -60,7 +60,7 @@ class AuthServiceTest {
         User user = User.builder().id("u2").email("alice@test.com").fullName("Alice Smith").build();
 
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
-        when(userRepository.findById("u2")).thenReturn(Optional.of(user));
+        when(userRepository.findAuthUserById("u2")).thenReturn(Optional.of(user));
         when(tokenService.generateAccessToken(any())).thenReturn("at");
         when(tokenService.generateRefreshToken(any())).thenReturn("rt");
 
@@ -83,7 +83,7 @@ class AuthServiceTest {
         ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null);
 
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
-        when(userRepository.findById("u1")).thenReturn(Optional.empty());
+        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("token")))
                 .isInstanceOf(IllegalStateException.class)

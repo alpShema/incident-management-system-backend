@@ -45,9 +45,9 @@ public interface UserRepository extends JpaRepository<User, String> {
                 updated_at  = NOW()
             """, nativeQuery = true)
     void upsert(
-            @Param("id")         String id,
-            @Param("email")      String email,
-            @Param("fullName")   String fullName,
+            @Param("id") String id,
+            @Param("email") String email,
+            @Param("fullName") String fullName,
             @Param("profileImg") String profileImg
     );
 }

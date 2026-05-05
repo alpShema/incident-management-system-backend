@@ -26,8 +26,8 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(
-        @RequestBody LoginRequest request,
-        HttpServletResponse response
+            @RequestBody LoginRequest request,
+            HttpServletResponse response
     ) {
         TokenResponse tokens = authService.login(request);
         CookieUtils.addAuthCookies(response, tokens, cookieSecure);
@@ -38,8 +38,8 @@ public class AuthController {
 
     @PostMapping("/refresh-token")
     public ResponseEntity<TokenResponse> refresh(
-        @RequestBody RefreshTokenRequest request,
-        HttpServletResponse response
+            @RequestBody RefreshTokenRequest request,
+            HttpServletResponse response
     ) {
         TokenResponse tokens = authService.refresh(request);
         CookieUtils.addAuthCookies(response, tokens, cookieSecure);
@@ -48,8 +48,8 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
-        @RequestBody RefreshTokenRequest request,
-        HttpServletResponse response
+            @RequestBody RefreshTokenRequest request,
+            HttpServletResponse response
     ) {
         authService.logout(request);
         CookieUtils.clearAuthCookies(response, cookieSecure);

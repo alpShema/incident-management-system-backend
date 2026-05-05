@@ -16,6 +16,7 @@ public class AuthService {
     private final ArmsClient armsClient;
     private final TokenService tokenService;
     private final UserRepository userRepository;
+
     @Transactional
     public TokenResponse login(LoginRequest request) {
         ArmsUserInfo armsUser = armsClient.getUserByToken(request.armsToken());
@@ -27,7 +28,7 @@ public class AuthService {
                 armsUser.profileImage()
         );
 
-        User user = userRepository.findById(armsUser.userId())
+        User user = userRepository.findAuthUserById(armsUser.userId())
                 .orElseThrow(() -> new IllegalStateException(
                         "User not found after upsert for id=" + armsUser.userId()));
 
@@ -35,11 +36,11 @@ public class AuthService {
         String refreshToken = tokenService.generateRefreshToken(user);
 
         return TokenResponse.builder()
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .accessTokenExpiresIn(tokenService.getAccessTokenTtlSeconds())
-            .refreshTokenExpiresIn(tokenService.getRefreshTokenTtlSeconds())
-            .build();
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .accessTokenExpiresIn(tokenService.getAccessTokenTtlSeconds())
+                .refreshTokenExpiresIn(tokenService.getRefreshTokenTtlSeconds())
+                .build();
     }
 
     public TokenResponse refresh(RefreshTokenRequest request) {

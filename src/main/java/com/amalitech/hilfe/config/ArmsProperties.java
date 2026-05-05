@@ -8,4 +8,5 @@ public record ArmsProperties(
         String authUrl,
         String employeeInfoUrl,
         String apiKey
-) {}
+) {
+}

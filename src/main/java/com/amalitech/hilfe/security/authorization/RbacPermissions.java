@@ -34,66 +34,67 @@ public final class RbacPermissions {
     public static final String RBAC_PERMISSION_READ = "rbac.permission.read";
 
     public static final List<String> CLIENT_DEFAULTS = List.of(
-        INCIDENT_CREATE,
-        INCIDENT_READ_OWN
+            INCIDENT_CREATE,
+            INCIDENT_READ_OWN
     );
 
     public static final List<String> AGENT_DEFAULTS = List.of(
-        INCIDENT_READ_ASSIGNED,
-        INCIDENT_ASSIGN,
-        INCIDENT_STATUS_CHANGE,
-        INCIDENT_SEVERITY_CHANGE,
-        AGENT_READ
+            INCIDENT_READ_ASSIGNED,
+            INCIDENT_ASSIGN,
+            INCIDENT_STATUS_CHANGE,
+            INCIDENT_SEVERITY_CHANGE,
+            AGENT_READ
     );
 
     public static final List<String> ADMIN_DEFAULTS = List.of(
-        AGENT_CREATE,
-        AGENT_READ,
-        AGENT_UPDATE,
-        AGENT_DELETE,
-        AGENT_GROUP_CREATE,
-        AGENT_GROUP_UPDATE,
-        AGENT_GROUP_DELETE,
-        STATUS_CREATE,
-        STATUS_UPDATE,
-        STATUS_DELETE,
-        SEVERITY_CREATE,
-        SEVERITY_UPDATE,
-        SEVERITY_DELETE,
-        LOCATION_CREATE,
-        LOCATION_UPDATE,
-        LOCATION_DELETE,
-        INCIDENT_TYPE_CREATE,
-        INCIDENT_TYPE_UPDATE,
-        INCIDENT_TYPE_DELETE,
-        RBAC_PERMISSION_READ
+            AGENT_CREATE,
+            AGENT_READ,
+            AGENT_UPDATE,
+            AGENT_DELETE,
+            AGENT_GROUP_CREATE,
+            AGENT_GROUP_UPDATE,
+            AGENT_GROUP_DELETE,
+            STATUS_CREATE,
+            STATUS_UPDATE,
+            STATUS_DELETE,
+            SEVERITY_CREATE,
+            SEVERITY_UPDATE,
+            SEVERITY_DELETE,
+            LOCATION_CREATE,
+            LOCATION_UPDATE,
+            LOCATION_DELETE,
+            INCIDENT_TYPE_CREATE,
+            INCIDENT_TYPE_UPDATE,
+            INCIDENT_TYPE_DELETE,
+            RBAC_PERMISSION_READ
     );
 
     public static final List<String> SUPER_ADMIN_DEFAULTS = List.of(
-        AGENT_CREATE,
-        AGENT_READ,
-        AGENT_UPDATE,
-        AGENT_DELETE,
-        AGENT_GROUP_CREATE,
-        AGENT_GROUP_UPDATE,
-        AGENT_GROUP_DELETE,
-        STATUS_CREATE,
-        STATUS_UPDATE,
-        STATUS_DELETE,
-        SEVERITY_CREATE,
-        SEVERITY_UPDATE,
-        SEVERITY_DELETE,
-        LOCATION_CREATE,
-        LOCATION_UPDATE,
-        LOCATION_DELETE,
-        INCIDENT_TYPE_CREATE,
-        INCIDENT_TYPE_UPDATE,
-        INCIDENT_TYPE_DELETE,
-        RBAC_ROLE_READ,
-        RBAC_ROLE_UPDATE,
-        RBAC_USER_ROLE_UPDATE,
-        RBAC_PERMISSION_READ
+            AGENT_CREATE,
+            AGENT_READ,
+            AGENT_UPDATE,
+            AGENT_DELETE,
+            AGENT_GROUP_CREATE,
+            AGENT_GROUP_UPDATE,
+            AGENT_GROUP_DELETE,
+            STATUS_CREATE,
+            STATUS_UPDATE,
+            STATUS_DELETE,
+            SEVERITY_CREATE,
+            SEVERITY_UPDATE,
+            SEVERITY_DELETE,
+            LOCATION_CREATE,
+            LOCATION_UPDATE,
+            LOCATION_DELETE,
+            INCIDENT_TYPE_CREATE,
+            INCIDENT_TYPE_UPDATE,
+            INCIDENT_TYPE_DELETE,
+            RBAC_ROLE_READ,
+            RBAC_ROLE_UPDATE,
+            RBAC_USER_ROLE_UPDATE,
+            RBAC_PERMISSION_READ
     );
 
-    private RbacPermissions() {}
+    private RbacPermissions() {
+    }
 }
