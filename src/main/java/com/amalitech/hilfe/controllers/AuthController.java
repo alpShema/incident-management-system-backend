@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.AuthSessionResponse;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
+import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.utils.CookieUtils;
@@ -11,9 +12,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -68,5 +72,11 @@ public class AuthController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         return ResponseEntity.ok(authService.getUserPermissions(principal.userId()));
+    }
+
+    @GetMapping("/users/roles")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    public ResponseEntity<Page<UserRoleSummaryResponse>> userRoles(Pageable pageable) {
+        return ResponseEntity.ok(authService.getUserRoles(pageable));
     }
 }

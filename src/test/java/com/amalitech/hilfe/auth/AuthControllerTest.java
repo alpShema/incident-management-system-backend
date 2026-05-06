@@ -6,8 +6,10 @@ import com.amalitech.hilfe.dto.AuthSessionResponse;
 import com.amalitech.hilfe.dto.AuthTokens;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
+import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.services.TokenService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockCookie;
@@ -164,5 +167,30 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.userId").value("u1"))
                 .andExpect(jsonPath("$.permissions[0]").value("incident.create"))
                 .andExpect(jsonPath("$.permissions[1]").value("incident.read.own"));
+    }
+
+    @Test
+    void userRoles_adminRequest_returnsPaginatedRoles() throws Exception {
+        when(authService.getUserRoles(any())).thenReturn(new PageImpl<>(List.of(
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN)
+        )));
+
+        var principal = new com.amalitech.hilfe.services.JwtTokenService.AuthPrincipal(
+                "admin-1",
+                "admin@test.com",
+                RoleCode.ADMIN
+        );
+
+        mvc.perform(get("/auth/users/roles")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .with(authentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                principal,
+                                null,
+                                List.of(() -> "ROLE_ADMIN")
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].userId").value("u1"))
+                .andExpect(jsonPath("$.content[0].roleCode").value("ADMIN"));
     }
 }

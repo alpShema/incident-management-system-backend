@@ -6,8 +6,11 @@ import com.amalitech.hilfe.dto.AuthSessionResponse;
 import com.amalitech.hilfe.dto.AuthTokens;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
+import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import jakarta.transaction.Transactional;
@@ -109,6 +112,10 @@ public class AuthService {
                 .userId(resolvedAuthorities.userId())
                 .permissions(permissions)
                 .build();
+    }
+
+    public Page<UserRoleSummaryResponse> getUserRoles(Pageable pageable) {
+        return userRepository.findUserRoleSummaries(pageable);
     }
 
     private void validateRefreshPrincipal(TokenService.RefreshPrincipal refreshPrincipal, ArmsUserInfo armsUser) {
