@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.ArmsUserInfo;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
+import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
@@ -13,6 +14,9 @@ import com.amalitech.hilfe.services.ArmsClient;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.services.TokenService;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -171,5 +175,19 @@ class AuthServiceTest {
 
         assertThat(response.getUserId()).isEqualTo("u1");
         assertThat(response.getPermissions()).containsExactly("incident.create", "incident.read.own");
+    }
+
+    @Test
+    void getUserRoles_returnsPaginatedProjection() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of(
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN)
+        ));
+        when(userRepository.findUserRoleSummaries(pageable)).thenReturn(page);
+
+        Page<UserRoleSummaryResponse> result = authService.getUserRoles(pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().roleCode()).isEqualTo(RoleCode.ADMIN);
     }
 }

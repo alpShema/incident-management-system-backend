@@ -1,6 +1,9 @@
 package com.amalitech.hilfe.repositories;
 
+import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.models.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +20,24 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, String> {
 
     Optional<User> findByEmail(String email);
+
+    @Query(
+            value = """
+                    SELECT new com.amalitech.hilfe.dto.UserRoleSummaryResponse(
+                        user.id,
+                        user.email,
+                        user.fullName,
+                        user.profileImg,
+                        user.roleCode
+                    )
+                    FROM User user
+                    """,
+            countQuery = """
+                    SELECT COUNT(user)
+                    FROM User user
+                    """
+    )
+    Page<UserRoleSummaryResponse> findUserRoleSummaries(Pageable pageable);
 
     @Query("""
             SELECT user
