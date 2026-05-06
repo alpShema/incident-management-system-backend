@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.auth;
 
 import com.amalitech.hilfe.dto.ArmsUserInfo;
+import com.amalitech.hilfe.dto.ActivityLogResponse;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
@@ -11,6 +12,7 @@ import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.services.ArmsTokenExpiryService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ArmsClient;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.services.TokenService;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
@@ -42,6 +44,7 @@ class AuthServiceTest {
     @Mock TokenService tokenService;
     @Mock UserRepository userRepository;
     @Mock UserAuthorityService userAuthorityService;
+    @Mock ActivityLogService activityLogService;
     @InjectMocks AuthService authService;
 
     @Test
@@ -189,5 +192,75 @@ class AuthServiceTest {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().roleCode()).isEqualTo(RoleCode.ADMIN);
+    }
+
+    @Test
+    void getActivityLogs_returnsPaginatedProjection() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<ActivityLogResponse> page = new PageImpl<>(List.of(
+                new ActivityLogResponse(
+                        1L,
+                        "admin-1",
+                        "u1",
+                        "ROLE_CHANGED",
+                        "USER",
+                        "u1",
+                        "Changed role for user u1 from CLIENT to ADMIN",
+                        "{\"previousRoleCode\":\"CLIENT\",\"newRoleCode\":\"ADMIN\"}",
+                        java.time.Instant.now()
+                )
+        ));
+        when(activityLogService.getActivityLogs(pageable)).thenReturn(page);
+
+        Page<ActivityLogResponse> result = authService.getActivityLogs(pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().action()).isEqualTo("ROLE_CHANGED");
+    }
+
+    @Test
+    void assignUserRole_updatesRoleAndReturnsSummary() {
+        User user = User.builder()
+                .id("u1")
+                .email("john@test.com")
+                .fullName("John Doe")
+                .profileImg("http://img.png")
+                .roleCode(RoleCode.CLIENT)
+                .build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+
+        UserRoleSummaryResponse result = authService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
+
+        assertThat(result.userId()).isEqualTo("u1");
+        assertThat(result.roleCode()).isEqualTo(RoleCode.ADMIN);
+        verify(activityLogService).logUserRoleChange("admin-1", "u1", RoleCode.CLIENT, RoleCode.ADMIN);
+    }
+
+    @Test
+    void assignUserRole_userNotFound_throwsNotFound() {
+        when(userRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.assignUserRole("admin-1", "missing", RoleCode.ADMIN))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("User not found");
+    }
+
+    @Test
+    void assignUserRole_sameRole_doesNotLogActivity() {
+        User user = User.builder()
+                .id("u1")
+                .email("john@test.com")
+                .fullName("John Doe")
+                .roleCode(RoleCode.ADMIN)
+                .build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+
+        UserRoleSummaryResponse result = authService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
+
+        assertThat(result.roleCode()).isEqualTo(RoleCode.ADMIN);
+        verify(activityLogService, org.mockito.Mockito.never())
+                .logUserRoleChange(any(), any(), any(), any());
     }
 }
