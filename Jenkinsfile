@@ -12,6 +12,7 @@ pipeline {
         DATE              = sh(script: 'date +%Y%m%d', returnStdout: true).trim()
         IMAGE_TAG         = "${appName}-${DATE}-${BUILD_NUMBER}"
         SONAR_PROJECT_KEY = 'hilfe-v2-backend'
+        AWS_REGION        = 'eu-west-1'
     }
 
     stages {
@@ -108,6 +109,67 @@ pipeline {
             }
             steps {
                 sh "trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${appName}:${IMAGE_TAG} > trivy-image-scan.txt"
+            }
+        }
+
+        stage('Push to ECR') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    branch 'testing'
+                }
+            }
+            steps {
+                withCredentials([string(credentialsId: 'aws-account-id', variable: 'AWS_ACCOUNT_ID')]) {
+                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                        sh '''
+                            ECR_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                            ECR_REPO="${ECR_URL}/${appName}"
+                            aws ecr get-login-password --region "${AWS_REGION}" | \
+                                docker login --username AWS --password-stdin "${ECR_URL}"
+                            docker tag "${appName}:${IMAGE_TAG}" "${ECR_REPO}:${IMAGE_TAG}"
+                            docker tag "${appName}:${IMAGE_TAG}" "${ECR_REPO}:latest"
+                            docker push "${ECR_REPO}:${IMAGE_TAG}"
+                            docker push "${ECR_REPO}:latest"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Staging') {
+            when {
+                branch 'develop'
+            }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-account-id', variable: 'AWS_ACCOUNT_ID'),
+                    string(credentialsId: 'staging-ec2-ip',  variable: 'EC2_IP'),
+                    sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')
+                ]) {
+                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                        sh '''
+                            ECR_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                            ECR_REPO="${ECR_URL}/${appName}"
+                            SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30"
+
+                            # Get ECR login token on Jenkins (has AWS credentials) and
+                            # pipe it directly to Docker on the EC2 over SSH.
+                            # The staging server needs no AWS credentials of its own.
+                            ECR_TOKEN=$(aws ecr get-login-password --region "${AWS_REGION}")
+                            echo "${ECR_TOKEN}" | ssh ${SSH_OPTS} -i "${SSH_KEY}" "ubuntu@${EC2_IP}" \
+                                "docker login --username AWS --password-stdin ${ECR_URL}"
+
+                            # Update the backend image tag in the server .env file
+                            ssh ${SSH_OPTS} -i "${SSH_KEY}" "ubuntu@${EC2_IP}" \
+                                "sed -i 's|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${ECR_REPO}:${IMAGE_TAG}|' /home/ubuntu/app/.env"
+
+                            # Pull the new image and restart only the backend container
+                            ssh ${SSH_OPTS} -i "${SSH_KEY}" "ubuntu@${EC2_IP}" \
+                                "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
+                        '''
+                    }
+                }
             }
         }
 
