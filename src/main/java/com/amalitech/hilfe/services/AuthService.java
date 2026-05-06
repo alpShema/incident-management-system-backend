@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.ArmsUserInfo;
+import com.amalitech.hilfe.dto.ActivityLogResponse;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.AuthSessionResponse;
 import com.amalitech.hilfe.dto.AuthTokens;
@@ -8,6 +9,7 @@ import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +31,7 @@ public class AuthService {
     private final TokenService tokenService;
     private final UserRepository userRepository;
     private final UserAuthorityService userAuthorityService;
+    private final ActivityLogService activityLogService;
 
     @Transactional
     public AuthResult login(LoginRequest request) {
@@ -116,6 +119,31 @@ public class AuthService {
 
     public Page<UserRoleSummaryResponse> getUserRoles(Pageable pageable) {
         return userRepository.findUserRoleSummaries(pageable);
+    }
+
+    public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
+        return activityLogService.getActivityLogs(pageable);
+    }
+
+    @Transactional
+    public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, RoleCode roleCode) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ArmsAuthException("User not found", 404));
+
+        RoleCode previousRoleCode = user.getRoleCode();
+        user.setRoleCode(roleCode);
+
+        if (previousRoleCode != roleCode) {
+            activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, roleCode);
+        }
+
+        return new UserRoleSummaryResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getProfileImg(),
+                user.getRoleCode()
+        );
     }
 
     private void validateRefreshPrincipal(TokenService.RefreshPrincipal refreshPrincipal, ArmsUserInfo armsUser) {

@@ -121,6 +121,13 @@ class ModelLifecycleTest {
     }
 
     @Test
+    void activityLog_onCreate_setsCreatedAt() throws Exception {
+        ActivityLog log = new ActivityLog();
+        invokeProtected(log, "onCreate");
+        assertThat(log.getCreatedAt()).isNotNull();
+    }
+
+    @Test
     void message_onCreate_setsTimestamps() throws Exception {
         Message message = new Message();
         invokeProtected(message, "onCreate");
