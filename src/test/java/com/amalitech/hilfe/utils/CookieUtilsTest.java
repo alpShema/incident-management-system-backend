@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.utils;
 
-import com.amalitech.hilfe.dto.TokenResponse;
+import com.amalitech.hilfe.dto.AuthTokens;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -16,7 +16,7 @@ class CookieUtilsTest {
     @Test
     void addAuthCookies_setsAccessAndRefreshCookieHeaders() {
         MockHttpServletResponse response = new MockHttpServletResponse();
-        TokenResponse tokens = TokenResponse.builder()
+        AuthTokens tokens = AuthTokens.builder()
                 .accessToken("at-value").refreshToken("rt-value")
                 .accessTokenExpiresIn(3600L).refreshTokenExpiresIn(86400L)
                 .build();
@@ -34,7 +34,7 @@ class CookieUtilsTest {
     @Test
     void addAuthCookies_secureFlag_setsCookieWithSecure() {
         MockHttpServletResponse response = new MockHttpServletResponse();
-        TokenResponse tokens = TokenResponse.builder()
+        AuthTokens tokens = AuthTokens.builder()
                 .accessToken("at").refreshToken("rt")
                 .accessTokenExpiresIn(3600L).refreshTokenExpiresIn(86400L)
                 .build();

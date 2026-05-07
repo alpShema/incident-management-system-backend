@@ -1,7 +1,6 @@
 package com.amalitech.hilfe.models;
 
 
-
 import jakarta.persistence.*;
 import lombok.*;
 

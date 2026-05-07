@@ -1,6 +1,8 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
@@ -9,41 +11,41 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.Optional;
 
 @Service
 public class JwtTokenService implements TokenService {
     private static final String CLAIM_EMAIL = "email";
-    private static final String CLAIM_ROLES = "roles";
-    private static final String CLAIM_TYPE  = "type";
+    private static final String CLAIM_ROLE = "role";
+    private static final String CLAIM_TYPE = "type";
 
     private final SecretKey signingKey;
     private final String jwtIssuer;
     private final String jwtAudience;
     private final long accessTokenTtlSeconds;
     private final long refreshTokenTtlSeconds;
+    private final UserAuthorityService userAuthorityService;
 
     public JwtTokenService(
             @Value("${app.jwt.secret}") String jwtSecret,
             @Value("${app.jwt.issuer}") String jwtIssuer,
             @Value("${app.jwt.audience}") String jwtAudience,
             @Value("${app.jwt.access-ttl-seconds:3600}") long accessTokenTtlSeconds,
-            @Value("${app.jwt.refresh-ttl-seconds:86400}") long refreshTokenTtlSeconds
+            @Value("${app.jwt.refresh-ttl-seconds:86400}") long refreshTokenTtlSeconds,
+            UserAuthorityService userAuthorityService
     ) {
         this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
         this.jwtIssuer = jwtIssuer;
         this.jwtAudience = jwtAudience;
         this.accessTokenTtlSeconds = accessTokenTtlSeconds;
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
+        this.userAuthorityService = userAuthorityService;
     }
 
     @Override
@@ -54,6 +56,11 @@ public class JwtTokenService implements TokenService {
     @Override
     public String generateRefreshToken(User user) {
         return buildToken(user, "refresh", refreshTokenTtlSeconds, false);
+    }
+
+    @Override
+    public String generateRefreshToken(User user, long ttlSeconds) {
+        return buildToken(user, "refresh", ttlSeconds, false);
     }
 
     @Override
@@ -71,14 +78,23 @@ public class JwtTokenService implements TokenService {
             }
 
             String userId = claims.getSubject();
-            String email  = claims.get(CLAIM_EMAIL, String.class);
-            List<String> roles = extractRoles(claims.get(CLAIM_ROLES));
-
-            List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-            roles.forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
-
-            AuthPrincipal principal = new AuthPrincipal(userId, email, roles);
-            return Optional.of(new UsernamePasswordAuthenticationToken(principal, null, authorities));
+            String email = claims.get(CLAIM_EMAIL, String.class);
+            String claimedRole = claims.get(CLAIM_ROLE, String.class);
+            return userAuthorityService.resolveByUserId(userId)
+                    .filter(resolvedAuthorities -> email.equals(resolvedAuthorities.email()))
+                    .filter(resolvedAuthorities -> hasMatchingRoleClaim(claimedRole, resolvedAuthorities.roleCode()))
+                    .map(resolvedAuthorities -> {
+                        AuthPrincipal principal = new AuthPrincipal(
+                                resolvedAuthorities.userId(),
+                                resolvedAuthorities.email(),
+                                resolvedAuthorities.roleCode()
+                        );
+                        return new UsernamePasswordAuthenticationToken(
+                                principal,
+                                null,
+                                resolvedAuthorities.authorities()
+                        );
+                    });
 
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
@@ -89,17 +105,17 @@ public class JwtTokenService implements TokenService {
     public Optional<RefreshPrincipal> authenticateRefreshToken(String token) {
         try {
             Claims claims = Jwts.parser()
-                .verifyWith(signingKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                    .verifyWith(signingKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
 
             if (!"refresh".equals(claims.get(CLAIM_TYPE, String.class))) {
                 return Optional.empty();
             }
 
             String userId = claims.getSubject();
-            String email  = claims.get(CLAIM_EMAIL, String.class);
+            String email = claims.get(CLAIM_EMAIL, String.class);
             if (userId == null || email == null) {
                 return Optional.empty();
             }
@@ -120,8 +136,8 @@ public class JwtTokenService implements TokenService {
         return refreshTokenTtlSeconds;
     }
 
-    private String buildToken(User user, String type, long ttlSeconds, boolean includeRoles) {
-        Instant now    = Instant.now();
+    private String buildToken(User user, String type, long ttlSeconds, boolean includeRoleClaim) {
+        Instant now = Instant.now();
         Instant expiry = now.plusSeconds(ttlSeconds);
 
         var builder = Jwts.builder()
@@ -133,37 +149,18 @@ public class JwtTokenService implements TokenService {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry));
 
-        if (includeRoles) {
-            builder.claim(CLAIM_ROLES, resolveRoles(user));
+        if (includeRoleClaim) {
+            RoleCode resolvedRoleCode = userAuthorityService.resolve(user).roleCode();
+            builder.claim(CLAIM_ROLE, resolvedRoleCode.name());
         }
 
         return builder.signWith(signingKey, Jwts.SIG.HS256).compact();
     }
 
-    private List<String> resolveRoles(User user) {
-        List<String> roles = new ArrayList<>();
-        roles.add("ROLE_CLIENT");
-
-        if (user.getAgent() != null && Boolean.TRUE.equals(user.getAgent().getStatus())) {
-            roles.add("ROLE_AGENT");
-        }
-        if (user.getAdmin() != null && user.getAdmin().isStatus()) {
-            roles.add("ROLE_ADMIN");
-        }
-
-        return roles;
+    private boolean hasMatchingRoleClaim(String claimedRole, RoleCode resolvedRoleCode) {
+        return claimedRole != null && claimedRole.equals(resolvedRoleCode.name());
     }
 
-    private List<String> extractRoles(Object rolesClaim) {
-        if (!(rolesClaim instanceof List<?> rawRoles)) {
-            return new ArrayList<>();
-        }
-        List<String> roles = new ArrayList<>();
-        for (Object role : rawRoles) {
-            if (role != null) roles.add(role.toString());
-        }
-        return roles;
+    public record AuthPrincipal(String userId, String email, RoleCode roleCode) {
     }
-
-    public record AuthPrincipal(String userId, String email, List<String> roles) {}
 }

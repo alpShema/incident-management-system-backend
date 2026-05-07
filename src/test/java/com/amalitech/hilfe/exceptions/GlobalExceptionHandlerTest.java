@@ -24,29 +24,43 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void armsAuthException401_returns401WithDetail() throws Exception {
+    void armsAuthException401_returns401WithStandardPayload() throws Exception {
         mvc.perform(get("/throw/arms-401"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.detail").value("Invalid ARMS token"));
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").value("Invalid ARMS token"))
+                .andExpect(jsonPath("$.path").value("/throw/arms-401"));
     }
 
     @Test
-    void armsAuthException502_returns502WithDetail() throws Exception {
+    void armsAuthException502_returns502WithStandardPayload() throws Exception {
         mvc.perform(get("/throw/arms-502"))
                 .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.detail").value("ARMS unavailable"));
+                .andExpect(jsonPath("$.status").value(502))
+                .andExpect(jsonPath("$.error").value("Bad Gateway"))
+                .andExpect(jsonPath("$.message").value("ARMS unavailable"))
+                .andExpect(jsonPath("$.path").value("/throw/arms-502"));
     }
 
     @Test
     void unsupportedOperation_returns501() throws Exception {
         mvc.perform(get("/throw/not-implemented"))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isNotImplemented())
+                .andExpect(jsonPath("$.status").value(501))
+                .andExpect(jsonPath("$.error").value("Not Implemented"))
+                .andExpect(jsonPath("$.message").value("Not yet implemented"))
+                .andExpect(jsonPath("$.path").value("/throw/not-implemented"));
     }
 
     @Test
     void genericException_returns500() throws Exception {
         mvc.perform(get("/throw/generic"))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.error").value("Internal Server Error"))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred"))
+                .andExpect(jsonPath("$.path").value("/throw/generic"));
     }
 
     @RestController

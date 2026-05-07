@@ -1,37 +1,61 @@
 package com.amalitech.hilfe.exceptions;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.Instant;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ArmsAuthException.class)
-    public ResponseEntity<ProblemDetail> handleArmsAuth(ArmsAuthException ex) {
+    public ResponseEntity<ApiErrorResponse> handleArmsAuth(ArmsAuthException ex, HttpServletRequest request) {
         log.warn("ARMS auth error: {}", ex.getMessage());
         HttpStatus status = HttpStatus.resolve(ex.getHttpStatus());
         if (status == null) status = HttpStatus.BAD_GATEWAY;
-        return ResponseEntity.status(status)
-                .body(ProblemDetail.forStatusAndDetail(status, ex.getMessage()));
+        return buildResponse(status, ex.getMessage(), request);
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)
-    public ResponseEntity<ProblemDetail> handleNotImplemented(UnsupportedOperationException ex) {
+    public ResponseEntity<ApiErrorResponse> handleNotImplemented(
+            UnsupportedOperationException ex,
+            HttpServletRequest request
+    ) {
         log.warn("Not implemented: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-                .body(ProblemDetail.forStatusAndDetail(HttpStatus.NOT_IMPLEMENTED, ex.getMessage()));
+        return buildResponse(HttpStatus.NOT_IMPLEMENTED, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(Exception ex, HttpServletRequest request) {
+        log.warn("Access denied: {}", ex.getMessage());
+        return buildResponse(HttpStatus.FORBIDDEN, "Access denied", request);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ProblemDetail> handleGeneral(Exception ex) {
+    public ResponseEntity<ApiErrorResponse> handleGeneral(Exception ex, HttpServletRequest request) {
         log.error("Unhandled exception", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ProblemDetail.forStatusAndDetail(
-                        HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred"));
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", request);
+    }
+
+    private ResponseEntity<ApiErrorResponse> buildResponse(
+            HttpStatus status,
+            String message,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(status)
+                .body(ApiErrorResponse.builder()
+                        .timestamp(Instant.now())
+                        .status(status.value())
+                        .error(status.getReasonPhrase())
+                        .message(message)
+                        .path(request.getRequestURI())
+                        .build());
     }
 }
