@@ -17,12 +17,14 @@ pipeline {
 
     stages {
 
+        // ── 1. Checkout ────────────────────────────────────────── all branches ──
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
+        // ── 2. Install Dependencies ────────────────────────────── all branches ──
         stage('Install Dependencies') {
             steps {
                 sh '''
@@ -33,19 +35,23 @@ pipeline {
             }
         }
 
+        // ── 3. Unit Tests + JaCoCo Coverage ───────────────────── all branches ──
         stage('Unit Tests') {
-            when {
-                changeRequest target: 'develop'
-            }
             steps {
                 sh 'mvn verify'
                 junit allowEmptyResults: true, testResults: 'target/surefire-reports/**/*.xml'
             }
         }
 
+        // ── 4. SonarQube Analysis ────────── PR→develop | develop | testing | staging ──
         stage('SonarQube Code Analysis') {
             when {
-                changeRequest target: 'develop'
+                anyOf {
+                    changeRequest target: 'develop'
+                    branch 'develop'
+                    branch 'testing'
+                    branch 'staging'
+                }
             }
             steps {
                 withSonarQubeEnv('SonarQube') {
@@ -54,27 +60,22 @@ pipeline {
             }
         }
 
+        // ── 5. SonarQube Quality Gate ────── PR→develop | develop | testing | staging ──
         stage('SonarQube Code Quality') {
             when {
-                changeRequest target: 'develop'
+                anyOf {
+                    changeRequest target: 'develop'
+                    branch 'develop'
+                    branch 'testing'
+                    branch 'staging'
+                }
             }
             steps {
                 waitForQualityGate abortPipeline: true
             }
         }
 
-        stage('Build Verification') {
-            when {
-                anyOf {
-                    branch 'develop'
-                    branch 'testing'
-                }
-            }
-            steps {
-                sh 'mvn package -DskipTests'
-            }
-        }
-
+        // ── 6. OWASP Dependency Check ──────────────────────────── testing only ──
         stage('OWASP Dependency Check') {
             when {
                 branch 'testing'
@@ -85,13 +86,8 @@ pipeline {
             }
         }
 
+        // ── 7. Docker Build ────────────────────────────────────── all branches ──
         stage('Docker Build') {
-            when {
-                anyOf {
-                    branch 'develop'
-                    branch 'testing'
-                }
-            }
             steps {
                 script {
                     sh 'docker system prune -af --volumes'
@@ -100,24 +96,17 @@ pipeline {
             }
         }
 
+        // ── 8. Trivy Security Scan ─────────────────────────────── all branches ──
         stage('Trivy Security Scan') {
-            when {
-                anyOf {
-                    branch 'develop'
-                    branch 'testing'
-                }
-            }
             steps {
                 sh "trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${appName}:${IMAGE_TAG} > trivy-image-scan.txt"
             }
         }
 
+        // ── 9. Push to ECR ─────────────────────────────────────── staging only ──
         stage('Push to ECR') {
             when {
-                anyOf {
-                    branch 'develop'
-                    branch 'testing'
-                }
+                branch 'staging'
             }
             steps {
                 withCredentials([string(credentialsId: 'aws-account-id', variable: 'AWS_ACCOUNT_ID')]) {
@@ -137,9 +126,10 @@ pipeline {
             }
         }
 
+        // ── 10. Deploy to Staging EC2 ──────────────────────────── staging only ──
         stage('Deploy to Staging') {
             when {
-                branch 'develop'
+                branch 'staging'
             }
             steps {
                 withCredentials([
@@ -153,18 +143,13 @@ pipeline {
                             ECR_REPO="${ECR_URL}/${appName}"
                             SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30"
 
-                            # Get ECR login token on Jenkins (has AWS credentials) and
-                            # pipe it directly to Docker on the EC2 over SSH.
-                            # The staging server needs no AWS credentials of its own.
                             ECR_TOKEN=$(aws ecr get-login-password --region "${AWS_REGION}")
                             echo "${ECR_TOKEN}" | ssh ${SSH_OPTS} -i "${SSH_KEY}" "ubuntu@${EC2_IP}" \
                                 "docker login --username AWS --password-stdin ${ECR_URL}"
 
-                            # Update the backend image tag in the server .env file
                             ssh ${SSH_OPTS} -i "${SSH_KEY}" "ubuntu@${EC2_IP}" \
                                 "sed -i 's|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${ECR_REPO}:${IMAGE_TAG}|' /home/ubuntu/app/.env"
 
-                            # Pull the new image and restart only the backend container
                             ssh ${SSH_OPTS} -i "${SSH_KEY}" "ubuntu@${EC2_IP}" \
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
                         '''
