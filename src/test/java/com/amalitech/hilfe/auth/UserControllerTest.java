@@ -63,7 +63,7 @@ class UserControllerTest {
                                 List.of(() -> "ROLE_ADMIN")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.message").value("User roles retrieved successfully"))
                 .andExpect(jsonPath("$.data.items[0].userId").value("u1"))
                 .andExpect(jsonPath("$.data.items[0].roleCode").value("ADMIN"))
                 .andExpect(jsonPath("$.data.page").value(0))
@@ -91,7 +91,7 @@ class UserControllerTest {
                                 List.of(() -> "ROLE_ADMIN")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.message").value("User role updated successfully"))
                 .andExpect(jsonPath("$.data.userId").value("u1"))
                 .andExpect(jsonPath("$.data.roleCode").value("ADMIN"));
     }

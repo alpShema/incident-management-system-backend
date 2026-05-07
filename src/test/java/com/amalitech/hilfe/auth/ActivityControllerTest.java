@@ -70,7 +70,7 @@ class ActivityControllerTest {
                                 List.of(() -> "ROLE_ADMIN")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.message").value("Activity logs retrieved successfully"))
                 .andExpect(jsonPath("$.data.items[0].id").value(1))
                 .andExpect(jsonPath("$.data.items[0].action").value("ROLE_CHANGED"))
                 .andExpect(jsonPath("$.data.items[0].subjectType").value("USER"))

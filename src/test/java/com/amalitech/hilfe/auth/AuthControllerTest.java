@@ -64,7 +64,7 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new LoginRequest("arms-token"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.message").value("Login successful"))
                 .andExpect(jsonPath("$.data.userId").value("u1"))
                 .andExpect(jsonPath("$.data.email").value("john@test.com"))
                 .andReturn();
@@ -118,7 +118,7 @@ class AuthControllerTest {
                         .cookie(new MockCookie("refresh_token", "rt"))
                         .cookie(new MockCookie("arms_token", "arms-cookie-token")))
                         .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.message").value("successful"))
+                        .andExpect(jsonPath("$.message").value("Token refreshed successfully"))
                         .andExpect(jsonPath("$.data.userId").value("u1"))
                         .andReturn();
 
@@ -163,7 +163,7 @@ class AuthControllerTest {
                                 List.of(() -> "ROLE_CLIENT")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.message").value("Permissions retrieved successfully"))
                 .andExpect(jsonPath("$.data.userId").value("u1"))
                 .andExpect(jsonPath("$.data.permissions[0]").value("incident.create"))
                 .andExpect(jsonPath("$.data.permissions[1]").value("incident.read.own"));

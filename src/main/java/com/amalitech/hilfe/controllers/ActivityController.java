@@ -21,6 +21,6 @@ public class ActivityController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<ActivityLogResponse>>> activityLogs(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(PageResponse.from(activityLogService.getActivityLogs(pageable))));
+        return ResponseEntity.ok(ApiResponse.success("Activity logs retrieved successfully", PageResponse.from(activityLogService.getActivityLogs(pageable))));
     }
 }
