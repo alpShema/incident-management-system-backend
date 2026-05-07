@@ -99,7 +99,14 @@ pipeline {
         // ── 8. Trivy Security Scan ─────────────────────────────── all branches ──
         stage('Trivy Security Scan') {
             steps {
-                sh "trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${appName}:${IMAGE_TAG} > trivy-image-scan.txt"
+                sh """
+                    if ! command -v trivy &>/dev/null; then
+                        echo "Trivy not found — installing..."
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                    fi
+                    trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${appName}:${IMAGE_TAG} > trivy-image-scan.txt
+                    cat trivy-image-scan.txt
+                """
             }
         }
 
