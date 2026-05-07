@@ -39,7 +39,7 @@ public class AuthController {
         CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
         CookieUtils.addArmsTokenCookie(response, request.armsToken(), cookieSecure,
                 authResult.tokens().getRefreshTokenExpiresIn());
-        return ResponseEntity.ok(ApiResponse.success(authResult.session()));
+        return ResponseEntity.ok(ApiResponse.success("Login successful", authResult.session()));
     }
 
     @PostMapping("/refresh-token")
@@ -52,7 +52,7 @@ public class AuthController {
         AuthResult authResult = authService.refresh(refreshToken, armsToken);
         CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
         CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, authResult.tokens().getRefreshTokenExpiresIn());
-        return ResponseEntity.ok(ApiResponse.success(authResult.session()));
+        return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", authResult.session()));
     }
 
     @PostMapping("/logout")
@@ -68,6 +68,6 @@ public class AuthController {
     public ResponseEntity<ApiResponse<UserPermissionsResponse>> permissions(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success(authService.getUserPermissions(principal.userId())));
+        return ResponseEntity.ok(ApiResponse.success("Permissions retrieved successfully", authService.getUserPermissions(principal.userId())));
     }
 }

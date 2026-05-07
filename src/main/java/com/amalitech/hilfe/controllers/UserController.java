@@ -28,7 +28,7 @@ public class UserController {
     @GetMapping("/roles")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<UserRoleSummaryResponse>>> userRoles(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(PageResponse.from(userService.getUserRoles(pageable))));
+        return ResponseEntity.ok(ApiResponse.success("User roles retrieved successfully", PageResponse.from(userService.getUserRoles(pageable))));
     }
 
     @PatchMapping("/{userId}/role")
@@ -38,6 +38,6 @@ public class UserController {
             @PathVariable String userId,
             @Valid @RequestBody UpdateUserRoleRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(userService.assignUserRole(principal.userId(), userId, request.roleCode())));
+        return ResponseEntity.ok(ApiResponse.success("User role updated successfully", userService.assignUserRole(principal.userId(), userId, request.roleCode())));
     }
 }
