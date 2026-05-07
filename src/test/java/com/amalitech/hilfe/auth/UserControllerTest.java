@@ -63,10 +63,11 @@ class UserControllerTest {
                                 List.of(() -> "ROLE_ADMIN")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].userId").value("u1"))
-                .andExpect(jsonPath("$.items[0].roleCode").value("ADMIN"))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(10));
+                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.data.items[0].userId").value("u1"))
+                .andExpect(jsonPath("$.data.items[0].roleCode").value("ADMIN"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(10));
     }
 
     @Test
@@ -90,7 +91,8 @@ class UserControllerTest {
                                 List.of(() -> "ROLE_ADMIN")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value("u1"))
-                .andExpect(jsonPath("$.roleCode").value("ADMIN"));
+                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.data.userId").value("u1"))
+                .andExpect(jsonPath("$.data.roleCode").value("ADMIN"));
     }
 }

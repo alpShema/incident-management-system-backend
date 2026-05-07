@@ -64,8 +64,9 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new LoginRequest("arms-token"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value("u1"))
-                .andExpect(jsonPath("$.email").value("john@test.com"))
+                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.data.userId").value("u1"))
+                .andExpect(jsonPath("$.data.email").value("john@test.com"))
                 .andReturn();
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
@@ -117,7 +118,8 @@ class AuthControllerTest {
                         .cookie(new MockCookie("refresh_token", "rt"))
                         .cookie(new MockCookie("arms_token", "arms-cookie-token")))
                         .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.userId").value("u1"))
+                        .andExpect(jsonPath("$.message").value("successful"))
+                        .andExpect(jsonPath("$.data.userId").value("u1"))
                         .andReturn();
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
@@ -161,8 +163,9 @@ class AuthControllerTest {
                                 List.of(() -> "ROLE_CLIENT")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value("u1"))
-                .andExpect(jsonPath("$.permissions[0]").value("incident.create"))
-                .andExpect(jsonPath("$.permissions[1]").value("incident.read.own"));
+                .andExpect(jsonPath("$.message").value("successful"))
+                .andExpect(jsonPath("$.data.userId").value("u1"))
+                .andExpect(jsonPath("$.data.permissions[0]").value("incident.create"))
+                .andExpect(jsonPath("$.data.permissions[1]").value("incident.read.own"));
     }
 }
