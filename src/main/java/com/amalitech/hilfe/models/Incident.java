@@ -1,8 +1,9 @@
 package com.amalitech.hilfe.models;
 
-import java.time.Instant;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.time.Instant;
 
 
 @Entity

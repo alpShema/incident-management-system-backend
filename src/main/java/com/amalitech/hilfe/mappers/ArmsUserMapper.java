@@ -9,7 +9,8 @@ import java.util.ArrayList;
 @Component
 public class ArmsUserMapper {
 
-    private ArmsUserMapper() {}
+    private ArmsUserMapper() {
+    }
 
     public static User mapArmsUserToImsUser(ArmsUserInfo armsUser) {
         return User.builder()

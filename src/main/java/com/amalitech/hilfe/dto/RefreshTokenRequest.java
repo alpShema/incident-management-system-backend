@@ -1,3 +1,4 @@
 package com.amalitech.hilfe.dto;
 
-public record RefreshTokenRequest(String refreshToken) {}
+public record RefreshTokenRequest(String refreshToken) {
+}
