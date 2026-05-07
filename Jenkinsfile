@@ -93,7 +93,7 @@ pipeline {
             steps {
                 script {
                     sh 'docker system prune -af --volumes'
-                    docker.build("${appName}:${IMAGE_TAG}")
+                    docker.build("${env.appName}:${env.IMAGE_TAG}")
                 }
             }
         }
@@ -106,7 +106,7 @@ pipeline {
                         echo "Trivy not found — installing..."
                         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
                     fi
-                    trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${appName}:${IMAGE_TAG} > trivy-image-scan.txt
+                    trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${env.appName}:${env.IMAGE_TAG} > trivy-image-scan.txt
                     cat trivy-image-scan.txt
                 """
             }
@@ -141,11 +141,9 @@ pipeline {
                 branch 'staging'
             }
             steps {
-                withCredentials([
-                    string(credentialsId: 'aws-account-id', variable: 'AWS_ACCOUNT_ID'),
-                    string(credentialsId: 'staging-ec2-ip',  variable: 'EC2_IP'),
-                    sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')
-                ]) {
+                withCredentials([string(credentialsId: 'aws-account-id', variable: 'AWS_ACCOUNT_ID')]) {
+                withCredentials([string(credentialsId: 'staging-ec2-ip', variable: 'EC2_IP')]) {
+                withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                     withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
                         sh '''
                             ECR_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
@@ -164,6 +162,8 @@ pipeline {
                         '''
                     }
                 }
+                }
+                }
             }
         }
 
@@ -176,10 +176,10 @@ pipeline {
             }
         }
         success {
-            echo "PASSED: ${env.BRANCH_NAME} | ${IMAGE_TAG}"
+            echo "PASSED: ${env.BRANCH_NAME} | ${env.IMAGE_TAG}"
         }
         failure {
-            echo "FAILED: ${env.BRANCH_NAME} | ${IMAGE_TAG} | ${env.BUILD_URL}"
+            echo "FAILED: ${env.BRANCH_NAME} | ${env.IMAGE_TAG} | ${env.BUILD_URL}"
         }
     }
 }
