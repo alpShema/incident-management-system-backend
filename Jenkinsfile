@@ -48,11 +48,11 @@ pipeline {
         // ── 4. SonarQube Analysis ────────── PR→develop | develop | testing | staging ──
         stage('SonarQube Code Analysis') {
             when {
-                anyOf {
-                    changeRequest target: 'develop'
-                    branch 'develop'
-                    branch 'testing'
-                    branch 'staging'
+                expression {
+                    env.CHANGE_TARGET == 'develop' ||
+                    env.BRANCH_NAME == 'develop' ||
+                    env.BRANCH_NAME == 'testing' ||
+                    env.BRANCH_NAME == 'staging'
                 }
             }
             steps {
@@ -65,11 +65,11 @@ pipeline {
         // ── 5. SonarQube Quality Gate ────── PR→develop | develop | testing | staging ──
         stage('SonarQube Code Quality') {
             when {
-                anyOf {
-                    changeRequest target: 'develop'
-                    branch 'develop'
-                    branch 'testing'
-                    branch 'staging'
+                expression {
+                    env.CHANGE_TARGET == 'develop' ||
+                    env.BRANCH_NAME == 'develop' ||
+                    env.BRANCH_NAME == 'testing' ||
+                    env.BRANCH_NAME == 'staging'
                 }
             }
             steps {
@@ -83,8 +83,10 @@ pipeline {
                 branch 'testing'
             }
             steps {
-                dependencyCheck additionalArguments: '--scan pom.xml --format HTML --out dependency-check-report', odcInstallation: 'OWASP-DC'
-                dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.html'
+                script {
+                    dependencyCheck additionalArguments: '--scan pom.xml --format HTML --out dependency-check-report', odcInstallation: 'OWASP-DC'
+                    dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.html'
+                }
             }
         }
 
