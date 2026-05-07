@@ -4,7 +4,6 @@ pipeline {
     tools {
         jdk 'jdk21'
         maven 'Maven 3.9.9'
-        'hudson.plugins.sonar.SonarRunnerInstallation' 'SonarQube'
     }
 
     environment {
