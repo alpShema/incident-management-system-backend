@@ -9,8 +9,6 @@ pipeline {
 
     environment {
         appName           = 'hilfe-v2-backend'
-        DATE              = sh(script: 'date +%Y%m%d', returnStdout: true).trim()
-        IMAGE_TAG         = "${appName}-${DATE}-${BUILD_NUMBER}"
         SONAR_PROJECT_KEY = 'hilfe-v2-backend'
         AWS_REGION        = 'eu-west-1'
     }
@@ -21,6 +19,10 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                script {
+                    env.DATE      = sh(script: 'date +%Y%m%d', returnStdout: true).trim()
+                    env.IMAGE_TAG = "${env.appName}-${env.DATE}-${env.BUILD_NUMBER}"
+                }
             }
         }
 
