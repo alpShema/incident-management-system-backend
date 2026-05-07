@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers;
 
+import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateUserRoleRequest;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
@@ -26,17 +27,17 @@ public class UserController {
 
     @GetMapping("/roles")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<PageResponse<UserRoleSummaryResponse>> userRoles(Pageable pageable) {
-        return ResponseEntity.ok(PageResponse.from(userService.getUserRoles(pageable)));
+    public ResponseEntity<ApiResponse<PageResponse<UserRoleSummaryResponse>>> userRoles(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(PageResponse.from(userService.getUserRoles(pageable))));
     }
 
     @PatchMapping("/{userId}/role")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<UserRoleSummaryResponse> assignUserRole(
+    public ResponseEntity<ApiResponse<UserRoleSummaryResponse>> assignUserRole(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @PathVariable String userId,
             @Valid @RequestBody UpdateUserRoleRequest request
     ) {
-        return ResponseEntity.ok(userService.assignUserRole(principal.userId(), userId, request.roleCode()));
+        return ResponseEntity.ok(ApiResponse.success(userService.assignUserRole(principal.userId(), userId, request.roleCode())));
     }
 }
