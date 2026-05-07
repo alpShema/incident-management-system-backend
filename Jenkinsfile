@@ -109,22 +109,21 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'aws-account-id', variable: 'AWS_ACCOUNT_ID')]) {
-                        withAWS(credentials: 'aws-credentials', region: env.AWS_REGION) {
-                            def appName  = env.appName
-                            def imageTag = env.IMAGE_TAG
-                            def region   = env.AWS_REGION
-                            sh """
-                                ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
-                                ECR_REPO="\${ECR_URL}/${appName}"
-                                aws ecr get-login-password --region "${region}" | \\
-                                    docker login --username AWS --password-stdin "\${ECR_URL}"
-                                docker tag "${appName}:${imageTag}" "\${ECR_REPO}:${imageTag}"
-                                docker tag "${appName}:${imageTag}" "\${ECR_REPO}:latest"
-                                docker push "\${ECR_REPO}:${imageTag}"
-                                docker push "\${ECR_REPO}:latest"
-                            """
-                        }
+                    withAWS(credentials: 'aws-credentials', region: env.AWS_REGION) {
+                        def appName  = env.appName
+                        def imageTag = env.IMAGE_TAG
+                        def region   = env.AWS_REGION
+                        sh """
+                            AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+                            ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
+                            ECR_REPO="\${ECR_URL}/${appName}"
+                            aws ecr get-login-password --region "${region}" | \\
+                                docker login --username AWS --password-stdin "\${ECR_URL}"
+                            docker tag "${appName}:${imageTag}" "\${ECR_REPO}:${imageTag}"
+                            docker tag "${appName}:${imageTag}" "\${ECR_REPO}:latest"
+                            docker push "\${ECR_REPO}:${imageTag}"
+                            docker push "\${ECR_REPO}:latest"
+                        """
                     }
                 }
             }
@@ -137,7 +136,6 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'aws-account-id', variable: 'AWS_ACCOUNT_ID')]) {
                     withCredentials([string(credentialsId: 'staging-ec2-ip', variable: 'EC2_IP')]) {
                     withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         withAWS(credentials: 'aws-credentials', region: env.AWS_REGION) {
@@ -145,6 +143,7 @@ pipeline {
                             def imageTag = env.IMAGE_TAG
                             def region   = env.AWS_REGION
                             sh """
+                                AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                                 ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
                                 ECR_REPO="\${ECR_URL}/${appName}"
                                 SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30"
@@ -160,7 +159,6 @@ pipeline {
                                     "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
                             """
                         }
-                    }
                     }
                     }
                 }
