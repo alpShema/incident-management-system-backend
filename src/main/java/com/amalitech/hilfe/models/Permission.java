@@ -1,24 +1,27 @@
 package com.amalitech.hilfe.models;
 
-
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
 
 @Entity
-@Table(name = "Severity")
+@Table(name = "permissions")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Severity {
+public class Permission {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false, unique = true)
+    private String code;
+
+    @Column(nullable = false)
     private String name;
 
     private String description;
@@ -28,8 +31,6 @@ public class Severity {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    // ── Lifecycle ──
 
     @PrePersist
     protected void onCreate() {
