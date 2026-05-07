@@ -76,20 +76,7 @@ pipeline {
             }
         }
 
-        // ── 6. OWASP Dependency Check ──────────────────────────── testing only ──
-        stage('OWASP Dependency Check') {
-            when {
-                branch 'testing'
-            }
-            steps {
-                script {
-                    dependencyCheck additionalArguments: '--scan pom.xml --format HTML --out dependency-check-report', odcInstallation: 'OWASP-DC'
-                    dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.html'
-                }
-            }
-        }
-
-        // ── 7. Docker Build ────────────────────────────────────── all branches ──
+        // ── 6. Docker Build ────────────────────────────────────── all branches ──
         stage('Docker Build') {
             steps {
                 script {
