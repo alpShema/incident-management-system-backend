@@ -109,11 +109,14 @@ pipeline {
             }
             steps {
                 script {
-                    withAWS(credentials: 'aws-credentials', region: env.AWS_REGION) {
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
                         def region   = env.AWS_REGION
                         sh """
+                            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+                            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+                            export AWS_DEFAULT_REGION="${region}"
                             AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                             ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
                             ECR_REPO="\${ECR_URL}/${appName}"
@@ -136,29 +139,32 @@ pipeline {
             }
             steps {
                 script {
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     withCredentials([string(credentialsId: 'staging-ec2-ip', variable: 'EC2_IP')]) {
                     withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                        withAWS(credentials: 'aws-credentials', region: env.AWS_REGION) {
-                            def appName  = env.appName
-                            def imageTag = env.IMAGE_TAG
-                            def region   = env.AWS_REGION
-                            sh """
-                                AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
-                                ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
-                                ECR_REPO="\${ECR_URL}/${appName}"
-                                SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30"
+                        def appName  = env.appName
+                        def imageTag = env.IMAGE_TAG
+                        def region   = env.AWS_REGION
+                        sh """
+                            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+                            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+                            export AWS_DEFAULT_REGION="${region}"
+                            AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+                            ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
+                            ECR_REPO="\${ECR_URL}/${appName}"
+                            SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30"
 
-                                ECR_TOKEN=\$(aws ecr get-login-password --region "${region}")
-                                echo "\${ECR_TOKEN}" | ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                    "docker login --username AWS --password-stdin \${ECR_URL}"
+                            ECR_TOKEN=\$(aws ecr get-login-password --region "${region}")
+                            echo "\${ECR_TOKEN}" | ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "docker login --username AWS --password-stdin \${ECR_URL}"
 
-                                ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                    "sed -i 's|^BACKEND_IMAGE=.*|BACKEND_IMAGE=\${ECR_REPO}:${imageTag}|' /home/ubuntu/app/.env"
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "sed -i 's|^BACKEND_IMAGE=.*|BACKEND_IMAGE=\${ECR_REPO}:${imageTag}|' /home/ubuntu/app/.env"
 
-                                ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                    "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
-                            """
-                        }
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
+                        """
+                    }
                     }
                     }
                 }
