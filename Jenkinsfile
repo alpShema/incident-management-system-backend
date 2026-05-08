@@ -152,7 +152,10 @@ pipeline {
                                 "docker login --username AWS --password-stdin \${ECR_URL}"
 
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                "sed -i 's|^BACKEND_IMAGE=.*|BACKEND_IMAGE=\${ECR_REPO}:${imageTag}|' /home/ubuntu/app/.env"
+                                "mkdir -p /home/ubuntu/app && \
+                                 touch /home/ubuntu/app/.env && \
+                                 sed -i '/^BACKEND_IMAGE=/d' /home/ubuntu/app/.env && \
+                                 echo 'BACKEND_IMAGE=\${ECR_REPO}:${imageTag}' >> /home/ubuntu/app/.env"
 
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
