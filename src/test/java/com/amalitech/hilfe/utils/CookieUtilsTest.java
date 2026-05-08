@@ -26,9 +26,9 @@ class CookieUtilsTest {
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).hasSize(2);
         assertThat(cookies.get(0)).contains("access_token=at-value")
-                .contains("HttpOnly").contains("SameSite=Strict").contains("Max-Age=3600");
+                .contains("HttpOnly").contains("SameSite=Lax").contains("Max-Age=3600");
         assertThat(cookies.get(1)).contains("refresh_token=rt-value")
-                .contains("HttpOnly").contains("SameSite=Strict").contains("Max-Age=86400");
+                .contains("HttpOnly").contains("SameSite=Lax").contains("Max-Age=86400");
     }
 
     @Test
@@ -54,7 +54,7 @@ class CookieUtilsTest {
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).hasSize(1);
         assertThat(cookies.get(0)).contains("arms_token=arms-token-val")
-                .contains("HttpOnly").contains("SameSite=Strict").contains("Max-Age=3600");
+                .contains("HttpOnly").contains("SameSite=Lax").contains("Max-Age=3600");
     }
 
     @Test

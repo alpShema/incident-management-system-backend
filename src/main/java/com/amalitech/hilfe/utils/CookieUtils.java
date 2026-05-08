@@ -23,7 +23,7 @@ public final class CookieUtils {
         ResponseCookie accessCookie = ResponseCookie.from(ACCESS_TOKEN_COOKIE, tokens.getAccessToken())
                 .httpOnly(true)
                 .secure(secure)
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .path("/")
                 .maxAge(tokens.getAccessTokenExpiresIn())
                 .build();
@@ -31,7 +31,7 @@ public final class CookieUtils {
         ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, tokens.getRefreshToken())
                 .httpOnly(true)
                 .secure(secure)
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .path("/")
                 .maxAge(tokens.getRefreshTokenExpiresIn())
                 .build();
@@ -50,7 +50,7 @@ public final class CookieUtils {
         ResponseCookie armsCookie = ResponseCookie.from(ARMS_TOKEN_COOKIE, armsToken)
                 .httpOnly(true)
                 .secure(secure)
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .path("/")
                 .maxAge(ttlSeconds)
                 .build();
@@ -66,7 +66,7 @@ public final class CookieUtils {
             ResponseCookie cleared = ResponseCookie.from(name, "")
                     .httpOnly(true)
                     .secure(secure)
-                    .sameSite("Strict")
+                    .sameSite("Lax")
                     .path("/")
                     .maxAge(0)
                     .build();

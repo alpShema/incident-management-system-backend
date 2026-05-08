@@ -75,7 +75,7 @@ class AuthControllerTest {
         assertThat(cookies).anyMatch(c -> c.startsWith("access_token="));
         assertThat(cookies).anyMatch(c -> c.startsWith("refresh_token="));
         assertThat(cookies).anyMatch(c -> c.startsWith("arms_token="));
-        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=Strict"));
+        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=Lax"));
     }
 
     @Test

@@ -140,11 +140,20 @@ public class AuthService {
     }
 
     private AuthSessionResponse toSessionResponse(User user) {
+        List<String> permissions = userAuthorityService.resolveByUserId(user.getId())
+                .map(resolved -> resolved.authorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .filter(a -> a != null && !a.startsWith("ROLE_"))
+                        .sorted(Comparator.naturalOrder())
+                        .toList())
+                .orElse(List.of());
+
         return AuthSessionResponse.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .profileImg(user.getProfileImg())
+                .permissions(permissions)
                 .build();
     }
 
