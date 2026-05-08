@@ -157,6 +157,8 @@ pipeline {
                                  sed -i '/^BACKEND_IMAGE=/d' /home/ubuntu/app/.env && \
                                  echo 'BACKEND_IMAGE=\${ECR_REPO}:${imageTag}' >> /home/ubuntu/app/.env"
 
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" docker-compose.yml "ubuntu@\${EC2_IP}:/home/ubuntu/app/docker-compose.yml"
+
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
                         """
