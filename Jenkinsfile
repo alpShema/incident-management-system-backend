@@ -90,10 +90,10 @@ pipeline {
             }
         }
 
-        // ── 9. Push to ECR ─────────────────────────────────────── staging only ──
+        // ── 9. Push to ECR ─────────────────────────────────────── develop only ──
         stage('Push to ECR') {
             when {
-                branch 'staging'
+                branch 'develop'
             }
             steps {
                 script {
@@ -120,10 +120,10 @@ pipeline {
             }
         }
 
-        // ── 10. Deploy to Staging EC2 ──────────────────────────── staging only ──
+        // ── 10. Deploy to Staging EC2 ──────────────────────────── develop only ──
         stage('Deploy to Staging') {
             when {
-                branch 'staging'
+                branch 'develop'
             }
             steps {
                 script {
