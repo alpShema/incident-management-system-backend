@@ -74,12 +74,13 @@ class ArmsClientImplTest {
     }
 
     @Test
-    void getUserByToken_4xxResponse_throwsArmsAuthException() {
+    void getUserByToken_4xxResponse_throwsArmsAuthExceptionWith401() {
         server.expect(requestTo(SSO_URL))
               .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
         assertThatThrownBy(() -> client.getUserByToken(TOKEN))
-                .isInstanceOf(ArmsAuthException.class);
+                .isInstanceOf(ArmsAuthException.class)
+                .satisfies(ex -> assertThat(((ArmsAuthException) ex).getHttpStatus()).isEqualTo(401));
     }
 
     @Test
@@ -102,9 +103,10 @@ class ArmsClientImplTest {
     }
 
     @Test
-    void getUserByToken_invalidToken_throwsArmsAuthException() {
+    void getUserByToken_invalidToken_throwsArmsAuthExceptionWith401() {
         assertThatThrownBy(() -> client.getUserByToken("not-a-jwt"))
-                .isInstanceOf(ArmsAuthException.class);
+                .isInstanceOf(ArmsAuthException.class)
+                .satisfies(ex -> assertThat(((ArmsAuthException) ex).getHttpStatus()).isEqualTo(401));
     }
 
     // ── getAllUsers ────────────────────────────────────────────────────────────

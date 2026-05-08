@@ -12,18 +12,21 @@ import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
     private final ArmsClient armsClient;
     private final ArmsTokenExpiryService armsTokenExpiryService;
     private final TokenService tokenService;
+    private final TokenRevocationService tokenRevocationService;
     private final UserRepository userRepository;
     private final UserAuthorityService userAuthorityService;
     @Transactional
@@ -61,6 +64,10 @@ public class AuthService {
         TokenService.RefreshPrincipal refreshPrincipal = tokenService.authenticateRefreshToken(refreshToken)
                 .orElseThrow(() -> new ArmsAuthException("Invalid refresh token", 401));
 
+        if (tokenRevocationService.isRevoked(refreshPrincipal.jti())) {
+            throw new ArmsAuthException("Refresh token has been revoked", 401);
+        }
+
         long refreshTokenTtlSeconds = armsTokenExpiryService.getRemainingLifetimeSeconds(armsToken);
         ArmsUserInfo armsUser = armsClient.getUserByToken(armsToken);
         validateRefreshPrincipal(refreshPrincipal, armsUser);
@@ -76,6 +83,9 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalStateException(
                         "User not found after upsert for id=" + armsUser.userId()));
 
+        tokenRevocationService.revoke(
+                refreshPrincipal.jti(), refreshPrincipal.userId(), refreshPrincipal.expiresAt());
+
         String accessToken = tokenService.generateAccessToken(user);
         String newRefreshToken = tokenService.generateRefreshToken(user, refreshTokenTtlSeconds);
 
@@ -90,8 +100,20 @@ public class AuthService {
         );
     }
 
-    public void logout() {
-        // TODO: Revoke refresh token when storage is implemented.
+    @Transactional
+    public void logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            log.debug("Logout called with no refresh token — nothing to revoke");
+            return;
+        }
+        tokenService.authenticateRefreshToken(refreshToken)
+                .ifPresentOrElse(
+                        p -> {
+                            tokenRevocationService.revoke(p.jti(), p.userId(), p.expiresAt());
+                            userRepository.incrementTokenVersion(p.userId());
+                        },
+                        () -> log.debug("Logout: refresh token invalid or expired — nothing to revoke")
+                );
     }
 
     public UserPermissionsResponse getUserPermissions(String userId) {
