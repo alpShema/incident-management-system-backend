@@ -56,7 +56,7 @@ pipeline {
             }
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY} -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml'
+                    sh 'mvn sonar:sonar'
                 }
             }
         }
