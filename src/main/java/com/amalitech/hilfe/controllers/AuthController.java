@@ -57,9 +57,11 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
+            HttpServletRequest request,
             HttpServletResponse response
     ) {
-        authService.logout();
+        String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
+        authService.logout(refreshToken);
         CookieUtils.clearAuthCookies(response, cookieSecure);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }

@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -139,6 +140,15 @@ class AuthControllerTest {
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).hasSize(3);
         assertThat(cookies).allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
+    }
+
+    @Test
+    void logout_withRefreshCookie_passesTokenToService() throws Exception {
+        mvc.perform(post("/auth/logout")
+                        .cookie(new MockCookie("refresh_token", "rt-value")))
+                .andExpect(status().isNoContent());
+
+        verify(authService).logout("rt-value");
     }
 
     @Test

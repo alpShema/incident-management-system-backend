@@ -54,6 +54,10 @@ public interface UserRepository extends JpaRepository<User, String> {
      * Status is intentionally excluded from the UPDATE so an admin deactivation survives re-login.
      * clearAutomatically = true flushes the JPA cache so the following findById hits the DB.
      */
+    @Modifying
+    @Query("UPDATE User u SET u.tokenVersion = u.tokenVersion + 1 WHERE u.id = :userId")
+    void incrementTokenVersion(@Param("userId") String userId);
+
     @Modifying(clearAutomatically = true)
     @Query(value = """
             INSERT INTO "User" (id, email, full_name, profile_img, status, created_at, updated_at)

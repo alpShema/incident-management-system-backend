@@ -3,6 +3,7 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.models.User;
 import org.springframework.security.core.Authentication;
 
+import java.time.Instant;
 import java.util.Optional;
 
 public interface TokenService {
@@ -20,6 +21,6 @@ public interface TokenService {
 
     long getRefreshTokenTtlSeconds();
 
-    record RefreshPrincipal(String userId, String email) {
+    record RefreshPrincipal(String userId, String email, String jti, Instant expiresAt) {
     }
 }

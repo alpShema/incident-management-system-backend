@@ -18,12 +18,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class JwtTokenService implements TokenService {
     private static final String CLAIM_EMAIL = "email";
     private static final String CLAIM_ROLE = "role";
     private static final String CLAIM_TYPE = "type";
+    private static final String CLAIM_TOKEN_VERSION = "ver";
 
     private final SecretKey signingKey;
     private final String jwtIssuer;
@@ -80,19 +82,21 @@ public class JwtTokenService implements TokenService {
             String userId = claims.getSubject();
             String email = claims.get(CLAIM_EMAIL, String.class);
             String claimedRole = claims.get(CLAIM_ROLE, String.class);
+            Integer claimedVersion = claims.get(CLAIM_TOKEN_VERSION, Integer.class);
             return userAuthorityService.resolveByUserId(userId)
-                    .filter(resolvedAuthorities -> email.equals(resolvedAuthorities.email()))
-                    .filter(resolvedAuthorities -> hasMatchingRoleClaim(claimedRole, resolvedAuthorities.roleCode()))
-                    .map(resolvedAuthorities -> {
+                    .filter(r -> email.equals(r.email()))
+                    .filter(r -> hasMatchingRoleClaim(claimedRole, r.roleCode()))
+                    .filter(r -> claimedVersion != null && claimedVersion == r.tokenVersion())
+                    .map(r -> {
                         AuthPrincipal principal = new AuthPrincipal(
-                                resolvedAuthorities.userId(),
-                                resolvedAuthorities.email(),
-                                resolvedAuthorities.roleCode()
+                                r.userId(),
+                                r.email(),
+                                r.roleCode()
                         );
                         return new UsernamePasswordAuthenticationToken(
                                 principal,
                                 null,
-                                resolvedAuthorities.authorities()
+                                r.authorities()
                         );
                     });
 
@@ -120,7 +124,10 @@ public class JwtTokenService implements TokenService {
                 return Optional.empty();
             }
 
-            return Optional.of(new RefreshPrincipal(userId, email));
+            String jti = claims.getId();
+            Instant expiresAt = claims.getExpiration().toInstant();
+
+            return Optional.of(new RefreshPrincipal(userId, email, jti, expiresAt));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }
@@ -149,9 +156,17 @@ public class JwtTokenService implements TokenService {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry));
 
+        if ("refresh".equals(type)) {
+            builder.id(UUID.randomUUID().toString());
+        }
+
         if (includeRoleClaim) {
             RoleCode resolvedRoleCode = userAuthorityService.resolve(user).roleCode();
             builder.claim(CLAIM_ROLE, resolvedRoleCode.name());
+        }
+
+        if ("access".equals(type)) {
+            builder.claim(CLAIM_TOKEN_VERSION, user.getTokenVersion());
         }
 
         return builder.signWith(signingKey, Jwts.SIG.HS256).compact();

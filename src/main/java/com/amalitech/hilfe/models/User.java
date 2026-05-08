@@ -50,6 +50,10 @@ public class User {
     @Builder.Default
     private List<String> permissions = new ArrayList<>();
 
+    @Column(name = "token_version", nullable = false)
+    @Builder.Default
+    private int tokenVersion = 1;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
