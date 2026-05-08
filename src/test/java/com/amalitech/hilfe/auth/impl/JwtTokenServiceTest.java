@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -162,7 +163,7 @@ class JwtTokenServiceTest {
     // ── authenticateRefreshToken ───────────────────────────────────────────────
 
     @Test
-    void authenticateRefreshToken_validToken_returnsRefreshPrincipal() {
+    void authenticateRefreshToken_validToken_returnsRefreshPrincipalWithJtiAndExpiry() {
         String token = tokenService.generateRefreshToken(testUser);
 
         Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(token);
@@ -170,6 +171,19 @@ class JwtTokenServiceTest {
         assertThat(result).isPresent();
         assertThat(result.get().userId()).isEqualTo("u1");
         assertThat(result.get().email()).isEqualTo("john@test.com");
+        assertThat(result.get().jti()).isNotBlank();
+        assertThat(result.get().expiresAt()).isAfter(Instant.now());
+    }
+
+    @Test
+    void authenticateRefreshToken_twoTokensProduceDifferentJtis() {
+        String token1 = tokenService.generateRefreshToken(testUser);
+        String token2 = tokenService.generateRefreshToken(testUser);
+
+        String jti1 = tokenService.authenticateRefreshToken(token1).orElseThrow().jti();
+        String jti2 = tokenService.authenticateRefreshToken(token2).orElseThrow().jti();
+
+        assertThat(jti1).isNotEqualTo(jti2);
     }
 
     @Test
@@ -251,6 +265,30 @@ class JwtTokenServiceTest {
     }
 
     @Test
+    void authenticateAccessToken_staleTokenVersion_returnsEmpty() {
+        // token issued with version=1; DB now reports version=2 (post-logout increment)
+        mockResolvedRole(testUser, RoleCode.CLIENT);
+        String token = tokenService.generateAccessToken(testUser);
+        mockResolvedAuthorities("u1", "john@test.com", RoleCode.CLIENT, 2, "ROLE_CLIENT");
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
+    }
+
+    @Test
+    void authenticateAccessToken_matchingTokenVersion_returnsAuthentication() {
+        // token issued with version=1; DB also reports version=1 — valid
+        mockResolvedRole(testUser, RoleCode.CLIENT);
+        String token = tokenService.generateAccessToken(testUser);
+        mockResolvedAuthorities("u1", "john@test.com", RoleCode.CLIENT, 1, "ROLE_CLIENT");
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isPresent();
+    }
+
+    @Test
     void authenticateAccessToken_mismatchedRoleClaim_returnsEmpty() {
         User userWithAdminRole = User.builder()
             .id("u5")
@@ -274,12 +312,22 @@ class JwtTokenServiceTest {
         RoleCode roleCode,
         String... authorities
     ) {
+        mockResolvedAuthorities(userId, email, roleCode, 1, authorities);
+    }
+
+    private void mockResolvedAuthorities(
+        String userId,
+        String email,
+        RoleCode roleCode,
+        int tokenVersion,
+        String... authorities
+    ) {
         List<SimpleGrantedAuthority> grantedAuthorities = List.of(authorities).stream()
             .map(SimpleGrantedAuthority::new)
             .toList();
 
         when(userAuthorityService.resolveByUserId(userId)).thenReturn(Optional.of(
-            new UserAuthorityService.ResolvedAuthorities(userId, email, roleCode, grantedAuthorities)
+            new UserAuthorityService.ResolvedAuthorities(userId, email, roleCode, grantedAuthorities, tokenVersion)
         ));
     }
 
@@ -289,7 +337,8 @@ class JwtTokenServiceTest {
                 user.getId(),
                 user.getEmail(),
                 roleCode,
-                List.of(new SimpleGrantedAuthority("ROLE_" + roleCode.name()))
+                List.of(new SimpleGrantedAuthority("ROLE_" + roleCode.name())),
+                user.getTokenVersion()
             )
         );
     }
