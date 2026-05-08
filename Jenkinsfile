@@ -44,8 +44,8 @@ pipeline {
             }
         }
 
-        // ── 4. SonarQube Analysis ────────── PR→develop | develop | testing | staging ──
-        stage('SonarQube Code Analysis') {
+        // ── 4 & 5. SonarQube Analysis + Quality Gate ── PR→develop | develop | testing | staging ──
+        stage('SonarQube Analysis & Quality Gate') {
             when {
                 expression {
                     env.CHANGE_TARGET == 'develop' ||
@@ -56,23 +56,11 @@ pipeline {
             }
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn sonar:sonar'
+                    sh 'mvn sonar:sonar -Dsonar.projectKey=hilfe-v2-backend -Dsonar.projectName="Hilfe v2 Backend"'
                 }
-            }
-        }
-
-        // ── 5. SonarQube Quality Gate ────── PR→develop | develop | testing | staging ──
-        stage('SonarQube Code Quality') {
-            when {
-                expression {
-                    env.CHANGE_TARGET == 'develop' ||
-                    env.BRANCH_NAME == 'develop' ||
-                    env.BRANCH_NAME == 'testing' ||
-                    env.BRANCH_NAME == 'staging'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
-            }
-            steps {
-                waitForQualityGate abortPipeline: true
             }
         }
 
@@ -113,9 +101,8 @@ pipeline {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
                         def region   = env.AWS_REGION
+                        withEnv(["AWS_DEFAULT_REGION=${region}"]) {
                         sh """
-                            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-                            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                             export AWS_DEFAULT_REGION="${region}"
                             AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                             ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
@@ -127,6 +114,7 @@ pipeline {
                             docker push "\${ECR_REPO}:${imageTag}"
                             docker push "\${ECR_REPO}:latest"
                         """
+                        } // withEnv
                     }
                 }
             }
@@ -140,14 +128,13 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    withCredentials([string(credentialsId: 'staging-ec2-ip', variable: 'EC2_IP')]) {
+                    withCredentials([string(credentialsId: 'staging-backend-ec2-ip', variable: 'EC2_IP')]) {
                     withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
                         def region   = env.AWS_REGION
+                        withEnv(["AWS_DEFAULT_REGION=${region}"]) {
                         sh """
-                            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-                            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                             export AWS_DEFAULT_REGION="${region}"
                             AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                             ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
@@ -164,6 +151,7 @@ pipeline {
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
                         """
+                        } // withEnv
                     }
                     }
                     }
