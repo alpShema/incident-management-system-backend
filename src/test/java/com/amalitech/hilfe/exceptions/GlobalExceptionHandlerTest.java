@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,6 +55,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void unsupportedHttpMethod_returns405WithDescriptiveMessage() throws Exception {
+        mvc.perform(get("/post-only"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.error").value("Method Not Allowed"))
+                .andExpect(jsonPath("$.message").value("HTTP method 'GET' is not supported for this endpoint"))
+                .andExpect(jsonPath("$.path").value("/post-only"));
+    }
+
+    @Test
     void genericException_returns500() throws Exception {
         mvc.perform(get("/throw/generic"))
                 .andExpect(status().isInternalServerError())
@@ -65,6 +76,9 @@ class GlobalExceptionHandlerTest {
 
     @RestController
     static class ThrowingController {
+
+        @PostMapping("/post-only")
+        void postOnly() { /* accepts POST only — used to trigger 405 on GET */ }
 
         @GetMapping("/throw/arms-401")
         void throwArms401() {

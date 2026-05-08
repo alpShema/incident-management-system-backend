@@ -69,7 +69,8 @@ public class UserAuthorityService {
                 user.getId(),
                 user.getEmail(),
                 roleCode,
-                authorities.stream().map(SimpleGrantedAuthority::new).toList()
+                authorities.stream().map(SimpleGrantedAuthority::new).toList(),
+                user.getTokenVersion()
         );
     }
 
@@ -120,7 +121,8 @@ public class UserAuthorityService {
             String userId,
             String email,
             RoleCode roleCode,
-            Collection<? extends GrantedAuthority> authorities
+            Collection<? extends GrantedAuthority> authorities,
+            int tokenVersion
     ) {
     }
 }

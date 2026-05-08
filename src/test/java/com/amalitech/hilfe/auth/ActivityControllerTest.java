@@ -70,10 +70,11 @@ class ActivityControllerTest {
                                 List.of(() -> "ROLE_ADMIN")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].id").value(1))
-                .andExpect(jsonPath("$.items[0].action").value("ROLE_CHANGED"))
-                .andExpect(jsonPath("$.items[0].subjectType").value("USER"))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(10));
+                .andExpect(jsonPath("$.message").value("Activity logs retrieved successfully"))
+                .andExpect(jsonPath("$.data.items[0].id").value(1))
+                .andExpect(jsonPath("$.data.items[0].action").value("ROLE_CHANGED"))
+                .andExpect(jsonPath("$.data.items[0].subjectType").value("USER"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(10));
     }
 }

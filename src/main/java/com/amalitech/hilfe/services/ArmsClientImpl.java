@@ -195,7 +195,7 @@ public class ArmsClientImpl implements ArmsClient {
         try {
             String[] parts = token.split("\\.");
             if (parts.length < 2) {
-                throw new ArmsAuthException("Invalid ARMS token: expected JWT format");
+                throw new ArmsAuthException("Invalid ARMS token: expected JWT format", 401);
             }
 
             byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]); // NOSONAR java:S5659 - reading user_id from ARMS token only; signature verification is the ARMS server's responsibility
@@ -203,20 +203,20 @@ public class ArmsClientImpl implements ArmsClient {
             String userId = claims.path("user_id").asText(null);
 
             if (userId == null || userId.isBlank()) {
-                throw new ArmsAuthException("ARMS token is missing user_id claim");
+                throw new ArmsAuthException("ARMS token is missing user_id claim", 401);
             }
             return userId;
         } catch (ArmsAuthException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new ArmsAuthException("Failed to decode ARMS token", exception);
+            throw new ArmsAuthException("Failed to decode ARMS token", 401, exception);
         }
     }
 
     private ArmsAuthException handleTokenRequestFailure(String userId, RuntimeException exception) {
         if (exception instanceof HttpClientErrorException clientErrorException) {
             log.error("ARMS rejected request for user {}: {}", userId, clientErrorException.getMessage());
-            return new ArmsAuthException("Invalid or expired ARMS token", clientErrorException);
+            return new ArmsAuthException("Invalid or expired ARMS token", 401, clientErrorException);
         }
         if (exception instanceof HttpServerErrorException serverErrorException) {
             log.error("ARMS service error: {}", serverErrorException.getMessage());

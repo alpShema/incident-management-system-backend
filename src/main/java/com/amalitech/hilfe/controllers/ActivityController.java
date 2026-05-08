@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ActivityLogResponse;
+import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.services.ActivityLogService;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ public class ActivityController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
-    public ResponseEntity<PageResponse<ActivityLogResponse>> activityLogs(Pageable pageable) {
-        return ResponseEntity.ok(PageResponse.from(activityLogService.getActivityLogs(pageable)));
+    public ResponseEntity<ApiResponse<PageResponse<ActivityLogResponse>>> activityLogs(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success("Activity logs retrieved successfully", PageResponse.from(activityLogService.getActivityLogs(pageable))));
     }
 }
