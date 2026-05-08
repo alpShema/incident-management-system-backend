@@ -198,8 +198,8 @@ public class ArmsClientImpl implements ArmsClient {
                 throw new ArmsAuthException("Invalid ARMS token: expected JWT format");
             }
 
-            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
-            JsonNode claims = OBJECT_MAPPER.readTree(payloadBytes);
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]); // NOSONAR java:S5659 - reading user_id from ARMS token only; signature verification is the ARMS server's responsibility
+            JsonNode claims = OBJECT_MAPPER.readTree(payloadBytes); // NOSONAR java:S5659
             String userId = claims.path("user_id").asText(null);
 
             if (userId == null || userId.isBlank()) {
