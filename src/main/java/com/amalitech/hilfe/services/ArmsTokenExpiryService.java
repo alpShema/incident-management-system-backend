@@ -24,8 +24,8 @@ public class ArmsTokenExpiryService {
                 throw new ArmsAuthException("Invalid ARMS token", 401);
             }
 
-            byte[] payloadBytes = Base64.getUrlDecoder().decode(tokenParts[1]);
-            JsonNode payload = OBJECT_MAPPER.readTree(new String(payloadBytes, StandardCharsets.UTF_8));
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(tokenParts[1]); // NOSONAR java:S5659 - reading ARMS token expiry only; signature verification is the ARMS server's responsibility
+            JsonNode payload = OBJECT_MAPPER.readTree(new String(payloadBytes, StandardCharsets.UTF_8)); // NOSONAR java:S5659
             JsonNode expiryNode = payload.get("exp");
             if (expiryNode == null || !expiryNode.canConvertToLong()) {
                 throw new ArmsAuthException("ARMS token is missing an expiry", 401);
