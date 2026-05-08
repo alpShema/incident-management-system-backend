@@ -51,12 +51,11 @@ pipeline {
             }
         }
 
-        // ── 4 & 5. SonarQube Analysis + Quality Gate ── PR→develop | develop | testing | staging ──
+        // ── 4 & 5. SonarQube Analysis + Quality Gate ── PR→develop | testing | staging ──
         stage('SonarQube Analysis & Quality Gate') {
             when {
                 expression {
                     env.CHANGE_TARGET == 'develop' ||
-                    env.BRANCH_NAME == 'develop' ||
                     env.BRANCH_NAME == 'testing' ||
                     env.BRANCH_NAME == 'staging'
                 }
