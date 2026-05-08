@@ -44,8 +44,8 @@ pipeline {
             }
         }
 
-        // ── 4. SonarQube Analysis ────────── PR→develop | develop | testing | staging ──
-        stage('SonarQube Code Analysis') {
+        // ── 4 & 5. SonarQube Analysis + Quality Gate ── PR→develop | develop | testing | staging ──
+        stage('SonarQube Analysis & Quality Gate') {
             when {
                 expression {
                     env.CHANGE_TARGET == 'develop' ||
@@ -56,23 +56,11 @@ pipeline {
             }
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn sonar:sonar'
+                    sh 'mvn sonar:sonar -Dsonar.projectKey=hilfe-v2-backend -Dsonar.projectName="Hilfe v2 Backend"'
                 }
-            }
-        }
-
-        // ── 5. SonarQube Quality Gate ────── PR→develop | develop | testing | staging ──
-        stage('SonarQube Code Quality') {
-            when {
-                expression {
-                    env.CHANGE_TARGET == 'develop' ||
-                    env.BRANCH_NAME == 'develop' ||
-                    env.BRANCH_NAME == 'testing' ||
-                    env.BRANCH_NAME == 'staging'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
-            }
-            steps {
-                waitForQualityGate abortPipeline: true
             }
         }
 
@@ -140,7 +128,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    withCredentials([string(credentialsId: 'staging-ec2-ip', variable: 'EC2_IP')]) {
+                    withCredentials([string(credentialsId: 'staging-backend-ec2-ip', variable: 'EC2_IP')]) {
                     withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
