@@ -14,6 +14,13 @@ pipeline {
 
     stages {
 
+        // ── 0. Clean Workspace ─────────────────────────────────── all branches ──
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
         // ── 1. Checkout ────────────────────────────────────────── all branches ──
         stage('Checkout') {
             steps {
