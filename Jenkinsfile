@@ -101,9 +101,8 @@ pipeline {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
                         def region   = env.AWS_REGION
+                        withEnv(["AWS_DEFAULT_REGION=${region}"]) {
                         sh """
-                            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-                            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                             export AWS_DEFAULT_REGION="${region}"
                             AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                             ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
@@ -115,6 +114,7 @@ pipeline {
                             docker push "\${ECR_REPO}:${imageTag}"
                             docker push "\${ECR_REPO}:latest"
                         """
+                        } // withEnv
                     }
                 }
             }
@@ -133,9 +133,8 @@ pipeline {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
                         def region   = env.AWS_REGION
+                        withEnv(["AWS_DEFAULT_REGION=${region}"]) {
                         sh """
-                            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-                            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                             export AWS_DEFAULT_REGION="${region}"
                             AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                             ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
@@ -152,6 +151,7 @@ pipeline {
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
                         """
+                        } // withEnv
                     }
                     }
                     }
