@@ -6,6 +6,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -21,6 +22,16 @@ public class GlobalExceptionHandler {
         HttpStatus status = HttpStatus.resolve(ex.getHttpStatus());
         if (status == null) status = HttpStatus.BAD_GATEWAY;
         return buildResponse(status, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Method not allowed: {} {}", ex.getMethod(), request.getRequestURI());
+        String message = String.format("HTTP method '%s' is not supported for this endpoint", ex.getMethod());
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, message, request);
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)

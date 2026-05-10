@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers;
 
+import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.AuthSessionResponse;
@@ -30,7 +31,7 @@ public class AuthController {
     private boolean cookieSecure;
 
     @PostMapping("/login")
-    public ResponseEntity<AuthSessionResponse> login(
+    public ResponseEntity<ApiResponse<AuthSessionResponse>> login(
             @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
@@ -38,11 +39,11 @@ public class AuthController {
         CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
         CookieUtils.addArmsTokenCookie(response, request.armsToken(), cookieSecure,
                 authResult.tokens().getRefreshTokenExpiresIn());
-        return ResponseEntity.ok(authResult.session());
+        return ResponseEntity.ok(ApiResponse.success("Login successful", authResult.session()));
     }
 
     @PostMapping("/refresh-token")
-    public ResponseEntity<AuthSessionResponse> refresh(
+    public ResponseEntity<ApiResponse<AuthSessionResponse>> refresh(
             HttpServletRequest servletRequest,
             HttpServletResponse response
     ) {
@@ -51,22 +52,24 @@ public class AuthController {
         AuthResult authResult = authService.refresh(refreshToken, armsToken);
         CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
         CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, authResult.tokens().getRefreshTokenExpiresIn());
-        return ResponseEntity.ok(authResult.session());
+        return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", authResult.session()));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
+            HttpServletRequest request,
             HttpServletResponse response
     ) {
-        authService.logout();
+        String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
+        authService.logout(refreshToken);
         CookieUtils.clearAuthCookies(response, cookieSecure);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
     @GetMapping("/permissions")
-    public ResponseEntity<UserPermissionsResponse> permissions(
+    public ResponseEntity<ApiResponse<UserPermissionsResponse>> permissions(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
-        return ResponseEntity.ok(authService.getUserPermissions(principal.userId()));
+        return ResponseEntity.ok(ApiResponse.success("Permissions retrieved successfully", authService.getUserPermissions(principal.userId())));
     }
 }

@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -64,8 +65,9 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new LoginRequest("arms-token"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value("u1"))
-                .andExpect(jsonPath("$.email").value("john@test.com"))
+                .andExpect(jsonPath("$.message").value("Login successful"))
+                .andExpect(jsonPath("$.data.userId").value("u1"))
+                .andExpect(jsonPath("$.data.email").value("john@test.com"))
                 .andReturn();
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
@@ -73,7 +75,7 @@ class AuthControllerTest {
         assertThat(cookies).anyMatch(c -> c.startsWith("access_token="));
         assertThat(cookies).anyMatch(c -> c.startsWith("refresh_token="));
         assertThat(cookies).anyMatch(c -> c.startsWith("arms_token="));
-        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=Strict"));
+        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=Lax"));
     }
 
     @Test
@@ -117,7 +119,8 @@ class AuthControllerTest {
                         .cookie(new MockCookie("refresh_token", "rt"))
                         .cookie(new MockCookie("arms_token", "arms-cookie-token")))
                         .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.userId").value("u1"))
+                        .andExpect(jsonPath("$.message").value("Token refreshed successfully"))
+                        .andExpect(jsonPath("$.data.userId").value("u1"))
                         .andReturn();
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
@@ -137,6 +140,15 @@ class AuthControllerTest {
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).hasSize(3);
         assertThat(cookies).allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
+    }
+
+    @Test
+    void logout_withRefreshCookie_passesTokenToService() throws Exception {
+        mvc.perform(post("/auth/logout")
+                        .cookie(new MockCookie("refresh_token", "rt-value")))
+                .andExpect(status().isNoContent());
+
+        verify(authService).logout("rt-value");
     }
 
     @Test
@@ -161,8 +173,9 @@ class AuthControllerTest {
                                 List.of(() -> "ROLE_CLIENT")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value("u1"))
-                .andExpect(jsonPath("$.permissions[0]").value("incident.create"))
-                .andExpect(jsonPath("$.permissions[1]").value("incident.read.own"));
+                .andExpect(jsonPath("$.message").value("Permissions retrieved successfully"))
+                .andExpect(jsonPath("$.data.userId").value("u1"))
+                .andExpect(jsonPath("$.data.permissions[0]").value("incident.create"))
+                .andExpect(jsonPath("$.data.permissions[1]").value("incident.read.own"));
     }
 }
