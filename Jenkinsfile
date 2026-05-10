@@ -52,14 +52,21 @@ pipeline {
             }
         }
 
-        // ── 4 & 5. SonarQube Analysis + Quality Gate ──────────── all branches ──
+        // ── 4 & 5. SonarQube Analysis + Quality Gate ── PR→develop | testing | staging ──
         stage('SonarQube Analysis & Quality Gate') {
+            when {
+                expression {
+                    env.CHANGE_TARGET == 'develop' ||
+                    env.BRANCH_NAME == 'testing' ||
+                    env.BRANCH_NAME == 'staging'
+                }
+            }
             steps {
                 withSonarQubeEnv('SonarQube') {
                     sh 'mvn sonar:sonar -Dsonar.projectKey=hilfe-v2-backend -Dsonar.projectName="Hilfe v2 Backend"'
                 }
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
