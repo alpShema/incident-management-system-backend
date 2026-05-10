@@ -25,6 +25,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                sh 'test -f pom.xml || (echo "ERROR: checkout did not populate workspace — pom.xml missing" && exit 1)'
                 script {
                     env.DATE      = sh(script: 'date +%Y%m%d', returnStdout: true).trim()
                     env.IMAGE_TAG = "${env.appName}-${env.DATE}-${env.BUILD_NUMBER}"
