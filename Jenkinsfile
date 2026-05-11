@@ -160,6 +160,13 @@ pipeline {
 
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" docker-compose.yml "ubuntu@\${EC2_IP}:/home/ubuntu/app/docker-compose.yml"
 
+                            # Deploy nginx config and reload nginx (idempotent — only reloads if config changed)
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend.conf "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend.conf"
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "sudo cp /tmp/nginx-host-backend.conf /etc/nginx/sites-available/hilfe-backend && \
+                                 sudo ln -sf /etc/nginx/sites-available/hilfe-backend /etc/nginx/sites-enabled/hilfe-backend && \
+                                 sudo nginx -t && sudo systemctl reload nginx"
+
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
                         """
