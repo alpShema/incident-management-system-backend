@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateUserRoleRequest;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.UserService;
 import jakarta.validation.Valid;
@@ -26,13 +27,13 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping("/roles")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_ROLE_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<UserRoleSummaryResponse>>> userRoles(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("User roles retrieved successfully", PageResponse.from(userService.getUserRoles(pageable))));
     }
 
     @PatchMapping("/{userId}/role")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_USER_ROLE_UPDATE + "')")
     public ResponseEntity<ApiResponse<UserRoleSummaryResponse>> assignUserRole(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @PathVariable String userId,

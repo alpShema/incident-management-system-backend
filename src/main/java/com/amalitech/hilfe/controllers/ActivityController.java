@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ActivityLogResponse;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.PageResponse;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -19,7 +20,7 @@ public class ActivityController {
     private final ActivityLogService activityLogService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_ROLE_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<ActivityLogResponse>>> activityLogs(Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Activity logs retrieved successfully", PageResponse.from(activityLogService.getActivityLogs(pageable))));
     }
