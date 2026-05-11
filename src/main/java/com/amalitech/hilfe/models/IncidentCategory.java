@@ -4,15 +4,17 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
-@Table(name = "IncidentType")
+@Table(name = "IncidentCategory")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class IncidentType {
+public class IncidentCategory {
 
     @Id
     private String id;
@@ -20,21 +22,7 @@ public class IncidentType {
     @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(nullable = false)
     private String description;
-
-    @Column(name = "category_id")
-    private String categoryId;
-
-    @Column(name = "admin_id", nullable = false)
-    private String adminId;
-
-    @Column(name = "agent_id", nullable = false)
-    private String agentId;
-
-    @Column(name = "visible_to_group", nullable = false)
-    @Builder.Default
-    private boolean visibleToGroup = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -44,13 +32,9 @@ public class IncidentType {
 
     // ── Relationships ──
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id", insertable = false, updatable = false)
-    private IncidentCategory category;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "agent_id", insertable = false, updatable = false)
-    private Agent agent;
+    @OneToMany(mappedBy = "category", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<IncidentType> incidentTypes = new ArrayList<>();
 
     // ── Lifecycle ──
 

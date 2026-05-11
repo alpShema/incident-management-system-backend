@@ -28,6 +28,9 @@ public final class RbacPermissions {
     public static final String INCIDENT_TYPE_CREATE = "incident-type.create";
     public static final String INCIDENT_TYPE_UPDATE = "incident-type.update";
     public static final String INCIDENT_TYPE_DELETE = "incident-type.delete";
+    public static final String INCIDENT_CATEGORY_CREATE = "incident-category.create";
+    public static final String INCIDENT_CATEGORY_UPDATE = "incident-category.update";
+    public static final String INCIDENT_CATEGORY_DELETE = "incident-category.delete";
     public static final String RBAC_ROLE_READ = "rbac.role.read";
     public static final String RBAC_ROLE_UPDATE = "rbac.role.update";
     public static final String RBAC_USER_ROLE_UPDATE = "rbac.user-role.update";
