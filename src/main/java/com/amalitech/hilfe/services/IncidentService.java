@@ -35,6 +35,7 @@ public class IncidentService {
         Incident incident = Incident.builder()
                 .id(UUID.randomUUID().toString())
                 .title(request.title())
+                .description(request.description())
                 .userId(userId)
                 .locationId(request.locationId())
                 .incidentTypeId(request.incidentTypeId())
