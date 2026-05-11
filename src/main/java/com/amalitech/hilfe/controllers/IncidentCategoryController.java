@@ -1,16 +1,19 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
+import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.IncidentCategoryService;
+import com.amalitech.hilfe.services.JwtTokenService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -61,5 +64,16 @@ public class IncidentCategoryController {
     @GetMapping("/{id}/topics")
     public ResponseEntity<ApiResponse<List<IncidentTopicResponse>>> listTopics(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Incident topics retrieved successfully", categoryService.listTopicsByCategory(id)));
+    }
+
+    @PostMapping("/{id}/topics")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_CREATE + "')")
+    public ResponseEntity<ApiResponse<IncidentTopicResponse>> createTopic(
+            @PathVariable String id,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Valid @RequestBody CreateTopicRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Incident topic created successfully", categoryService.createTopic(id, principal.userId(), request)));
     }
 }
