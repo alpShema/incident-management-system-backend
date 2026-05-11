@@ -30,14 +30,17 @@ public class AuthController {
     @Value("${cookie.secure:false}")
     private boolean cookieSecure;
 
+    @Value("${cookie.same-site:None}")
+    private String cookieSameSite;
+
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthSessionResponse>> login(
             @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
         AuthResult authResult = authService.login(request);
-        CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
-        CookieUtils.addArmsTokenCookie(response, request.armsToken(), cookieSecure,
+        CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure, cookieSameSite);
+        CookieUtils.addArmsTokenCookie(response, request.armsToken(), cookieSecure, cookieSameSite,
                 authResult.tokens().getRefreshTokenExpiresIn());
         return ResponseEntity.ok(ApiResponse.success("Login successful", authResult.session()));
     }
@@ -50,8 +53,8 @@ public class AuthController {
         String armsToken = CookieUtils.getCookieValue(servletRequest, CookieUtils.ARMS_TOKEN_COOKIE);
         String refreshToken = CookieUtils.getCookieValue(servletRequest, CookieUtils.REFRESH_TOKEN_COOKIE);
         AuthResult authResult = authService.refresh(refreshToken, armsToken);
-        CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure);
-        CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, authResult.tokens().getRefreshTokenExpiresIn());
+        CookieUtils.addAuthCookies(response, authResult.tokens(), cookieSecure, cookieSameSite);
+        CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, cookieSameSite, authResult.tokens().getRefreshTokenExpiresIn());
         return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", authResult.session()));
     }
 
@@ -62,7 +65,7 @@ public class AuthController {
     ) {
         String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
         authService.logout(refreshToken);
-        CookieUtils.clearAuthCookies(response, cookieSecure);
+        CookieUtils.clearAuthCookies(response, cookieSecure, cookieSameSite);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 

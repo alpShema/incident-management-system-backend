@@ -124,6 +124,7 @@ arms:
 # ──────────────────────────────────────────
 cookie:
   secure: ${COOKIE_SECURE:false}
+  same-site: ${COOKIE_SAME_SITE:None}
 
 # ──────────────────────────────────────────
 # CORS

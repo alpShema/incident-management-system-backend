@@ -1,10 +1,12 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.IncidentCategory;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.transaction.Transactional;
@@ -63,5 +65,22 @@ public class IncidentCategoryService {
         return typeRepository.findByCategoryId(categoryId).stream()
                 .map(IncidentTopicResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public IncidentTopicResponse createTopic(String categoryId, String adminId, CreateTopicRequest request) {
+        if (!categoryRepository.existsById(categoryId)) {
+            throw new ArmsAuthException("Incident category not found", 404);
+        }
+        IncidentType topic = IncidentType.builder()
+                .id(UUID.randomUUID().toString())
+                .name(request.name())
+                .description(request.description())
+                .categoryId(categoryId)
+                .adminId(adminId)
+                .agentId(request.agentId())
+                .visibleToGroup(request.visibleToGroup())
+                .build();
+        return IncidentTopicResponse.from(typeRepository.save(topic));
     }
 }
