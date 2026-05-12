@@ -1,7 +1,7 @@
-INSERT INTO permissions (code, name, description, system_defined)
+INSERT INTO permissions (code, name, description)
 VALUES
-    ('dashboard.agent', 'Agent Dashboard', 'Allows an agent to view their own dashboard summary.', TRUE),
-    ('dashboard.admin', 'Admin Dashboard', 'Allows an admin to view the platform-wide dashboard summary.', TRUE)
+    ('dashboard.agent', 'Agent Dashboard', 'Allows an agent to view their own dashboard summary.'),
+    ('dashboard.admin', 'Admin Dashboard', 'Allows an admin to view the platform-wide dashboard summary.')
 ON CONFLICT (code) DO UPDATE
 SET
     name        = EXCLUDED.name,

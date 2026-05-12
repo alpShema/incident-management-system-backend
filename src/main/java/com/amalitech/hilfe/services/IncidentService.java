@@ -17,7 +17,6 @@ import com.amalitech.hilfe.repositories.StatusRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -46,7 +45,6 @@ public class IncidentService {
     private final CacheManager cacheManager;
 
     @Transactional
-    @CacheEvict(value = CacheConfig.ADMIN_DASHBOARD, allEntries = true)
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
         if (!incidentTypeRepository.existsById(request.incidentTypeId())) {
             throw new ArmsAuthException("Incident type not found", 404);
@@ -60,6 +58,7 @@ public class IncidentService {
                 .locationId(request.locationId())
                 .incidentTypeId(request.incidentTypeId())
                 .severityId(request.severityId())
+                .statusId("status-open")
                 .build();
 
         Incident saved = incidentRepository.save(incident);
@@ -75,14 +74,9 @@ public class IncidentService {
             case CLIENT -> incidentRepository
                     .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, locationId, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> {
-                String agentId = agentRepository.findByUserId(userId)
-                        .orElseThrow(() -> new ArmsAuthException("Agent record not found for user", 404))
-                        .getId();
-                yield incidentRepository
-                        .findByUserIdOrAssignedToIdFiltered(userId, agentId, statusId, severityId, incidentTypeId, locationId, pageable)
-                        .map(IncidentResponse::from);
-            }
+            case AGENT -> incidentRepository
+                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, locationId, pageable)
+                    .map(IncidentResponse::from);
             case ADMIN, SUPER_ADMIN -> incidentRepository
                     .findAllFiltered(statusId, severityId, incidentTypeId, locationId, pageable)
                     .map(IncidentResponse::from);
@@ -111,7 +105,6 @@ public class IncidentService {
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
 
-        evictAdminDashboard();
         evictAgentDashboardForIncident(incident);
 
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
@@ -125,7 +118,6 @@ public class IncidentService {
         incidentRepository.save(incident);
         activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
 
-        evictAdminDashboard();
         evictAgentDashboardForIncident(incident);
 
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
@@ -148,8 +140,6 @@ public class IncidentService {
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
 
-        evictAdminDashboard();
-        // Evict new assignee
         evictAgentDashboardByAgentId(request.agentId());
 
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
@@ -157,15 +147,6 @@ public class IncidentService {
 
     // ── Cache helpers ─────────────────────────────────────────────────────────
 
-    private void evictAdminDashboard() {
-        var cache = cacheManager.getCache(CacheConfig.ADMIN_DASHBOARD);
-        if (cache != null) cache.clear();
-    }
-
-    /**
-     * Evicts the agent dashboard for whoever is currently assigned to the incident.
-     * Uses the agentId → userId lookup so the correct per-userId cache entry is removed.
-     */
     private void evictAgentDashboardForIncident(Incident incident) {
         if (incident.getAssignedToId() == null) return;
         evictAgentDashboardByAgentId(incident.getAssignedToId());

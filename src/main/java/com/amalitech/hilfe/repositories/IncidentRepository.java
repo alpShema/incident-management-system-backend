@@ -52,7 +52,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
-            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
+            WHERE i.assignedToId = :agentId
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -60,14 +60,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
-            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
+            WHERE i.assignedToId = :agentId
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
-    Page<Incident> findByUserIdOrAssignedToIdFiltered(
-            @Param("userId") String userId,
+    Page<Incident> findByAssignedToIdFiltered(
             @Param("agentId") String agentId,
             @Param("statusId") String statusId,
             @Param("severityId") String severityId,
@@ -169,6 +168,20 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
 
     @Query("SELECT i.status.name, COUNT(i) FROM Incident i GROUP BY i.status.name")
     List<Object[]> countByStatusGlobal();
+
+    @Query("SELECT i.status.name, COUNT(i) FROM Incident i WHERE i.createdAt >= :since GROUP BY i.status.name")
+    List<Object[]> countByStatusSince(@Param("since") Instant since);
+
+    @Query(value = """
+            SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') AS month,
+                   DATE_TRUNC('month', created_at) AS month_start,
+                   COUNT(*) AS count
+            FROM "Incident"
+            WHERE created_at >= :since
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at)
+            """, nativeQuery = true)
+    List<Object[]> countByMonthSince(@Param("since") Instant since);
 
     @Query("""
             SELECT i.incidentType.category.name, COUNT(i)
