@@ -50,8 +50,8 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     /**
      * Atomic upsert by ARMS user id (which is the local PK).
-     * INSERT on first login, UPDATE profile fields on every subsequent login.
-     * Status is intentionally excluded from the UPDATE so an admin deactivation survives re-login.
+     * INSERT on first login with a default CLIENT role, UPDATE profile fields on every subsequent login.
+     * Status and role_code are intentionally excluded from the UPDATE so admin changes survive re-login.
      * clearAutomatically = true flushes the JPA cache so the following findById hits the DB.
      */
     @Modifying
@@ -60,8 +60,8 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     @Modifying(clearAutomatically = true)
     @Query(value = """
-            INSERT INTO "User" (id, email, full_name, profile_img, status, created_at, updated_at)
-            VALUES (:id, :email, :fullName, :profileImg, true, NOW(), NOW())
+            INSERT INTO "User" (id, email, full_name, profile_img, role_code, status, created_at, updated_at)
+            VALUES (:id, :email, :fullName, :profileImg, 'CLIENT', true, NOW(), NOW())
             ON CONFLICT (id)
             DO UPDATE SET
                 email       = EXCLUDED.email,
