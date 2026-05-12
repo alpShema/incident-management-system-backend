@@ -15,6 +15,7 @@ public record IncidentResponse(
         LookupResponse status,
         String assignedToId,
         boolean read,
+        Instant closedAt,
         Instant createdAt
 ) {
     public static IncidentResponse from(Incident incident) {
@@ -29,6 +30,7 @@ public record IncidentResponse(
                 incident.getStatus() != null ? LookupResponse.from(incident.getStatus().getId(), incident.getStatus().getName()) : null,
                 incident.getAssignedToId(),
                 incident.isRead(),
+                incident.getClosedAt(),
                 incident.getCreatedAt()
         );
     }
