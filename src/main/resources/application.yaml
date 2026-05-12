@@ -52,21 +52,6 @@ server:
     include-binding-errors: always
 
 # ──────────────────────────────────────────
-# Caching (Caffeine — swap for Redis later)
-# ──────────────────────────────────────────
-  cache:
-    type: caffeine
-
-# ──────────────────────────────────────────
-# GraphQL
-# ──────────────────────────────────────────
-  graphql:
-    graphiql:
-      enabled: true
-      path: /graphiql
-    path: /graphql
-
-# ──────────────────────────────────────────
 # Springdoc / Swagger UI
 # ──────────────────────────────────────────
 springdoc:

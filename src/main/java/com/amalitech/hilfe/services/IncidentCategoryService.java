@@ -1,6 +1,5 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.config.CacheConfig;
 import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
@@ -12,9 +11,6 @@ import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,7 +22,6 @@ public class IncidentCategoryService {
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
 
-    @Cacheable(CacheConfig.CATEGORIES)
     public List<IncidentCategoryResponse> listCategories() {
         return categoryRepository.findAll().stream()
                 .map(IncidentCategoryResponse::from)
@@ -34,7 +29,6 @@ public class IncidentCategoryService {
     }
 
     @Transactional
-    @CacheEvict(value = CacheConfig.CATEGORIES, allEntries = true)
     public IncidentCategoryResponse createCategory(IncidentCategoryRequest request) {
         if (categoryRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("Incident category with this name already exists", 409);
@@ -48,7 +42,6 @@ public class IncidentCategoryService {
     }
 
     @Transactional
-    @CacheEvict(value = CacheConfig.CATEGORIES, allEntries = true)
     public IncidentCategoryResponse updateCategory(String id, IncidentCategoryRequest request) {
         IncidentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
@@ -58,10 +51,6 @@ public class IncidentCategoryService {
     }
 
     @Transactional
-    @Caching(evict = {
-        @CacheEvict(value = CacheConfig.CATEGORIES, allEntries = true),
-        @CacheEvict(value = CacheConfig.TOPICS, key = "#id")
-    })
     public void deleteCategory(String id) {
         if (!categoryRepository.existsById(id)) {
             throw new ArmsAuthException("Incident category not found", 404);
@@ -69,7 +58,6 @@ public class IncidentCategoryService {
         categoryRepository.deleteById(id);
     }
 
-    @Cacheable(value = CacheConfig.TOPICS, key = "#categoryId")
     public List<IncidentTopicResponse> listTopicsByCategory(String categoryId) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException("Incident category not found", 404);
@@ -80,7 +68,6 @@ public class IncidentCategoryService {
     }
 
     @Transactional
-    @CacheEvict(value = CacheConfig.TOPICS, key = "#categoryId")
     public IncidentTopicResponse createTopic(String categoryId, String adminId, CreateTopicRequest request) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException("Incident category not found", 404);
