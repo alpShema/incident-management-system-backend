@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.config.CacheConfig;
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
 import com.amalitech.hilfe.dto.IncidentResponse;
@@ -15,6 +16,8 @@ import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,7 +31,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class IncidentService {
 
-    // Valid status transitions: key = current status name (lowercase), value = allowed next names
     private static final Map<String, Set<String>> VALID_TRANSITIONS = Map.of(
             "open",     Set.of("pending"),
             "pending",  Set.of("resolved", "closed"),
@@ -41,8 +43,10 @@ public class IncidentService {
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final ActivityLogService activityLogService;
+    private final CacheManager cacheManager;
 
     @Transactional
+    @CacheEvict(value = CacheConfig.ADMIN_DASHBOARD, allEntries = true)
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
         if (!incidentTypeRepository.existsById(request.incidentTypeId())) {
             throw new ArmsAuthException("Incident type not found", 404);
@@ -59,17 +63,12 @@ public class IncidentService {
                 .build();
 
         Incident saved = incidentRepository.save(incident);
-        return IncidentResponse.from(incidentRepository.findByIdWithDetails(saved.getId())
-                .orElseThrow());
+        return IncidentResponse.from(incidentRepository.findByIdWithDetails(saved.getId()).orElseThrow());
     }
 
     public Page<IncidentResponse> listIncidents(
-            String userId,
-            RoleCode roleCode,
-            String statusId,
-            String severityId,
-            String incidentTypeId,
-            String locationId,
+            String userId, RoleCode roleCode,
+            String statusId, String severityId, String incidentTypeId, String locationId,
             Pageable pageable
     ) {
         return switch (roleCode) {
@@ -107,15 +106,13 @@ public class IncidentService {
 
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
-
-        if ("closed".equalsIgnoreCase(newStatus.getName())) {
-            incident.setClosedAt(Instant.now());
-        } else {
-            incident.setClosedAt(null);
-        }
+        incident.setClosedAt("closed".equalsIgnoreCase(newStatus.getName()) ? Instant.now() : null);
 
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
+
+        evictAdminDashboard();
+        evictAgentDashboardForIncident(incident);
 
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
@@ -127,17 +124,55 @@ public class IncidentService {
         incident.setSeverityId(request.severityId());
         incidentRepository.save(incident);
         activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
+
+        evictAdminDashboard();
+        evictAgentDashboardForIncident(incident);
+
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     @Transactional
     public IncidentResponse assignIncident(String actorUserId, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
+
+        // Evict previous assignee before changing the field
+        evictAgentDashboardForIncident(incident);
+
         incident.setAssignedToId(request.agentId());
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
+
+        evictAdminDashboard();
+        // Evict new assignee
+        evictAgentDashboardByAgentId(request.agentId());
+
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
+
+    // ── Cache helpers ─────────────────────────────────────────────────────────
+
+    private void evictAdminDashboard() {
+        var cache = cacheManager.getCache(CacheConfig.ADMIN_DASHBOARD);
+        if (cache != null) cache.clear();
+    }
+
+    /**
+     * Evicts the agent dashboard for whoever is currently assigned to the incident.
+     * Uses the agentId → userId lookup so the correct per-userId cache entry is removed.
+     */
+    private void evictAgentDashboardForIncident(Incident incident) {
+        if (incident.getAssignedToId() == null) return;
+        evictAgentDashboardByAgentId(incident.getAssignedToId());
+    }
+
+    private void evictAgentDashboardByAgentId(String agentId) {
+        agentRepository.findUserIdByAgentId(agentId).ifPresent(userId -> {
+            var cache = cacheManager.getCache(CacheConfig.AGENT_DASHBOARD);
+            if (cache != null) cache.evict(userId);
+        });
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     private Incident findIncident(String incidentId) {
         return incidentRepository.findByIdWithDetails(incidentId)
@@ -149,7 +184,7 @@ public class IncidentService {
                 ? incident.getStatus().getName().toLowerCase()
                 : null;
 
-        if (currentStatusName == null) return; // no status yet — any initial assignment allowed
+        if (currentStatusName == null) return;
 
         Set<String> allowed = VALID_TRANSITIONS.getOrDefault(currentStatusName, Set.of());
         if (!allowed.contains(newStatus.getName().toLowerCase())) {
