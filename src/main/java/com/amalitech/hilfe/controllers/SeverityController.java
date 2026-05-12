@@ -2,7 +2,7 @@ package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.LookupResponse;
-import com.amalitech.hilfe.repositories.SeverityRepository;
+import com.amalitech.hilfe.services.SeverityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,7 +19,7 @@ import java.util.List;
 @RequestMapping("/severities")
 @RequiredArgsConstructor
 public class SeverityController {
-    private final SeverityRepository severityRepository;
+    private final SeverityService severityService;
 
     @Operation(summary = "List all severities", description = "Returns all available severity levels (e.g. Low, Medium, High, Critical).")
     @ApiResponses({
@@ -27,9 +27,6 @@ public class SeverityController {
     })
     @GetMapping
     public ResponseEntity<ApiResponse<List<LookupResponse>>> listSeverities() {
-        List<LookupResponse> severities = severityRepository.findAll().stream()
-                .map(s -> LookupResponse.from(s.getId(), s.getName()))
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success("Severities retrieved successfully", severities));
+        return ResponseEntity.ok(ApiResponse.success("Severities retrieved successfully", severityService.listSeverities()));
     }
 }
