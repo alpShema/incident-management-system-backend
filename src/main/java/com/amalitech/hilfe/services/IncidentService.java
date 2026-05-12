@@ -81,7 +81,7 @@ public class IncidentService {
                         .orElseThrow(() -> new ArmsAuthException("Agent record not found for user", 404))
                         .getId();
                 yield incidentRepository
-                        .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, locationId, pageable)
+                        .findByUserIdOrAssignedToIdFiltered(userId, agentId, statusId, severityId, incidentTypeId, locationId, pageable)
                         .map(IncidentResponse::from);
             }
             case ADMIN, SUPER_ADMIN -> incidentRepository
@@ -134,6 +134,12 @@ public class IncidentService {
     public IncidentResponse assignIncident(String actorUserId, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
         incident.setAssignedToId(request.agentId());
+
+        String pendingStatusId = statusRepository.findByNameIgnoreCase("Pending")
+                .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                .getId();
+        incident.setStatusId(pendingStatusId);
+
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());

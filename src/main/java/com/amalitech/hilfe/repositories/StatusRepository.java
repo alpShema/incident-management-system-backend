@@ -9,4 +9,5 @@ import java.util.Optional;
 @Repository
 public interface StatusRepository extends JpaRepository<Status, String> {
 
+    Optional<Status> findByNameIgnoreCase(String name);
 }
