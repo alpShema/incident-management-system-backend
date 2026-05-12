@@ -21,7 +21,7 @@ class CookieUtilsTest {
                 .accessTokenExpiresIn(3600L).refreshTokenExpiresIn(86400L)
                 .build();
 
-        CookieUtils.addAuthCookies(response, tokens, false);
+        CookieUtils.addAuthCookies(response, tokens, false, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).hasSize(2);
@@ -39,7 +39,7 @@ class CookieUtilsTest {
                 .accessTokenExpiresIn(3600L).refreshTokenExpiresIn(86400L)
                 .build();
 
-        CookieUtils.addAuthCookies(response, tokens, true);
+        CookieUtils.addAuthCookies(response, tokens, true, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).allSatisfy(c -> assertThat(c).contains("Secure"));
@@ -49,7 +49,7 @@ class CookieUtilsTest {
     void addArmsTokenCookie_setsArmsTokenHeader() {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        CookieUtils.addArmsTokenCookie(response, "arms-token-val", false, 3600L);
+        CookieUtils.addArmsTokenCookie(response, "arms-token-val", false, "Lax", 3600L);
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).hasSize(1);
@@ -61,7 +61,7 @@ class CookieUtilsTest {
     void clearAuthCookies_setsAllThreeCookiesToExpired() {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        CookieUtils.clearAuthCookies(response, false);
+        CookieUtils.clearAuthCookies(response, false, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).hasSize(3);
