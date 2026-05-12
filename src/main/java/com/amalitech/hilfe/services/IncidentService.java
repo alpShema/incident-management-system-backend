@@ -54,7 +54,7 @@ public class IncidentService {
                 String agentId = agentRepository.findByUserId(userId)
                         .orElseThrow(() -> new ArmsAuthException("Agent record not found for user", 404))
                         .getId();
-                yield incidentRepository.findByAssignedToId(agentId, pageable).map(IncidentResponse::from);
+                yield incidentRepository.findByUserIdOrAssignedToId(userId, agentId, pageable).map(IncidentResponse::from);
             }
             case ADMIN, SUPER_ADMIN -> incidentRepository.findAllWithDetails(pageable).map(IncidentResponse::from);
         };
