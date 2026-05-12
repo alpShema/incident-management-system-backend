@@ -29,9 +29,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
-            WHERE i.assignedToId = :agentId
+            WHERE i.userId = :userId OR i.assignedToId = :agentId
             """)
-    Page<Incident> findByAssignedToId(@Param("agentId") String agentId, Pageable pageable);
+    Page<Incident> findByUserIdOrAssignedToId(@Param("userId") String userId, @Param("agentId") String agentId, Pageable pageable);
 
     @Query("""
             SELECT i FROM Incident i
