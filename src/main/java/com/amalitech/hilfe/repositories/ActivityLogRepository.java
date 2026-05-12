@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> {
     @Query("""
@@ -25,4 +27,15 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
             FROM ActivityLog activityLog
             """)
     Page<ActivityLogResponse> findActivityLogResponses(Pageable pageable);
+
+    @Query("""
+            SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
+                a.id, a.actorUserId, a.targetUserId,
+                a.action, a.subjectType, a.subjectId,
+                a.description, a.metadata, a.createdAt
+            )
+            FROM ActivityLog a
+            ORDER BY a.createdAt DESC
+            """)
+    List<ActivityLogResponse> findRecent(Pageable pageable);
 }
