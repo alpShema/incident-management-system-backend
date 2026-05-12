@@ -8,10 +8,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface IncidentRepository extends JpaRepository<Incident, String> {
 
-    @Query("""
+    @Query(value = """
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category
@@ -19,29 +21,84 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             WHERE i.userId = :userId
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            WHERE i.userId = :userId
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
-    Page<Incident> findByUserId(@Param("userId") String userId, Pageable pageable);
+    Page<Incident> findByUserIdFiltered(
+            @Param("userId") String userId,
+            @Param("statusId") String statusId,
+            @Param("severityId") String severityId,
+            @Param("incidentTypeId") String incidentTypeId,
+            @Param("locationId") String locationId,
+            Pageable pageable
+    );
 
-    @Query("""
+    @Query(value = """
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
-            WHERE i.userId = :userId OR i.assignedToId = :agentId
+            WHERE i.assignedToId = :agentId
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            WHERE i.assignedToId = :agentId
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
-    Page<Incident> findByUserIdOrAssignedToId(@Param("userId") String userId, @Param("agentId") String agentId, Pageable pageable);
+    Page<Incident> findByAssignedToIdFiltered(
+            @Param("agentId") String agentId,
+            @Param("statusId") String statusId,
+            @Param("severityId") String severityId,
+            @Param("incidentTypeId") String incidentTypeId,
+            @Param("locationId") String locationId,
+            Pageable pageable
+    );
 
-    @Query("""
+    @Query(value = """
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
+            WHERE (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            WHERE (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
-    Page<Incident> findAllWithDetails(Pageable pageable);
+    Page<Incident> findAllFiltered(
+            @Param("statusId") String statusId,
+            @Param("severityId") String severityId,
+            @Param("incidentTypeId") String incidentTypeId,
+            @Param("locationId") String locationId,
+            Pageable pageable
+    );
 
     @Query("""
             SELECT i FROM Incident i

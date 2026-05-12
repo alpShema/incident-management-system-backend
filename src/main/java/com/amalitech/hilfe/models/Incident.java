@@ -51,6 +51,9 @@ public class Incident {
     @Builder.Default
     private boolean read = false;
 
+    @Column(name = "closed_at")
+    private Instant closedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
