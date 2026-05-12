@@ -26,6 +26,6 @@ public class Session {
     @Column(nullable = false)
     private String data;
 
-    @Column(name = "expiresAt", nullable = false)
+    @Column(name = "\"expiresAt\"", nullable = false)
     private Instant expiresAt;
 }
