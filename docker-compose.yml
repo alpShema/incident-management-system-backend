@@ -19,6 +19,8 @@ services:
     image: postgres:16-alpine
     container_name: hilfe-db
     restart: unless-stopped
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_DB:       ${DB_NAME}
       POSTGRES_USER:     ${DB_USER}
@@ -45,14 +47,20 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL:      jdbc:postgresql://db:5432/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      SPRING_FLYWAY_ENABLED:      "true"
-      JWT_SECRET:                 ${JWT_SECRET}
-      ARMS_SSO_URL:               ${ARMS_SSO_URL}
-      CORS_ALLOWED_ORIGINS:       ${CORS_ALLOWED_ORIGINS}
-      COOKIE_SECURE:              ${COOKIE_SECURE}
+      DB_URL:      jdbc:postgresql://db:5432/${DB_NAME}
+      DB_USERNAME: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}  # For signing JWTs; set in Jenkins credentials
+      ARMS_SSO_URL: ${ARMS_SSO_URL}  # ARMS SSO base URL, e.g. https://sso.amalitech-dev.net
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}  # Comma-separated list of allowed CORS origins, e.g. https://hilfe.amalitech-dev.net
+      COOKIE_SECURE: ${COOKIE_SECURE}  # "true" or "false" to set the Secure flag on cookies
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE}  # "Strict", "Lax", or "None" for the SameSite attribute on cookies
+      JWT_ISSUER: ${JWT_ISSUER}  # Optional: set the issuer claim in JWTs, e.g. "hilfe-pro-service"
+      JWT_AUDIENCE: ${JWT_AUDIENCE}  # Optional: set the audience claim in JWTs, e.g. "hilfe-pro-frontend"
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS}  # Access token time-to-live in seconds, e.g. 900 for 15 minutes
+      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS}  # Refresh token time
+      AWS_REGION: ${AWS_REGION}  # AWS region for any AWS SDK usage, e.g. "us-east-1"
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}  # S3 bucket name for any file storage needs
     depends_on:
       db:
         condition: service_healthy
