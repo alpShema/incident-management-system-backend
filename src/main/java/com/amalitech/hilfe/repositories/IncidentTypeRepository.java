@@ -11,6 +11,8 @@ import java.util.List;
 @Repository
 public interface IncidentTypeRepository extends JpaRepository<IncidentType, String> {
 
+    boolean existsByNameIgnoreCase(String name);
+
     @Query("SELECT it FROM IncidentType it LEFT JOIN FETCH it.category WHERE it.categoryId = :categoryId")
     List<IncidentType> findByCategoryId(@Param("categoryId") String categoryId);
 }

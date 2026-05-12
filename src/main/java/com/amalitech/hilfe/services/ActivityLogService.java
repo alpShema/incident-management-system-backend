@@ -65,6 +65,57 @@ public class ActivityLogService {
                 + "\",\"newRoleCode\":\"" + formatRole(newRoleCode) + "\"}";
     }
 
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentStatusChange(String actorUserId, String incidentId, String previousStatus, String newStatus) {
+        try {
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INCIDENT_STATUS_CHANGED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description("Incident " + incidentId + " status changed from " + previousStatus + " to " + newStatus)
+                    .metadata("{\"previousStatus\":\"" + previousStatus + "\",\"newStatus\":\"" + newStatus + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log status change for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentSeverityChange(String actorUserId, String incidentId, String previousSeverity, String newSeverity) {
+        try {
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INCIDENT_SEVERITY_CHANGED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description("Incident " + incidentId + " severity changed from " + previousSeverity + " to " + newSeverity)
+                    .metadata("{\"previousSeverity\":\"" + previousSeverity + "\",\"newSeverity\":\"" + newSeverity + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log severity change for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentAssignment(String actorUserId, String incidentId, String agentId) {
+        try {
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INCIDENT_ASSIGNED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description("Incident " + incidentId + " assigned to agent " + agentId)
+                    .metadata("{\"agentId\":\"" + agentId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log assignment for incident {}", incidentId, ex);
+        }
+    }
+
     private String formatRole(RoleCode roleCode) {
         return roleCode == null ? "null" : roleCode.name();
     }
