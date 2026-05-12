@@ -1,6 +1,5 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.config.CacheConfig;
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
 import com.amalitech.hilfe.dto.IncidentResponse;
@@ -16,7 +15,6 @@ import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -42,7 +40,6 @@ public class IncidentService {
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final ActivityLogService activityLogService;
-    private final CacheManager cacheManager;
 
     @Transactional
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
@@ -105,8 +102,6 @@ public class IncidentService {
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
 
-        evictAgentDashboardForIncident(incident);
-
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
@@ -118,18 +113,12 @@ public class IncidentService {
         incidentRepository.save(incident);
         activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
 
-        evictAgentDashboardForIncident(incident);
-
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     @Transactional
     public IncidentResponse assignIncident(String actorUserId, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
-
-        // Evict previous assignee before changing the field
-        evictAgentDashboardForIncident(incident);
-
         incident.setAssignedToId(request.agentId());
 
         String pendingStatusId = statusRepository.findByNameIgnoreCase("Pending")
@@ -140,23 +129,7 @@ public class IncidentService {
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
 
-        evictAgentDashboardByAgentId(request.agentId());
-
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
-    }
-
-    // ── Cache helpers ─────────────────────────────────────────────────────────
-
-    private void evictAgentDashboardForIncident(Incident incident) {
-        if (incident.getAssignedToId() == null) return;
-        evictAgentDashboardByAgentId(incident.getAssignedToId());
-    }
-
-    private void evictAgentDashboardByAgentId(String agentId) {
-        agentRepository.findUserIdByAgentId(agentId).ifPresent(userId -> {
-            var cache = cacheManager.getCache(CacheConfig.AGENT_DASHBOARD);
-            if (cache != null) cache.evict(userId);
-        });
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

@@ -124,6 +124,38 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     List<Object[]> countByStatusForAgent(@Param("agentId") String agentId);
 
     @Query("""
+            SELECT i.status.name, COUNT(i) FROM Incident i
+            WHERE i.assignedToId = :agentId
+            AND i.createdAt >= :since
+            GROUP BY i.status.name
+            """)
+    List<Object[]> countByStatusForAgentSince(@Param("agentId") String agentId, @Param("since") Instant since);
+
+    @Query(value = """
+            SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') AS month,
+                   DATE_TRUNC('month', created_at) AS month_start,
+                   COUNT(*) AS count
+            FROM "Incident"
+            WHERE user_id = :userId
+            AND created_at >= :since
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at)
+            """, nativeQuery = true)
+    List<Object[]> countByMonthForUser(@Param("userId") String userId, @Param("since") Instant since);
+
+    @Query(value = """
+            SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') AS month,
+                   DATE_TRUNC('month', created_at) AS month_start,
+                   COUNT(*) AS count
+            FROM "Incident"
+            WHERE assigned_to_id = :agentId
+            AND created_at >= :since
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at)
+            """, nativeQuery = true)
+    List<Object[]> countByMonthForAgent(@Param("agentId") String agentId, @Param("since") Instant since);
+
+    @Query("""
             SELECT COUNT(i) FROM Incident i
             WHERE i.assignedToId = :agentId
             AND LOWER(i.severity.name) IN ('high', 'critical')
