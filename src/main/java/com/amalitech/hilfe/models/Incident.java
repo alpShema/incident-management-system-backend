@@ -2,6 +2,8 @@ package com.amalitech.hilfe.models;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 import java.time.Instant;
 
@@ -20,6 +22,7 @@ public class Incident {
     @Column(nullable = false)
     private String title;
 
+    @Generated(event = EventType.INSERT)
     @Column(name = "incident_no", nullable = false, insertable = false, updatable = false)
     private Integer incidentNo;
 
@@ -47,6 +50,9 @@ public class Incident {
     @Column(nullable = false)
     @Builder.Default
     private boolean read = false;
+
+    @Column(name = "closed_at")
+    private Instant closedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

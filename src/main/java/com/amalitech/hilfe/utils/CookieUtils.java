@@ -19,11 +19,11 @@ public final class CookieUtils {
     private CookieUtils() {
     }
 
-    public static void addAuthCookies(HttpServletResponse response, AuthTokens tokens, boolean secure) {
+    public static void addAuthCookies(HttpServletResponse response, AuthTokens tokens, boolean secure, String sameSite) {
         ResponseCookie accessCookie = ResponseCookie.from(ACCESS_TOKEN_COOKIE, tokens.getAccessToken())
                 .httpOnly(true)
                 .secure(secure)
-                .sameSite("Lax")
+                .sameSite(sameSite)
                 .path("/")
                 .maxAge(tokens.getAccessTokenExpiresIn())
                 .build();
@@ -31,7 +31,7 @@ public final class CookieUtils {
         ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, tokens.getRefreshToken())
                 .httpOnly(true)
                 .secure(secure)
-                .sameSite("Lax")
+                .sameSite(sameSite)
                 .path("/")
                 .maxAge(tokens.getRefreshTokenExpiresIn())
                 .build();
@@ -40,17 +40,12 @@ public final class CookieUtils {
         response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
     }
 
-    /**
-     * Stores the original ARMS token in its own httpOnly cookie.
-     * The backend uses this for subsequent server-to-server ARMS calls on behalf of the user.
-     * TTL should match the remaining ARMS token lifetime.
-     */
     public static void addArmsTokenCookie(HttpServletResponse response, String armsToken,
-                                          boolean secure, long ttlSeconds) {
+                                          boolean secure, String sameSite, long ttlSeconds) {
         ResponseCookie armsCookie = ResponseCookie.from(ARMS_TOKEN_COOKIE, armsToken)
                 .httpOnly(true)
                 .secure(secure)
-                .sameSite("Lax")
+                .sameSite(sameSite)
                 .path("/")
                 .maxAge(ttlSeconds)
                 .build();
@@ -61,12 +56,12 @@ public final class CookieUtils {
     /**
      * Clears all three auth cookies: access_token, refresh_token, arms_token.
      */
-    public static void clearAuthCookies(HttpServletResponse response, boolean secure) {
+    public static void clearAuthCookies(HttpServletResponse response, boolean secure, String sameSite) {
         for (String name : new String[]{ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, ARMS_TOKEN_COOKIE}) {
             ResponseCookie cleared = ResponseCookie.from(name, "")
                     .httpOnly(true)
                     .secure(secure)
-                    .sameSite("Lax")
+                    .sameSite(sameSite)
                     .path("/")
                     .maxAge(0)
                     .build();

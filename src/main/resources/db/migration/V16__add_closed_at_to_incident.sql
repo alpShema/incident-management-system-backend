@@ -1,0 +1,2 @@
+ALTER TABLE "Incident"
+    ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP;

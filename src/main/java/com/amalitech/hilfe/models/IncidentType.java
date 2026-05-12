@@ -23,6 +23,9 @@ public class IncidentType {
     @Column(nullable = false)
     private String description;
 
+    @Column(name = "category_id")
+    private String categoryId;
+
     @Column(name = "admin_id", nullable = false)
     private String adminId;
 
@@ -40,6 +43,10 @@ public class IncidentType {
     private Instant updatedAt;
 
     // ── Relationships ──
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", insertable = false, updatable = false)
+    private IncidentCategory category;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id", insertable = false, updatable = false)

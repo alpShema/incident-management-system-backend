@@ -1,0 +1,324 @@
+package com.amalitech.hilfe;
+
+import com.amalitech.hilfe.dto.AssignIncidentRequest;
+import com.amalitech.hilfe.dto.CreateIncidentRequest;
+import com.amalitech.hilfe.dto.IncidentResponse;
+import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
+import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Status;
+import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.StatusRepository;
+import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.services.IncidentService;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class IncidentServiceTest {
+
+    @Mock IncidentRepository incidentRepository;
+    @Mock IncidentTypeRepository incidentTypeRepository;
+    @Mock AgentRepository agentRepository;
+    @Mock StatusRepository statusRepository;
+    @Mock ActivityLogService activityLogService;
+    @InjectMocks IncidentService incidentService;
+
+    private Incident buildIncident() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .title("Test Incident")
+                .description("Test description")
+                .userId("user-1")
+                .locationId("loc-1")
+                .incidentTypeId("type-1")
+                .statusId("status-open")
+                .build();
+        incident.setIncidentNo(1);
+        return incident;
+    }
+
+    private Status buildStatus(String id, String name) {
+        Status s = new Status();
+        s.setId(id);
+        s.setName(name);
+        return s;
+    }
+
+    // ── createIncident ────────────────────────────────────────────────────────
+
+    @Test
+    void createIncident_happyPath_returnsIncidentResponse() {
+        Incident incident = buildIncident();
+        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null);
+        IncidentResponse response = incidentService.createIncident("user-1", request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.id()).isEqualTo("inc-1");
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void createIncident_incidentTypeNotFound_throws404() {
+        when(incidentTypeRepository.existsById("bad-type")).thenReturn(false);
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Title", "Desc", "bad-type", "loc-1", null);
+
+        assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Incident type not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    // ── listIncidents ─────────────────────────────────────────────────────────
+
+    @Test
+    void listIncidents_clientRole_callsFindByUserIdFiltered() {
+        Incident incident = buildIncident();
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.listIncidents(
+                "user-1", RoleCode.CLIENT, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result).isNotNull();
+        verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void listIncidents_agentRole_callsFindByUserIdFiltered() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(page);
+
+        incidentService.listIncidents("agent-1", RoleCode.AGENT, null, null, null, null, Pageable.unpaged());
+
+        verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void listIncidents_adminRole_callsFindAllFiltered() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(page);
+
+        incidentService.listIncidents("admin-1", RoleCode.ADMIN, null, null, null, null, Pageable.unpaged());
+
+        verify(incidentRepository).findAllFiltered(any(), any(), any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void listIncidents_superAdminRole_callsFindAllFiltered() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(page);
+
+        incidentService.listIncidents("super-1", RoleCode.SUPER_ADMIN, null, null, null, null, Pageable.unpaged());
+
+        verify(incidentRepository).findAllFiltered(any(), any(), any(), any(), any(Pageable.class));
+    }
+
+    // ── getIncident ───────────────────────────────────────────────────────────
+
+    @Test
+    void getIncident_found_returnsResponse() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        IncidentResponse response = incidentService.getIncident("inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_notFound_throws404() {
+        when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> incidentService.getIncident("missing"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    // ── updateStatus ──────────────────────────────────────────────────────────
+
+    @Test
+    void updateStatus_validTransition_openToPending_savesAndLogs() {
+        Status openStatus = buildStatus("status-open", "open");
+        Status pendingStatus = buildStatus("status-pending", "pending");
+
+        Incident incident = buildIncident();
+        incident.setStatus(openStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1"))
+                .thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("status-pending"));
+
+        verify(incidentRepository).save(any(Incident.class));
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "open", "pending");
+    }
+
+    @Test
+    void updateStatus_invalidTransition_closedToOpen_throws422() {
+        Status closedStatus = buildStatus("status-closed", "closed");
+        Status openStatus = buildStatus("status-open", "open");
+
+        Incident incident = buildIncident();
+        incident.setStatus(closedStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-open")).thenReturn(Optional.of(openStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("status-open")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(422);
+    }
+
+    @Test
+    void updateStatus_statusNotFound_throws404() {
+        Incident incident = buildIncident();
+        incident.setStatus(buildStatus("status-open", "open"));
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("bad-status")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("bad-status")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Status not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void updateStatus_incidentNotFound_throws404() {
+        when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", "missing", new UpdateIncidentStatusRequest("status-pending")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void updateStatus_transitionToClosed_setsClosedAt() {
+        Status pendingStatus = buildStatus("status-pending", "pending");
+        Status closedStatus = buildStatus("status-closed", "closed");
+
+        Incident incident = buildIncident();
+        incident.setStatus(pendingStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1"))
+                .thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("status-closed"));
+
+        assertThat(incident.getClosedAt()).isNotNull();
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    // ── updateSeverity ────────────────────────────────────────────────────────
+
+    @Test
+    void updateSeverity_happyPath_savesAndLogs() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
+
+        verify(incidentRepository).save(any(Incident.class));
+        verify(activityLogService).logIncidentSeverityChange("actor-1", "inc-1", "none", "sev-high");
+    }
+
+    @Test
+    void updateSeverity_incidentNotFound_throws404() {
+        when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                incidentService.updateSeverity("actor-1", "missing", new UpdateIncidentSeverityRequest("sev-high")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    // ── assignIncident ────────────────────────────────────────────────────────
+
+    @Test
+    void assignIncident_happyPath_setsAgentAndStatusAndLogs() {
+        Incident incident = buildIncident();
+        Status pendingStatus = buildStatus("status-pending", "Pending");
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findByNameIgnoreCase("Pending")).thenReturn(Optional.of(pendingStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1"));
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-1");
+        assertThat(incident.getStatusId()).isEqualTo("status-pending");
+        verify(incidentRepository).save(any(Incident.class));
+        verify(activityLogService).logIncidentAssignment("actor-1", "inc-1", "agent-1");
+    }
+
+    @Test
+    void assignIncident_pendingStatusNotConfigured_throws500() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findByNameIgnoreCase("Pending")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Default 'Pending' status not configured")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(500);
+    }
+
+    @Test
+    void assignIncident_incidentNotFound_throws404() {
+        when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("actor-1", "missing", new AssignIncidentRequest("agent-1")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+}
