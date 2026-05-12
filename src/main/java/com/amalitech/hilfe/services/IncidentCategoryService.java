@@ -72,6 +72,9 @@ public class IncidentCategoryService {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException("Incident category not found", 404);
         }
+        if (typeRepository.existsByNameIgnoreCase(request.name())) {
+            throw new ArmsAuthException("A topic with this name already exists", 409);
+        }
         IncidentType topic = IncidentType.builder()
                 .id(UUID.randomUUID().toString())
                 .name(request.name())
