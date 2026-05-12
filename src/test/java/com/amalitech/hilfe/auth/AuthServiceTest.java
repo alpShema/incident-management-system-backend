@@ -50,7 +50,7 @@ class AuthServiceTest {
     @Test
     void login_happyPath_upsertsUserAndReturnsTokens() {
         ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png");
-        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
+        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").roleCode(RoleCode.CLIENT).build();
 
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
         when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(7200L);
@@ -73,7 +73,7 @@ class AuthServiceTest {
     @Test
     void login_concatenatesFirstAndLastName() {
         ArmsUserInfo armsUser = new ArmsUserInfo("u2", "Alice", "Smith", "alice@test.com", null);
-        User user = User.builder().id("u2").email("alice@test.com").fullName("Alice Smith").build();
+        User user = User.builder().id("u2").email("alice@test.com").fullName("Alice Smith").roleCode(RoleCode.CLIENT).build();
 
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
         when(armsTokenExpiryService.getRemainingLifetimeSeconds("token")).thenReturn(5400L);
@@ -105,6 +105,25 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login(new LoginRequest("token")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("u1");
+    }
+
+    @Test
+    void login_firstLoginPersistsClientRole() {
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null);
+        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").roleCode(RoleCode.CLIENT).build();
+
+        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
+        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(7200L);
+        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
+        when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
+        when(tokenService.generateRefreshToken(user, 7200L)).thenReturn("refresh-jwt");
+        when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
+
+        AuthResult result = authService.login(new LoginRequest("arms-token"));
+
+        assertThat(result.session().getUserId()).isEqualTo("u1");
+        assertThat(user.getRoleCode()).isEqualTo(RoleCode.CLIENT);
+        verify(userRepository).upsert("u1", "john@test.com", "John Doe", null);
     }
 
     @Test
