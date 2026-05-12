@@ -8,23 +8,39 @@ import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.StatusRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class IncidentService {
+
+    // Valid status transitions: key = current status name (lowercase), value = allowed next names
+    private static final Map<String, Set<String>> VALID_TRANSITIONS = Map.of(
+            "open",     Set.of("pending"),
+            "pending",  Set.of("resolved", "closed"),
+            "resolved", Set.of("closed"),
+            "closed",   Set.of()
+    );
+
     private final IncidentRepository incidentRepository;
     private final IncidentTypeRepository incidentTypeRepository;
     private final AgentRepository agentRepository;
+    private final StatusRepository statusRepository;
+    private final ActivityLogService activityLogService;
 
     @Transactional
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
@@ -47,16 +63,30 @@ public class IncidentService {
                 .orElseThrow());
     }
 
-    public Page<IncidentResponse> listIncidents(String userId, RoleCode roleCode, Pageable pageable) {
+    public Page<IncidentResponse> listIncidents(
+            String userId,
+            RoleCode roleCode,
+            String statusId,
+            String severityId,
+            String incidentTypeId,
+            String locationId,
+            Pageable pageable
+    ) {
         return switch (roleCode) {
-            case CLIENT -> incidentRepository.findByUserId(userId, pageable).map(IncidentResponse::from);
+            case CLIENT -> incidentRepository
+                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, locationId, pageable)
+                    .map(IncidentResponse::from);
             case AGENT -> {
                 String agentId = agentRepository.findByUserId(userId)
                         .orElseThrow(() -> new ArmsAuthException("Agent record not found for user", 404))
                         .getId();
-                yield incidentRepository.findByUserIdOrAssignedToId(userId, agentId, pageable).map(IncidentResponse::from);
+                yield incidentRepository
+                        .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, locationId, pageable)
+                        .map(IncidentResponse::from);
             }
-            case ADMIN, SUPER_ADMIN -> incidentRepository.findAllWithDetails(pageable).map(IncidentResponse::from);
+            case ADMIN, SUPER_ADMIN -> incidentRepository
+                    .findAllFiltered(statusId, severityId, incidentTypeId, locationId, pageable)
+                    .map(IncidentResponse::from);
         };
     }
 
@@ -67,31 +97,69 @@ public class IncidentService {
     }
 
     @Transactional
-    public IncidentResponse updateStatus(String incidentId, UpdateIncidentStatusRequest request) {
+    public IncidentResponse updateStatus(String actorUserId, String incidentId, UpdateIncidentStatusRequest request) {
         Incident incident = findIncident(incidentId);
+
+        Status newStatus = statusRepository.findById(request.statusId())
+                .orElseThrow(() -> new ArmsAuthException("Status not found", 404));
+
+        enforceTransition(incident, newStatus);
+
+        String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
+
+        if ("closed".equalsIgnoreCase(newStatus.getName())) {
+            incident.setClosedAt(Instant.now());
+        } else {
+            incident.setClosedAt(null);
+        }
+
         incidentRepository.save(incident);
+        activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
+
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     @Transactional
-    public IncidentResponse updateSeverity(String incidentId, UpdateIncidentSeverityRequest request) {
+    public IncidentResponse updateSeverity(String actorUserId, String incidentId, UpdateIncidentSeverityRequest request) {
         Incident incident = findIncident(incidentId);
+        String previousSeverityName = incident.getSeverity() != null ? incident.getSeverity().getName() : "none";
         incident.setSeverityId(request.severityId());
         incidentRepository.save(incident);
+        activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     @Transactional
-    public IncidentResponse assignIncident(String incidentId, AssignIncidentRequest request) {
+    public IncidentResponse assignIncident(String actorUserId, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
         incident.setAssignedToId(request.agentId());
         incidentRepository.save(incident);
+        activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     private Incident findIncident(String incidentId) {
-        return incidentRepository.findById(incidentId)
+        return incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+    }
+
+    private void enforceTransition(Incident incident, Status newStatus) {
+        String currentStatusName = incident.getStatus() != null
+                ? incident.getStatus().getName().toLowerCase()
+                : null;
+
+        if (currentStatusName == null) return; // no status yet — any initial assignment allowed
+
+        Set<String> allowed = VALID_TRANSITIONS.getOrDefault(currentStatusName, Set.of());
+        if (!allowed.contains(newStatus.getName().toLowerCase())) {
+            String allowedStr = allowed.isEmpty() ? "none — this is a terminal state" : String.join(", ", allowed);
+            throw new ArmsAuthException(
+                    "Invalid status transition from '" + incident.getStatus().getName()
+                    + "' to '" + newStatus.getName()
+                    + "'. Allowed next statuses: " + allowedStr,
+                    422
+            );
+        }
     }
 }
