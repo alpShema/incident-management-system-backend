@@ -146,8 +146,13 @@ public class ArmsClientImpl implements ArmsClient {
     }
 
     private EmployeeBio requireEmployeeBio(EmployeeBioResponse response, String userId) {
+        if (response != null && response.errors() != null && !response.errors().isEmpty()) {
+            log.warn("ARMS rejected token for user {}: {}", userId, response.errors().get(0).message());
+            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
+        }
         if (response == null || response.data() == null || response.data().employeeBio() == null) {
-            throw new ArmsAuthException("ARMS returned empty employee bio for user: " + userId);
+            log.warn("ARMS returned no employee data for user {}", userId);
+            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
         }
         return response.data().employeeBio();
     }
@@ -246,8 +251,13 @@ public class ArmsClientImpl implements ArmsClient {
     private record GraphQlRequest(String query, Object variables) {
     }
 
-    private record EmployeeBioResponse(@JsonProperty("data") EmployeeBioData data) {
-    }
+    private record GraphQlError(@JsonProperty("message") String message) {}
+
+    private record EmployeeBioResponse(
+        @JsonProperty("data") EmployeeBioData data,
+        @JsonProperty("errors") List<GraphQlError> errors
+    ) {}
+
 
     private record EmployeeBioData(@JsonProperty("getEmployeeBio") EmployeeBio employeeBio) {
     }
