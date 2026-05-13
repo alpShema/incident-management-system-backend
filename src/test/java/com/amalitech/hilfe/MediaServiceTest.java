@@ -26,7 +26,6 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.net.URI;
-import java.net.URL;
 import java.time.Duration;
 import java.util.List;
 
@@ -106,13 +105,11 @@ class MediaServiceTest {
         when(mediaProperties.maxAttachments()).thenReturn(5);
         when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
         when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
-        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("image/png")
+                .contentLength(2048L)
+                .build());
         when(s3Properties.bucketName()).thenReturn("test-bucket");
-        when(s3Properties.presignExpiry()).thenReturn(Duration.ofMinutes(15));
-
-        PresignedGetObjectRequest presigned = mock(PresignedGetObjectRequest.class);
-        when(presigned.url()).thenReturn(URI.create("https://s3.example.com/presigned-get").toURL());
-        when(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class))).thenReturn(presigned);
 
         when(mediaRepository.save(any(Media.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -124,6 +121,7 @@ class MediaServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().getIncidentId()).isEqualTo("inc-1");
         assertThat(result.getFirst().getOriginalName()).isEqualTo("photo.png");
+        assertThat(result.getFirst().getUrl()).isEqualTo("s3://test-bucket/media/uuid1/photo.png");
         verify(mediaRepository).save(any(Media.class));
     }
 
@@ -158,6 +156,77 @@ class MediaServiceTest {
         assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("File not found in storage")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void createMediaForIncident_fileKeyOutsideMediaNamespace_throws400() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("other/path/file.png", "file.png", "image/png", 1024L));
+
+        assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("Invalid attachment file key")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void createMediaForIncident_duplicateFileKeys_throws400() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("media/same/file.png", "a.png", "image/png", 1024L),
+                new AttachmentRef("media/same/file.png", "b.png", "image/png", 1024L));
+
+        assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("Duplicate attachment file key")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void createMediaForIncident_uploadedSizeMismatch_throws400() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("image/png")
+                .contentLength(999L)
+                .build());
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("media/uuid1/photo.png", "photo.png", "image/png", 2048L));
+
+        assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("file size")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void createMediaForIncident_uploadedContentTypeMismatch_throws400() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("application/pdf")
+                .contentLength(2048L)
+                .build());
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("media/uuid1/photo.png", "photo.png", "image/png", 2048L));
+
+        assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("content type")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }

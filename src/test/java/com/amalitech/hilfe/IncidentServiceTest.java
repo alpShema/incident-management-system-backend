@@ -1,12 +1,15 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
+import com.amalitech.hilfe.dto.AttachmentRef;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
 import com.amalitech.hilfe.dto.IncidentResponse;
+import com.amalitech.hilfe.dto.MediaResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentRepository;
@@ -36,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,7 +97,43 @@ class IncidentServiceTest {
 
         assertThat(response).isNotNull();
         assertThat(response.id()).isEqualTo("inc-1");
+        assertThat(response.attachments()).isEmpty();
         verify(incidentRepository).save(any(Incident.class));
+        verify(entityManager).flush();
+    }
+
+    @Test
+    void createIncident_withAttachments_persistsMediaAndReturnsAttachmentResponses() {
+        Incident incident = buildIncident();
+        AttachmentRef attachment = new AttachmentRef(
+                "media/uuid/photo.png", "photo.png", "image/png", 2048L);
+        Media media = Media.builder()
+                .id("media-1")
+                .incidentId("inc-1")
+                .originalName("photo.png")
+                .fileKey("media/uuid/photo.png")
+                .url("s3://test-bucket/media/uuid/photo.png")
+                .contentType("image/png")
+                .fileSize(2048L)
+                .build();
+        MediaResponse mediaResponse = new MediaResponse(
+                "media-1", "photo.png", "image/png", 2048L, "https://s3.example.com/get");
+
+        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(mediaService.createMediaForIncident("inc-1", List.of(attachment))).thenReturn(List.of(media));
+        when(mediaService.toMediaResponses(List.of(media))).thenReturn(List.of(mediaResponse));
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, List.of(attachment));
+        IncidentResponse response = incidentService.createIncident("user-1", request);
+
+        assertThat(response.id()).isEqualTo("inc-1");
+        assertThat(response.attachments()).containsExactly(mediaResponse);
+        verify(mediaService).createMediaForIncident("inc-1", List.of(attachment));
+        verify(mediaService).toMediaResponses(List.of(media));
+        verify(entityManager, times(2)).flush();
     }
 
     @Test
@@ -164,11 +204,26 @@ class IncidentServiceTest {
     @Test
     void getIncident_found_returnsResponse() {
         Incident incident = buildIncident();
+        Media media = Media.builder()
+                .id("media-1")
+                .incidentId("inc-1")
+                .originalName("doc.pdf")
+                .fileKey("media/uuid/doc.pdf")
+                .url("s3://test-bucket/media/uuid/doc.pdf")
+                .contentType("application/pdf")
+                .fileSize(5000L)
+                .build();
+        MediaResponse mediaResponse = new MediaResponse(
+                "media-1", "doc.pdf", "application/pdf", 5000L, "https://s3.example.com/get");
+
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of(media));
+        when(mediaService.toMediaResponses(List.of(media))).thenReturn(List.of(mediaResponse));
 
         IncidentResponse response = incidentService.getIncident("inc-1");
 
         assertThat(response.id()).isEqualTo("inc-1");
+        assertThat(response.attachments()).containsExactly(mediaResponse);
     }
 
     @Test

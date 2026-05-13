@@ -158,6 +158,8 @@ public class MediaService {
             validateUploadedMetadata(ref, object);
         } catch (NoSuchKeyException e) {
             throw new ArmsAuthException("File not found in storage: " + ref.fileKey(), 400);
+        } catch (ArmsAuthException e) {
+            throw e;
         } catch (S3Exception e) {
             if (e.statusCode() == 404) {
                 throw new ArmsAuthException("File not found in storage: " + ref.fileKey(), 400);
