@@ -60,19 +60,25 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     @Modifying(clearAutomatically = true)
     @Query(value = """
-            INSERT INTO "User" (id, email, full_name, profile_img, role_code, status, created_at, updated_at)
-            VALUES (:id, :email, :fullName, :profileImg, 'CLIENT', true, NOW(), NOW())
+            INSERT INTO "User" (id, email, full_name, contact, profile_img, position, location_id, role_code, status, created_at, updated_at)
+            VALUES (:id, :email, :fullName, :contact, :profileImg, :position, :locationId, 'CLIENT', true, NOW(), NOW())
             ON CONFLICT (id)
             DO UPDATE SET
                 email       = EXCLUDED.email,
                 full_name   = EXCLUDED.full_name,
+                contact     = EXCLUDED.contact,
                 profile_img = EXCLUDED.profile_img,
+                position    = EXCLUDED.position,
+                location_id = COALESCE(EXCLUDED.location_id, "User".location_id),
                 updated_at  = NOW()
             """, nativeQuery = true)
     void upsert(
             @Param("id") String id,
             @Param("email") String email,
             @Param("fullName") String fullName,
-            @Param("profileImg") String profileImg
+            @Param("contact") String contact,
+            @Param("profileImg") String profileImg,
+            @Param("position") String position,
+            @Param("locationId") String locationId
     );
 }
