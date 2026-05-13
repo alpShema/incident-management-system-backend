@@ -11,7 +11,7 @@ public record IncidentResponse(
         @Schema(description = "Auto-incremented human-readable incident number", example = "42") int incidentNo,
         @Schema(description = "Short summary of the incident") String title,
         @Schema(description = "Detailed description of the issue") String description,
-        @Schema(description = "Incident topic (type) with its parent category") IncidentTopicResponse incidentType,
+        @Schema(description = "Incident topic (type) with its parent category") IncidentTopicResponse incidentTopic,
         @Schema(description = "Location where the incident occurred") LocationResponse location,
         @Schema(description = "Current severity/priority level", nullable = true) LookupResponse severity,
         @Schema(description = "Current lifecycle status", nullable = true) LookupResponse status,

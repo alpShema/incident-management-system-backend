@@ -13,6 +13,8 @@ import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -41,6 +43,9 @@ public class IncidentService {
     private final StatusRepository statusRepository;
     private final ActivityLogService activityLogService;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Transactional
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
         if (!incidentTypeRepository.existsById(request.incidentTypeId())) {
@@ -59,6 +64,8 @@ public class IncidentService {
                 .build();
 
         Incident saved = incidentRepository.save(incident);
+        entityManager.flush();
+        entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(saved.getId()).orElseThrow());
     }
 
@@ -101,7 +108,8 @@ public class IncidentService {
 
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
-
+        entityManager.flush();
+        entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
@@ -112,7 +120,8 @@ public class IncidentService {
         incident.setSeverityId(request.severityId());
         incidentRepository.save(incident);
         activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
-
+        entityManager.flush();
+        entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
@@ -128,7 +137,8 @@ public class IncidentService {
 
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
-
+        entityManager.flush();
+        entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
