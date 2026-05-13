@@ -6,6 +6,7 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 import java.time.Instant;
+import java.util.List;
 
 
 @Entity
@@ -85,6 +86,10 @@ public class Incident {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to_id", insertable = false, updatable = false)
     private Agent assignedTo;
+
+    @OneToMany(fetch = FetchType.LAZY)
+    @JoinColumn(name = "incident_id", insertable = false, updatable = false)
+    private List<Media> media;
 
     // ── Lifecycle ──
 

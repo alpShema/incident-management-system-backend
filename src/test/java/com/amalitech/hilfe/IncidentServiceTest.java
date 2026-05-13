@@ -12,9 +12,11 @@ import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.MediaRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
+import com.amalitech.hilfe.services.MediaService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,8 @@ class IncidentServiceTest {
     @Mock AgentRepository agentRepository;
     @Mock StatusRepository statusRepository;
     @Mock ActivityLogService activityLogService;
+    @Mock MediaService mediaService;
+    @Mock MediaRepository mediaRepository;
     @Mock EntityManager entityManager;
     @InjectMocks IncidentService incidentService;
 
@@ -84,7 +88,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
 
         CreateIncidentRequest request = new CreateIncidentRequest(
-                "Test Incident", "Test description", "type-1", "loc-1", null);
+                "Test Incident", "Test description", "type-1", "loc-1", null, null);
         IncidentResponse response = incidentService.createIncident("user-1", request);
 
         assertThat(response).isNotNull();
@@ -97,7 +101,7 @@ class IncidentServiceTest {
         when(incidentTypeRepository.existsById("bad-type")).thenReturn(false);
 
         CreateIncidentRequest request = new CreateIncidentRequest(
-                "Title", "Desc", "bad-type", "loc-1", null);
+                "Title", "Desc", "bad-type", "loc-1", null, null);
 
         assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
                 .isInstanceOf(ArmsAuthException.class)

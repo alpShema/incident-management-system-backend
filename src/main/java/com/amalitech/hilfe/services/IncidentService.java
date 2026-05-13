@@ -3,15 +3,18 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
 import com.amalitech.hilfe.dto.IncidentResponse;
+import com.amalitech.hilfe.dto.MediaResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.MediaRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -22,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -42,6 +46,8 @@ public class IncidentService {
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final ActivityLogService activityLogService;
+    private final MediaService mediaService;
+    private final MediaRepository mediaRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -65,8 +71,17 @@ public class IncidentService {
 
         Incident saved = incidentRepository.save(incident);
         entityManager.flush();
+
+        List<MediaResponse> mediaResponses = List.of();
+        if (request.attachments() != null && !request.attachments().isEmpty()) {
+            List<Media> mediaList = mediaService.createMediaForIncident(saved.getId(), request.attachments());
+            mediaResponses = mediaService.toMediaResponses(mediaList);
+        }
+
         entityManager.clear();
-        return IncidentResponse.from(incidentRepository.findByIdWithDetails(saved.getId()).orElseThrow());
+        return IncidentResponse.from(
+                incidentRepository.findByIdWithDetails(saved.getId()).orElseThrow(),
+                mediaResponses);
     }
 
     public Page<IncidentResponse> listIncidents(
@@ -88,9 +103,11 @@ public class IncidentService {
     }
 
     public IncidentResponse getIncident(String incidentId) {
-        return incidentRepository.findByIdWithDetails(incidentId)
-                .map(IncidentResponse::from)
+        Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+        List<Media> mediaList = mediaRepository.findByIncidentId(incidentId);
+        List<MediaResponse> mediaResponses = mediaService.toMediaResponses(mediaList);
+        return IncidentResponse.from(incident, mediaResponses);
     }
 
     @Transactional
