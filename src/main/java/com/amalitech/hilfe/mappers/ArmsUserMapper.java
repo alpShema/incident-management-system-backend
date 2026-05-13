@@ -15,11 +15,21 @@ public class ArmsUserMapper {
     public static User mapArmsUserToImsUser(ArmsUserInfo armsUser) {
         return User.builder()
                 .id(armsUser.userId())
-                .fullName(armsUser.firstName() + " " + armsUser.lastName())
+                .fullName(buildFullName(armsUser))
                 .email(armsUser.email())
+                .contact(armsUser.phoneNumber())
                 .profileImg(armsUser.profileImage())
+                .position(armsUser.positionName())
                 .status(true)
                 .permissions(new ArrayList<>())
                 .build();
+    }
+
+    public static String buildFullName(ArmsUserInfo armsUser) {
+        return String.join(" ",
+                armsUser.firstName() == null ? "" : armsUser.firstName().trim(),
+                armsUser.otherName() == null ? "" : armsUser.otherName().trim(),
+                armsUser.lastName() == null ? "" : armsUser.lastName().trim()
+        ).replaceAll("\\s+", " ").trim();
     }
 }
