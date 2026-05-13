@@ -145,7 +145,7 @@ cors:
 # AWS S3
 # ──────────────────────────────────────────
 s3:
-  bucket-name: ${S3_BUCKET_NAME:hilfe-attachments}
+  bucket-name: ${S3_BUCKET_NAME}
   region: ${S3_REGION:eu-west-1}
   access-key-id: ${S3_ACCESS_KEY_ID:}
   secret-access-key: ${S3_SECRET_ACCESS_KEY:}
