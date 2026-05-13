@@ -3,6 +3,8 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.controllers.MediaController;
 import com.amalitech.hilfe.dto.PresignedUrlRequest;
 import com.amalitech.hilfe.dto.PresignedUrlResponse;
+import com.amalitech.hilfe.security.SecurityConfig;
+import com.amalitech.hilfe.security.JwtAuthenticationFilter;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -29,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(MediaController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class})
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class MediaControllerTest {
 
