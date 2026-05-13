@@ -13,14 +13,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -61,25 +65,21 @@ public class MediaService {
     }
 
     public List<Media> createMediaForIncident(String incidentId, List<AttachmentRef> attachments) {
-        if (attachments.size() > mediaProperties.maxAttachments()) {
-            throw new ArmsAuthException(
-                    "Maximum " + mediaProperties.maxAttachments() + " attachments allowed", 400);
-        }
+        validateAttachments(attachments);
 
         return attachments.stream()
                 .map(ref -> {
+                    validateFileKey(ref.fileKey());
                     validateContentType(ref.contentType());
                     validateFileSize(ref.fileSize());
-                    verifyFileExistsInS3(ref.fileKey());
-
-                    String downloadUrl = generatePresignedGetUrl(ref.fileKey());
+                    verifyUploadedObject(ref);
 
                     Media media = Media.builder()
                             .id(UUID.randomUUID().toString())
                             .incidentId(incidentId)
                             .originalName(ref.originalName())
                             .fileKey(ref.fileKey())
-                            .url(downloadUrl)
+                            .url(stableObjectUrl(ref.fileKey()))
                             .contentType(ref.contentType())
                             .fileSize(ref.fileSize())
                             .build();
@@ -108,7 +108,27 @@ public class MediaService {
         return s3Presigner.presignGetObject(presignRequest).url().toString();
     }
 
-    // ── Private helpers ──────────────────────────────────────────────────────
+
+
+    private void validateAttachments(List<AttachmentRef> attachments) {
+        if (attachments.size() > mediaProperties.maxAttachments()) {
+            throw new ArmsAuthException(
+                    "Maximum " + mediaProperties.maxAttachments() + " attachments allowed", 400);
+        }
+
+        Set<String> fileKeys = new HashSet<>();
+        for (AttachmentRef attachment : attachments) {
+            if (!fileKeys.add(attachment.fileKey())) {
+                throw new ArmsAuthException("Duplicate attachment file key: " + attachment.fileKey(), 400);
+            }
+        }
+    }
+
+    private void validateFileKey(String fileKey) {
+        if (!fileKey.startsWith("media/")) {
+            throw new ArmsAuthException("Invalid attachment file key", 400);
+        }
+    }
 
     private void validateContentType(String contentType) {
         if (!mediaProperties.allowedContentTypes().contains(contentType)) {
@@ -128,18 +148,41 @@ public class MediaService {
         }
     }
 
-    private void verifyFileExistsInS3(String fileKey) {
+    private void verifyUploadedObject(AttachmentRef ref) {
         try {
-            s3Client.headObject(HeadObjectRequest.builder()
+            HeadObjectResponse object = s3Client.headObject(HeadObjectRequest.builder()
                     .bucket(s3Properties.bucketName())
-                    .key(fileKey)
+                    .key(ref.fileKey())
                     .build());
+
+            validateUploadedMetadata(ref, object);
         } catch (NoSuchKeyException e) {
-            throw new ArmsAuthException("File not found in storage: " + fileKey, 400);
+            throw new ArmsAuthException("File not found in storage: " + ref.fileKey(), 400);
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                throw new ArmsAuthException("File not found in storage: " + ref.fileKey(), 400);
+            }
+
+            log.error("Failed to verify file in S3: {}", ref.fileKey(), e);
+            throw new ArmsAuthException("Unable to verify uploaded file", 502);
         } catch (Exception e) {
-            log.error("Failed to verify file in S3: {}", fileKey, e);
+            log.error("Failed to verify file in S3: {}", ref.fileKey(), e);
             throw new ArmsAuthException("Unable to verify uploaded file", 502);
         }
+    }
+
+    private void validateUploadedMetadata(AttachmentRef ref, HeadObjectResponse object) {
+        if (!ref.fileSize().equals(object.contentLength())) {
+            throw new ArmsAuthException("Uploaded file size does not match the declared file size", 400);
+        }
+
+        if (!ref.contentType().equals(object.contentType())) {
+            throw new ArmsAuthException("Uploaded file content type does not match the declared content type", 400);
+        }
+    }
+
+    private String stableObjectUrl(String fileKey) {
+        return "s3://" + s3Properties.bucketName() + "/" + fileKey;
     }
 
     private String sanitizeFileName(String fileName) {
