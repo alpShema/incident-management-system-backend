@@ -62,7 +62,7 @@ class IncidentControllerTest {
         return new IncidentResponse(
                 "inc-1", 1, "Test Incident", "Description",
                 null, null, null, null,
-                null, false, null, null);
+                null, false, null, null, null);
     }
 
     // ── POST /incidents ───────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ class IncidentControllerTest {
         mvc.perform(post("/incidents")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateIncidentRequest("Test Incident", "Description", "type-1", "loc-1", null)))
+                                new CreateIncidentRequest("Test Incident", "Description", "type-1", "loc-1", null, null)))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Incident created successfully"));
@@ -91,7 +91,7 @@ class IncidentControllerTest {
         mvc.perform(post("/incidents")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateIncidentRequest("", "Description", "type-1", "loc-1", null)))
+                                new CreateIncidentRequest("", "Description", "type-1", "loc-1", null, null)))
                         .with(authentication(auth)))
                 .andExpect(status().isBadRequest());
     }

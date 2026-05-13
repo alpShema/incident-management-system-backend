@@ -1,7 +1,11 @@
 package com.amalitech.hilfe.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+import java.util.List;
 
 @Schema(description = "Request body for creating a new incident")
 public record CreateIncidentRequest(
@@ -18,5 +22,10 @@ public record CreateIncidentRequest(
         @NotBlank String locationId,
 
         @Schema(description = "ID of the severity level (optional — defaults to system default if omitted)", example = "severity-uuid", nullable = true)
-        String severityId
+        String severityId,
+
+        @Schema(description = "File attachments uploaded via presigned URLs (optional, max 5)", nullable = true)
+        @Size(max = 5, message = "Maximum 5 attachments allowed")
+        @Valid
+        List<AttachmentRef> attachments
 ) {}

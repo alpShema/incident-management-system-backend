@@ -27,6 +27,12 @@ public class Media {
     @Column(nullable = false)
     private String url;
 
+    @Column(name = "content_type")
+    private String contentType;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+
     // ── Relationships ──
 
     @ManyToOne(fetch = FetchType.LAZY)
