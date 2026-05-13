@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -47,7 +48,7 @@ public class AuthController {
     })
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthSessionResponse>> login(
-            @RequestBody LoginRequest request,
+            @Valid @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
         AuthResult authResult = authService.login(request);
