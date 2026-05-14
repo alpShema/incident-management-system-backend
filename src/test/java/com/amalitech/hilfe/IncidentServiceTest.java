@@ -214,13 +214,14 @@ class IncidentServiceTest {
     @Test
     void createIncident_incidentTypeNotFound_throws404() {
         when(incidentTypeRepository.existsById("bad-type")).thenReturn(false);
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
 
         CreateIncidentRequest request = new CreateIncidentRequest(
                 "Title", "Desc", "bad-type", "loc-1", null, null);
 
         assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Incident type not found")
+                .hasMessage("Incident type with the provided ID could not be found.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }
@@ -236,6 +237,22 @@ class IncidentServiceTest {
         assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Location with the provided ID could not be found.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void createIncident_bothIdsNotFound_throws404WithBothMessages() {
+        when(incidentTypeRepository.existsById("bad-type")).thenReturn(false);
+        when(locationRepository.existsById("bad-loc")).thenReturn(false);
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Title", "Desc", "bad-type", "bad-loc", null, null);
+
+        assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("Incident type with the provided ID could not be found.")
+                .hasMessageContaining("Location with the provided ID could not be found.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }

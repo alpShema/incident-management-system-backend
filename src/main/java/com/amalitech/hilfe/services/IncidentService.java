@@ -57,11 +57,15 @@ public class IncidentService {
 
     @Transactional
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
+        List<String> notFound = new java.util.ArrayList<>();
         if (!incidentTypeRepository.existsById(request.incidentTypeId())) {
-            throw new ArmsAuthException("Incident type not found", 404);
+            notFound.add("Incident type with the provided ID could not be found.");
         }
         if (!locationRepository.existsById(request.locationId())) {
-            throw new ArmsAuthException("Location with the provided ID could not be found.", 404);
+            notFound.add("Location with the provided ID could not be found.");
+        }
+        if (!notFound.isEmpty()) {
+            throw new ArmsAuthException(String.join(" ", notFound), 404);
         }
 
         Incident incident = Incident.builder()
