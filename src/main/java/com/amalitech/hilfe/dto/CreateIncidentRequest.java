@@ -9,11 +9,15 @@ import java.util.List;
 
 @Schema(description = "Request body for creating a new incident")
 public record CreateIncidentRequest(
-        @Schema(description = "Short summary of the incident", example = "Projector not working in Room 3B")
-        @NotBlank String title,
+        @Schema(description = "Short summary of the incident", example = "Projector not working in Room 3B", maxLength = 100)
+        @NotBlank
+        @Size(max = 100, message = "title must not exceed 100 characters")
+        String title,
 
-        @Schema(description = "Detailed description of the issue", example = "The ceiling projector in Room 3B fails to power on after pressing the remote button.")
-        @NotBlank String description,
+        @Schema(description = "Detailed description of the issue", example = "The ceiling projector in Room 3B fails to power on after pressing the remote button.", maxLength = 1000)
+        @NotBlank
+        @Size(max = 1000, message = "description must not exceed 1000 characters")
+        String description,
 
         @Schema(description = "Stable ID of the incident topic (type) selected during reporting", example = "type-account-issues")
         @NotBlank String incidentTypeId,
