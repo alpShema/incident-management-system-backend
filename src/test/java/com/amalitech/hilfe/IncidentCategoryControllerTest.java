@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -154,5 +155,41 @@ class IncidentCategoryControllerTest {
     }
 
     // ── POST /incident-categories/{id}/topics ─────────────────────────────────
+
+    @Test
+    void createTopic_validRequest_returns201AndUsesAuthenticatedUser() throws Exception {
+        when(categoryService.createTopic(any(), any(), any(CreateTopicRequest.class)))
+                .thenReturn(stubTopic());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-type.create"));
+
+        mvc.perform(post("/incident-categories/cat-1/topics")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateTopicRequest("Projector", "Projector issues", true)))
+                        .with(authentication(auth)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("Incident topic created successfully"))
+                .andExpect(jsonPath("$.data.id").value("type-1"));
+
+        verify(categoryService).createTopic(eq("cat-1"), any(), any(CreateTopicRequest.class));
+    }
+
+    @Test
+    void createTopic_userWithoutAgent_returns403() throws Exception {
+        when(categoryService.createTopic(any(), any(), any(CreateTopicRequest.class)))
+                .thenThrow(new ArmsAuthException("Authenticated user is not linked to an agent record", 403));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-type.create"));
+
+        mvc.perform(post("/incident-categories/cat-1/topics")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateTopicRequest("Projector", "Projector issues", true)))
+                        .with(authentication(auth)))
+                .andExpect(status().isForbidden());
+    }
 
 }

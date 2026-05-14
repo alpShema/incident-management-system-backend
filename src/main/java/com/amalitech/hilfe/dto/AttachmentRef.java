@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Positive;
 
 @Schema(description = "Reference to a previously uploaded file attachment")
 public record AttachmentRef(
-        @Schema(description = "S3 object key returned from the presigned URL endpoint")
+        @Schema(description = "S3 object key returned from the presigned URL endpoint", example = "media/933631a6-75bf-4d5a-b237-aa986ad2dbe6/screenshot.png")
         @NotBlank String fileKey,
 
         @Schema(description = "Original file name", example = "screenshot.png")
