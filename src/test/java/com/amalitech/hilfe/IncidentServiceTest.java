@@ -46,6 +46,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -122,6 +123,7 @@ class IncidentServiceTest {
     void createIncident_withExplicitPriority_usesProvidedSeverityId() {
         Incident incident = buildIncident();
         when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(severityRepository.existsById("sev-high")).thenReturn(true);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
 
@@ -133,6 +135,23 @@ class IncidentServiceTest {
         var incidentCaptor = forClass(Incident.class);
         verify(incidentRepository).save(incidentCaptor.capture());
         assertThat(incidentCaptor.getValue().getSeverityId()).isEqualTo("sev-high");
+    }
+
+    @Test
+    void createIncident_withUnknownPriority_throws404() {
+        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(severityRepository.existsById("bad-sev")).thenReturn(false);
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", "bad-sev", null);
+
+        assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Severity not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
     }
 
     @Test
