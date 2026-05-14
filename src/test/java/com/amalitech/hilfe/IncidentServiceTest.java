@@ -8,6 +8,7 @@ import com.amalitech.hilfe.dto.MediaResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.models.RoleCode;
@@ -215,14 +216,28 @@ class IncidentServiceTest {
     }
 
     @Test
-    void listIncidents_agentRole_callsFindByUserIdFiltered() {
+    void listIncidents_agentRole_callsFindByAssignedToIdFiltered() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.findByAssignedToIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        incidentService.listIncidents("agent-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
+        incidentService.listIncidents(
+                "agent-user-1", RoleCode.AGENT, null, null, "type-fire", "cat-facility", null, Pageable.unpaged());
 
-        verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByAssignedToIdFiltered(
+                eq("agent-row-1"), any(), any(), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
+    }
+
+    @Test
+    void listIncidents_agentRoleWithoutAgentRecord_returnsEmptyPage() {
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = incidentService.listIncidents(
+                "agent-user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result).isEmpty();
     }
 
     @Test
