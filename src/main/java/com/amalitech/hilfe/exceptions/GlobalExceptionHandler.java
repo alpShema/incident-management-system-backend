@@ -11,6 +11,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -36,6 +37,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex, HttpServletRequest request) {
         log.warn("Malformed request body: {}", ex.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, "Request body is missing or malformed", request);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Unsupported media type: {}", ex.getContentType());
+        return buildResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "Unsupported Media Type. Please submit the request body as application/json.", request);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
