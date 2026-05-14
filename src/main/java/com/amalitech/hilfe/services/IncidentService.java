@@ -14,6 +14,7 @@ import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.MediaRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import jakarta.persistence.EntityManager;
@@ -43,6 +44,7 @@ public class IncidentService {
 
     private final IncidentRepository incidentRepository;
     private final IncidentTypeRepository incidentTypeRepository;
+    private final LocationRepository locationRepository;
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final ActivityLogService activityLogService;
@@ -55,7 +57,10 @@ public class IncidentService {
     @Transactional
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
         if (!incidentTypeRepository.existsById(request.incidentTypeId())) {
-            throw new ArmsAuthException("Incident type not found", 404);
+            throw new ArmsAuthException("Incident type with the provided ID could not be found.", 404);
+        }
+        if (!locationRepository.existsById(request.locationId())) {
+            throw new ArmsAuthException("Location with the provided ID could not be found.", 404);
         }
 
         Incident incident = Incident.builder()
