@@ -1,6 +1,7 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.IncidentController;
+import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
 import com.amalitech.hilfe.dto.IncidentResponse;
@@ -37,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(IncidentController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, Http401AuthenticationEntryPoint.class})
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class IncidentControllerTest {
 
