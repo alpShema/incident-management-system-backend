@@ -41,6 +41,7 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    repair-on-migrate: true
 
 # ──────────────────────────────────────────
 # Server
@@ -140,3 +141,21 @@ cookie:
 # ──────────────────────────────────────────
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:[*]}
+
+# ──────────────────────────────────────────
+# AWS S3
+# ──────────────────────────────────────────
+s3:
+  bucket-name: ${S3_BUCKET_NAME}
+  region: ${S3_REGION:eu-west-1}
+  access-key-id: ${S3_ACCESS_KEY_ID:}
+  secret-access-key: ${S3_SECRET_ACCESS_KEY:}
+  presign-expiry: ${S3_PRESIGN_EXPIRY:PT15M}
+
+# ──────────────────────────────────────────
+# Media / Attachments
+# ──────────────────────────────────────────
+media:
+  max-file-size: ${MEDIA_MAX_FILE_SIZE:10485760}
+  max-attachments: ${MEDIA_MAX_ATTACHMENTS:5}
+  allowed-content-types: image/jpeg,image/png,image/gif,image/webp,application/pdf

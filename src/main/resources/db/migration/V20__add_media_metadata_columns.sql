@@ -1,0 +1,3 @@
+ALTER TABLE "Media"
+    ADD COLUMN IF NOT EXISTS content_type VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS file_size   BIGINT;

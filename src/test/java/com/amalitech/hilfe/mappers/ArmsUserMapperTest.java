@@ -15,7 +15,8 @@ class ArmsUserMapperTest {
                 "Alphonse",
                 "Shema",
                 "alphonse@amalitech.org",
-                "https://example.com/photo.jpg"
+                "https://example.com/photo.jpg",
+                null
         );
 
         User result = ArmsUserMapper.mapArmsUserToImsUser(armsUser);
@@ -35,6 +36,7 @@ class ArmsUserMapperTest {
                 "Alphonse",
                 "Shema",
                 "alphonse@amalitech.org",
+                null,
                 null
         );
 

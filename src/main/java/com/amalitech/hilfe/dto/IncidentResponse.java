@@ -4,6 +4,7 @@ import com.amalitech.hilfe.models.Incident;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.util.List;
 
 @Schema(description = "Full incident detail returned by create, get, and update operations")
 public record IncidentResponse(
@@ -18,9 +19,14 @@ public record IncidentResponse(
         @Schema(description = "Agent record ID of the assigned agent, or null if unassigned", nullable = true) String assignedToId,
         @Schema(description = "Whether the incident has been read/acknowledged by the assigned agent") boolean read,
         @Schema(description = "Timestamp when the incident was closed, or null if still open", nullable = true) Instant closedAt,
-        @Schema(description = "Timestamp when the incident was created (UTC)") Instant createdAt
+        @Schema(description = "Timestamp when the incident was created (UTC)") Instant createdAt,
+        @Schema(description = "File attachments (populated on detail view, null on list view)", nullable = true) List<MediaResponse> attachments
 ) {
     public static IncidentResponse from(Incident incident) {
+        return from(incident, null);
+    }
+
+    public static IncidentResponse from(Incident incident, List<MediaResponse> attachments) {
         return new IncidentResponse(
                 incident.getId(),
                 incident.getIncidentNo(),
@@ -33,7 +39,8 @@ public record IncidentResponse(
                 incident.getAssignedToId(),
                 incident.isRead(),
                 incident.getClosedAt(),
-                incident.getCreatedAt()
+                incident.getCreatedAt(),
+                attachments
         );
     }
 }
