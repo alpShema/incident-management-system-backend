@@ -48,6 +48,7 @@ public final class RbacPermissions {
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
+            INCIDENT_TYPE_CREATE,
             AGENT_READ,
             DASHBOARD_AGENT
     );
