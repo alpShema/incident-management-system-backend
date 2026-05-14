@@ -33,6 +33,17 @@ pipeline {
             }
         }
 
+        //  1b. Validate Branch Name  all branches ──
+        stage('Validate Branch Name') {
+            steps {
+                script {
+                    // PRs: validate the source branch; direct pushes: validate BRANCH_NAME
+                    def branchToCheck = env.CHANGE_BRANCH ?: env.BRANCH_NAME
+                    sh "chmod +x scripts/validate_branch_name.sh && scripts/validate_branch_name.sh '${branchToCheck}'"
+                }
+            }
+        }
+
         // ── 2. Install Dependencies ────────────────────────────── all branches ──
         stage('Install Dependencies') {
             steps {
