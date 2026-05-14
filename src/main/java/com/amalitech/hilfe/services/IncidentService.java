@@ -7,6 +7,7 @@ import com.amalitech.hilfe.dto.MediaResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.models.RoleCode;
@@ -23,6 +24,7 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -99,9 +101,12 @@ public class IncidentService {
             case CLIENT -> incidentRepository
                     .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> incidentRepository
-                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
-                    .map(IncidentResponse::from);
+            case AGENT -> agentRepository.findByUserId(userId)
+                    .map(Agent::getId)
+                    .map(agentId -> incidentRepository
+                            .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .map(IncidentResponse::from))
+                    .orElse(new PageImpl<>(List.of(), pageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
                     .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                     .map(IncidentResponse::from);
