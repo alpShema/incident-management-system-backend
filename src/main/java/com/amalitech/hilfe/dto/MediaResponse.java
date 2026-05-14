@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "Media attachment details with a presigned download URL")
 public record MediaResponse(
-        @Schema(description = "Media UUID") String id,
+        @Schema(description = "Media attachment ID") String id,
         @Schema(description = "Original file name") String originalName,
         @Schema(description = "MIME content type") String contentType,
         @Schema(description = "File size in bytes") Long fileSize,

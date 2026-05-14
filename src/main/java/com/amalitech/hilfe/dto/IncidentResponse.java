@@ -8,7 +8,7 @@ import java.util.List;
 
 @Schema(description = "Full incident detail returned by create, get, and update operations")
 public record IncidentResponse(
-        @Schema(description = "Unique incident UUID") String id,
+        @Schema(description = "Unique incident ID") String id,
         @Schema(description = "Auto-incremented human-readable incident number", example = "42") int incidentNo,
         @Schema(description = "Short summary of the incident") String title,
         @Schema(description = "Detailed description of the issue") String description,
