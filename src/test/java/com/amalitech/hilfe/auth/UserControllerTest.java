@@ -4,6 +4,7 @@ import com.amalitech.hilfe.controllers.UserController;
 import com.amalitech.hilfe.dto.UpdateUserRoleRequest;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
+import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.TokenService;
 import com.amalitech.hilfe.services.UserService;
@@ -31,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, Http401AuthenticationEntryPoint.class})
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class UserControllerTest {
 
