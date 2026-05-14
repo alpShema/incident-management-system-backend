@@ -12,6 +12,9 @@ import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -40,7 +43,9 @@ public class IncidentController {
 
     @Operation(
         summary = "Create a new incident",
-        description = "Creates an incident on behalf of the authenticated user. Requires `incident.create` permission."
+        description = "Creates an incident on behalf of the authenticated user. Use the stable IDs returned by the lookup endpoints for incidentTypeId, locationId, and severityId. "
+                    + "For attachments, first request a presigned upload URL from `POST /media/presigned-url`, upload the file to S3, then include the returned fileKey here. "
+                    + "Requires `incident.create` permission."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Incident created"),
@@ -52,6 +57,33 @@ public class IncidentController {
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_CREATE + "')")
     public ResponseEntity<ApiResponse<IncidentResponse>> createIncident(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Incident creation payload. Attachments are optional and must reference files already uploaded through the presigned URL flow.",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = CreateIncidentRequest.class),
+                            examples = @ExampleObject(
+                                    name = "Incident with attachment",
+                                    value = """
+                                            {
+                                              "title": "Projector not working in Room 3B",
+                                              "description": "The ceiling projector in Room 3B fails to power on after pressing the remote button.",
+                                              "incidentTypeId": "type-account-issues",
+                                              "locationId": "loc-accra",
+                                              "severityId": "sev-low",
+                                              "attachments": [
+                                                {
+                                                  "fileKey": "media/933631a6-75bf-4d5a-b237-aa986ad2dbe6/screenshot.png",
+                                                  "originalName": "screenshot.png",
+                                                  "contentType": "image/png",
+                                                  "fileSize": 2048576
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            )
             @Valid @RequestBody CreateIncidentRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)

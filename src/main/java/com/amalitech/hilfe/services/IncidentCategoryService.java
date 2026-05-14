@@ -5,8 +5,10 @@ import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.transaction.Transactional;
@@ -21,6 +23,7 @@ import java.util.UUID;
 public class IncidentCategoryService {
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
+    private final AgentRepository agentRepository;
 
     public List<IncidentCategoryResponse> listCategories() {
         return categoryRepository.findAll().stream()
@@ -68,20 +71,22 @@ public class IncidentCategoryService {
     }
 
     @Transactional
-    public IncidentTopicResponse createTopic(String categoryId, String adminId, CreateTopicRequest request) {
+    public IncidentTopicResponse createTopic(String categoryId, String creatorUserId, CreateTopicRequest request) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException("Incident category not found", 404);
         }
         if (typeRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("A topic with this name already exists", 409);
         }
+        Agent creatorAgent = agentRepository.findByUserId(creatorUserId)
+                .orElseThrow(() -> new ArmsAuthException("Authenticated user is not linked to an agent record", 403));
         IncidentType topic = IncidentType.builder()
                 .id(UUID.randomUUID().toString())
                 .name(request.name())
                 .description(request.description())
                 .categoryId(categoryId)
-                .adminId(adminId)
-                .agentId(request.agentId())
+                .adminId(creatorUserId)
+                .agentId(creatorAgent.getId())
                 .visibleToGroup(request.visibleToGroup())
                 .build();
         return IncidentTopicResponse.from(typeRepository.save(topic));
