@@ -8,7 +8,7 @@ import java.util.List;
 
 @Schema(description = "Full incident detail returned by create, get, and update operations")
 public record IncidentResponse(
-        @Schema(description = "Unique incident UUID") String id,
+        @Schema(description = "Unique incident ID", example = "c26c5ba5-f654-4829-9675-d09704e667be") String id,
         @Schema(description = "Auto-incremented human-readable incident number", example = "42") int incidentNo,
         @Schema(description = "Short summary of the incident") String title,
         @Schema(description = "Detailed description of the issue") String description,
@@ -16,7 +16,7 @@ public record IncidentResponse(
         @Schema(description = "Location where the incident occurred") LocationResponse location,
         @Schema(description = "Current severity/priority level", nullable = true) LookupResponse severity,
         @Schema(description = "Current lifecycle status", nullable = true) LookupResponse status,
-        @Schema(description = "Agent record ID of the assigned agent, or null if unassigned", nullable = true) String assignedToId,
+        @Schema(description = "Agent record ID of the assigned agent, or null if unassigned", example = "agent-seed", nullable = true) String assignedToId,
         @Schema(description = "Whether the incident has been read/acknowledged by the assigned agent") boolean read,
         @Schema(description = "Timestamp when the incident was closed, or null if still open", nullable = true) Instant closedAt,
         @Schema(description = "Timestamp when the incident was created (UTC)") Instant createdAt,

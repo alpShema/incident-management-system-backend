@@ -5,6 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 
 @Schema(description = "Request body for updating the status of an incident. Valid lifecycle: Open → Pending → Resolved → Closed.")
 public record UpdateIncidentStatusRequest(
-        @Schema(description = "ID of the target status. Must be a valid next state in the lifecycle.", example = "status-uuid")
+        @Schema(description = "Stable ID of the target status. Must be a valid next state in the lifecycle.", example = "status-pending")
         @NotBlank String statusId
 ) {}
