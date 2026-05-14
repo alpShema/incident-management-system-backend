@@ -92,6 +92,18 @@ class IncidentControllerTest {
     }
 
     @Test
+    void createIncident_unsupportedContentType_returns415() throws Exception {
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.create"));
+
+        mvc.perform(post("/incidents")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("title=Test&description=Desc")
+                        .with(authentication(auth)))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.message").value("Unsupported Media Type. Please submit the request body as application/json."));
+    }
+
+    @Test
     void createIncident_missingTitle_returns400() throws Exception {
         var principal = clientPrincipal();
         var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(() -> "incident.create"));
