@@ -7,7 +7,9 @@ import com.amalitech.hilfe.dto.AuthTokens;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.mappers.ArmsUserMapper;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import jakarta.transaction.Transactional;
@@ -28,16 +30,21 @@ public class AuthService {
     private final TokenService tokenService;
     private final TokenRevocationService tokenRevocationService;
     private final UserRepository userRepository;
+    private final LocationRepository locationRepository;
     private final UserAuthorityService userAuthorityService;
     @Transactional
     public AuthResult login(LoginRequest request) {
         ArmsUserInfo armsUser = armsClient.getUserByToken(request.armsToken());
+        String locationId = resolveLocationId(armsUser);
 
         userRepository.upsert(
                 armsUser.userId(),
                 armsUser.email(),
-                armsUser.firstName() + " " + armsUser.lastName(),
-                armsUser.profileImage()
+                ArmsUserMapper.buildFullName(armsUser),
+                armsUser.phoneNumber(),
+                armsUser.profileImage(),
+                armsUser.positionName(),
+                locationId
         );
 
         User user = userRepository.findAuthUserById(armsUser.userId())
@@ -72,11 +79,15 @@ public class AuthService {
         ArmsUserInfo armsUser = armsClient.getUserByToken(armsToken);
         validateRefreshPrincipal(refreshPrincipal, armsUser);
 
+        String locationId = resolveLocationId(armsUser);
         userRepository.upsert(
                 armsUser.userId(),
                 armsUser.email(),
-                armsUser.firstName() + " " + armsUser.lastName(),
-                armsUser.profileImage()
+                ArmsUserMapper.buildFullName(armsUser),
+                armsUser.phoneNumber(),
+                armsUser.profileImage(),
+                armsUser.positionName(),
+                locationId
         );
 
         User user = userRepository.findAuthUserById(armsUser.userId())
@@ -137,6 +148,20 @@ public class AuthService {
                 || !refreshPrincipal.email().equals(armsUser.email())) {
             throw new ArmsAuthException("Refresh token does not match the authenticated ARMS user", 401);
         }
+    }
+
+    private String resolveLocationId(ArmsUserInfo armsUser) {
+        if (armsUser.officeName() == null || armsUser.officeName().isBlank()) {
+            return null;
+        }
+        return locationRepository.findByNameIgnoreCase(armsUser.officeName())
+                .or(() -> locationRepository.findByNameIgnoreCase(normalizeOfficeName(armsUser.officeName())))
+                .map(location -> location.getId())
+                .orElse(null);
+    }
+
+    private String normalizeOfficeName(String officeName) {
+        return officeName.replaceFirst("(?i)\\s+office$", "").trim();
     }
 
     private AuthSessionResponse toSessionResponse(User user) {

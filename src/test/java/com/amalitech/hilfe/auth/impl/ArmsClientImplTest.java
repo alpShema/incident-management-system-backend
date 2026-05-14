@@ -55,8 +55,22 @@ class ArmsClientImplTest {
     @Test
     void getUserByToken_validResponse_mapsFieldsCorrectly() {
         String json = """
-                {"data":{"getEmployeeBio":{"user_id":"u1","first_name":"John","last_name":"Doe",
-                 "profile_image":"http://img.png","user":{"email":"john@test.com"}}}}
+                {"data":{
+                  "getEmployeeActiveInfo":{
+                    "user_id":"u1",
+                    "user":{"first_name":"John","last_name":"Doe","other_name":"K","email":"john@work.test"},
+                    "employee_bio":{"profile_image":"http://img.png"},
+                    "position":{"position_name":"Engineer"},
+                    "office":{"id":"25","name":"Accra Office","archive":false,"organization_id":"1042","organization":{"offices":null}}
+                  },
+                  "getEmployeeContact":{
+                    "id":"1185",
+                    "user_id":"u1",
+                    "work_email":"john@work.test",
+                    "personal_email":"john@test.com",
+                    "phone_number_1":"233000000"
+                  }
+                }}
                 """;
         server.expect(requestTo(SSO_URL))
               .andExpect(method(HttpMethod.POST))
@@ -68,8 +82,14 @@ class ArmsClientImplTest {
         assertThat(info.userId()).isEqualTo("u1");
         assertThat(info.firstName()).isEqualTo("John");
         assertThat(info.lastName()).isEqualTo("Doe");
+        assertThat(info.otherName()).isEqualTo("K");
         assertThat(info.email()).isEqualTo("john@test.com");
         assertThat(info.profileImage()).isEqualTo("http://img.png");
+        assertThat(info.positionName()).isEqualTo("Engineer");
+        assertThat(info.officeName()).isEqualTo("Accra Office");
+        assertThat(info.workEmail()).isEqualTo("john@work.test");
+        assertThat(info.personalEmail()).isEqualTo("john@test.com");
+        assertThat(info.phoneNumber()).isEqualTo("233000000");
         server.verify();
     }
 
@@ -96,7 +116,7 @@ class ArmsClientImplTest {
     void getUserByToken_nullEmployeeBio_throwsArmsAuthException() {
         server.expect(requestTo(SSO_URL))
               .andRespond(withSuccess(
-                      "{\"data\":{\"getEmployeeBio\":null}}", MediaType.APPLICATION_JSON));
+                      "{\"data\":{\"getEmployeeActiveInfo\":null,\"getEmployeeContact\":null}}", MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> client.getUserByToken(TOKEN))
                 .isInstanceOf(ArmsAuthException.class);
