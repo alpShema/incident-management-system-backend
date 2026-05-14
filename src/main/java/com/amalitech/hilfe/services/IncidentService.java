@@ -179,6 +179,9 @@ public class IncidentService {
 
     private String resolvePriorityId(String requestedSeverityId) {
         if (requestedSeverityId != null && !requestedSeverityId.isBlank()) {
+            if (!severityRepository.existsById(requestedSeverityId)) {
+                throw new ArmsAuthException("Severity not found", 404);
+            }
             return requestedSeverityId;
         }
 
