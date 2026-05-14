@@ -5,6 +5,7 @@ import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
 import com.amalitech.hilfe.dto.IncidentResponse;
+import com.amalitech.hilfe.dto.LookupResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -62,7 +63,7 @@ class IncidentControllerTest {
     private IncidentResponse stubResponse() {
         return new IncidentResponse(
                 "inc-1", 1, "Test Incident", "Description",
-                null, null, null, null,
+                null, null, new LookupResponse("sev-low", "Low"), null,
                 null, false, null, null, null);
     }
 
@@ -70,7 +71,7 @@ class IncidentControllerTest {
 
     @Test
     void createIncident_validRequest_returns201() throws Exception {
-        when(incidentService.createIncident(anyString(), any(CreateIncidentRequest.class))).thenReturn(stubResponse());
+        when(incidentService.createIncident(any(), any(CreateIncidentRequest.class))).thenReturn(stubResponse());
 
         var principal = clientPrincipal();
         var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(() -> "incident.create"));
@@ -81,7 +82,9 @@ class IncidentControllerTest {
                                 new CreateIncidentRequest("Test Incident", "Description", "type-1", "loc-1", null, null)))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message").value("Incident created successfully"));
+                .andExpect(jsonPath("$.message").value("Incident created successfully"))
+                .andExpect(jsonPath("$.data.priority.id").value("sev-low"))
+                .andExpect(jsonPath("$.data.severity").doesNotExist());
     }
 
     @Test

@@ -148,13 +148,14 @@ public class DashboardController {
             @RequestParam(required = false) String statusId,
             @RequestParam(required = false) String severityId,
             @RequestParam(required = false) String incidentTypeId,
+            @RequestParam(required = false) String categoryId,
             @RequestParam(required = false) String locationId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 principal.userId(), principal.roleCode(),
-                statusId, severityId, incidentTypeId, locationId,
+                statusId, severityId, incidentTypeId, categoryId, locationId,
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         );
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", result));
@@ -192,13 +193,14 @@ public class DashboardController {
             @RequestParam(required = false) String statusId,
             @RequestParam(required = false) String severityId,
             @RequestParam(required = false) String incidentTypeId,
+            @RequestParam(required = false) String categoryId,
             @RequestParam(required = false) String locationId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Page<IncidentResponse> result = dashboardService.getMyIncidents(
                 principal.userId(),
-                statusId, severityId, incidentTypeId, locationId,
+                statusId, severityId, incidentTypeId, categoryId, locationId,
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         );
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", result));

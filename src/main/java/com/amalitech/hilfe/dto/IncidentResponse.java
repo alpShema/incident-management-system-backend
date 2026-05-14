@@ -14,7 +14,7 @@ public record IncidentResponse(
         @Schema(description = "Detailed description of the issue") String description,
         @Schema(description = "Incident topic (type) with its parent category") IncidentTopicResponse incidentTopic,
         @Schema(description = "Location where the incident occurred") LocationResponse location,
-        @Schema(description = "Current severity/priority level", nullable = true) LookupResponse severity,
+        @Schema(description = "Current priority level", nullable = true) LookupResponse priority,
         @Schema(description = "Current lifecycle status", nullable = true) LookupResponse status,
         @Schema(description = "Agent record ID of the assigned agent, or null if unassigned", example = "agent-seed", nullable = true) String assignedToId,
         @Schema(description = "Whether the incident has been read/acknowledged by the assigned agent") boolean read,
