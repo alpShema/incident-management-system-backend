@@ -2,6 +2,8 @@ package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.IncidentController;
 import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
+import com.amalitech.hilfe.security.JwtAuthenticationFilter;
+import com.amalitech.hilfe.security.SecurityConfig;
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
 import com.amalitech.hilfe.dto.IncidentResponse;
@@ -41,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(IncidentController.class)
-@Import({GlobalExceptionHandler.class, Http401AuthenticationEntryPoint.class})
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class, Http401AuthenticationEntryPoint.class})
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class IncidentControllerTest {
 
@@ -211,5 +213,14 @@ class IncidentControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident assigned successfully"));
+    }
+
+    // ── GET /incidents ────────────────────────────────────────────────────────
+
+    @Test
+    void listIncidents_noAuth_returns401() throws Exception {
+        mvc.perform(get("/incidents"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Authentication required. Please log in to access this resource."));
     }
 }

@@ -4,7 +4,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -73,6 +76,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
     public ResponseEntity<ApiErrorResponse> handleAccessDenied(Exception ex, HttpServletRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAnonymous = auth == null
+                || !auth.isAuthenticated()
+                || auth instanceof AnonymousAuthenticationToken;
+        if (isAnonymous) {
+            log.warn("Unauthenticated access attempt: {}", request.getRequestURI());
+            return buildResponse(HttpStatus.UNAUTHORIZED, "Authentication required. Please log in to access this resource.", request);
+        }
         log.warn("Access denied: {}", ex.getMessage());
         return buildResponse(HttpStatus.FORBIDDEN, "Access denied", request);
     }
