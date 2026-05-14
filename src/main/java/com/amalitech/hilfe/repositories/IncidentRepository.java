@@ -26,14 +26,17 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
+            LEFT JOIN i.incidentType it
             WHERE i.userId = :userId
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
     Page<Incident> findByUserIdFiltered(
@@ -41,6 +44,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             @Param("statusId") String statusId,
             @Param("severityId") String severityId,
             @Param("incidentTypeId") String incidentTypeId,
+            @Param("categoryId") String categoryId,
             @Param("locationId") String locationId,
             Pageable pageable
     );
@@ -56,14 +60,17 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
+            LEFT JOIN i.incidentType it
             WHERE i.assignedToId = :agentId
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
     Page<Incident> findByAssignedToIdFiltered(
@@ -71,6 +78,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             @Param("statusId") String statusId,
             @Param("severityId") String severityId,
             @Param("incidentTypeId") String incidentTypeId,
+            @Param("categoryId") String categoryId,
             @Param("locationId") String locationId,
             Pageable pageable
     );
@@ -85,19 +93,23 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             WHERE (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
+            LEFT JOIN i.incidentType it
             WHERE (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
     Page<Incident> findAllFiltered(
             @Param("statusId") String statusId,
             @Param("severityId") String severityId,
             @Param("incidentTypeId") String incidentTypeId,
+            @Param("categoryId") String categoryId,
             @Param("locationId") String locationId,
             Pageable pageable
     );

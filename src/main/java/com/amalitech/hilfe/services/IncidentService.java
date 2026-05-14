@@ -7,20 +7,24 @@ import com.amalitech.hilfe.dto.MediaResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Severity;
 import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import com.amalitech.hilfe.repositories.MediaRepository;
+import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +38,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class IncidentService {
 
+    private static final String DEFAULT_PRIORITY_NAME = "Low";
+
     private static final Map<String, Set<String>> VALID_TRANSITIONS = Map.of(
             "open",     Set.of("pending"),
             "pending",  Set.of("resolved", "closed"),
@@ -45,6 +51,7 @@ public class IncidentService {
     private final IncidentTypeRepository incidentTypeRepository;
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
+    private final SeverityRepository severityRepository;
     private final ActivityLogService activityLogService;
     private final MediaService mediaService;
     private final MediaRepository mediaRepository;
@@ -65,7 +72,7 @@ public class IncidentService {
                 .userId(userId)
                 .locationId(request.locationId())
                 .incidentTypeId(request.incidentTypeId())
-                .severityId(request.severityId())
+                .severityId(resolvePriorityId(request.severityId()))
                 .statusId("status-open")
                 .build();
 
@@ -87,18 +94,21 @@ public class IncidentService {
 
     public Page<IncidentResponse> listIncidents(
             String userId, RoleCode roleCode,
-            String statusId, String severityId, String incidentTypeId, String locationId,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
         return switch (roleCode) {
             case CLIENT -> incidentRepository
-                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, locationId, pageable)
+                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> incidentRepository
-                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, locationId, pageable)
-                    .map(IncidentResponse::from);
+            case AGENT -> agentRepository.findByUserId(userId)
+                    .map(Agent::getId)
+                    .map(agentId -> incidentRepository
+                            .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .map(IncidentResponse::from))
+                    .orElse(new PageImpl<>(List.of(), pageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllFiltered(statusId, severityId, incidentTypeId, locationId, pageable)
+                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                     .map(IncidentResponse::from);
         };
     }
@@ -165,6 +175,16 @@ public class IncidentService {
     private Incident findIncident(String incidentId) {
         return incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+    }
+
+    private String resolvePriorityId(String requestedSeverityId) {
+        if (requestedSeverityId != null && !requestedSeverityId.isBlank()) {
+            return requestedSeverityId;
+        }
+
+        Severity defaultPriority = severityRepository.findByNameIgnoreCase(DEFAULT_PRIORITY_NAME)
+                .orElseThrow(() -> new ArmsAuthException("Default 'Low' priority not configured", 500));
+        return defaultPriority.getId();
     }
 
     private void enforceTransition(Incident incident, Status newStatus) {

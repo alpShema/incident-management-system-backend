@@ -95,7 +95,7 @@ public class IncidentController {
         summary = "List incidents",
         description = "Returns a paginated list of incidents. Results are automatically scoped by role: "
                     + "CLIENTs see only their own, AGENTs see only assigned incidents, ADMINs see all. "
-                    + "Supports filtering by statusId, severityId, incidentTypeId, and locationId. "
+                    + "Supports filtering by statusId, severityId, incidentTypeId, categoryId, and locationId. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`)."
     )
     @ApiResponses({
@@ -108,12 +108,13 @@ public class IncidentController {
             @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
             @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
+            @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.listIncidents(
                 principal.userId(), principal.roleCode(),
-                statusId, severityId, incidentTypeId, locationId,
+                statusId, severityId, incidentTypeId, categoryId, locationId,
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
