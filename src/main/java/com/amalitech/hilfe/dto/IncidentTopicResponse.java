@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "An incident topic (type) with its parent category")
 public record IncidentTopicResponse(
-        @Schema(description = "Topic UUID") String id,
+        @Schema(description = "Stable topic ID") String id,
         @Schema(description = "Topic display name", example = "Projector") String name,
         @Schema(description = "Topic description") String description,
         @Schema(description = "Parent category (id + name)", nullable = true) LookupResponse category

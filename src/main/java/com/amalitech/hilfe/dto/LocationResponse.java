@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "A location that can be associated with an incident")
 public record LocationResponse(
-        @Schema(description = "Location UUID") String id,
+        @Schema(description = "Stable location ID") String id,
         @Schema(description = "Location display name", example = "Accra Office - Floor 2") String name
 ) {
     public static LocationResponse from(Location location) {

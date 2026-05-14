@@ -15,13 +15,13 @@ public record CreateIncidentRequest(
         @Schema(description = "Detailed description of the issue", example = "The ceiling projector in Room 3B fails to power on after pressing the remote button.")
         @NotBlank String description,
 
-        @Schema(description = "ID of the incident topic (type) selected during reporting", example = "topic-uuid")
+        @Schema(description = "Stable ID of the incident topic (type) selected during reporting", example = "type-account-issues")
         @NotBlank String incidentTypeId,
 
-        @Schema(description = "ID of the location where the incident occurred", example = "location-uuid")
+        @Schema(description = "Stable ID of the location where the incident occurred", example = "loc-accra")
         @NotBlank String locationId,
 
-        @Schema(description = "ID of the severity level (optional — defaults to system default if omitted)", example = "severity-uuid", nullable = true)
+        @Schema(description = "Stable ID of the severity level (optional - defaults to system default if omitted)", example = "sev-low", nullable = true)
         String severityId,
 
         @Schema(description = "File attachments uploaded via presigned URLs (optional, max 5)", nullable = true)

@@ -11,7 +11,7 @@ public record CreateTopicRequest(
         @Schema(description = "Description of what incidents belong under this topic", example = "Issues with projection equipment in meeting rooms")
         @NotBlank String description,
 
-        @Schema(description = "Agent ID of the default agent responsible for this topic type", example = "agent-uuid")
+        @Schema(description = "Agent record ID of the default agent responsible for this topic type", example = "agent-seed")
         @NotBlank String agentId,
 
         @Schema(description = "Whether this topic is visible to group members (non-admin reporters)", example = "true")
