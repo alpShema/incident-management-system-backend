@@ -5,8 +5,10 @@ import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import com.amalitech.hilfe.services.IncidentCategoryService;
@@ -22,7 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +33,7 @@ class IncidentCategoryServiceTest {
 
     @Mock IncidentCategoryRepository categoryRepository;
     @Mock IncidentTypeRepository typeRepository;
+    @Mock AgentRepository agentRepository;
     @InjectMocks IncidentCategoryService categoryService;
 
     private IncidentCategory buildCategory() {
@@ -176,15 +179,20 @@ class IncidentCategoryServiceTest {
         IncidentType saved = buildType();
         when(categoryRepository.existsById("cat-1")).thenReturn(true);
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
+        when(agentRepository.findByUserId("admin-1")).thenReturn(Optional.of(
+                Agent.builder().id("agent-1").userId("admin-1").build()));
         when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
 
         IncidentTopicResponse response = categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "agent-1", true));
+                new CreateTopicRequest("Projector", "Projector issues", true));
 
         assertThat(response.id()).isEqualTo("type-1");
         assertThat(response.name()).isEqualTo("Projector");
-        verify(typeRepository).save(any(IncidentType.class));
+        var topicCaptor = forClass(IncidentType.class);
+        verify(typeRepository).save(topicCaptor.capture());
+        assertThat(topicCaptor.getValue().getAdminId()).isEqualTo("admin-1");
+        assertThat(topicCaptor.getValue().getAgentId()).isEqualTo("agent-1");
     }
 
     @Test
@@ -193,7 +201,7 @@ class IncidentCategoryServiceTest {
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "missing", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "agent-1", true)))
+                new CreateTopicRequest("Projector", "Projector issues", true)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -207,10 +215,25 @@ class IncidentCategoryServiceTest {
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "agent-1", true)))
+                new CreateTopicRequest("Projector", "Projector issues", true)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("A topic with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
+    }
+
+    @Test
+    void createTopic_authenticatedUserWithoutAgent_throws403() {
+        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
+        when(agentRepository.findByUserId("admin-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> categoryService.createTopic(
+                "cat-1", "admin-1",
+                new CreateTopicRequest("Projector", "Projector issues", true)))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Authenticated user is not linked to an agent record")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
     }
 }
