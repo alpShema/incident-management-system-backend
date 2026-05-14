@@ -235,4 +235,35 @@ class IncidentControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Authentication required. Please log in to access this resource."));
     }
+    @Test
+    void createIncident_invalidLocationId_returns404() throws Exception {
+        when(incidentService.createIncident(any(), any()))
+                .thenThrow(new ArmsAuthException("Location with the provided ID could not be found.", 404));
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.create"));
+
+        mvc.perform(post("/incidents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateIncidentRequest("Title", "Description", "type-1", "bad-loc", null, null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Location with the provided ID could not be found."));
+    }
+
+    @Test
+    void createIncident_invalidIncidentTypeId_returns404() throws Exception {
+        when(incidentService.createIncident(any(), any()))
+                .thenThrow(new ArmsAuthException("Incident type with the provided ID could not be found.", 404));
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.create"));
+
+        mvc.perform(post("/incidents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateIncidentRequest("Title", "Description", "bad-type", "loc-1", null, null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Incident type with the provided ID could not be found."));
+    }
 }
