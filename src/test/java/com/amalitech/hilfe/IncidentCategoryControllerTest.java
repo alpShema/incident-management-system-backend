@@ -50,6 +50,10 @@ class IncidentCategoryControllerTest {
         return new JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
     }
 
+    private JwtTokenService.AuthPrincipal agentPrincipal() {
+        return new JwtTokenService.AuthPrincipal("agent-user-1", "agent@test.com", RoleCode.AGENT);
+    }
+
     private IncidentCategoryResponse stubCategory() {
         return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents");
     }
@@ -163,6 +167,26 @@ class IncidentCategoryControllerTest {
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "incident-type.create"));
+
+        mvc.perform(post("/incident-categories/cat-1/topics")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateTopicRequest("Projector", "Projector issues", true)))
+                        .with(authentication(auth)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("Incident topic created successfully"))
+                .andExpect(jsonPath("$.data.id").value("type-1"));
+
+        verify(categoryService).createTopic(eq("cat-1"), any(), any(CreateTopicRequest.class));
+    }
+
+    @Test
+    void createTopic_agentWithPermission_returns201AndUsesAuthenticatedUser() throws Exception {
+        when(categoryService.createTopic(any(), any(), any(CreateTopicRequest.class)))
+                .thenReturn(stubTopic());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "incident-type.create"));
 
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
