@@ -30,6 +30,8 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -98,6 +100,38 @@ class IncidentControllerTest {
                                 new CreateIncidentRequest("", "Description", "type-1", "loc-1", null, null)))
                         .with(authentication(auth)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createIncident_titleOver100Characters_returns400() throws Exception {
+        var principal = clientPrincipal();
+        var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(() -> "incident.create"));
+
+        mvc.perform(post("/incidents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateIncidentRequest("a".repeat(101), "Description", "type-1", "loc-1", null, null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("title: title must not exceed 100 characters"));
+
+        verify(incidentService, never()).createIncident(anyString(), any(CreateIncidentRequest.class));
+    }
+
+    @Test
+    void createIncident_descriptionOver1000Characters_returns400() throws Exception {
+        var principal = clientPrincipal();
+        var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(() -> "incident.create"));
+
+        mvc.perform(post("/incidents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateIncidentRequest("Title", "a".repeat(1001), "type-1", "loc-1", null, null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("description: description must not exceed 1000 characters"));
+
+        verify(incidentService, never()).createIncident(anyString(), any(CreateIncidentRequest.class));
     }
 
     // ── GET /incidents/{id} ───────────────────────────────────────────────────
