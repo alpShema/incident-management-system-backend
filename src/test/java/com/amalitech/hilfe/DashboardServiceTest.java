@@ -161,14 +161,14 @@ class DashboardServiceTest {
     @Test
     void getIncidents_adminRole_callsFindAllFiltered() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "admin-1", RoleCode.ADMIN, null, null, null, null, Pageable.unpaged());
+                "admin-1", RoleCode.ADMIN, null, null, null, "cat-it", null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findAllFiltered(any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findAllFiltered(any(), any(), any(), eq("cat-it"), any(), any(Pageable.class));
     }
 
     @Test
@@ -176,14 +176,14 @@ class DashboardServiceTest {
         Agent agent = buildAgent("agent-1");
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAssignedToIdFiltered(anyString(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByAssignedToIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByAssignedToIdFiltered(eq("agent-1"), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByAssignedToIdFiltered(eq("agent-1"), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test
@@ -191,7 +191,7 @@ class DashboardServiceTest {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
         assertThat(result.getTotalElements()).isEqualTo(0);
@@ -202,13 +202,13 @@ class DashboardServiceTest {
     @Test
     void getMyIncidents_callsFindByUserIdFiltered() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = dashboardService.getMyIncidents(
-                "user-1", null, null, null, null, Pageable.unpaged());
+                "user-1", null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 }

@@ -91,16 +91,16 @@ public class DashboardService {
 
     public Page<IncidentResponse> getIncidents(
             String userId, RoleCode role,
-            String statusId, String severityId, String incidentTypeId, String locationId,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
         return switch (role) {
             case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllFiltered(statusId, severityId, incidentTypeId, locationId, pageable)
+                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                     .map(IncidentResponse::from);
             case AGENT -> findAgentId(userId)
                     .map(agentId -> incidentRepository
-                            .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, locationId, pageable)
+                            .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -109,11 +109,11 @@ public class DashboardService {
 
     public Page<IncidentResponse> getMyIncidents(
             String userId,
-            String statusId, String severityId, String incidentTypeId, String locationId,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
         return incidentRepository
-                .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, locationId, pageable)
+                .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                 .map(IncidentResponse::from);
     }
 
