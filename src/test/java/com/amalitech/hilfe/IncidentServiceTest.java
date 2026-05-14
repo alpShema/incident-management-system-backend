@@ -17,6 +17,7 @@ import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.MediaRepository;
 import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
@@ -54,6 +55,7 @@ class IncidentServiceTest {
 
     @Mock IncidentRepository incidentRepository;
     @Mock IncidentTypeRepository incidentTypeRepository;
+    @Mock LocationRepository locationRepository;
     @Mock AgentRepository agentRepository;
     @Mock StatusRepository statusRepository;
     @Mock SeverityRepository severityRepository;
@@ -102,6 +104,7 @@ class IncidentServiceTest {
     void createIncident_happyPath_returnsIncidentResponse() {
         Incident incident = buildIncident();
         when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
@@ -123,6 +126,7 @@ class IncidentServiceTest {
     void createIncident_withExplicitPriority_usesProvidedSeverityId() {
         Incident incident = buildIncident();
         when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.existsById("sev-high")).thenReturn(true);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
@@ -140,6 +144,7 @@ class IncidentServiceTest {
     @Test
     void createIncident_withUnknownPriority_throws404() {
         when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.existsById("bad-sev")).thenReturn(false);
 
         CreateIncidentRequest request = new CreateIncidentRequest(
@@ -157,6 +162,7 @@ class IncidentServiceTest {
     @Test
     void createIncident_defaultLowPriorityMissing_throws500() {
         when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.empty());
 
         CreateIncidentRequest request = new CreateIncidentRequest(
@@ -187,6 +193,7 @@ class IncidentServiceTest {
                 "media-1", "photo.png", "image/png", 2048L, "https://s3.example.com/get");
 
         when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(mediaService.createMediaForIncident("inc-1", List.of(attachment))).thenReturn(List.of(media));
@@ -214,6 +221,21 @@ class IncidentServiceTest {
         assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident type not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void createIncident_locationNotFound_throws404() {
+        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(locationRepository.existsById("bad-loc")).thenReturn(false);
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Title", "Desc", "type-1", "bad-loc", null, null);
+
+        assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Location with the provided ID could not be found.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }
