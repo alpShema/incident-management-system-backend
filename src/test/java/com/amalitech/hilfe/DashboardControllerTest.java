@@ -87,7 +87,7 @@ class DashboardControllerTest {
 
     @Test
     void getIncidents_adminAuth_returns200Paginated() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -102,7 +102,7 @@ class DashboardControllerTest {
 
     @Test
     void getMyIncidents_adminAuth_returns200() throws Exception {
-        when(dashboardService.getMyIncidents(anyString(), any(), any(), any(), any(), any()))
+        when(dashboardService.getMyIncidents(anyString(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
