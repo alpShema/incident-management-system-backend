@@ -47,7 +47,7 @@ class DashboardControllerTest {
     }
 
     private DashboardStats stubStats() {
-        return new DashboardStats(10L, 5L, 3L, 2L);
+        return new DashboardStats(10L, 5L, 2L, 3L, 2L);
     }
 
     private DashboardCharts stubCharts() {
