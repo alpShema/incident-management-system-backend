@@ -35,15 +35,15 @@ public class DashboardService {
                     .map(agentId -> {
                         List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agentId));
                         long total = incidentRepository.countByAssignedToId(agentId);
-                        return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+                        return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
                     })
-                    .orElse(new DashboardStats(0, 0, 0, 0));
+                    .orElse(new DashboardStats(0, 0, 0, 0, 0));
         }
 
         if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
             List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusGlobal());
             long total = byStatus.stream().mapToLong(LabelCount::count).sum();
-            return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+            return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
         }
 
         throw new ArmsAuthException("Dashboard not available for this role", 403);
