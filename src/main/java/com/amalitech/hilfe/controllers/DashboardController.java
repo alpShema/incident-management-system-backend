@@ -35,7 +35,7 @@ public class DashboardController {
 
     @Operation(
             summary = "Dashboard stats",
-            description = "Admin: total/open/closed/resolved across all incidents. Agent: same counts scoped to assigned incidents."
+            description = "Admin: total/open/pending/closed/resolved across all incidents. Agent: same counts scoped to assigned incidents."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -49,6 +49,7 @@ public class DashboardController {
                       "data": {
                         "totalIncidents": 120,
                         "openCount": 45,
+                        "pending": 5,
                         "closedCount": 60,
                         "resolvedCount": 15
                       }
@@ -85,6 +86,7 @@ public class DashboardController {
                         "byStatus": [
                           { "label": "Open",     "count": 45 },
                           { "label": "Closed",   "count": 60 },
+                          { "label": "Pending",   "count": 5 },
                           { "label": "Resolved", "count": 15 }
                         ],
                         "trends": [
