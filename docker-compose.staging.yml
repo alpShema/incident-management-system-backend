@@ -1,0 +1,56 @@
+# docker-compose.staging.yml
+# Deployed to /home/ubuntu/app/ on the BACKEND EC2 in the staging environment.
+# Unlike docker-compose.yml there is no local db container — the backend
+# connects to AWS RDS PostgreSQL via DB_HOST.
+#
+# Required in /home/ubuntu/app/.env (written by bootstrap-staging.sh):
+#   BACKEND_IMAGE   — ECR image URL (updated by Jenkins on each deploy)
+#   DB_HOST         — RDS endpoint
+#   DB_PORT         — 5432
+#   DB_NAME         — hilfe
+#   DB_USER         — RDS username
+#   DB_PASSWORD     — RDS password
+#   JWT_SECRET      — JWT signing secret (>= 32 chars)
+#   ARMS_SSO_URL    — SSO validation endpoint
+#   CORS_ALLOWED_ORIGINS — comma-separated allowed frontend origins
+#   COOKIE_SECURE   — true
+#   S3_BUCKET_NAME  — hilfe-v2-media-staging
+#   S3_REGION       — eu-west-1
+
+services:
+
+  backend:
+    image: ${BACKEND_IMAGE}
+    container_name: hilfe-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL:      jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}
+      DB_USERNAME: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET:  ${JWT_SECRET}
+      ARMS_SSO_URL:                ${ARMS_SSO_URL}
+      CORS_ALLOWED_ORIGINS:        ${CORS_ALLOWED_ORIGINS}
+      COOKIE_SECURE:               ${COOKIE_SECURE}
+      COOKIE_SAME_SITE:            ${COOKIE_SAME_SITE:-Lax}
+      S3_BUCKET_NAME:              ${S3_BUCKET_NAME}
+      S3_REGION:                   ${S3_REGION:-eu-west-1}
+      S3_ACCESS_KEY_ID:            ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY:        ${S3_SECRET_ACCESS_KEY:-}
+      S3_PRESIGN_EXPIRY:           ${S3_PRESIGN_EXPIRY:-3600}
+      MEDIA_MAX_FILE_SIZE:         ${MEDIA_MAX_FILE_SIZE:-10485760}
+      MEDIA_MAX_ATTACHMENTS:       ${MEDIA_MAX_ATTACHMENTS:-5}
+      MEDIA_ALLOWED_CONTENT_TYPES: ${MEDIA_ALLOWED_CONTENT_TYPES:-image/jpeg,image/png,image/gif,image/webp,application/pdf}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - hilfe-net
+
+networks:
+  hilfe-net:
+    driver: bridge
