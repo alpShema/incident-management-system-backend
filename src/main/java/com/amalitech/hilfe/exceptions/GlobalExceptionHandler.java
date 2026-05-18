@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.exceptions;
 
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import tools.jackson.databind.exc.InvalidFormatException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,7 +39,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex, HttpServletRequest request) {
         if (ex.getCause() instanceof InvalidFormatException ife && ife.getTargetType().isEnum()) {
-            String fieldName = ife.getPath().isEmpty() ? "value" : ife.getPath().get(0).getFieldName();
+            String fieldName = ife.getPath().isEmpty() ? "value" : ife.getPath().get(0).getPropertyName();
             String accepted = Arrays.stream(ife.getTargetType().getEnumConstants())
                     .map(Object::toString)
                     .collect(Collectors.joining(", "));
