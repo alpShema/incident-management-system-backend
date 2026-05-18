@@ -3,6 +3,7 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.controllers.DashboardController;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
 import com.amalitech.hilfe.dto.dashboard.DashboardStats;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.DashboardService;
@@ -81,6 +82,23 @@ class DashboardControllerTest {
                         .param("period", "7d")
                         .with(authentication(auth)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void getCharts_unsupportedPeriod_returns400() throws Exception {
+        when(dashboardService.getCharts(any(), any(), any()))
+                .thenThrow(new ArmsAuthException(
+                        "Unsupported period '60d'. Accepted values: 7d, 30d, 90d.", 400));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "dashboard.admin"));
+
+        mvc.perform(get("/dashboard/charts")
+                        .param("period", "60d")
+                        .with(authentication(auth)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Unsupported period '60d'. Accepted values: 7d, 30d, 90d."));
     }
 
     // ── GET /dashboard/incidents ──────────────────────────────────────────────
