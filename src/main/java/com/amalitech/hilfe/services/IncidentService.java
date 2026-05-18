@@ -107,7 +107,7 @@ public class IncidentService {
             case AGENT -> agentRepository.findByUserId(userId)
                     .map(Agent::getId)
                     .map(agentId -> incidentRepository
-                            .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository

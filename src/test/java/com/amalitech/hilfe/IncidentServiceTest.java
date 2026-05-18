@@ -274,18 +274,18 @@ class IncidentServiceTest {
     }
 
     @Test
-    void listIncidents_agentRole_callsFindByAssignedToIdFiltered() {
+    void listIncidents_agentRole_callsFindByAgentScope() {
         Page<Incident> page = new PageImpl<>(List.of());
         Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAssignedToIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByAgentScope(anyString(), anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         incidentService.listIncidents(
                 "agent-user-1", RoleCode.AGENT, null, null, "type-fire", "cat-facility", null, Pageable.unpaged());
 
-        verify(incidentRepository).findByAssignedToIdFiltered(
-                eq("agent-row-1"), any(), any(), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
+        verify(incidentRepository).findByAgentScope(
+                eq("agent-user-1"), eq("agent-row-1"), any(), any(), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
     }
 
     @Test

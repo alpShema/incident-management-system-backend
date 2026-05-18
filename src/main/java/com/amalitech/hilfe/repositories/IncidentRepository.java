@@ -56,7 +56,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
-            WHERE i.assignedToId = :agentId
+            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -66,14 +66,15 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
-            WHERE i.assignedToId = :agentId
+            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
-    Page<Incident> findByAssignedToIdFiltered(
+    Page<Incident> findByAgentScope(
+            @Param("userId") String userId,
             @Param("agentId") String agentId,
             @Param("statusId") String statusId,
             @Param("severityId") String severityId,
