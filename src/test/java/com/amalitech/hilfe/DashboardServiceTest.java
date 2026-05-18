@@ -156,6 +156,14 @@ class DashboardServiceTest {
         assertThat(charts.trends().get(1).data()).isEmpty();
     }
 
+    @Test
+    void getCharts_unsupportedPeriod_throws400() {
+        assertThatThrownBy(() -> dashboardService.getCharts("admin-1", RoleCode.ADMIN, "60d"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
     // ── getIncidents ──────────────────────────────────────────────────────────
 
     @Test

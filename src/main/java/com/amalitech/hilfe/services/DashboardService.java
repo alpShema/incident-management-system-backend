@@ -129,7 +129,8 @@ public class DashboardService {
             case "7d"  -> Instant.now().minus(7,  ChronoUnit.DAYS);
             case "30d" -> Instant.now().minus(30, ChronoUnit.DAYS);
             case "90d" -> Instant.now().minus(90, ChronoUnit.DAYS);
-            default    -> null;
+            default    -> throw new ArmsAuthException(
+                    "Unsupported period '" + period + "'. Accepted values: 7d, 30d, 90d.", 400);
         };
     }
 
