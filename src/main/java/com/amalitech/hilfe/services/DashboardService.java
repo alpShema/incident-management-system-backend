@@ -51,7 +51,7 @@ public class DashboardService {
 
     public DashboardCharts getCharts(String userId, RoleCode role, String period) {
         Instant since      = resolvePeriod(period);
-        Instant trendSince = Instant.now().minus(180, ChronoUnit.DAYS);
+        Instant trendSince = since != null ? since : Instant.now().minus(180, ChronoUnit.DAYS);
 
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
