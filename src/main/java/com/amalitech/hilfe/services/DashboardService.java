@@ -100,7 +100,7 @@ public class DashboardService {
                     .map(IncidentResponse::from);
             case AGENT -> findAgentId(userId)
                     .map(agentId -> incidentRepository
-                            .findByAssignedToIdFiltered(agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);

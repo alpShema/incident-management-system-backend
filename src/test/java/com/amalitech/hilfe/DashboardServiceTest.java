@@ -180,18 +180,18 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getIncidents_agentRole_agentFound_callsFindByAssignedToIdFiltered() {
+    void getIncidents_agentRole_agentFound_callsFindByAgentScope() {
         Agent agent = buildAgent("agent-1");
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAssignedToIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByAgentScope(anyString(), anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 "user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByAssignedToIdFiltered(eq("agent-1"), any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByAgentScope(eq("user-1"), eq("agent-1"), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test

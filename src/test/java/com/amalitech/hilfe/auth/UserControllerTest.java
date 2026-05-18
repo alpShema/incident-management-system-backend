@@ -96,4 +96,24 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.data.userId").value("u1"))
                 .andExpect(jsonPath("$.data.roleCode").value("ADMIN"));
     }
+
+    @Test
+    void assignUserRole_invalidEnumValue_returns400WithSpecificMessage() throws Exception {
+        var principal = new com.amalitech.hilfe.services.JwtTokenService.AuthPrincipal(
+                "admin-1",
+                "admin@test.com",
+                RoleCode.ADMIN
+        );
+
+        mvc.perform(patch("/users/u1/role")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"roleCode\":\"CLIENTS\"}")
+                        .with(authentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                principal,
+                                null,
+                                List.of(() -> "ROLE_ADMIN")
+                        ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid value 'CLIENTS' for roleCode. Accepted values: CLIENT, AGENT, ADMIN, SUPER_ADMIN"));
+    }
 }
