@@ -228,9 +228,17 @@ pipeline {
 
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" docker-compose.staging.yml "ubuntu@\${EC2_IP}:/home/ubuntu/app/docker-compose.yml"
 
-                            scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging.conf "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend.conf"
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging.conf      "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend.conf"
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging-init.conf "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend-init.conf"
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                "sudo cp /tmp/nginx-host-backend.conf /etc/nginx/sites-available/hilfe-backend && \
+                                "CERT=/etc/letsencrypt/live/hilfe-pro-service-stage.amalitech-dev.net/fullchain.pem && \
+                                 if [ -f \\\$CERT ]; then \
+                                   echo 'Certs exist — deploying SSL config'; \
+                                   sudo cp /tmp/nginx-host-backend.conf /etc/nginx/sites-available/hilfe-backend; \
+                                 else \
+                                   echo 'No certs yet — deploying HTTP-only config'; \
+                                   sudo cp /tmp/nginx-host-backend-init.conf /etc/nginx/sites-available/hilfe-backend; \
+                                 fi && \
                                  sudo ln -sf /etc/nginx/sites-available/hilfe-backend /etc/nginx/sites-enabled/hilfe-backend && \
                                  sudo rm -f /etc/nginx/sites-enabled/default && \
                                  sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
