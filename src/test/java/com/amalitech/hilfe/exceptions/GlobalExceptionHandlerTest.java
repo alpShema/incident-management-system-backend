@@ -2,11 +2,13 @@ package com.amalitech.hilfe.exceptions;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -65,6 +67,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void noResourceFound_returns404WithStandardPayload() throws Exception {
+        mvc.perform(get("/throw/no-resource"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("The requested route does not exist"))
+                .andExpect(jsonPath("$.path").value("/throw/no-resource"));
+    }
+
+    @Test
     void genericException_returns500() throws Exception {
         mvc.perform(get("/throw/generic"))
                 .andExpect(status().isInternalServerError())
@@ -93,6 +105,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/throw/not-implemented")
         void throwNotImplemented() {
             throw new UnsupportedOperationException("Not yet implemented");
+        }
+
+        @GetMapping("/throw/no-resource")
+        void throwNoResource() throws NoResourceFoundException {
+            throw new NoResourceFoundException(HttpMethod.GET, "/nonexistent/endpoint", null);
         }
 
         @GetMapping("/throw/generic")
