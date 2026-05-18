@@ -1,0 +1,46 @@
+package com.amalitech.hilfe.dto;
+
+import com.amalitech.hilfe.models.Incident;
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import java.time.Instant;
+import java.util.List;
+
+@Schema(description = "Full incident detail returned by create, get, and update operations")
+public record IncidentResponse(
+        @Schema(description = "Unique incident ID", example = "c26c5ba5-f654-4829-9675-d09704e667be") String id,
+        @Schema(description = "Auto-incremented human-readable incident number", example = "42") int incidentNo,
+        @Schema(description = "Short summary of the incident") String title,
+        @Schema(description = "Detailed description of the issue") String description,
+        @Schema(description = "Incident topic (type) with its parent category") IncidentTopicResponse incidentTopic,
+        @Schema(description = "Location where the incident occurred") LocationResponse location,
+        @Schema(description = "Current priority level", nullable = true) LookupResponse priority,
+        @Schema(description = "Current lifecycle status", nullable = true) LookupResponse status,
+        @Schema(description = "Agent record ID of the assigned agent, or null if unassigned", example = "agent-seed", nullable = true) String assignedToId,
+        @Schema(description = "Whether the incident has been read/acknowledged by the assigned agent") boolean read,
+        @Schema(description = "Timestamp when the incident was closed, or null if still open", nullable = true) Instant closedAt,
+        @Schema(description = "Timestamp when the incident was created (UTC)") Instant createdAt,
+        @Schema(description = "File attachments (populated on detail view, null on list view)", nullable = true) List<MediaResponse> attachments
+) {
+    public static IncidentResponse from(Incident incident) {
+        return from(incident, null);
+    }
+
+    public static IncidentResponse from(Incident incident, List<MediaResponse> attachments) {
+        return new IncidentResponse(
+                incident.getId(),
+                incident.getIncidentNo(),
+                incident.getTitle(),
+                incident.getDescription(),
+                incident.getIncidentType() != null ? IncidentTopicResponse.from(incident.getIncidentType()) : null,
+                incident.getLocation() != null ? LocationResponse.from(incident.getLocation()) : null,
+                incident.getSeverity() != null ? LookupResponse.from(incident.getSeverity().getId(), incident.getSeverity().getName()) : null,
+                incident.getStatus() != null ? LookupResponse.from(incident.getStatus().getId(), incident.getStatus().getName()) : null,
+                incident.getAssignedToId(),
+                incident.isRead(),
+                incident.getClosedAt(),
+                incident.getCreatedAt(),
+                attachments
+        );
+    }
+}
