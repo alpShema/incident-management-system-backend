@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.exceptions;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import java.time.Instant;
@@ -36,6 +38,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        if (ex.getCause() instanceof InvalidFormatException ife && ife.getTargetType().isEnum()) {
+            String fieldName = ife.getPath().isEmpty() ? "value" : ife.getPath().get(0).getFieldName();
+            String accepted = Arrays.stream(ife.getTargetType().getEnumConstants())
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
+            String message = String.format("Invalid value '%s' for %s. Accepted values: %s",
+                    ife.getValue(), fieldName, accepted);
+            log.warn("Invalid enum value: {}", message);
+            return buildResponse(HttpStatus.BAD_REQUEST, message, request);
+        }
         log.warn("Malformed request body: {}", ex.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, "Request body is missing or malformed", request);
     }
