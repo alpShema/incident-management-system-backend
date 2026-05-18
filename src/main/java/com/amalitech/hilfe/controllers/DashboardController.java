@@ -103,6 +103,7 @@ public class DashboardController {
                     }""")
             )
         ),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Unsupported period value", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
     @GetMapping("/charts")
