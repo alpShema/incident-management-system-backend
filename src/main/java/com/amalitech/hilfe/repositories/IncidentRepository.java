@@ -125,19 +125,20 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
             WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
-              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
-              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """)
     Page<Incident> searchByUserId(
             @Param("userId") String userId,
-            @Param("query") String query,
+            @Param("queryPattern") String queryPattern,
             Pageable pageable
     );
 
@@ -148,20 +149,21 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
-              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
-              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """)
     Page<Incident> searchByAgentScope(
             @Param("userId") String userId,
             @Param("agentId") String agentId,
-            @Param("query") String query,
+            @Param("queryPattern") String queryPattern,
             Pageable pageable
     );
 
@@ -172,16 +174,17 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
-            WHERE (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
-              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            LEFT JOIN FETCH i.createdBy
+            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
-            WHERE (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
-              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """)
     Page<Incident> searchAll(
-            @Param("query") String query,
+            @Param("queryPattern") String queryPattern,
             Pageable pageable
     );
 
