@@ -20,7 +20,9 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -100,18 +102,22 @@ public class IncidentService {
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
+        Pageable sortedPageable = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "createdAt"));
         return switch (roleCode) {
             case CLIENT -> incidentRepository
-                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                     .map(IncidentResponse::from);
             case AGENT -> agentRepository.findByUserId(userId)
                     .map(Agent::getId)
                     .map(agentId -> incidentRepository
-                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                             .map(IncidentResponse::from))
-                    .orElse(new PageImpl<>(List.of(), pageable, 0));
+                    .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                     .map(IncidentResponse::from);
         };
     }

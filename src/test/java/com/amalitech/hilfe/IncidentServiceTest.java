@@ -33,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -267,7 +268,7 @@ class IncidentServiceTest {
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.listIncidents(
-                "user-1", RoleCode.CLIENT, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.CLIENT, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result).isNotNull();
         verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class));
@@ -282,7 +283,7 @@ class IncidentServiceTest {
                 .thenReturn(page);
 
         incidentService.listIncidents(
-                "agent-user-1", RoleCode.AGENT, null, null, "type-fire", "cat-facility", null, Pageable.unpaged());
+                "agent-user-1", RoleCode.AGENT, null, null, "type-fire", "cat-facility", null, PageRequest.of(0, 20));
 
         verify(incidentRepository).findByAgentScope(
                 eq("agent-user-1"), eq("agent-row-1"), any(), any(), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
@@ -293,7 +294,7 @@ class IncidentServiceTest {
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.empty());
 
         Page<IncidentResponse> result = incidentService.listIncidents(
-                "agent-user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
+                "agent-user-1", RoleCode.AGENT, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result).isEmpty();
     }
@@ -304,7 +305,7 @@ class IncidentServiceTest {
         when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        incidentService.listIncidents("admin-1", RoleCode.ADMIN, null, null, null, "cat-it", null, Pageable.unpaged());
+        incidentService.listIncidents("admin-1", RoleCode.ADMIN, null, null, null, "cat-it", null, PageRequest.of(0, 20));
 
         verify(incidentRepository).findAllFiltered(any(), any(), any(), eq("cat-it"), any(), any(Pageable.class));
     }
@@ -315,7 +316,7 @@ class IncidentServiceTest {
         when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        incidentService.listIncidents("super-1", RoleCode.SUPER_ADMIN, null, null, null, null, null, Pageable.unpaged());
+        incidentService.listIncidents("super-1", RoleCode.SUPER_ADMIN, null, null, null, null, null, PageRequest.of(0, 20));
 
         verify(incidentRepository).findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class));
     }
