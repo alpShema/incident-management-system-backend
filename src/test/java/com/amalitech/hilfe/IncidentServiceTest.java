@@ -400,7 +400,7 @@ class IncidentServiceTest {
     // ── getIncident ───────────────────────────────────────────────────────────
 
     @Test
-    void getIncident_found_returnsResponse() {
+    void getIncident_creator_returnsResponse() {
         Incident incident = buildIncident();
         Media media = Media.builder()
                 .id("media-1")
@@ -418,17 +418,71 @@ class IncidentServiceTest {
         when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of(media));
         when(mediaService.toMediaResponses(List.of(media))).thenReturn(List.of(mediaResponse));
 
-        IncidentResponse response = incidentService.getIncident("inc-1");
+        IncidentResponse response = incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1");
 
         assertThat(response.id()).isEqualTo("inc-1");
         assertThat(response.attachments()).containsExactly(mediaResponse);
     }
 
     @Test
+    void getIncident_admin_canAccessAnyIncident() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("other-admin", RoleCode.ADMIN, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_assignedAgent_canAccess() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-row-1");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_unrelatedUser_throws403() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        assertThatThrownBy(() -> incidentService.getIncident("other-user", RoleCode.CLIENT, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void getIncident_unassignedAgent_throws403() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("different-agent");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+
+        assertThatThrownBy(() -> incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
     void getIncident_notFound_throws404() {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> incidentService.getIncident("missing"))
+        assertThatThrownBy(() -> incidentService.getIncident("user-1", RoleCode.CLIENT, "missing"))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
