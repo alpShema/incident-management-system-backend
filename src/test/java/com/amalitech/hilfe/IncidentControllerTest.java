@@ -68,6 +68,7 @@ class IncidentControllerTest {
         return new IncidentResponse(
                 "inc-1", 1, "Test Incident", "Description",
                 null, null, new LookupResponse("sev-low", "Low"), null,
+                new com.amalitech.hilfe.dto.CreatorResponse("user-1", "John Doe", "http://img.png"),
                 null, false, null, null, null);
     }
 

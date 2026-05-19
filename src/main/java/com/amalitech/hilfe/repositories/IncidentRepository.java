@@ -22,6 +22,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
             WHERE i.userId = :userId
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
@@ -56,6 +57,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
@@ -91,6 +93,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
             WHERE (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -189,6 +192,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
             WHERE i.id = :id
             """)
     Optional<Incident> findByIdWithDetails(@Param("id") String id);
