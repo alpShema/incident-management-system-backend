@@ -123,18 +123,24 @@ public class IncidentService {
             throw new ArmsAuthException("Search query must not be blank", 400);
         }
 
+        String escaped = query.toLowerCase()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        String queryPattern = "%" + escaped + "%";
+
         return switch (roleCode) {
             case CLIENT -> incidentRepository
-                    .searchByUserId(userId, query, pageable)
+                    .searchByUserId(userId, queryPattern, pageable)
                     .map(IncidentResponse::from);
             case AGENT -> agentRepository.findByUserId(userId)
                     .map(Agent::getId)
                     .map(agentId -> incidentRepository
-                            .searchByAgentScope(userId, agentId, query, pageable)
+                            .searchByAgentScope(userId, agentId, queryPattern, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .searchAll(query, pageable)
+                    .searchAll(queryPattern, pageable)
                     .map(IncidentResponse::from);
         };
     }
