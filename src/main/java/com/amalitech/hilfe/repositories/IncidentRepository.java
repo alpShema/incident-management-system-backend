@@ -115,6 +115,73 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             Pageable pageable
     );
 
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            WHERE i.userId = :userId
+            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
+              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            WHERE i.userId = :userId
+            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
+              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            """)
+    Page<Incident> searchByUserId(
+            @Param("userId") String userId,
+            @Param("query") String query,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
+            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
+              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
+            AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
+              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            """)
+    Page<Incident> searchByAgentScope(
+            @Param("userId") String userId,
+            @Param("agentId") String agentId,
+            @Param("query") String query,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            WHERE (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
+              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            WHERE (LOWER(i.title) LIKE LOWER(CONCAT('%', :query, '%'))
+              OR LOWER(i.description) LIKE LOWER(CONCAT('%', :query, '%')))
+            """)
+    Page<Incident> searchAll(
+            @Param("query") String query,
+            Pageable pageable
+    );
+
     @Query("""
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it

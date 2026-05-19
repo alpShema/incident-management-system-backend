@@ -116,6 +116,29 @@ public class IncidentService {
         };
     }
 
+    public Page<IncidentResponse> searchIncidents(
+            String userId, RoleCode roleCode, String query, Pageable pageable
+    ) {
+        if (query == null || query.isBlank()) {
+            throw new ArmsAuthException("Search query must not be blank", 400);
+        }
+
+        return switch (roleCode) {
+            case CLIENT -> incidentRepository
+                    .searchByUserId(userId, query, pageable)
+                    .map(IncidentResponse::from);
+            case AGENT -> agentRepository.findByUserId(userId)
+                    .map(Agent::getId)
+                    .map(agentId -> incidentRepository
+                            .searchByAgentScope(userId, agentId, query, pageable)
+                            .map(IncidentResponse::from))
+                    .orElse(new PageImpl<>(List.of(), pageable, 0));
+            case ADMIN, SUPER_ADMIN -> incidentRepository
+                    .searchAll(query, pageable)
+                    .map(IncidentResponse::from);
+        };
+    }
+
     public IncidentResponse getIncident(String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
