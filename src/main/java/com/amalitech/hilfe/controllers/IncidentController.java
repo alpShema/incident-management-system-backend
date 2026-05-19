@@ -119,6 +119,30 @@ public class IncidentController {
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
+    @Operation(
+        summary = "Search incidents by keyword",
+        description = "Full-text search across incident title and description. "
+                    + "Results are role-scoped identically to GET /incidents: "
+                    + "CLIENTs see only their own, AGENTs see assigned/created, ADMINs see all. "
+                    + "Supports pagination and sorting via Pageable (e.g. sort=createdAt,desc)."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Search results returned"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Missing or blank search query"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> searchIncidents(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Free-text keyword to search in title and description", required = true)
+            @RequestParam String query,
+            Pageable pageable
+    ) {
+        Page<IncidentResponse> page = incidentService.searchIncidents(
+                principal.userId(), principal.roleCode(), query, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+    }
+
     @Operation(summary = "Get a single incident", description = "Returns full detail of an incident by its ID.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident retrieved"),
