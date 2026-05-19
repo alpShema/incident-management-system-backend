@@ -153,7 +153,7 @@ class IncidentControllerTest {
 
     @Test
     void getIncident_found_returns200() throws Exception {
-        when(incidentService.getIncident("inc-1")).thenReturn(stubResponse());
+        when(incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1")).thenReturn(stubResponse());
 
         var principal = clientPrincipal();
         var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(() -> "incident.read.own"));
@@ -166,7 +166,7 @@ class IncidentControllerTest {
 
     @Test
     void getIncident_notFound_returns404() throws Exception {
-        when(incidentService.getIncident("missing"))
+        when(incidentService.getIncident("user-1", RoleCode.CLIENT, "missing"))
                 .thenThrow(new ArmsAuthException("Incident not found", 404));
 
         var principal = clientPrincipal();

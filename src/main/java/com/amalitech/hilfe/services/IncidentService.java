@@ -139,9 +139,12 @@ public class IncidentService {
         };
     }
 
-    public IncidentResponse getIncident(String incidentId) {
+    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+
+        enforceAccess(userId, roleCode, incident);
+
         List<Media> mediaList = mediaRepository.findByIncidentId(incidentId);
         List<MediaResponse> mediaResponses = mediaService.toMediaResponses(mediaList);
         return IncidentResponse.from(incident, mediaResponses);
@@ -197,6 +200,22 @@ public class IncidentService {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private void enforceAccess(String userId, RoleCode roleCode, Incident incident) {
+        if (roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) {
+            return;
+        }
+        if (userId.equals(incident.getUserId())) {
+            return;
+        }
+        if (roleCode == RoleCode.AGENT) {
+            boolean isAssigned = agentRepository.findByUserId(userId)
+                    .map(agent -> agent.getId().equals(incident.getAssignedToId()))
+                    .orElse(false);
+            if (isAssigned) return;
+        }
+        throw new ArmsAuthException("You do not have access to this incident", 403);
+    }
 
     private Incident findIncident(String incidentId) {
         return incidentRepository.findByIdWithDetails(incidentId)
