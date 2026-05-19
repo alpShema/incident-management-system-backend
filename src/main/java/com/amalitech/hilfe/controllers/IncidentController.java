@@ -150,10 +150,11 @@ public class IncidentController {
     })
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<IncidentResponse>> getIncident(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @Parameter(description = "Incident ID") @PathVariable String id
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident retrieved successfully",
-                incidentService.getIncident(id)));
+                incidentService.getIncident(principal.userId(), principal.roleCode(), id)));
     }
 
     @Operation(
