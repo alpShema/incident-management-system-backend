@@ -44,16 +44,25 @@ class IncidentCategoryControllerTest {
         return new JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
     }
 
-    private JwtTokenService.AuthPrincipal agentPrincipal() {
-        return new JwtTokenService.AuthPrincipal("agent-user-1", "agent@test.com", RoleCode.AGENT);
-    }
-
     private IncidentCategoryResponse stubCategory() {
-        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", "active");
+        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", null, "active");
     }
 
     private IncidentTopicResponse stubTopic() {
-        return new IncidentTopicResponse("type-1", "Projector", "Projector issues", null, new LookupResponse("agent-1", "Agent One"));
+        return new IncidentTopicResponse(
+                "type-1",
+                "Projector",
+                "Projector issues",
+                true,
+                null,
+                new IncidentTopicResponse.AssignedAgentGroupResponse(
+                        "group-1",
+                        "IT Support",
+                        new IncidentTopicResponse.AssignedAgentResponse(
+                                "agent-1",
+                                "agent-user-1",
+                                "Agent One",
+                                "agent@test.com")));
     }
 
     // ── GET /incident-categories ──────────────────────────────────────────────
@@ -83,7 +92,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Facility", "Facility incidents")))
+                                new IncidentCategoryRequest("Facility", "Facility incidents", null)))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Incident category created successfully"))
@@ -101,7 +110,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Facility", "Duplicate")))
+                                new IncidentCategoryRequest("Facility", "Duplicate", null)))
                         .with(authentication(auth)))
                 .andExpect(status().isConflict());
     }
@@ -118,7 +127,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(patch("/incident-categories/cat-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Updated", "Updated description")))
+                                new IncidentCategoryRequest("Updated", "Updated description", null)))
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
@@ -155,17 +164,17 @@ class IncidentCategoryControllerTest {
     // ── POST /incident-categories/{id}/topics ─────────────────────────────────
 
     @Test
-    void createTopic_validRequest_returns201AndUsesAuthenticatedUser() throws Exception {
+    void createTopic_validRequest_returns201() throws Exception {
         when(categoryService.createTopic(any(), any(), any(CreateTopicRequest.class)))
                 .thenReturn(stubTopic());
 
         var auth = new UsernamePasswordAuthenticationToken(
-                adminPrincipal(), null, List.of(() -> "incident-type.create"));
+                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN", () -> "incident-type.create"));
 
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateTopicRequest("Projector", "Projector issues", null, true)))
+                                new CreateTopicRequest("Projector", "Projector issues", "group-1", true)))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Incident topic created successfully"))
@@ -175,39 +184,16 @@ class IncidentCategoryControllerTest {
     }
 
     @Test
-    void createTopic_agentWithPermission_returns201AndUsesAuthenticatedUser() throws Exception {
-        when(categoryService.createTopic(any(), any(), any(CreateTopicRequest.class)))
-                .thenReturn(stubTopic());
-
+    void createTopic_missingAgentGroupId_returns400() throws Exception {
         var auth = new UsernamePasswordAuthenticationToken(
-                agentPrincipal(), null, List.of(() -> "incident-type.create"));
+                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN", () -> "incident-type.create"));
 
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 new CreateTopicRequest("Projector", "Projector issues", null, true)))
                         .with(authentication(auth)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message").value("Incident topic created successfully"))
-                .andExpect(jsonPath("$.data.id").value("type-1"));
-
-        verify(categoryService).createTopic(eq("cat-1"), any(), any(CreateTopicRequest.class));
-    }
-
-    @Test
-    void createTopic_userWithoutAgent_returns403() throws Exception {
-        when(categoryService.createTopic(any(), any(), any(CreateTopicRequest.class)))
-                .thenThrow(new ArmsAuthException("Authenticated user is not linked to an agent record", 403));
-
-        var auth = new UsernamePasswordAuthenticationToken(
-                adminPrincipal(), null, List.of(() -> "incident-type.create"));
-
-        mvc.perform(post("/incident-categories/cat-1/topics")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new CreateTopicRequest("Projector", "Projector issues", null, true)))
-                        .with(authentication(auth)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isBadRequest());
     }
 
 }

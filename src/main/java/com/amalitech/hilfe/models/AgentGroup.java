@@ -24,6 +24,9 @@ public class AgentGroup {
 
     private String description;
 
+    @Column(name = "primary_agent_id")
+    private String primaryAgentId;
+
     private Boolean status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -37,6 +40,10 @@ public class AgentGroup {
     @OneToMany(mappedBy = "agentGroup")
     @Builder.Default
     private List<Agent> agents = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "primary_agent_id", insertable = false, updatable = false)
+    private Agent primaryAgent;
 
     // ── Lifecycle ──
 

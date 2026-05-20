@@ -8,13 +8,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "IncidentCategory")
+@Table(name = "Department")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class IncidentCategory {
+public class Department {
 
     @Id
     private String id;
@@ -24,12 +24,7 @@ public class IncidentCategory {
 
     private String description;
 
-    @Column(name = "department_id")
-    private String departmentId;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private String status = "active";
+    private Boolean status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -37,17 +32,9 @@ public class IncidentCategory {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    // ── Relationships ──
-
-    @OneToMany(mappedBy = "category", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "department", fetch = FetchType.LAZY)
     @Builder.Default
-    private List<IncidentType> incidentTypes = new ArrayList<>();
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id", insertable = false, updatable = false)
-    private Department department;
-
-    // ── Lifecycle ──
+    private List<IncidentCategory> categories = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {

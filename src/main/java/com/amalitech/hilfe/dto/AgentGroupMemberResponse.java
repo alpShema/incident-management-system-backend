@@ -3,7 +3,7 @@ package com.amalitech.hilfe.dto;
 import com.amalitech.hilfe.models.Agent;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "Department member details")
+@Schema(description = "Agent group member details")
 public record AgentGroupMemberResponse(
         @Schema(description = "Agent record ID") String agentId,
         @Schema(description = "User ID linked to the agent") String userId,

@@ -13,6 +13,13 @@ import java.util.Optional;
 public interface AgentRepository extends JpaRepository<Agent, String> {
     Optional<Agent> findByUserId(String userId);
 
+    @Query("""
+            SELECT a FROM Agent a
+            LEFT JOIN FETCH a.user
+            WHERE a.id = :agentId
+            """)
+    Optional<Agent> findByIdWithUser(@Param("agentId") String agentId);
+
     long countByAgentGroupId(String agentGroupId);
 
     @Query("SELECT a.userId FROM Agent a WHERE a.id = :agentId")

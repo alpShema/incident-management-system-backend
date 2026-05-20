@@ -17,6 +17,10 @@ public final class RbacPermissions {
     public static final String AGENT_GROUP_CREATE = "agent-group.create";
     public static final String AGENT_GROUP_UPDATE = "agent-group.update";
     public static final String AGENT_GROUP_DELETE = "agent-group.delete";
+    public static final String DEPARTMENT_READ = "department.read";
+    public static final String DEPARTMENT_CREATE = "department.create";
+    public static final String DEPARTMENT_UPDATE = "department.update";
+    public static final String DEPARTMENT_DELETE = "department.delete";
     public static final String STATUS_CREATE = "status.create";
     public static final String STATUS_UPDATE = "status.update";
     public static final String STATUS_DELETE = "status.delete";
@@ -49,7 +53,6 @@ public final class RbacPermissions {
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
-            INCIDENT_TYPE_CREATE,
             AGENT_READ,
             DASHBOARD_AGENT
     );
@@ -67,6 +70,10 @@ public final class RbacPermissions {
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,
             AGENT_GROUP_DELETE,
+            DEPARTMENT_READ,
+            DEPARTMENT_CREATE,
+            DEPARTMENT_UPDATE,
+            DEPARTMENT_DELETE,
             STATUS_CREATE,
             STATUS_UPDATE,
             STATUS_DELETE,
@@ -98,6 +105,10 @@ public final class RbacPermissions {
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,
             AGENT_GROUP_DELETE,
+            DEPARTMENT_READ,
+            DEPARTMENT_CREATE,
+            DEPARTMENT_UPDATE,
+            DEPARTMENT_DELETE,
             STATUS_CREATE,
             STATUS_UPDATE,
             STATUS_DELETE,

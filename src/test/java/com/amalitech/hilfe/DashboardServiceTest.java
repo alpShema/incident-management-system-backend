@@ -139,7 +139,7 @@ class DashboardServiceTest {
 
         assertThat(charts.trends()).hasSize(2);
         assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
-        assertThat(charts.trends().get(1).label()).isEqualTo("Department Incidents");
+        assertThat(charts.trends().get(1).label()).isEqualTo("Agent Group Incidents");
     }
 
     @Test
