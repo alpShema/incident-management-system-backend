@@ -42,7 +42,8 @@ public final class RbacPermissions {
 
     public static final List<String> CLIENT_DEFAULTS = List.of(
             INCIDENT_CREATE,
-            INCIDENT_READ_OWN
+            INCIDENT_READ_OWN,
+            INCIDENT_STATUS_CHANGE
     );
 
     public static final List<String> AGENT_DEFAULTS = List.of(
