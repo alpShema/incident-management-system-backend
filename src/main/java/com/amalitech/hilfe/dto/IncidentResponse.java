@@ -19,6 +19,7 @@ public record IncidentResponse(
         @Schema(description = "The user who created this incident") CreatorResponse createdBy,
         @Schema(description = "Agent record ID of the assigned agent, or null if unassigned", example = "agent-seed", nullable = true) String assignedToId,
         @Schema(description = "Whether the incident has been read/acknowledged by the assigned agent") boolean read,
+        @Schema(description = "Timestamp when the incident was marked resolved, or null if not yet resolved", nullable = true) Instant resolvedAt,
         @Schema(description = "Timestamp when the incident was closed, or null if still open", nullable = true) Instant closedAt,
         @Schema(description = "Timestamp when the incident was created (UTC)") Instant createdAt,
         @Schema(description = "File attachments (populated on detail view, null on list view)", nullable = true) List<MediaResponse> attachments
@@ -40,6 +41,7 @@ public record IncidentResponse(
                 CreatorResponse.from(incident.getCreatedBy()),
                 incident.getAssignedToId(),
                 incident.isRead(),
+                incident.getResolvedAt(),
                 incident.getClosedAt(),
                 incident.getCreatedAt(),
                 attachments
