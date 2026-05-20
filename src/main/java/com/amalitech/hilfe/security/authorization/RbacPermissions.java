@@ -13,6 +13,7 @@ public final class RbacPermissions {
     public static final String AGENT_READ = "agent.read";
     public static final String AGENT_UPDATE = "agent.update";
     public static final String AGENT_DELETE = "agent.delete";
+    public static final String AGENT_GROUP_READ = "agent-group.read";
     public static final String AGENT_GROUP_CREATE = "agent-group.create";
     public static final String AGENT_GROUP_UPDATE = "agent-group.update";
     public static final String AGENT_GROUP_DELETE = "agent-group.delete";
@@ -62,6 +63,7 @@ public final class RbacPermissions {
             AGENT_READ,
             AGENT_UPDATE,
             AGENT_DELETE,
+            AGENT_GROUP_READ,
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,
             AGENT_GROUP_DELETE,
@@ -92,6 +94,7 @@ public final class RbacPermissions {
             AGENT_READ,
             AGENT_UPDATE,
             AGENT_DELETE,
+            AGENT_GROUP_READ,
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,
             AGENT_GROUP_DELETE,

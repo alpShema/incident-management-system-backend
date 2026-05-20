@@ -1,13 +1,13 @@
 package com.amalitech.hilfe.repositories;
 
-import com.amalitech.hilfe.models.IncidentCategory;
+import com.amalitech.hilfe.models.AgentGroup;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
-public interface IncidentCategoryRepository extends JpaRepository<IncidentCategory, String> {
+public interface AgentGroupRepository extends JpaRepository<AgentGroup, String> {
     boolean existsByNameIgnoreCase(String name);
-    List<IncidentCategory> findByStatus(String status);
+    List<AgentGroup> findByStatus(Boolean status);
 }

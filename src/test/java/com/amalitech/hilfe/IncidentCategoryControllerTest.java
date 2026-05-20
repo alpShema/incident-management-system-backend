@@ -5,6 +5,7 @@ import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
+import com.amalitech.hilfe.dto.LookupResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
@@ -55,11 +56,11 @@ class IncidentCategoryControllerTest {
     }
 
     private IncidentCategoryResponse stubCategory() {
-        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents");
+        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", "active");
     }
 
     private IncidentTopicResponse stubTopic() {
-        return new IncidentTopicResponse("type-1", "Projector", "Projector issues", null);
+        return new IncidentTopicResponse("type-1", "Projector", "Projector issues", null, new LookupResponse("agent-1", "Agent One"));
     }
 
     // ── GET /incident-categories ──────────────────────────────────────────────
@@ -171,7 +172,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateTopicRequest("Projector", "Projector issues", true)))
+                                new CreateTopicRequest("Projector", "Projector issues", null, true)))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Incident topic created successfully"))
@@ -191,7 +192,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateTopicRequest("Projector", "Projector issues", true)))
+                                new CreateTopicRequest("Projector", "Projector issues", null, true)))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Incident topic created successfully"))
@@ -211,7 +212,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateTopicRequest("Projector", "Projector issues", true)))
+                                new CreateTopicRequest("Projector", "Projector issues", null, true)))
                         .with(authentication(auth)))
                 .andExpect(status().isForbidden());
     }

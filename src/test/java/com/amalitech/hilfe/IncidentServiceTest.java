@@ -10,6 +10,7 @@ import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Severity;
@@ -99,12 +100,20 @@ class IncidentServiceTest {
         return severity;
     }
 
+    private IncidentType buildIncidentType() {
+        return IncidentType.builder()
+                .id("type-1")
+                .name("Topic")
+                .categoryId("cat-1")
+                .build();
+    }
+
     // ── createIncident ────────────────────────────────────────────────────────
 
     @Test
     void createIncident_happyPath_returnsIncidentResponse() {
         Incident incident = buildIncident();
-        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
@@ -126,7 +135,7 @@ class IncidentServiceTest {
     @Test
     void createIncident_withExplicitPriority_usesProvidedSeverityId() {
         Incident incident = buildIncident();
-        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.existsById("sev-high")).thenReturn(true);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
@@ -144,7 +153,7 @@ class IncidentServiceTest {
 
     @Test
     void createIncident_withUnknownPriority_throws404() {
-        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.existsById("bad-sev")).thenReturn(false);
 
@@ -162,7 +171,7 @@ class IncidentServiceTest {
 
     @Test
     void createIncident_defaultLowPriorityMissing_throws500() {
-        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.empty());
 
@@ -193,7 +202,7 @@ class IncidentServiceTest {
         MediaResponse mediaResponse = new MediaResponse(
                 "media-1", "photo.png", "image/png", 2048L, "https://s3.example.com/get");
 
-        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
@@ -214,7 +223,7 @@ class IncidentServiceTest {
 
     @Test
     void createIncident_incidentTypeNotFound_throws404() {
-        when(incidentTypeRepository.existsById("bad-type")).thenReturn(false);
+        when(incidentTypeRepository.findById("bad-type")).thenReturn(Optional.empty());
         when(locationRepository.existsById("loc-1")).thenReturn(true);
 
         CreateIncidentRequest request = new CreateIncidentRequest(
@@ -229,7 +238,7 @@ class IncidentServiceTest {
 
     @Test
     void createIncident_locationNotFound_throws404() {
-        when(incidentTypeRepository.existsById("type-1")).thenReturn(true);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("bad-loc")).thenReturn(false);
 
         CreateIncidentRequest request = new CreateIncidentRequest(
@@ -244,7 +253,7 @@ class IncidentServiceTest {
 
     @Test
     void createIncident_bothIdsNotFound_throws404WithBothMessages() {
-        when(incidentTypeRepository.existsById("bad-type")).thenReturn(false);
+        when(incidentTypeRepository.findById("bad-type")).thenReturn(Optional.empty());
         when(locationRepository.existsById("bad-loc")).thenReturn(false);
 
         CreateIncidentRequest request = new CreateIncidentRequest(
@@ -261,7 +270,7 @@ class IncidentServiceTest {
     // ── listIncidents ─────────────────────────────────────────────────────────
 
     @Test
-    void listIncidents_clientRole_callsFindByUserIdFiltered() {
+    void listIncidents_returnsIncidentsCreatedByUser() {
         Incident incident = buildIncident();
         Page<Incident> page = new PageImpl<>(List.of(incident));
         when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
@@ -271,54 +280,21 @@ class IncidentServiceTest {
                 "user-1", RoleCode.CLIENT, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class));
+        assertThat(result).hasSize(1);
+        verify(incidentRepository).findByUserIdFiltered(eq("user-1"), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test
-    void listIncidents_agentRole_callsFindByAgentScope() {
+    void listIncidents_withFilters_passesFiltersToRepository() {
         Page<Incident> page = new PageImpl<>(List.of());
-        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
-        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAgentScope(anyString(), anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         incidentService.listIncidents(
-                "agent-user-1", RoleCode.AGENT, null, null, "type-fire", "cat-facility", null, PageRequest.of(0, 20));
+                "user-1", RoleCode.CLIENT, "status-open", "sev-high", "type-fire", "cat-facility", null, PageRequest.of(0, 20));
 
-        verify(incidentRepository).findByAgentScope(
-                eq("agent-user-1"), eq("agent-row-1"), any(), any(), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
-    }
-
-    @Test
-    void listIncidents_agentRoleWithoutAgentRecord_returnsEmptyPage() {
-        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.empty());
-
-        Page<IncidentResponse> result = incidentService.listIncidents(
-                "agent-user-1", RoleCode.AGENT, null, null, null, null, null, PageRequest.of(0, 20));
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void listIncidents_adminRole_callsFindAllFiltered() {
-        Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
-                .thenReturn(page);
-
-        incidentService.listIncidents("admin-1", RoleCode.ADMIN, null, null, null, "cat-it", null, PageRequest.of(0, 20));
-
-        verify(incidentRepository).findAllFiltered(any(), any(), any(), eq("cat-it"), any(), any(Pageable.class));
-    }
-
-    @Test
-    void listIncidents_superAdminRole_callsFindAllFiltered() {
-        Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
-                .thenReturn(page);
-
-        incidentService.listIncidents("super-1", RoleCode.SUPER_ADMIN, null, null, null, null, null, PageRequest.of(0, 20));
-
-        verify(incidentRepository).findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByUserIdFiltered(
+                eq("user-1"), eq("status-open"), eq("sev-high"), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
     }
 
     // ── searchIncidents ───────────────────────────────────────────────────────
@@ -336,18 +312,18 @@ class IncidentServiceTest {
     }
 
     @Test
-    void searchIncidents_agentRole_delegatesToSearchByAgentScope() {
+    void searchIncidents_agentRole_delegatesToSearchByDepartment() {
         Incident incident = buildIncident();
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").agentGroupId("dept-1").build();
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.searchByAgentScope(eq("agent-user-1"), eq("agent-row-1"), eq("%projector%"), any(Pageable.class)))
+        when(incidentRepository.searchByDepartment(eq("dept-1"), eq("%projector%"), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.searchIncidents("agent-user-1", RoleCode.AGENT, "projector", Pageable.unpaged());
 
         assertThat(result).hasSize(1);
-        verify(incidentRepository).searchByAgentScope(eq("agent-user-1"), eq("agent-row-1"), eq("%projector%"), any(Pageable.class));
+        verify(incidentRepository).searchByDepartment(eq("dept-1"), eq("%projector%"), any(Pageable.class));
     }
 
     @Test
@@ -461,10 +437,11 @@ class IncidentServiceTest {
     void getIncident_assignedAgent_canAccess() {
         Incident incident = buildIncident();
         incident.setAssignedToId("agent-row-1");
-        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").agentGroupId("dept-1").build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(agentRepository.findAgentGroupIdByAgentId("agent-row-1")).thenReturn(Optional.of("dept-1"));
         when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
         when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
 

@@ -31,10 +31,10 @@ public class DashboardService {
 
     public DashboardStats getStats(String userId, RoleCode role) {
         if (role == RoleCode.AGENT) {
-            return findAgentId(userId)
-                    .map(agentId -> {
-                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agentId));
-                        long total = incidentRepository.countByAssignedToId(agentId);
+            return findAgentGroupId(userId)
+                    .map(agentGroupId -> {
+                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForDepartment(agentGroupId));
+                        long total = incidentRepository.countByDepartment(agentGroupId);
                         return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
                     })
                     .orElse(new DashboardStats(0, 0, 0, 0, 0));
@@ -67,20 +67,20 @@ public class DashboardService {
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
             }
             case AGENT -> {
-                var agentIdOpt = findAgentId(userId);
-                byStatus = agentIdOpt.map(agentId -> toLabel(since != null
-                        ? incidentRepository.countByStatusForAgentSince(agentId, since)
-                        : incidentRepository.countByStatusForAgent(agentId)))
+                var agentGroupIdOpt = findAgentGroupId(userId);
+                byStatus = agentGroupIdOpt.map(agentGroupId -> toLabel(since != null
+                        ? incidentRepository.countByStatusForDepartmentSince(agentGroupId, since)
+                        : incidentRepository.countByStatusForDepartment(agentGroupId)))
                         .orElse(List.of());
 
                 List<MonthlyCount> myTrend = toMonthlyCount(
                         incidentRepository.countByMonthForUser(userId, trendSince));
-                List<MonthlyCount> assignedTrend = agentIdOpt
-                        .map(agentId -> toMonthlyCount(incidentRepository.countByMonthForAgent(agentId, trendSince)))
+                List<MonthlyCount> departmentTrend = agentGroupIdOpt
+                        .map(agentGroupId -> toMonthlyCount(incidentRepository.countByMonthForDepartment(agentGroupId, trendSince)))
                         .orElse(List.of());
                 trends = List.of(
                         new TrendSeries("My Incidents", myTrend),
-                        new TrendSeries("Assigned Incidents", assignedTrend)
+                        new TrendSeries("Department Incidents", departmentTrend)
                 );
             }
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -98,9 +98,9 @@ public class DashboardService {
             case ADMIN, SUPER_ADMIN -> incidentRepository
                     .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> findAgentId(userId)
-                    .map(agentId -> incidentRepository
-                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+            case AGENT -> findAgentGroupId(userId)
+                    .map(agentGroupId -> incidentRepository
+                            .findByDepartmentFiltered(agentGroupId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -121,6 +121,12 @@ public class DashboardService {
 
     private Optional<String> findAgentId(String userId) {
         return agentRepository.findByUserId(userId).map(Agent::getId);
+    }
+
+    private Optional<String> findAgentGroupId(String userId) {
+        return agentRepository.findByUserId(userId)
+                .map(Agent::getAgentGroupId)
+                .filter(agentGroupId -> agentGroupId != null && !agentGroupId.isBlank());
     }
 
     private Instant resolvePeriod(String period) {
