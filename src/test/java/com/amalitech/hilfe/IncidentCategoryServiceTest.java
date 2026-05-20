@@ -10,6 +10,7 @@ import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
+import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import com.amalitech.hilfe.services.IncidentCategoryService;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ class IncidentCategoryServiceTest {
     @Mock IncidentCategoryRepository categoryRepository;
     @Mock IncidentTypeRepository typeRepository;
     @Mock AgentRepository agentRepository;
+    @Mock IncidentRepository incidentRepository;
     @InjectMocks IncidentCategoryService categoryService;
 
     private IncidentCategory buildCategory() {
@@ -41,6 +43,7 @@ class IncidentCategoryServiceTest {
                 .id("cat-1")
                 .name("Facility")
                 .description("Facility related incidents")
+                .status("active")
                 .build();
     }
 
@@ -60,7 +63,7 @@ class IncidentCategoryServiceTest {
     @Test
     void listCategories_returnsMappedList() {
         IncidentCategory cat = buildCategory();
-        when(categoryRepository.findAll()).thenReturn(List.of(cat));
+        when(categoryRepository.findByStatus("active")).thenReturn(List.of(cat));
 
         List<IncidentCategoryResponse> result = categoryService.listCategories();
 
@@ -127,17 +130,19 @@ class IncidentCategoryServiceTest {
     // ── deleteCategory ────────────────────────────────────────────────────────
 
     @Test
-    void deleteCategory_exists_callsDeleteById() {
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+    void deleteCategory_exists_deactivatesCategory() {
+        IncidentCategory cat = buildCategory();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
 
         categoryService.deleteCategory("cat-1");
 
-        verify(categoryRepository).deleteById("cat-1");
+        assertThat(cat.getStatus()).isEqualTo("inactive");
+        verify(categoryRepository).save(cat);
     }
 
     @Test
     void deleteCategory_notFound_throws404() {
-        when(categoryRepository.existsById("missing")).thenReturn(false);
+        when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.deleteCategory("missing"))
                 .isInstanceOf(ArmsAuthException.class)
@@ -152,7 +157,7 @@ class IncidentCategoryServiceTest {
     void listTopicsByCategory_categoryExists_returnsTopicList() {
         IncidentType type = buildType();
         when(categoryRepository.existsById("cat-1")).thenReturn(true);
-        when(typeRepository.findByCategoryId("cat-1")).thenReturn(List.of(type));
+        when(typeRepository.findByCategoryIdWithAgent("cat-1")).thenReturn(List.of(type));
 
         List<IncidentTopicResponse> result = categoryService.listTopicsByCategory("cat-1");
 
@@ -180,12 +185,12 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.existsById("cat-1")).thenReturn(true);
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentRepository.findByUserId("admin-1")).thenReturn(Optional.of(
-                Agent.builder().id("agent-1").userId("admin-1").build()));
+                Agent.builder().id("agent-1").userId("admin-1").agentGroupId("dept-1").build()));
         when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
 
         IncidentTopicResponse response = categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", true));
+                new CreateTopicRequest("Projector", "Projector issues", null, true));
 
         assertThat(response.id()).isEqualTo("type-1");
         assertThat(response.name()).isEqualTo("Projector");
@@ -201,7 +206,7 @@ class IncidentCategoryServiceTest {
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "missing", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", true)))
+                new CreateTopicRequest("Projector", "Projector issues", null, true)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -215,7 +220,7 @@ class IncidentCategoryServiceTest {
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", true)))
+                new CreateTopicRequest("Projector", "Projector issues", null, true)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("A topic with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -230,7 +235,7 @@ class IncidentCategoryServiceTest {
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", true)))
+                new CreateTopicRequest("Projector", "Projector issues", null, true)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Authenticated user is not linked to an agent record")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())

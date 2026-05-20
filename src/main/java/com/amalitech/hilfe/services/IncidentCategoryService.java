@@ -4,12 +4,14 @@ import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
+import com.amalitech.hilfe.dto.UpdateTopicRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
+import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -24,9 +26,10 @@ public class IncidentCategoryService {
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
     private final AgentRepository agentRepository;
+    private final IncidentRepository incidentRepository;
 
     public List<IncidentCategoryResponse> listCategories() {
-        return categoryRepository.findAll().stream()
+        return categoryRepository.findByStatus("active").stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
     }
@@ -55,17 +58,14 @@ public class IncidentCategoryService {
 
     @Transactional
     public void deleteCategory(String id) {
-        if (!categoryRepository.existsById(id)) {
-            throw new ArmsAuthException("Incident category not found", 404);
-        }
-        categoryRepository.deleteById(id);
+        deactivateCategory(id);
     }
 
     public List<IncidentTopicResponse> listTopicsByCategory(String categoryId) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException("Incident category not found", 404);
         }
-        return typeRepository.findByCategoryId(categoryId).stream()
+        return typeRepository.findByCategoryIdWithAgent(categoryId).stream()
                 .map(IncidentTopicResponse::from)
                 .toList();
     }
@@ -78,17 +78,96 @@ public class IncidentCategoryService {
         if (typeRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("A topic with this name already exists", 409);
         }
-        Agent creatorAgent = agentRepository.findByUserId(creatorUserId)
-                .orElseThrow(() -> new ArmsAuthException("Authenticated user is not linked to an agent record", 403));
+        Agent assignedAgent = resolveTopicAgent(creatorUserId, request.agentId());
         IncidentType topic = IncidentType.builder()
                 .id(UUID.randomUUID().toString())
                 .name(request.name())
                 .description(request.description())
                 .categoryId(categoryId)
                 .adminId(creatorUserId)
-                .agentId(creatorAgent.getId())
+                .agentId(assignedAgent.getId())
                 .visibleToGroup(request.visibleToGroup())
                 .build();
-        return IncidentTopicResponse.from(typeRepository.save(topic));
+        IncidentType saved = typeRepository.save(topic);
+        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId()).orElse(saved));
+    }
+
+    @Transactional
+    public IncidentTopicResponse updateTopic(String categoryId, String topicId, UpdateTopicRequest request) {
+        if (!categoryRepository.existsById(categoryId)) {
+            throw new ArmsAuthException("Incident category not found", 404);
+        }
+        IncidentType topic = typeRepository.findById(topicId)
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
+        if (!categoryId.equals(topic.getCategoryId())) {
+            throw new ArmsAuthException("Incident topic not found in category", 404);
+        }
+
+        if (request.name() != null && !request.name().isBlank()) {
+            if (!topic.getName().equalsIgnoreCase(request.name())
+                    && typeRepository.existsByNameIgnoreCase(request.name())) {
+                throw new ArmsAuthException("A topic with this name already exists", 409);
+            }
+            topic.setName(request.name());
+        }
+        if (request.description() != null && !request.description().isBlank()) {
+            topic.setDescription(request.description());
+        }
+        if (request.agentId() != null && !request.agentId().isBlank()) {
+            topic.setAgentId(resolveDepartmentBackedAgent(request.agentId()).getId());
+        }
+        if (request.visibleToGroup() != null) {
+            topic.setVisibleToGroup(request.visibleToGroup());
+        }
+
+        IncidentType saved = typeRepository.save(topic);
+        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(topicId).orElse(saved));
+    }
+
+    @Transactional
+    public void deleteTopic(String categoryId, String topicId) {
+        if (!categoryRepository.existsById(categoryId)) {
+            throw new ArmsAuthException("Incident category not found", 404);
+        }
+        IncidentType topic = typeRepository.findById(topicId)
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
+        if (!categoryId.equals(topic.getCategoryId())) {
+            throw new ArmsAuthException("Incident topic not found in category", 404);
+        }
+        if (incidentRepository.existsByIncidentTypeId(topicId)) {
+            throw new ArmsAuthException("Incident topic is referenced by incidents", 409);
+        }
+        typeRepository.delete(topic);
+    }
+
+    @Transactional
+    public IncidentCategoryResponse deactivateCategory(String id) {
+        IncidentCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+        category.setStatus("inactive");
+        categoryRepository.save(category);
+        return IncidentCategoryResponse.from(category);
+    }
+
+    private Agent resolveTopicAgent(String creatorUserId, String requestedAgentId) {
+        if (requestedAgentId != null && !requestedAgentId.isBlank()) {
+            return resolveDepartmentBackedAgent(requestedAgentId);
+        }
+        Agent creatorAgent = agentRepository.findByUserId(creatorUserId)
+                .orElseThrow(() -> new ArmsAuthException("Authenticated user is not linked to an agent record", 403));
+        return validateDepartmentBackedAgent(creatorAgent);
+    }
+
+    private Agent resolveDepartmentBackedAgent(String agentId) {
+        Agent agent = agentRepository.findById(agentId)
+                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+        return validateDepartmentBackedAgent(agent);
+    }
+
+    private Agent validateDepartmentBackedAgent(Agent agent) {
+        if (agent.getAgentGroupId() == null || agent.getAgentGroupId().isBlank()) {
+            throw new ArmsAuthException("Agent must belong to a department", 400);
+        }
+        return agent;
     }
 }

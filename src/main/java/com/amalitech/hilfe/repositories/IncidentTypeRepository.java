@@ -15,4 +15,22 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
 
     @Query("SELECT it FROM IncidentType it LEFT JOIN FETCH it.category WHERE it.categoryId = :categoryId")
     List<IncidentType> findByCategoryId(@Param("categoryId") String categoryId);
+
+    @Query("""
+            SELECT it FROM IncidentType it
+            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH it.agent a
+            LEFT JOIN FETCH a.user
+            WHERE it.categoryId = :categoryId
+            """)
+    List<IncidentType> findByCategoryIdWithAgent(@Param("categoryId") String categoryId);
+
+    @Query("""
+            SELECT it FROM IncidentType it
+            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH it.agent a
+            LEFT JOIN FETCH a.user
+            WHERE it.id = :id
+            """)
+    java.util.Optional<IncidentType> findByIdWithDetails(@Param("id") String id);
 }
