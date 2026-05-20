@@ -5,10 +5,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.data.core.PropertyReferenceException;
+import org.springframework.data.core.TypeInformation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -77,6 +82,42 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void missingRequiredParam_returns400WithDescriptiveMessage() throws Exception {
+        mvc.perform(get("/requires-query"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Required parameter 'query' is missing"));
+    }
+
+    @Test
+    void illegalArgument_returns400WithMessage() throws Exception {
+        mvc.perform(get("/throw/illegal-arg"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Page index must not be less than zero"));
+    }
+
+    @Test
+    void invalidPageType_returns400WithDescriptiveMessage() throws Exception {
+        mvc.perform(get("/bad-type").param("page", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Invalid value 'abc' for parameter 'page'"));
+    }
+
+    @Test
+    void invalidSortField_returns400WithDescriptiveMessage() throws Exception {
+        mvc.perform(get("/bad-sort"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Invalid sort field: 'badField'"));
+    }
+
+    @Test
     void genericException_returns500() throws Exception {
         mvc.perform(get("/throw/generic"))
                 .andExpect(status().isInternalServerError())
@@ -110,6 +151,22 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/throw/no-resource")
         void throwNoResource() throws NoResourceFoundException {
             throw new NoResourceFoundException(HttpMethod.GET, "/nonexistent/endpoint", null);
+        }
+
+        @GetMapping("/requires-query")
+        void requiresQuery(@RequestParam String query) { /* requires ?query */ }
+
+        @GetMapping("/bad-type")
+        void badType(@RequestParam Integer page) { /* requires ?page as integer */ }
+
+        @GetMapping("/bad-sort")
+        void badSort() {
+            throw new PropertyReferenceException("badField", TypeInformation.of(Object.class), List.of());
+        }
+
+        @GetMapping("/throw/illegal-arg")
+        void throwIllegalArg() {
+            throw new IllegalArgumentException("Page index must not be less than zero");
         }
 
         @GetMapping("/throw/generic")

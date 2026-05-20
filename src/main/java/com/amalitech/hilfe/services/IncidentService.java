@@ -20,7 +20,9 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -100,25 +102,61 @@ public class IncidentService {
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
+        Pageable sortedPageable = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "createdAt"));
         return switch (roleCode) {
             case CLIENT -> incidentRepository
-                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                     .map(IncidentResponse::from);
             case AGENT -> agentRepository.findByUserId(userId)
                     .map(Agent::getId)
                     .map(agentId -> incidentRepository
-                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                             .map(IncidentResponse::from))
-                    .orElse(new PageImpl<>(List.of(), pageable, 0));
+                    .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                     .map(IncidentResponse::from);
         };
     }
 
-    public IncidentResponse getIncident(String incidentId) {
+    public Page<IncidentResponse> searchIncidents(
+            String userId, RoleCode roleCode, String query, Pageable pageable
+    ) {
+        if (query == null || query.isBlank()) {
+            throw new ArmsAuthException("Search query must not be blank", 400);
+        }
+
+        String escaped = query.toLowerCase()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        String queryPattern = "%" + escaped + "%";
+
+        return switch (roleCode) {
+            case CLIENT -> incidentRepository
+                    .searchByUserId(userId, queryPattern, pageable)
+                    .map(IncidentResponse::from);
+            case AGENT -> agentRepository.findByUserId(userId)
+                    .map(Agent::getId)
+                    .map(agentId -> incidentRepository
+                            .searchByAgentScope(userId, agentId, queryPattern, pageable)
+                            .map(IncidentResponse::from))
+                    .orElse(new PageImpl<>(List.of(), pageable, 0));
+            case ADMIN, SUPER_ADMIN -> incidentRepository
+                    .searchAll(queryPattern, pageable)
+                    .map(IncidentResponse::from);
+        };
+    }
+
+    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+
+        enforceAccess(userId, roleCode, incident);
+
         List<Media> mediaList = mediaRepository.findByIncidentId(incidentId);
         List<MediaResponse> mediaResponses = mediaService.toMediaResponses(mediaList);
         return IncidentResponse.from(incident, mediaResponses);
@@ -174,6 +212,22 @@ public class IncidentService {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private void enforceAccess(String userId, RoleCode roleCode, Incident incident) {
+        if (roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) {
+            return;
+        }
+        if (userId.equals(incident.getUserId())) {
+            return;
+        }
+        if (roleCode == RoleCode.AGENT) {
+            boolean isAssigned = agentRepository.findByUserId(userId)
+                    .map(agent -> agent.getId().equals(incident.getAssignedToId()))
+                    .orElse(false);
+            if (isAssigned) return;
+        }
+        throw new ArmsAuthException("You do not have access to this incident", 403);
+    }
 
     private Incident findIncident(String incidentId) {
         return incidentRepository.findByIdWithDetails(incidentId)

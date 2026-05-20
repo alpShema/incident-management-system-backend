@@ -33,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -267,7 +268,7 @@ class IncidentServiceTest {
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.listIncidents(
-                "user-1", RoleCode.CLIENT, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.CLIENT, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result).isNotNull();
         verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class));
@@ -282,7 +283,7 @@ class IncidentServiceTest {
                 .thenReturn(page);
 
         incidentService.listIncidents(
-                "agent-user-1", RoleCode.AGENT, null, null, "type-fire", "cat-facility", null, Pageable.unpaged());
+                "agent-user-1", RoleCode.AGENT, null, null, "type-fire", "cat-facility", null, PageRequest.of(0, 20));
 
         verify(incidentRepository).findByAgentScope(
                 eq("agent-user-1"), eq("agent-row-1"), any(), any(), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
@@ -293,7 +294,7 @@ class IncidentServiceTest {
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.empty());
 
         Page<IncidentResponse> result = incidentService.listIncidents(
-                "agent-user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
+                "agent-user-1", RoleCode.AGENT, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result).isEmpty();
     }
@@ -304,7 +305,7 @@ class IncidentServiceTest {
         when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        incidentService.listIncidents("admin-1", RoleCode.ADMIN, null, null, null, "cat-it", null, Pageable.unpaged());
+        incidentService.listIncidents("admin-1", RoleCode.ADMIN, null, null, null, "cat-it", null, PageRequest.of(0, 20));
 
         verify(incidentRepository).findAllFiltered(any(), any(), any(), eq("cat-it"), any(), any(Pageable.class));
     }
@@ -315,15 +316,112 @@ class IncidentServiceTest {
         when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        incidentService.listIncidents("super-1", RoleCode.SUPER_ADMIN, null, null, null, null, null, Pageable.unpaged());
+        incidentService.listIncidents("super-1", RoleCode.SUPER_ADMIN, null, null, null, null, null, PageRequest.of(0, 20));
 
         verify(incidentRepository).findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class));
+    }
+
+    // ── searchIncidents ───────────────────────────────────────────────────────
+
+    @Test
+    void searchIncidents_clientRole_delegatesToSearchByUserId() {
+        Incident incident = buildIncident();
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire%"), any(Pageable.class))).thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.searchIncidents("user-1", RoleCode.CLIENT, "fire", Pageable.unpaged());
+
+        assertThat(result).hasSize(1);
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire%"), any(Pageable.class));
+    }
+
+    @Test
+    void searchIncidents_agentRole_delegatesToSearchByAgentScope() {
+        Incident incident = buildIncident();
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.searchByAgentScope(eq("agent-user-1"), eq("agent-row-1"), eq("%projector%"), any(Pageable.class)))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.searchIncidents("agent-user-1", RoleCode.AGENT, "projector", Pageable.unpaged());
+
+        assertThat(result).hasSize(1);
+        verify(incidentRepository).searchByAgentScope(eq("agent-user-1"), eq("agent-row-1"), eq("%projector%"), any(Pageable.class));
+    }
+
+    @Test
+    void searchIncidents_adminRole_delegatesToSearchAll() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.searchAll(eq("%network%"), any(Pageable.class))).thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.searchIncidents("admin-1", RoleCode.ADMIN, "network", Pageable.unpaged());
+
+        assertThat(result).isEmpty();
+        verify(incidentRepository).searchAll(eq("%network%"), any(Pageable.class));
+    }
+
+    @Test
+    void searchIncidents_superAdminRole_delegatesToSearchAll() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.searchAll(eq("%access%"), any(Pageable.class))).thenReturn(page);
+
+        incidentService.searchIncidents("super-1", RoleCode.SUPER_ADMIN, "access", Pageable.unpaged());
+
+        verify(incidentRepository).searchAll(eq("%access%"), any(Pageable.class));
+    }
+
+    @Test
+    void searchIncidents_blankQuery_throws400() {
+        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", RoleCode.CLIENT, "  ", Pageable.unpaged()))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Search query must not be blank")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void searchIncidents_nullQuery_throws400() {
+        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", RoleCode.CLIENT, null, Pageable.unpaged()))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Search query must not be blank")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void searchIncidents_agentWithoutAgentRecord_returnsEmptyPage() {
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = incidentService.searchIncidents("agent-user-1", RoleCode.AGENT, "incident", Pageable.unpaged());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void searchIncidents_queryWithPercentSign_escapesWildcard() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire\\%%"), any(Pageable.class))).thenReturn(page);
+
+        incidentService.searchIncidents("user-1", RoleCode.CLIENT, "fire%", Pageable.unpaged());
+
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire\\%%"), any(Pageable.class));
+    }
+
+    @Test
+    void searchIncidents_queryWithUnderscore_escapesWildcard() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire\\_test%"), any(Pageable.class))).thenReturn(page);
+
+        incidentService.searchIncidents("user-1", RoleCode.CLIENT, "fire_test", Pageable.unpaged());
+
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire\\_test%"), any(Pageable.class));
     }
 
     // ── getIncident ───────────────────────────────────────────────────────────
 
     @Test
-    void getIncident_found_returnsResponse() {
+    void getIncident_creator_returnsResponse() {
         Incident incident = buildIncident();
         Media media = Media.builder()
                 .id("media-1")
@@ -341,17 +439,71 @@ class IncidentServiceTest {
         when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of(media));
         when(mediaService.toMediaResponses(List.of(media))).thenReturn(List.of(mediaResponse));
 
-        IncidentResponse response = incidentService.getIncident("inc-1");
+        IncidentResponse response = incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1");
 
         assertThat(response.id()).isEqualTo("inc-1");
         assertThat(response.attachments()).containsExactly(mediaResponse);
     }
 
     @Test
+    void getIncident_admin_canAccessAnyIncident() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("other-admin", RoleCode.ADMIN, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_assignedAgent_canAccess() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-row-1");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_unrelatedUser_throws403() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        assertThatThrownBy(() -> incidentService.getIncident("other-user", RoleCode.CLIENT, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void getIncident_unassignedAgent_throws403() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("different-agent");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+
+        assertThatThrownBy(() -> incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
     void getIncident_notFound_throws404() {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> incidentService.getIncident("missing"))
+        assertThatThrownBy(() -> incidentService.getIncident("user-1", RoleCode.CLIENT, "missing"))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);

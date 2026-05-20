@@ -68,6 +68,7 @@ class IncidentControllerTest {
         return new IncidentResponse(
                 "inc-1", 1, "Test Incident", "Description",
                 null, null, new LookupResponse("sev-low", "Low"), null,
+                new com.amalitech.hilfe.dto.CreatorResponse("user-1", "John Doe", "http://img.png"),
                 null, false, null, null, null);
     }
 
@@ -152,7 +153,7 @@ class IncidentControllerTest {
 
     @Test
     void getIncident_found_returns200() throws Exception {
-        when(incidentService.getIncident("inc-1")).thenReturn(stubResponse());
+        when(incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1")).thenReturn(stubResponse());
 
         var principal = clientPrincipal();
         var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(() -> "incident.read.own"));
@@ -165,7 +166,7 @@ class IncidentControllerTest {
 
     @Test
     void getIncident_notFound_returns404() throws Exception {
-        when(incidentService.getIncident("missing"))
+        when(incidentService.getIncident("user-1", RoleCode.CLIENT, "missing"))
                 .thenThrow(new ArmsAuthException("Incident not found", 404));
 
         var principal = clientPrincipal();
@@ -234,6 +235,62 @@ class IncidentControllerTest {
         mvc.perform(get("/incidents"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Authentication required. Please log in to access this resource."));
+    }
+
+    // ── GET /incidents/search ─────────────────────────────────────────────────
+
+    @Test
+    void searchIncidents_validQuery_returns200() throws Exception {
+        var response = stubResponse();
+        var pagedResponse = new org.springframework.data.domain.PageImpl<>(List.of(response));
+        when(incidentService.searchIncidents(any(), any(), eq("projector"), any())).thenReturn(pagedResponse);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents/search").param("query", "projector").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incidents retrieved successfully"))
+                .andExpect(jsonPath("$.data.items[0].id").value("inc-1"));
+    }
+
+    @Test
+    void searchIncidents_blankQuery_returns400() throws Exception {
+        when(incidentService.searchIncidents(any(), any(), eq(""), any()))
+                .thenThrow(new ArmsAuthException("Search query must not be blank", 400));
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents/search").param("query", "").with(authentication(auth)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Search query must not be blank"));
+    }
+
+    @Test
+    void searchIncidents_missingQueryParam_returns400() throws Exception {
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents/search").with(authentication(auth)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Required parameter 'query' is missing"));
+    }
+
+    @Test
+    void searchIncidents_unauthenticated_returns401() throws Exception {
+        mvc.perform(get("/incidents/search").param("query", "fire"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void searchIncidents_emptyResults_returns200WithEmptyPage() throws Exception {
+        var emptyPage = new org.springframework.data.domain.PageImpl<IncidentResponse>(List.of());
+        when(incidentService.searchIncidents(any(), any(), anyString(), any())).thenReturn(emptyPage);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents/search").param("query", "nonexistent").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
     }
     @Test
     void createIncident_invalidLocationId_returns404() throws Exception {

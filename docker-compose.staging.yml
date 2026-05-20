@@ -24,7 +24,7 @@ services:
     container_name: hilfe-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       DB_URL:      jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}
       DB_USERNAME: ${DB_USER}
