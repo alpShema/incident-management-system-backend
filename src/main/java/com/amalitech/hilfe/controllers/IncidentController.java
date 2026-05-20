@@ -121,7 +121,7 @@ public class IncidentController {
 
     @Operation(
         summary = "Search incidents by keyword",
-        description = "Full-text search across incident title and description. "
+        description = "Full-text search across incident title, description, topic name, and category name. "
                     + "Results are role-scoped identically to GET /incidents: "
                     + "CLIENTs see only their own, AGENTs see assigned/created, ADMINs see all. "
                     + "Supports pagination and sorting via Pageable (e.g. sort=createdAt,desc)."
@@ -134,7 +134,7 @@ public class IncidentController {
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> searchIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
-            @Parameter(description = "Free-text keyword to search in title and description", required = true)
+            @Parameter(description = "Free-text keyword to search in title, description, topic name, and category name", required = true)
             @RequestParam String query,
             Pageable pageable
     ) {
