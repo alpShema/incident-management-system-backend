@@ -159,15 +159,17 @@ public class IncidentController {
 
     @Operation(
         summary = "Update incident status",
-        description = "Changes the incident status following the allowed lifecycle: "
-                    + "Open → Pending → Resolved → Closed. "
+        description = "Changes the incident status following the role-based lifecycle. "
+                    + "Agents: In Progress → Pending/Resolved, Pending → In Progress. "
+                    + "Clients: Resolved → Closed/Reopened. "
+                    + "Admins: any → Closed (override). "
                     + "Invalid transitions are rejected with HTTP 422. Requires `incident.status.change` permission."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident or status not found"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Invalid status transition")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Invalid status transition"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident or status not found")
     })
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_STATUS_CHANGE + "')")
@@ -177,7 +179,7 @@ public class IncidentController {
             @Valid @RequestBody UpdateIncidentStatusRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident status updated successfully",
-                incidentService.updateStatus(principal.userId(), id, request)));
+                incidentService.updateStatus(principal.userId(), principal.roleCode(), id, request)));
     }
 
     @Operation(
