@@ -37,6 +37,8 @@ public final class RbacPermissions {
     public static final String RBAC_PERMISSION_READ = "rbac.permission.read";
     public static final String DASHBOARD_AGENT = "dashboard.agent";
     public static final String DASHBOARD_ADMIN = "dashboard.admin";
+    public static final String SYSTEM_CONFIG_READ = "system.config.read";
+    public static final String SYSTEM_CONFIG_UPDATE = "system.config.update";
 
     public static final List<String> CLIENT_DEFAULTS = List.of(
             INCIDENT_CREATE,
@@ -80,7 +82,9 @@ public final class RbacPermissions {
             RBAC_ROLE_READ,
             RBAC_USER_ROLE_UPDATE,
             RBAC_PERMISSION_READ,
-            DASHBOARD_ADMIN
+            DASHBOARD_ADMIN,
+            SYSTEM_CONFIG_READ,
+            SYSTEM_CONFIG_UPDATE
     );
 
     public static final List<String> SUPER_ADMIN_DEFAULTS = List.of(
@@ -111,7 +115,9 @@ public final class RbacPermissions {
             RBAC_ROLE_UPDATE,
             RBAC_USER_ROLE_UPDATE,
             RBAC_PERMISSION_READ,
-            DASHBOARD_ADMIN
+            DASHBOARD_ADMIN,
+            SYSTEM_CONFIG_READ,
+            SYSTEM_CONFIG_UPDATE
     );
 
     private RbacPermissions() {
