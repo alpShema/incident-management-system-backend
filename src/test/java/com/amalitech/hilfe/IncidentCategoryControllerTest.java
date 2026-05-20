@@ -92,7 +92,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Facility", "Facility incidents", null)))
+                                new IncidentCategoryRequest("Facility", "Facility incidents", "dept-1")))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Incident category created successfully"))
@@ -110,7 +110,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Facility", "Duplicate", null)))
+                                new IncidentCategoryRequest("Facility", "Duplicate", "dept-1")))
                         .with(authentication(auth)))
                 .andExpect(status().isConflict());
     }
@@ -127,7 +127,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(patch("/incident-categories/cat-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Updated", "Updated description", null)))
+                                new IncidentCategoryRequest("Updated", "Updated description", "dept-1")))
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
