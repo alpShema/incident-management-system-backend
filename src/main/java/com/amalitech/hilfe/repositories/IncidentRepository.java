@@ -329,4 +329,12 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
 
     @Query("SELECT COUNT(i) FROM Incident i")
     long countTotal();
+
+    @Query("""
+            SELECT i FROM Incident i
+            WHERE i.statusId = 'status-resolved'
+            AND i.resolvedAt IS NOT NULL
+            AND i.resolvedAt <= :cutoff
+            """)
+    List<Incident> findOverdueResolved(@Param("cutoff") Instant cutoff);
 }
