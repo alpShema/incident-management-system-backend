@@ -1,37 +1,18 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.dto.AssignIncidentRequest;
-import com.amalitech.hilfe.dto.CreateIncidentRequest;
-import com.amalitech.hilfe.dto.IncidentResponse;
-import com.amalitech.hilfe.dto.MediaResponse;
-import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
-import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.models.Incident;
-import com.amalitech.hilfe.models.IncidentType;
-import com.amalitech.hilfe.models.Media;
-import com.amalitech.hilfe.models.RoleCode;
-import com.amalitech.hilfe.models.Severity;
-import com.amalitech.hilfe.models.Status;
+import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor

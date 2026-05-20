@@ -1,11 +1,7 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.IncidentCategoryController;
-import com.amalitech.hilfe.dto.CreateTopicRequest;
-import com.amalitech.hilfe.dto.IncidentCategoryRequest;
-import com.amalitech.hilfe.dto.IncidentCategoryResponse;
-import com.amalitech.hilfe.dto.IncidentTopicResponse;
-import com.amalitech.hilfe.dto.LookupResponse;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
@@ -30,10 +26,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 

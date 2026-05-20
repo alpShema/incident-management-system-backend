@@ -1,10 +1,6 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.dto.CreateTopicRequest;
-import com.amalitech.hilfe.dto.IncidentCategoryRequest;
-import com.amalitech.hilfe.dto.IncidentCategoryResponse;
-import com.amalitech.hilfe.dto.IncidentTopicResponse;
-import com.amalitech.hilfe.dto.UpdateTopicRequest;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.IncidentCategory;

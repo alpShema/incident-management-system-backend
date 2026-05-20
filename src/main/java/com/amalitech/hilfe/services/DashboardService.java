@@ -1,19 +1,15 @@
 package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.IncidentResponse;
-import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
-import com.amalitech.hilfe.dto.dashboard.DashboardStats;
-import com.amalitech.hilfe.dto.dashboard.LabelCount;
-import com.amalitech.hilfe.dto.dashboard.MonthlyCount;
-import com.amalitech.hilfe.dto.dashboard.TrendSeries;
+import com.amalitech.hilfe.dto.dashboard.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
-import org.springframework.data.domain.PageImpl;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 

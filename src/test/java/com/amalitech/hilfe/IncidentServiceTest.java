@@ -1,27 +1,9 @@
 package com.amalitech.hilfe;
 
-import com.amalitech.hilfe.dto.AssignIncidentRequest;
-import com.amalitech.hilfe.dto.AttachmentRef;
-import com.amalitech.hilfe.dto.CreateIncidentRequest;
-import com.amalitech.hilfe.dto.IncidentResponse;
-import com.amalitech.hilfe.dto.MediaResponse;
-import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
-import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.models.Incident;
-import com.amalitech.hilfe.models.IncidentType;
-import com.amalitech.hilfe.models.Media;
-import com.amalitech.hilfe.models.RoleCode;
-import com.amalitech.hilfe.models.Severity;
-import com.amalitech.hilfe.models.Status;
-import com.amalitech.hilfe.repositories.AgentRepository;
-import com.amalitech.hilfe.repositories.IncidentRepository;
-import com.amalitech.hilfe.repositories.IncidentTypeRepository;
-import com.amalitech.hilfe.repositories.LocationRepository;
-import com.amalitech.hilfe.repositories.MediaRepository;
-import com.amalitech.hilfe.repositories.SeverityRepository;
-import com.amalitech.hilfe.repositories.StatusRepository;
+import com.amalitech.hilfe.models.*;
+import com.amalitech.hilfe.repositories.*;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
@@ -43,14 +25,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentCaptor.forClass;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class IncidentServiceTest {
