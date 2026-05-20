@@ -181,7 +181,8 @@ public class IncidentService {
 
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
-        incident.setClosedAt("closed".equalsIgnoreCase(newStatus.getName()) ? Instant.now() : null);
+        incident.setResolvedAt("status-resolved".equals(newStatus.getId()) ? Instant.now() : null);
+        incident.setClosedAt("status-closed".equals(newStatus.getId()) ? Instant.now() : null);
 
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
@@ -274,6 +275,7 @@ public class IncidentService {
         }
 
         incident.setStatusId(inProgressStatus.getId());
+        incident.setResolvedAt(null);
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
     }
