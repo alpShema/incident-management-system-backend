@@ -668,7 +668,26 @@ class IncidentServiceTest {
     }
 
     @Test
-    void updateStatus_wrongRole_throws422() {
+    void updateStatus_nonExistentTransitionPath_throws422() {
+        Status closedStatus = buildStatus("status-closed", "Closed");
+        Status openStatus   = buildStatus("status-open",   "Open");
+
+        Incident incident = buildIncident();
+        incident.setStatus(closedStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-open")).thenReturn(Optional.of(openStatus));
+
+        // closed → open is not a defined path at all
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(422);
+    }
+
+    @Test
+    void updateStatus_wrongRole_validPath_throws403() {
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
 
@@ -678,12 +697,31 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
 
-        // CLIENT is not permitted to move in-progress → resolved (that's AGENT only)
+        // in-progress → resolved is a valid path but only for AGENT, not CLIENT
         assertThatThrownBy(() ->
                 incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved")))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(422);
+                .isEqualTo(403);
+    }
+
+    @Test
+    void updateStatus_nonAgent_attemptsPending_throws403() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        Incident incident = buildIncident();
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-pending")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
     }
 
     @Test

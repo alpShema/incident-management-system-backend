@@ -291,15 +291,20 @@ public class IncidentService {
             return;
         }
 
-        Set<RoleCode> permittedRoles = VALID_TRANSITIONS
-                .getOrDefault(fromId, Map.of())
-                .getOrDefault(toId, Set.of());
+        Map<String, Set<RoleCode>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
 
-        if (!permittedRoles.contains(roleCode)) {
+        if (!toMap.containsKey(toId)) {
             throw new ArmsAuthException(
                     "Invalid status transition from '" + incident.getStatus().getName()
                     + "' to '" + newStatus.getName() + "'",
                     422
+            );
+        }
+
+        if (!toMap.get(toId).contains(roleCode)) {
+            throw new ArmsAuthException(
+                    "You do not have permission to move an incident to '" + newStatus.getName() + "'",
+                    403
             );
         }
     }
