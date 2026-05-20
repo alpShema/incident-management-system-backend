@@ -39,7 +39,7 @@ public class AgentGroup {
 
     @OneToMany(mappedBy = "agentGroup")
     @Builder.Default
-    private List<Agent> agents = new ArrayList<>();
+    private List<AgentGroupMember> members = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "primary_agent_id", insertable = false, updatable = false)

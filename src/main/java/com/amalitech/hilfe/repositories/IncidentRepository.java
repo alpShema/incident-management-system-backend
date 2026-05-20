@@ -146,8 +146,11 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
-            LEFT JOIN i.assignedTo a
-            WHERE a.agentGroupId = :agentGroupId
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -155,10 +158,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """,
             countQuery = """
-            SELECT COUNT(i) FROM Incident i
+            SELECT COUNT(DISTINCT i) FROM Incident i
             LEFT JOIN i.incidentType it
-            LEFT JOIN i.assignedTo a
-            WHERE a.agentGroupId = :agentGroupId
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -166,7 +172,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:locationId IS NULL OR i.locationId = :locationId)
             """)
     Page<Incident> findByDepartmentFiltered(
-            @Param("agentGroupId") String agentGroupId,
+            @Param("agentGroupIds") List<String> agentGroupIds,
             @Param("statusId") String statusId,
             @Param("severityId") String severityId,
             @Param("incidentTypeId") String incidentTypeId,
@@ -188,20 +194,26 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
-            LEFT JOIN i.assignedTo a
-            WHERE a.agentGroupId = :agentGroupId
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """,
             countQuery = """
-            SELECT COUNT(i) FROM Incident i
-            LEFT JOIN i.assignedTo a
-            WHERE a.agentGroupId = :agentGroupId
+            SELECT COUNT(DISTINCT i) FROM Incident i
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
             """)
     Page<Incident> searchByDepartment(
-            @Param("agentGroupId") String agentGroupId,
+            @Param("agentGroupIds") List<String> agentGroupIds,
             @Param("queryPattern") String queryPattern,
             Pageable pageable
     );
@@ -311,8 +323,15 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Query("SELECT COUNT(i) FROM Incident i WHERE i.assignedToId = :agentId")
     long countByAssignedToId(@Param("agentId") String agentId);
 
-    @Query("SELECT COUNT(i) FROM Incident i WHERE i.assignedTo.agentGroupId = :agentGroupId")
-    long countByDepartment(@Param("agentGroupId") String agentGroupId);
+    @Query("""
+            SELECT COUNT(DISTINCT i) FROM Incident i
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
+            """)
+    long countByDepartment(@Param("agentGroupIds") List<String> agentGroupIds);
 
     @Query("""
             SELECT i.status.name, COUNT(i) FROM Incident i
@@ -323,10 +342,14 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
 
     @Query("""
             SELECT i.status.name, COUNT(i) FROM Incident i
-            WHERE i.assignedTo.agentGroupId = :agentGroupId
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
             GROUP BY i.status.name
             """)
-    List<Object[]> countByStatusForDepartment(@Param("agentGroupId") String agentGroupId);
+    List<Object[]> countByStatusForDepartment(@Param("agentGroupIds") List<String> agentGroupIds);
 
     @Query("""
             SELECT i.status.name, COUNT(i) FROM Incident i
@@ -338,11 +361,15 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
 
     @Query("""
             SELECT i.status.name, COUNT(i) FROM Incident i
-            WHERE i.assignedTo.agentGroupId = :agentGroupId
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
             AND i.createdAt >= :since
             GROUP BY i.status.name
             """)
-    List<Object[]> countByStatusForDepartmentSince(@Param("agentGroupId") String agentGroupId, @Param("since") Instant since);
+    List<Object[]> countByStatusForDepartmentSince(@Param("agentGroupIds") List<String> agentGroupIds, @Param("since") Instant since);
 
     @Query(value = """
             SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') AS month,
@@ -373,13 +400,16 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                    DATE_TRUNC('month', i.created_at) AS month_start,
                    COUNT(*) AS count
             FROM "Incident" i
-            JOIN "Agent" a ON a.id = i.assigned_to_id
-            WHERE a.agent_group_id = :agentGroupId
+            WHERE EXISTS (
+                SELECT 1 FROM "AgentGroupMember" m
+                WHERE m.agent_id = i.assigned_to_id
+                AND m.agent_group_id IN (:agentGroupIds)
+            )
             AND i.created_at >= :since
             GROUP BY DATE_TRUNC('month', i.created_at)
             ORDER BY DATE_TRUNC('month', i.created_at)
             """, nativeQuery = true)
-    List<Object[]> countByMonthForDepartment(@Param("agentGroupId") String agentGroupId, @Param("since") Instant since);
+    List<Object[]> countByMonthForDepartment(@Param("agentGroupIds") List<String> agentGroupIds, @Param("since") Instant since);
 
     @Query("""
             SELECT COUNT(i) FROM Incident i

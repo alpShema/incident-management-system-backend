@@ -3,8 +3,8 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +24,15 @@ public class DashboardService {
 
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
+    private final AgentGroupMemberRepository agentGroupMemberRepository;
 
     public DashboardStats getStats(String userId, RoleCode role) {
         if (role == RoleCode.AGENT) {
-            return findAgentGroupId(userId)
-                    .map(agentGroupId -> {
-                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForDepartment(agentGroupId));
-                        long total = incidentRepository.countByDepartment(agentGroupId);
+            return findAgentGroupIds(userId)
+                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
+                    .map(agentGroupIds -> {
+                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForDepartment(agentGroupIds));
+                        long total = incidentRepository.countByDepartment(agentGroupIds);
                         return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
                     })
                     .orElse(new DashboardStats(0, 0, 0, 0, 0));
@@ -63,16 +65,16 @@ public class DashboardService {
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
             }
             case AGENT -> {
-                var agentGroupIdOpt = findAgentGroupId(userId);
-                byStatus = agentGroupIdOpt.map(agentGroupId -> toLabel(since != null
-                        ? incidentRepository.countByStatusForDepartmentSince(agentGroupId, since)
-                        : incidentRepository.countByStatusForDepartment(agentGroupId)))
+                var agentGroupIdsOpt = findAgentGroupIds(userId).filter(agentGroupIds -> !agentGroupIds.isEmpty());
+                byStatus = agentGroupIdsOpt.map(agentGroupIds -> toLabel(since != null
+                        ? incidentRepository.countByStatusForDepartmentSince(agentGroupIds, since)
+                        : incidentRepository.countByStatusForDepartment(agentGroupIds)))
                         .orElse(List.of());
 
                 List<MonthlyCount> myTrend = toMonthlyCount(
                         incidentRepository.countByMonthForUser(userId, trendSince));
-                List<MonthlyCount> agentGroupTrend = agentGroupIdOpt
-                        .map(agentGroupId -> toMonthlyCount(incidentRepository.countByMonthForDepartment(agentGroupId, trendSince)))
+                List<MonthlyCount> agentGroupTrend = agentGroupIdsOpt
+                        .map(agentGroupIds -> toMonthlyCount(incidentRepository.countByMonthForDepartment(agentGroupIds, trendSince)))
                         .orElse(List.of());
                 trends = List.of(
                         new TrendSeries("My Incidents", myTrend),
@@ -94,9 +96,10 @@ public class DashboardService {
             case ADMIN, SUPER_ADMIN -> incidentRepository
                     .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupId(userId)
-                    .map(agentGroupId -> incidentRepository
-                            .findByDepartmentFiltered(agentGroupId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+            case AGENT -> findAgentGroupIds(userId)
+                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
+                    .map(agentGroupIds -> incidentRepository
+                            .findByDepartmentFiltered(agentGroupIds, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -115,14 +118,9 @@ public class DashboardService {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Optional<String> findAgentId(String userId) {
-        return agentRepository.findByUserId(userId).map(Agent::getId);
-    }
-
-    private Optional<String> findAgentGroupId(String userId) {
+    private Optional<List<String>> findAgentGroupIds(String userId) {
         return agentRepository.findByUserId(userId)
-                .map(Agent::getAgentGroupId)
-                .filter(agentGroupId -> agentGroupId != null && !agentGroupId.isBlank());
+                .map(agent -> agentGroupMemberRepository.findAgentGroupIdsByAgentId(agent.getId()));
     }
 
     private Instant resolvePeriod(String period) {

@@ -112,8 +112,10 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(saved);
         when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(saved));
 
+        when(departmentRepository.existsById("dept-1")).thenReturn(true);
+
         IncidentCategoryResponse response = categoryService.createCategory(
-                new IncidentCategoryRequest("Facility", "Description", null));
+                new IncidentCategoryRequest("Facility", "Description", "dept-1"));
 
         assertThat(response.id()).isEqualTo("cat-1");
         assertThat(response.name()).isEqualTo("Facility");
@@ -125,7 +127,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.existsByNameIgnoreCase("Facility")).thenReturn(true);
 
         assertThatThrownBy(() -> categoryService.createCategory(
-                new IncidentCategoryRequest("Facility", "Description", null)))
+                new IncidentCategoryRequest("Facility", "Description", "dept-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -138,11 +140,12 @@ class IncidentCategoryServiceTest {
     void updateCategory_found_updatesAndReturns() {
         IncidentCategory cat = buildCategory();
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(departmentRepository.existsById("dept-1")).thenReturn(true);
         when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
         when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
 
         IncidentCategoryResponse response = categoryService.updateCategory(
-                "cat-1", new IncidentCategoryRequest("Updated", "New description", null));
+                "cat-1", new IncidentCategoryRequest("Updated", "New description", "dept-1"));
 
         assertThat(response).isNotNull();
         verify(categoryRepository).save(any(IncidentCategory.class));
@@ -153,7 +156,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.updateCategory(
-                "missing", new IncidentCategoryRequest("Updated", "Desc", null)))
+                "missing", new IncidentCategoryRequest("Updated", "Desc", "dept-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())

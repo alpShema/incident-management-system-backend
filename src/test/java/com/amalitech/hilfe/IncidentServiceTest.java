@@ -35,6 +35,7 @@ class IncidentServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock IncidentTypeRepository incidentTypeRepository;
     @Mock LocationRepository locationRepository;
+    @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock AgentRepository agentRepository;
     @Mock StatusRepository statusRepository;
     @Mock SeverityRepository severityRepository;
@@ -292,15 +293,16 @@ class IncidentServiceTest {
     void searchIncidents_agentRole_delegatesToSearchByDepartment() {
         Incident incident = buildIncident();
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").agentGroupId("dept-1").build();
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.searchByDepartment(eq("dept-1"), eq("%projector%"), any(Pageable.class)))
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("dept-1"));
+        when(incidentRepository.searchByDepartment(eq(List.of("dept-1")), eq("%projector%"), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.searchIncidents("agent-user-1", RoleCode.AGENT, "projector", Pageable.unpaged());
 
         assertThat(result).hasSize(1);
-        verify(incidentRepository).searchByDepartment(eq("dept-1"), eq("%projector%"), any(Pageable.class));
+        verify(incidentRepository).searchByDepartment(eq(List.of("dept-1")), eq("%projector%"), any(Pageable.class));
     }
 
     @Test
@@ -414,11 +416,11 @@ class IncidentServiceTest {
     void getIncident_assignedAgent_canAccess() {
         Incident incident = buildIncident();
         incident.setAssignedToId("agent-row-1");
-        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").agentGroupId("dept-1").build();
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(agentRepository.findAgentGroupIdByAgentId("agent-row-1")).thenReturn(Optional.of("dept-1"));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("dept-1"));
         when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
         when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
 

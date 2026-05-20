@@ -169,7 +169,7 @@ public class IncidentCategoryService {
     }
 
     private void validateDepartment(String departmentId) {
-        if (departmentId != null && !departmentId.isBlank() && !departmentRepository.existsById(departmentId)) {
+        if (!departmentRepository.existsById(departmentId)) {
             throw new ArmsAuthException("Department not found", 404);
         }
     }

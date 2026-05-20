@@ -7,6 +7,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.services.DashboardService;
@@ -34,10 +35,11 @@ class DashboardServiceTest {
 
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
+    @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @InjectMocks DashboardService dashboardService;
 
     private Agent buildAgent(String agentId) {
-        return Agent.builder().id(agentId).userId("user-1").agentGroupId("dept-1").build();
+        return Agent.builder().id(agentId).userId("user-1").build();
     }
 
     // ── getStats ──────────────────────────────────────────────────────────────
@@ -77,12 +79,13 @@ class DashboardServiceTest {
     void getStats_agentRole_agentFound_returnsAgentStats() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.countByStatusForDepartment("dept-1")).thenReturn(List.of(
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
+        when(incidentRepository.countByStatusForDepartment(List.of("dept-1"))).thenReturn(List.of(
                 new Object[]{"Open", 4L},
                 new Object[]{"Closed", 2L},
                 new Object[]{"Resolved", 1L}
         ));
-        when(incidentRepository.countByDepartment("dept-1")).thenReturn(7L);
+        when(incidentRepository.countByDepartment(List.of("dept-1"))).thenReturn(7L);
 
         DashboardStats stats = dashboardService.getStats("user-1", RoleCode.AGENT);
 
@@ -131,9 +134,10 @@ class DashboardServiceTest {
     void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.countByStatusForDepartment("dept-1")).thenReturn(List.of());
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
+        when(incidentRepository.countByStatusForDepartment(List.of("dept-1"))).thenReturn(List.of());
         when(incidentRepository.countByMonthForUser(anyString(), any(Instant.class))).thenReturn(List.of());
-        when(incidentRepository.countByMonthForDepartment(anyString(), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByMonthForDepartment(eq(List.of("dept-1")), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
@@ -182,14 +186,15 @@ class DashboardServiceTest {
         Agent agent = buildAgent("agent-1");
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByDepartmentFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
+        when(incidentRepository.findByDepartmentFiltered(anyList(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 "user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByDepartmentFiltered(eq("dept-1"), any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByDepartmentFiltered(eq(List.of("dept-1")), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test

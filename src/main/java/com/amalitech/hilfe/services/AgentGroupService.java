@@ -7,6 +7,8 @@ import com.amalitech.hilfe.dto.LookupResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
+import com.amalitech.hilfe.models.AgentGroupMember;
+import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import jakarta.transaction.Transactional;
@@ -23,6 +25,7 @@ import java.util.UUID;
 public class AgentGroupService {
     private final AgentGroupRepository agentGroupRepository;
     private final AgentRepository agentRepository;
+    private final AgentGroupMemberRepository agentGroupMemberRepository;
 
     public Page<AgentGroupResponse> listAgentGroups(Pageable pageable) {
         return agentGroupRepository.findByStatus(true, pageable)
@@ -54,8 +57,7 @@ public class AgentGroupService {
                 .build();
         AgentGroup saved = agentGroupRepository.save(group);
         if (primaryAgent != null) {
-            primaryAgent.setAgentGroupId(saved.getId());
-            agentRepository.save(primaryAgent);
+            addMembership(primaryAgent.getId(), saved.getId());
         }
         return toResponse(saved);
     }
@@ -72,7 +74,7 @@ public class AgentGroupService {
         group.setDescription(request.description());
         if (request.primaryAgentId() != null && !request.primaryAgentId().isBlank()) {
             Agent primaryAgent = findAgent(request.primaryAgentId());
-            if (!id.equals(primaryAgent.getAgentGroupId())) {
+            if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(primaryAgent.getId(), id)) {
                 throw new ArmsAuthException("Primary agent must be a member of this agent group", 400);
             }
             group.setPrimaryAgentId(primaryAgent.getId());
@@ -85,7 +87,7 @@ public class AgentGroupService {
     @Transactional
     public void deleteAgentGroup(String id) {
         AgentGroup group = findAgentGroup(id);
-        if (agentRepository.countByAgentGroupId(id) > 0) {
+        if (agentGroupMemberRepository.countByAgentGroupId(id) > 0) {
             throw new ArmsAuthException("Agent group has assigned agents", 409);
         }
         group.setStatus(false);
@@ -94,7 +96,7 @@ public class AgentGroupService {
 
     public List<AgentGroupMemberResponse> listMembers(String agentGroupId) {
         ensureAgentGroupExists(agentGroupId);
-        return agentRepository.findByAgentGroupIdWithUser(agentGroupId).stream()
+        return agentGroupMemberRepository.findAgentsByAgentGroupIdWithUser(agentGroupId).stream()
                 .map(AgentGroupMemberResponse::from)
                 .toList();
     }
@@ -102,24 +104,24 @@ public class AgentGroupService {
     @Transactional
     public AgentGroupMemberResponse addMember(String agentGroupId, String agentId) {
         ensureAgentGroupExists(agentGroupId);
-        Agent agent = findAgent(agentId);
-        agent.setAgentGroupId(agentGroupId);
-        return AgentGroupMemberResponse.from(agentRepository.save(agent));
+        Agent agent = findAgentWithUser(agentId);
+        addMembership(agentId, agentGroupId);
+        return AgentGroupMemberResponse.from(agent);
     }
 
     @Transactional
     public AgentGroupMemberResponse removeMember(String agentGroupId, String agentId) {
         AgentGroup group = findAgentGroup(agentGroupId);
-        Agent agent = findAgent(agentId);
-        if (!agentGroupId.equals(agent.getAgentGroupId())) {
+        Agent agent = findAgentWithUser(agentId);
+        if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(agentId, agentGroupId)) {
             throw new ArmsAuthException("Agent is not a member of this agent group", 400);
         }
         if (agentId.equals(group.getPrimaryAgentId())) {
             group.setPrimaryAgentId(null);
             agentGroupRepository.save(group);
         }
-        agent.setAgentGroupId(null);
-        return AgentGroupMemberResponse.from(agentRepository.save(agent));
+        agentGroupMemberRepository.deleteByAgentIdAndAgentGroupId(agentId, agentGroupId);
+        return AgentGroupMemberResponse.from(agent);
     }
 
     private AgentGroupResponse toResponse(AgentGroup group) {
@@ -131,7 +133,7 @@ public class AgentGroupService {
                             agent.getUser() != null ? agent.getUser().getFullName() : agent.getUserId()))
                     .orElse(null);
         }
-        return AgentGroupResponse.from(group, primaryAgent, agentRepository.countByAgentGroupId(group.getId()));
+        return AgentGroupResponse.from(group, primaryAgent, agentGroupMemberRepository.countByAgentGroupId(group.getId()));
     }
 
     private AgentGroup findAgentGroup(String id) {
@@ -147,5 +149,20 @@ public class AgentGroupService {
     private Agent findAgent(String agentId) {
         return agentRepository.findById(agentId)
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+    }
+
+    private Agent findAgentWithUser(String agentId) {
+        return agentRepository.findByIdWithUser(agentId)
+                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+    }
+
+    private void addMembership(String agentId, String agentGroupId) {
+        if (agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(agentId, agentGroupId)) {
+            return;
+        }
+        agentGroupMemberRepository.save(AgentGroupMember.builder()
+                .agentId(agentId)
+                .agentGroupId(agentGroupId)
+                .build());
     }
 }

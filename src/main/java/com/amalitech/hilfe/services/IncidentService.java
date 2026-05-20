@@ -30,6 +30,7 @@ public class IncidentService {
     private final IncidentRepository incidentRepository;
     private final IncidentTypeRepository incidentTypeRepository;
     private final AgentGroupRepository agentGroupRepository;
+    private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
@@ -95,9 +96,10 @@ public class IncidentService {
             case CLIENT -> incidentRepository
                     .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                     .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupId(userId)
-                    .map(agentGroupId -> incidentRepository
-                            .findByDepartmentFiltered(agentGroupId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
+            case AGENT -> findAgentGroupIds(userId)
+                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
+                    .map(agentGroupIds -> incidentRepository
+                            .findByDepartmentFiltered(agentGroupIds, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
@@ -123,11 +125,10 @@ public class IncidentService {
             case CLIENT -> incidentRepository
                     .searchByUserId(userId, queryPattern, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> agentRepository.findByUserId(userId)
-                    .map(Agent::getAgentGroupId)
-                    .filter(agentGroupId -> agentGroupId != null && !agentGroupId.isBlank())
-                    .map(agentGroupId -> incidentRepository
-                            .searchByDepartment(agentGroupId, queryPattern, pageable)
+            case AGENT -> findAgentGroupIds(userId)
+                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
+                    .map(agentGroupIds -> incidentRepository
+                            .searchByDepartment(agentGroupIds, queryPattern, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
@@ -236,20 +237,21 @@ public class IncidentService {
         incident.setStatusId("status-open");
     }
 
-    private Optional<String> findAgentGroupId(String userId) {
+    private Optional<List<String>> findAgentGroupIds(String userId) {
         return agentRepository.findByUserId(userId)
-                .map(Agent::getAgentGroupId)
-                .filter(agentGroupId -> agentGroupId != null && !agentGroupId.isBlank());
+                .map(agent -> agentGroupMemberRepository.findAgentGroupIdsByAgentId(agent.getId()));
     }
 
     private boolean isSameDepartmentAsAssignedAgent(String userId, Incident incident) {
         if (incident.getAssignedToId() == null) {
             return false;
         }
-        Optional<String> actorDepartment = findAgentGroupId(userId);
-        Optional<String> assignedDepartment = agentRepository.findAgentGroupIdByAgentId(incident.getAssignedToId())
-                .filter(agentGroupId -> agentGroupId != null && !agentGroupId.isBlank());
-        return actorDepartment.isPresent() && actorDepartment.equals(assignedDepartment);
+        List<String> actorDepartments = findAgentGroupIds(userId).orElse(List.of());
+        if (actorDepartments.isEmpty()) {
+            return false;
+        }
+        List<String> assignedDepartments = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
+        return assignedDepartments.stream().anyMatch(actorDepartments::contains);
     }
 
     private Incident findIncident(String incidentId) {
