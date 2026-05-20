@@ -29,6 +29,7 @@ public class IncidentService {
 
     private final IncidentRepository incidentRepository;
     private final IncidentTypeRepository incidentTypeRepository;
+    private final AgentGroupRepository agentGroupRepository;
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
@@ -211,6 +212,20 @@ public class IncidentService {
     }
 
     private void applyTopicAssignment(Incident incident, IncidentType incidentType) {
+        if (incidentType != null
+                && incidentType.getAgentGroupId() != null
+                && !incidentType.getAgentGroupId().isBlank()) {
+            AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
+                    .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
+            if (agentGroup.getPrimaryAgentId() == null || agentGroup.getPrimaryAgentId().isBlank()) {
+                throw new ArmsAuthException("Topic agent group has no primary agent", 400);
+            }
+            incident.setAssignedToId(agentGroup.getPrimaryAgentId());
+            incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
+                    .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                    .getId());
+            return;
+        }
         if (incidentType != null && incidentType.getAgentId() != null && !incidentType.getAgentId().isBlank()) {
             incident.setAssignedToId(incidentType.getAgentId());
             incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")

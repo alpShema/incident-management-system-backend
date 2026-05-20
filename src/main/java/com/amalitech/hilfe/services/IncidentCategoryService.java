@@ -2,13 +2,15 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
-import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.AgentGroupRepository;
+import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,11 +23,13 @@ import java.util.UUID;
 public class IncidentCategoryService {
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
-    private final AgentRepository agentRepository;
+    private final AgentGroupRepository agentGroupRepository;
+    private final DepartmentRepository departmentRepository;
     private final IncidentRepository incidentRepository;
+    private final EntityManager entityManager;
 
     public List<IncidentCategoryResponse> listCategories() {
-        return categoryRepository.findByStatus("active").stream()
+        return categoryRepository.findByStatusWithDepartment("active").stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
     }
@@ -35,21 +39,31 @@ public class IncidentCategoryService {
         if (categoryRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("Incident category with this name already exists", 409);
         }
+        validateDepartment(request.departmentId());
         IncidentCategory category = IncidentCategory.builder()
                 .id(UUID.randomUUID().toString())
                 .name(request.name())
                 .description(request.description())
+                .departmentId(request.departmentId())
                 .build();
-        return IncidentCategoryResponse.from(categoryRepository.save(category));
+        IncidentCategory saved = categoryRepository.save(category);
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentCategoryResponse.from(categoryRepository.findByIdWithDepartment(saved.getId()).orElse(saved));
     }
 
     @Transactional
     public IncidentCategoryResponse updateCategory(String id, IncidentCategoryRequest request) {
         IncidentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+        validateDepartment(request.departmentId());
         category.setName(request.name());
         category.setDescription(request.description());
-        return IncidentCategoryResponse.from(categoryRepository.save(category));
+        category.setDepartmentId(request.departmentId());
+        IncidentCategory saved = categoryRepository.save(category);
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentCategoryResponse.from(categoryRepository.findByIdWithDepartment(saved.getId()).orElse(saved));
     }
 
     @Transactional
@@ -74,18 +88,22 @@ public class IncidentCategoryService {
         if (typeRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("A topic with this name already exists", 409);
         }
-        Agent assignedAgent = resolveTopicAgent(creatorUserId, request.agentId());
+        AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId());
         IncidentType topic = IncidentType.builder()
                 .id(UUID.randomUUID().toString())
                 .name(request.name())
                 .description(request.description())
                 .categoryId(categoryId)
                 .adminId(creatorUserId)
-                .agentId(assignedAgent.getId())
+                .agentGroupId(assignedGroup.getId())
+                .agentId(assignedGroup.getPrimaryAgentId())
                 .visibleToGroup(request.visibleToGroup())
                 .build();
         IncidentType saved = typeRepository.save(topic);
-        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId()).orElse(saved));
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found after creation", 500)));
     }
 
     @Transactional
@@ -109,15 +127,20 @@ public class IncidentCategoryService {
         if (request.description() != null && !request.description().isBlank()) {
             topic.setDescription(request.description());
         }
-        if (request.agentId() != null && !request.agentId().isBlank()) {
-            topic.setAgentId(resolveDepartmentBackedAgent(request.agentId()).getId());
+        if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
+            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId());
+            topic.setAgentGroupId(assignedGroup.getId());
+            topic.setAgentId(assignedGroup.getPrimaryAgentId());
         }
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
         }
 
         IncidentType saved = typeRepository.save(topic);
-        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(topicId).orElse(saved));
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found after update", 500)));
     }
 
     @Transactional
@@ -145,25 +168,19 @@ public class IncidentCategoryService {
         return IncidentCategoryResponse.from(category);
     }
 
-    private Agent resolveTopicAgent(String creatorUserId, String requestedAgentId) {
-        if (requestedAgentId != null && !requestedAgentId.isBlank()) {
-            return resolveDepartmentBackedAgent(requestedAgentId);
+    private void validateDepartment(String departmentId) {
+        if (departmentId != null && !departmentId.isBlank() && !departmentRepository.existsById(departmentId)) {
+            throw new ArmsAuthException("Department not found", 404);
         }
-        Agent creatorAgent = agentRepository.findByUserId(creatorUserId)
-                .orElseThrow(() -> new ArmsAuthException("Authenticated user is not linked to an agent record", 403));
-        return validateDepartmentBackedAgent(creatorAgent);
     }
 
-    private Agent resolveDepartmentBackedAgent(String agentId) {
-        Agent agent = agentRepository.findById(agentId)
-                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
-        return validateDepartmentBackedAgent(agent);
-    }
-
-    private Agent validateDepartmentBackedAgent(Agent agent) {
-        if (agent.getAgentGroupId() == null || agent.getAgentGroupId().isBlank()) {
-            throw new ArmsAuthException("Agent must belong to a department", 400);
+    private AgentGroup resolveAssignableAgentGroup(String agentGroupId) {
+        AgentGroup agentGroup = agentGroupRepository.findById(agentGroupId)
+                .filter(group -> Boolean.TRUE.equals(group.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Agent group not found", 404));
+        if (agentGroup.getPrimaryAgentId() == null || agentGroup.getPrimaryAgentId().isBlank()) {
+            throw new ArmsAuthException("Agent group must have a primary agent", 400);
         }
-        return agent;
+        return agentGroup;
     }
 }
