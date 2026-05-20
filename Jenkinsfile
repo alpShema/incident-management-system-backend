@@ -231,7 +231,7 @@ pipeline {
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging.conf      "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend.conf"
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging-init.conf "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend-init.conf"
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                "CERT=/etc/letsencrypt/live/hilfe-pro-service-stage.amalitech-dev.net/fullchain.pem && \
+                                "CERT=/etc/letsencrypt/renewal/hilfe-pro-service-stage.amalitech-dev.net.conf && \
                                  if [ -f \\\$CERT ]; then \
                                    echo 'Certs exist — deploying SSL config'; \
                                    sudo cp /tmp/nginx-host-backend.conf /etc/nginx/sites-available/hilfe-backend; \
