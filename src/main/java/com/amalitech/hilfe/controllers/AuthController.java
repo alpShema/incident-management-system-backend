@@ -1,10 +1,6 @@
 package com.amalitech.hilfe.controllers;
 
-import com.amalitech.hilfe.dto.ApiResponse;
-import com.amalitech.hilfe.dto.LoginRequest;
-import com.amalitech.hilfe.dto.AuthResult;
-import com.amalitech.hilfe.dto.AuthSessionResponse;
-import com.amalitech.hilfe.dto.UserPermissionsResponse;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.utils.CookieUtils;
@@ -19,11 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Authentication", description = "ARMS SSO login, token refresh, logout, and permission retrieval")
 @RestController

@@ -9,5 +9,9 @@ public record IncidentCategoryRequest(
         @NotBlank String name,
 
         @Schema(description = "Optional longer description of the category", example = "Issues related to building and room facilities", nullable = true)
-        String description
+        String description,
+
+        @Schema(description = "Internal department ID this category belongs to", example = "dept-facilities")
+        @NotBlank(message = "departmentId is required")
+        String departmentId
 ) {}
