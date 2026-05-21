@@ -13,7 +13,7 @@ public class AutoCloseScheduler {
 
     private final AutoCloseService autoCloseService;
 
-    @Scheduled(cron = "${auto-close.cron:0 0 * * * *}")
+    @Scheduled(cron = "${auto-close.cron:0 * * * * *}")
     public void runAutoClose() {
         log.debug("Auto-close scheduler triggered");
         autoCloseService.autoCloseResolvedIncidents();
