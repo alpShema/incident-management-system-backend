@@ -1,35 +1,18 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.dto.AssignIncidentRequest;
-import com.amalitech.hilfe.dto.CreateIncidentRequest;
-import com.amalitech.hilfe.dto.IncidentResponse;
-import com.amalitech.hilfe.dto.MediaResponse;
-import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
-import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.models.Incident;
-import com.amalitech.hilfe.models.Media;
-import com.amalitech.hilfe.models.RoleCode;
-import com.amalitech.hilfe.models.Severity;
-import com.amalitech.hilfe.models.Status;
+import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +37,8 @@ public class IncidentService {
 
     private final IncidentRepository incidentRepository;
     private final IncidentTypeRepository incidentTypeRepository;
+    private final AgentGroupRepository agentGroupRepository;
+    private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
@@ -69,7 +54,8 @@ public class IncidentService {
     @Transactional
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
         List<String> notFound = new java.util.ArrayList<>();
-        if (!incidentTypeRepository.existsById(request.incidentTypeId())) {
+        IncidentType incidentType = incidentTypeRepository.findById(request.incidentTypeId()).orElse(null);
+        if (incidentType == null) {
             notFound.add("Incident type with the provided ID could not be found.");
         }
         if (!locationRepository.existsById(request.locationId())) {
@@ -87,8 +73,8 @@ public class IncidentService {
                 .locationId(request.locationId())
                 .incidentTypeId(request.incidentTypeId())
                 .severityId(resolvePriorityId(request.severityId()))
-                .statusId("status-open")
                 .build();
+        applyTopicAssignment(incident, incidentType);
 
         Incident saved = incidentRepository.save(incident);
         entityManager.flush();
@@ -119,10 +105,10 @@ public class IncidentService {
             case CLIENT -> incidentRepository
                     .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                     .map(IncidentResponse::from);
-            case AGENT -> agentRepository.findByUserId(userId)
-                    .map(Agent::getId)
-                    .map(agentId -> incidentRepository
-                            .findByAgentScope(userId, agentId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
+            case AGENT -> findAgentGroupIds(userId)
+                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
+                    .map(agentGroupIds -> incidentRepository
+                            .findByDepartmentFiltered(agentGroupIds, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
@@ -148,10 +134,10 @@ public class IncidentService {
             case CLIENT -> incidentRepository
                     .searchByUserId(userId, queryPattern, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> agentRepository.findByUserId(userId)
-                    .map(Agent::getId)
-                    .map(agentId -> incidentRepository
-                            .searchByAgentScope(userId, agentId, queryPattern, pageable)
+            case AGENT -> findAgentGroupIds(userId)
+                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
+                    .map(agentGroupIds -> incidentRepository
+                            .searchByDepartment(agentGroupIds, queryPattern, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             case ADMIN, SUPER_ADMIN -> incidentRepository
@@ -236,13 +222,52 @@ public class IncidentService {
         if (userId.equals(incident.getUserId())) {
             return;
         }
-        if (roleCode == RoleCode.AGENT) {
-            boolean isAssigned = agentRepository.findByUserId(userId)
-                    .map(agent -> agent.getId().equals(incident.getAssignedToId()))
-                    .orElse(false);
-            if (isAssigned) return;
+        if (roleCode == RoleCode.AGENT && isSameDepartmentAsAssignedAgent(userId, incident)) {
+            return;
         }
         throw new ArmsAuthException("You do not have access to this incident", 403);
+    }
+
+    private void applyTopicAssignment(Incident incident, IncidentType incidentType) {
+        if (incidentType != null
+                && incidentType.getAgentGroupId() != null
+                && !incidentType.getAgentGroupId().isBlank()) {
+            AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
+                    .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
+            if (agentGroup.getPrimaryAgentId() == null || agentGroup.getPrimaryAgentId().isBlank()) {
+                throw new ArmsAuthException("Topic agent group has no primary agent", 400);
+            }
+            incident.setAssignedToId(agentGroup.getPrimaryAgentId());
+            incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
+                    .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                    .getId());
+            return;
+        }
+        if (incidentType != null && incidentType.getAgentId() != null && !incidentType.getAgentId().isBlank()) {
+            incident.setAssignedToId(incidentType.getAgentId());
+            incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
+                    .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                    .getId());
+            return;
+        }
+        incident.setStatusId("status-open");
+    }
+
+    private Optional<List<String>> findAgentGroupIds(String userId) {
+        return agentRepository.findByUserId(userId)
+                .map(agent -> agentGroupMemberRepository.findAgentGroupIdsByAgentId(agent.getId()));
+    }
+
+    private boolean isSameDepartmentAsAssignedAgent(String userId, Incident incident) {
+        if (incident.getAssignedToId() == null) {
+            return false;
+        }
+        List<String> actorDepartments = findAgentGroupIds(userId).orElse(List.of());
+        if (actorDepartments.isEmpty()) {
+            return false;
+        }
+        List<String> assignedDepartments = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
+        return assignedDepartments.stream().anyMatch(actorDepartments::contains);
     }
 
     private Incident findIncident(String incidentId) {

@@ -4,8 +4,8 @@ import com.amalitech.hilfe.controllers.UserController;
 import com.amalitech.hilfe.dto.UpdateUserRoleRequest;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
-import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
 import com.amalitech.hilfe.services.TokenService;
 import com.amalitech.hilfe.services.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,9 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;

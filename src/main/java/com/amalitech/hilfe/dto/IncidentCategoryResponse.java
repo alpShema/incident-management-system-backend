@@ -7,9 +7,19 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record IncidentCategoryResponse(
         @Schema(description = "Stable category ID", example = "cat-facilities") String id,
         @Schema(description = "Category display name", example = "Facilities") String name,
-        @Schema(description = "Optional description of the category", nullable = true) String description
+        @Schema(description = "Optional description of the category", nullable = true) String description,
+        @Schema(description = "Internal department this category belongs to", nullable = true) LookupResponse department,
+        @Schema(description = "Category status", example = "active") String status
 ) {
     public static IncidentCategoryResponse from(IncidentCategory category) {
-        return new IncidentCategoryResponse(category.getId(), category.getName(), category.getDescription());
+        LookupResponse department = category.getDepartment() != null
+                ? LookupResponse.from(category.getDepartment().getId(), category.getDepartment().getName())
+                : null;
+        return new IncidentCategoryResponse(
+                category.getId(),
+                category.getName(),
+                category.getDescription(),
+                department,
+                category.getStatus());
     }
 }

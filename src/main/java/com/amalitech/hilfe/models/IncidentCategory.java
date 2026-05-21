@@ -24,6 +24,13 @@ public class IncidentCategory {
 
     private String description;
 
+    @Column(name = "department_id")
+    private String departmentId;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private String status = "active";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -35,6 +42,10 @@ public class IncidentCategory {
     @OneToMany(mappedBy = "category", fetch = FetchType.LAZY)
     @Builder.Default
     private List<IncidentType> incidentTypes = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id", insertable = false, updatable = false)
+    private Department department;
 
     // ── Lifecycle ──
 

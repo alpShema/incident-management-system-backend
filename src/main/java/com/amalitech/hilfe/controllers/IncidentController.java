@@ -1,12 +1,6 @@
 package com.amalitech.hilfe.controllers;
 
-import com.amalitech.hilfe.dto.ApiResponse;
-import com.amalitech.hilfe.dto.AssignIncidentRequest;
-import com.amalitech.hilfe.dto.CreateIncidentRequest;
-import com.amalitech.hilfe.dto.IncidentResponse;
-import com.amalitech.hilfe.dto.PageResponse;
-import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
-import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -25,14 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Incidents", description = "Incident lifecycle management — create, retrieve, filter, update status/severity, and assign")
 @RestController
@@ -121,7 +108,7 @@ public class IncidentController {
 
     @Operation(
         summary = "Search incidents by keyword",
-        description = "Full-text search across incident title and description. "
+        description = "Full-text search across incident title, description, topic name, and category name. "
                     + "Results are role-scoped identically to GET /incidents: "
                     + "CLIENTs see only their own, AGENTs see assigned/created, ADMINs see all. "
                     + "Supports pagination and sorting via Pageable (e.g. sort=createdAt,desc)."
@@ -134,7 +121,7 @@ public class IncidentController {
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> searchIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
-            @Parameter(description = "Free-text keyword to search in title and description", required = true)
+            @Parameter(description = "Free-text keyword to search in title, description, topic name, and category name", required = true)
             @RequestParam String query,
             Pageable pageable
     ) {

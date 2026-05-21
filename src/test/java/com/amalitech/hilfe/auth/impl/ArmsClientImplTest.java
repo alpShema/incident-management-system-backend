@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.auth.impl;
 
 import com.amalitech.hilfe.config.ArmsProperties;
+import com.amalitech.hilfe.dto.ArmsEmployeeInfo;
 import com.amalitech.hilfe.dto.ArmsUserInfo;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.services.ArmsClientImpl;
@@ -12,17 +13,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-import com.amalitech.hilfe.dto.ArmsEmployeeInfo;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
