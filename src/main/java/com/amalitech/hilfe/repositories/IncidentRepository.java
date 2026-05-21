@@ -221,7 +221,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Query(value = """
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
-            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
@@ -256,7 +256,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Query(value = """
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
-            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
@@ -292,7 +292,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Query(value = """
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
-            LEFT JOIN FETCH it.category
+            LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
