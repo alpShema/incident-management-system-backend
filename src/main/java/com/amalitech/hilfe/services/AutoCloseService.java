@@ -60,7 +60,7 @@ public class AutoCloseService {
             incident.setClosedAt(Instant.now());
             incidentRepository.save(incident);
             activityLogService.logIncidentStatusChange(
-                    "system", incident.getId(), "Resolved", "Closed");
+                    null, incident.getId(), "Resolved", "Closed");
         }
 
         log.info("Auto-closed {} resolved incident(s) after {} hours", overdue.size(), hours);
