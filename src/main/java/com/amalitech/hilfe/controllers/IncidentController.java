@@ -80,8 +80,8 @@ public class IncidentController {
 
     @Operation(
         summary = "List incidents",
-        description = "Returns a paginated list of incidents. Results are automatically scoped by role: "
-                    + "CLIENTs see only their own, AGENTs see only assigned incidents, ADMINs see all. "
+        description = "Returns a paginated list of incidents created by the authenticated user. "
+                    + "All roles (CLIENT, AGENT, ADMIN) see only incidents they raised. "
                     + "Supports filtering by statusId, severityId, incidentTypeId, categoryId, and locationId. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`)."
     )
@@ -100,7 +100,7 @@ public class IncidentController {
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.listIncidents(
-                principal.userId(), principal.roleCode(),
+                principal.userId(),
                 statusId, severityId, incidentTypeId, categoryId, locationId,
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
@@ -109,8 +109,7 @@ public class IncidentController {
     @Operation(
         summary = "Search incidents by keyword",
         description = "Full-text search across incident title, description, topic name, and category name. "
-                    + "Results are role-scoped identically to GET /incidents: "
-                    + "CLIENTs see only their own, AGENTs see assigned/created, ADMINs see all. "
+                    + "Returns only incidents created by the authenticated user. "
                     + "Supports pagination and sorting via Pageable (e.g. sort=createdAt,desc)."
     )
     @ApiResponses({
@@ -125,8 +124,7 @@ public class IncidentController {
             @RequestParam String query,
             Pageable pageable
     ) {
-        Page<IncidentResponse> page = incidentService.searchIncidents(
-                principal.userId(), principal.roleCode(), query, pageable);
+        Page<IncidentResponse> page = incidentService.searchIncidents(principal.userId(), query, pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
