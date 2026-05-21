@@ -61,6 +61,7 @@ public class IncidentService {
     private final MediaService mediaService;
     private final MediaRepository mediaRepository;
     private final LocationRepository locationRepository;
+    private final AutoCloseService autoCloseService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -178,6 +179,7 @@ public class IncidentService {
                 .orElseThrow(() -> new ArmsAuthException("Status not found", 404));
 
         enforceTransition(incident, newStatus, roleCode);
+        enforceReopenWindow(incident, newStatus);
 
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
@@ -278,6 +280,19 @@ public class IncidentService {
         incident.setResolvedAt(null);
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
+    }
+
+    private void enforceReopenWindow(Incident incident, Status newStatus) {
+        if (!"status-reopened".equals(newStatus.getId())) return;
+        if (incident.getResolvedAt() == null) return;
+
+        int windowHours = autoCloseService.readDurationHours();
+        Instant deadline = incident.getResolvedAt().plus(windowHours, java.time.temporal.ChronoUnit.HOURS);
+        if (Instant.now().isAfter(deadline)) {
+            throw new ArmsAuthException(
+                    "Reopen window has expired. Incidents must be reopened within " + windowHours + " hours of resolution.",
+                    403);
+        }
     }
 
     private void enforceTransition(Incident incident, Status newStatus, RoleCode roleCode) {
