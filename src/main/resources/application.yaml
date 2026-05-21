@@ -153,6 +153,12 @@ s3:
   presign-expiry: ${S3_PRESIGN_EXPIRY:PT15M}
 
 # ──────────────────────────────────────────
+# Auto-Close Scheduler
+# ──────────────────────────────────────────
+auto-close:
+  cron: "0 * * * * *"   # every minute — change to adjust polling frequency
+
+# ──────────────────────────────────────────
 # Media / Attachments
 # ──────────────────────────────────────────
 media:
