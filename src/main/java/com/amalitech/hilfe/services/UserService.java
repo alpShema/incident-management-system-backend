@@ -42,7 +42,9 @@ public class UserService {
                 user.getEmail(),
                 user.getFullName(),
                 user.getProfileImg(),
-                user.getRoleCode()
+                user.getRoleCode(),
+                user.getStatus(),
+                user.getLocation() != null ? user.getLocation().getName() : null
         );
     }
 
