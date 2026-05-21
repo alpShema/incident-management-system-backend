@@ -156,7 +156,7 @@ s3:
 # Auto-Close Scheduler
 # ──────────────────────────────────────────
 auto-close:
-  cron: "0 0 * * * *"   # every hour — change to adjust polling frequency
+  cron: "0 * * * * *"   # every minute — change to adjust polling frequency
 
 # ──────────────────────────────────────────
 # Media / Attachments
