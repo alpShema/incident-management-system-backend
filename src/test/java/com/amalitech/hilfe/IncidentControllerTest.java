@@ -1,18 +1,13 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.IncidentController;
-import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
-import com.amalitech.hilfe.security.JwtAuthenticationFilter;
-import com.amalitech.hilfe.security.SecurityConfig;
-import com.amalitech.hilfe.dto.AssignIncidentRequest;
-import com.amalitech.hilfe.dto.CreateIncidentRequest;
-import com.amalitech.hilfe.dto.IncidentResponse;
-import com.amalitech.hilfe.dto.LookupResponse;
-import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
-import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
+import com.amalitech.hilfe.security.JwtAuthenticationFilter;
+import com.amalitech.hilfe.security.SecurityConfig;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
@@ -29,16 +24,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 

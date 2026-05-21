@@ -8,13 +8,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "AgentGroup")
+@Table(name = "Department")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AgentGroup {
+public class Department {
 
     @Id
     private String id;
@@ -24,9 +24,6 @@ public class AgentGroup {
 
     private String description;
 
-    @Column(name = "primary_agent_id")
-    private String primaryAgentId;
-
     private Boolean status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -35,17 +32,9 @@ public class AgentGroup {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    // ── Relationships ──
-
-    @OneToMany(mappedBy = "agentGroup")
+    @OneToMany(mappedBy = "department", fetch = FetchType.LAZY)
     @Builder.Default
-    private List<AgentGroupMember> members = new ArrayList<>();
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "primary_agent_id", insertable = false, updatable = false)
-    private Agent primaryAgent;
-
-    // ── Lifecycle ──
+    private List<IncidentCategory> categories = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
