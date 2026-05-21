@@ -1,10 +1,6 @@
 package com.amalitech.hilfe.controllers;
 
-import com.amalitech.hilfe.dto.ApiResponse;
-import com.amalitech.hilfe.dto.CreateTopicRequest;
-import com.amalitech.hilfe.dto.IncidentCategoryRequest;
-import com.amalitech.hilfe.dto.IncidentCategoryResponse;
-import com.amalitech.hilfe.dto.IncidentTopicResponse;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.IncidentCategoryService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -21,14 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -39,7 +28,7 @@ import java.util.List;
 public class IncidentCategoryController {
     private final IncidentCategoryService categoryService;
 
-    @Operation(summary = "List all incident categories", description = "Returns all categories. No authentication required.")
+    @Operation(summary = "List active incident categories", description = "Returns active categories. Requires authentication, but no role-specific permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
     })
@@ -80,9 +69,9 @@ public class IncidentCategoryController {
         return ResponseEntity.ok(ApiResponse.success("Incident category updated successfully", categoryService.updateCategory(id, request)));
     }
 
-    @Operation(summary = "Delete an incident category", description = "Permanently deletes a category. Requires `incident-category.delete` permission.")
+    @Operation(summary = "Deactivate an incident category", description = "Soft-deactivates a category. Requires `incident-category.delete` permission.")
     @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Category deleted"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Category deactivated"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found")
     })
@@ -93,7 +82,7 @@ public class IncidentCategoryController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "List topics for a category", description = "Returns all incident topics (types) belonging to the given stable category ID.")
+    @Operation(summary = "List topics for a category", description = "Returns all incident topics (types) belonging to the given stable category ID. Requires authentication, but no role-specific permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topics retrieved"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found")
@@ -106,7 +95,7 @@ public class IncidentCategoryController {
     @Operation(
         summary = "Create a topic under a category",
         description = "Adds a new incident topic (type) to the specified category. The path `id` is the stable category ID returned by the category list endpoint, for example `cat-it`. "
-                    + "The default responsible agent is resolved automatically from the authenticated user's agent record. Requires `incident-type.create` permission."
+                    + "Admins must provide the responsible agentGroupId, and that agent group must have a primary agent. Requires `incident-type.create` permission."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Topic created"),
@@ -115,7 +104,7 @@ public class IncidentCategoryController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found")
     })
     @PostMapping("/{id}/topics")
-    @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_CREATE + "')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN') and hasAuthority('" + RbacPermissions.INCIDENT_TYPE_CREATE + "')")
     public ResponseEntity<ApiResponse<IncidentTopicResponse>> createTopic(
             @Parameter(description = "Stable category ID", example = "cat-it") @PathVariable String id,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
@@ -130,6 +119,7 @@ public class IncidentCategoryController {
                                             {
                                               "name": "Projector",
                                               "description": "Issues with projection equipment in meeting rooms",
+                                              "agentGroupId": "agent-group-facilities",
                                               "visibleToGroup": true
                                             }
                                             """
@@ -140,5 +130,28 @@ public class IncidentCategoryController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Incident topic created successfully", categoryService.createTopic(id, principal.userId(), request)));
+    }
+
+    @PatchMapping("/{categoryId}/topics/{topicId}")
+    @Operation(summary = "Update a topic", description = "Updates a topic name, description, assigned agent group, or group visibility. Requires `incident-type.update` permission.")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_UPDATE + "')")
+    public ResponseEntity<ApiResponse<IncidentTopicResponse>> updateTopic(
+            @PathVariable String categoryId,
+            @PathVariable String topicId,
+            @Valid @RequestBody UpdateTopicRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident topic updated successfully",
+                categoryService.updateTopic(categoryId, topicId, request)));
+    }
+
+    @DeleteMapping("/{categoryId}/topics/{topicId}")
+    @Operation(summary = "Delete a topic", description = "Deletes a topic if no incidents reference it. Requires `incident-type.delete` permission.")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_DELETE + "')")
+    public ResponseEntity<Void> deleteTopic(
+            @PathVariable String categoryId,
+            @PathVariable String topicId
+    ) {
+        categoryService.deleteTopic(categoryId, topicId);
+        return ResponseEntity.noContent().build();
     }
 }

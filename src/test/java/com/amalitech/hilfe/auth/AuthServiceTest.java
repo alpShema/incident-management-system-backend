@@ -8,14 +8,10 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.services.ArmsTokenExpiryService;
 import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
-import com.amalitech.hilfe.services.ArmsClient;
-import com.amalitech.hilfe.services.AuthService;
-import com.amalitech.hilfe.services.TokenRevocationService;
-import com.amalitech.hilfe.services.TokenService;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
+import com.amalitech.hilfe.services.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,14 +22,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {

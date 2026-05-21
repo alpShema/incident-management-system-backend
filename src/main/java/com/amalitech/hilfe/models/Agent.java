@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "Agent")
@@ -40,6 +42,10 @@ public class Agent {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_group_id", insertable = false, updatable = false)
     private AgentGroup agentGroup;
+
+    @OneToMany(mappedBy = "agent")
+    @Builder.Default
+    private List<AgentGroupMember> agentGroupMemberships = new ArrayList<>();
 
     // ── Lifecycle ──
 
