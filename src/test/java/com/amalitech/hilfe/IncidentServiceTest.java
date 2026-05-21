@@ -468,28 +468,147 @@ class IncidentServiceTest {
     // ── updateStatus ──────────────────────────────────────────────────────────
 
     @Test
-    void updateStatus_validTransition_openToPending_savesAndLogs() {
-        Status openStatus = buildStatus("status-open", "open");
-        Status pendingStatus = buildStatus("status-pending", "pending");
+    void updateStatus_agent_inProgressToPending_savesAndLogs() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        Incident incident = buildIncident();
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending"));
+
+        verify(incidentRepository).save(any(Incident.class));
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "In Progress", "Pending");
+    }
+
+    @Test
+    void updateStatus_agent_inProgressToResolved_savesAndLogs() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+
+        Incident incident = buildIncident();
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved"));
+
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_agent_pendingToInProgress_savesAndLogs() {
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+
+        Incident incident = buildIncident();
+        incident.setStatus(pendingStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-in-progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-in-progress"));
+
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_client_resolvedToClosed_savesAndLogs() {
+        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
+        Status closedStatus   = buildStatus("status-closed",   "Closed");
+
+        Incident incident = buildIncident();
+        incident.setStatus(resolvedStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-closed"));
+
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_client_resolvedToReopened_agentActive_keepAgentAndTransitionsToInProgress() {
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+        Status reopenedStatus   = buildStatus("status-reopened",    "Reopened");
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+
+        Agent agent = Agent.builder().id("agent-1").userId("user-agent-1").status(true).build();
+
+        Incident incident = buildIncident();
+        incident.setStatus(resolvedStatus);
+        incident.setAssignedToId("agent-1");
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened"));
+
+        assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-1");
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Resolved", "Reopened");
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Reopened", "In Progress");
+    }
+
+    @Test
+    void updateStatus_client_resolvedToReopened_agentUnavailable_clearsAgentAndTransitionsToInProgress() {
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+        Status reopenedStatus   = buildStatus("status-reopened",    "Reopened");
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+
+        Agent inactiveAgent = Agent.builder().id("agent-1").userId("user-agent-1").status(false).build();
+
+        Incident incident = buildIncident();
+        incident.setStatus(resolvedStatus);
+        incident.setAssignedToId("agent-1");
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(inactiveAgent));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened"));
+
+        assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
+        assertThat(incident.getAssignedToId()).isNull();
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Resolved", "Reopened");
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Reopened", "In Progress");
+    }
+
+    @Test
+    void updateStatus_admin_anyToClosed_override_succeeds() {
+        Status openStatus   = buildStatus("status-open",   "Open");
+        Status closedStatus = buildStatus("status-closed", "Closed");
 
         Incident incident = buildIncident();
         incident.setStatus(openStatus);
 
-        when(incidentRepository.findByIdWithDetails("inc-1"))
-                .thenReturn(Optional.of(incident));
-        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("status-pending"));
+        incidentService.updateStatus("actor-1", RoleCode.ADMIN, "inc-1", new UpdateIncidentStatusRequest("status-closed"));
 
         verify(incidentRepository).save(any(Incident.class));
-        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "open", "pending");
     }
 
     @Test
-    void updateStatus_invalidTransition_closedToOpen_throws422() {
-        Status closedStatus = buildStatus("status-closed", "closed");
-        Status openStatus = buildStatus("status-open", "open");
+    void updateStatus_invalidTransition_throws400() {
+        Status closedStatus = buildStatus("status-closed", "Closed");
+        Status openStatus   = buildStatus("status-open",   "Open");
 
         Incident incident = buildIncident();
         incident.setStatus(closedStatus);
@@ -498,22 +617,79 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-open")).thenReturn(Optional.of(openStatus));
 
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("status-open")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open")))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(422);
     }
 
     @Test
+    void updateStatus_nonExistentTransitionPath_throws422() {
+        Status closedStatus = buildStatus("status-closed", "Closed");
+        Status openStatus   = buildStatus("status-open",   "Open");
+
+        Incident incident = buildIncident();
+        incident.setStatus(closedStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-open")).thenReturn(Optional.of(openStatus));
+
+        // closed → open is not a defined path at all
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(422);
+    }
+
+    @Test
+    void updateStatus_wrongRole_validPath_throws403() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+
+        Incident incident = buildIncident();
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
+
+        // in-progress → resolved is a valid path but only for AGENT, not CLIENT
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void updateStatus_nonAgent_attemptsPending_throws403() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        Incident incident = buildIncident();
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-pending")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
     void updateStatus_statusNotFound_throws404() {
         Incident incident = buildIncident();
-        incident.setStatus(buildStatus("status-open", "open"));
+        incident.setStatus(buildStatus("status-in-progress", "In Progress"));
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("bad-status")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("bad-status")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("bad-status")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Status not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -525,7 +701,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", "missing", new UpdateIncidentStatusRequest("status-pending")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "missing", new UpdateIncidentStatusRequest("status-pending")))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -533,18 +709,17 @@ class IncidentServiceTest {
 
     @Test
     void updateStatus_transitionToClosed_setsClosedAt() {
-        Status pendingStatus = buildStatus("status-pending", "pending");
-        Status closedStatus = buildStatus("status-closed", "closed");
+        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
+        Status closedStatus   = buildStatus("status-closed",   "Closed");
 
         Incident incident = buildIncident();
-        incident.setStatus(pendingStatus);
+        incident.setStatus(resolvedStatus);
 
-        when(incidentRepository.findByIdWithDetails("inc-1"))
-                .thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", "inc-1", new UpdateIncidentStatusRequest("status-closed"));
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-closed"));
 
         assertThat(incident.getClosedAt()).isNotNull();
         verify(incidentRepository).save(any(Incident.class));
@@ -580,30 +755,30 @@ class IncidentServiceTest {
     @Test
     void assignIncident_happyPath_setsAgentAndStatusAndLogs() {
         Incident incident = buildIncident();
-        Status pendingStatus = buildStatus("status-pending", "Pending");
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
-        when(statusRepository.findByNameIgnoreCase("Pending")).thenReturn(Optional.of(pendingStatus));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1"));
 
         assertThat(incident.getAssignedToId()).isEqualTo("agent-1");
-        assertThat(incident.getStatusId()).isEqualTo("status-pending");
+        assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
         verify(incidentRepository).save(any(Incident.class));
         verify(activityLogService).logIncidentAssignment("actor-1", "inc-1", "agent-1");
     }
 
     @Test
-    void assignIncident_pendingStatusNotConfigured_throws500() {
+    void assignIncident_inProgressStatusNotConfigured_throws500() {
         Incident incident = buildIncident();
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
-        when(statusRepository.findByNameIgnoreCase("Pending")).thenReturn(Optional.empty());
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
                 incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1")))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Default 'Pending' status not configured")
+                .hasMessage("Default 'In Progress' status not configured")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(500);
     }
