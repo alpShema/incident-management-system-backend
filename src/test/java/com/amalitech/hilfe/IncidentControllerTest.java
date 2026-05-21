@@ -170,7 +170,7 @@ class IncidentControllerTest {
 
     @Test
     void updateStatus_validRequest_returns200() throws Exception {
-        when(incidentService.updateStatus(anyString(), eq("inc-1"), any(UpdateIncidentStatusRequest.class))).thenReturn(stubResponse());
+        when(incidentService.updateStatus(anyString(), any(RoleCode.class), eq("inc-1"), any(UpdateIncidentStatusRequest.class))).thenReturn(stubResponse());
 
         var principal = agentPrincipal();
         var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(() -> "incident.status.change"));

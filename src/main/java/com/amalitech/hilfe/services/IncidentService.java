@@ -20,11 +20,19 @@ public class IncidentService {
 
     private static final String DEFAULT_PRIORITY_NAME = "Low";
 
-    private static final Map<String, Set<String>> VALID_TRANSITIONS = Map.of(
-            "open",     Set.of("pending"),
-            "pending",  Set.of("resolved", "closed"),
-            "resolved", Set.of("closed"),
-            "closed",   Set.of()
+    // from-status-id → to-status-id → roles permitted to make that transition
+    private static final Map<String, Map<String, Set<RoleCode>>> VALID_TRANSITIONS = Map.of(
+            "status-in-progress", Map.of(
+                    "status-pending",  Set.of(RoleCode.AGENT),
+                    "status-resolved", Set.of(RoleCode.AGENT)
+            ),
+            "status-pending", Map.of(
+                    "status-in-progress", Set.of(RoleCode.AGENT)
+            ),
+            "status-resolved", Map.of(
+                    "status-closed",   Set.of(RoleCode.CLIENT),
+                    "status-reopened", Set.of(RoleCode.CLIENT)
+            )
     );
 
     private final IncidentRepository incidentRepository;
@@ -149,13 +157,13 @@ public class IncidentService {
     }
 
     @Transactional
-    public IncidentResponse updateStatus(String actorUserId, String incidentId, UpdateIncidentStatusRequest request) {
+    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
         Incident incident = findIncident(incidentId);
 
         Status newStatus = statusRepository.findById(request.statusId())
                 .orElseThrow(() -> new ArmsAuthException("Status not found", 404));
 
-        enforceTransition(incident, newStatus);
+        enforceTransition(incident, newStatus, roleCode);
 
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
@@ -163,6 +171,11 @@ public class IncidentService {
 
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
+
+        if ("reopened".equalsIgnoreCase(newStatus.getName())) {
+            applyReopenTransition(actorUserId, incident, incidentId);
+        }
+
         entityManager.flush();
         entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
@@ -185,10 +198,10 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         incident.setAssignedToId(request.agentId());
 
-        String pendingStatusId = statusRepository.findByNameIgnoreCase("Pending")
-                .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+        String inProgressStatusId = statusRepository.findByNameIgnoreCase("In Progress")
+                .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
                 .getId();
-        incident.setStatusId(pendingStatusId);
+        incident.setStatusId(inProgressStatusId);
 
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
@@ -272,21 +285,51 @@ public class IncidentService {
         return defaultPriority.getId();
     }
 
-    private void enforceTransition(Incident incident, Status newStatus) {
-        String currentStatusName = incident.getStatus() != null
-                ? incident.getStatus().getName().toLowerCase()
-                : null;
+    private void applyReopenTransition(String actorUserId, Incident incident, String incidentId) {
+        Status inProgressStatus = statusRepository.findByNameIgnoreCase("In Progress")
+                .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500));
 
-        if (currentStatusName == null) return;
+        if (incident.getAssignedToId() != null) {
+            boolean agentActive = agentRepository.findById(incident.getAssignedToId())
+                    .map(a -> Boolean.TRUE.equals(a.getStatus()))
+                    .orElse(false);
+            if (!agentActive) {
+                incident.setAssignedToId(null);
+            }
+        }
 
-        Set<String> allowed = VALID_TRANSITIONS.getOrDefault(currentStatusName, Set.of());
-        if (!allowed.contains(newStatus.getName().toLowerCase())) {
-            String allowedStr = allowed.isEmpty() ? "none — this is a terminal state" : String.join(", ", allowed);
+        incident.setStatusId(inProgressStatus.getId());
+        incidentRepository.save(incident);
+        activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
+    }
+
+    private void enforceTransition(Incident incident, Status newStatus, RoleCode roleCode) {
+        String fromId = incident.getStatus() != null ? incident.getStatus().getId() : null;
+        String toId   = newStatus.getId();
+
+        if (fromId == null) {
+            throw new ArmsAuthException("Cannot transition an incident with no current status", 422);
+        }
+
+        // Admins and super-admins may force-close any incident regardless of current status
+        if ((roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) && "status-closed".equals(toId)) {
+            return;
+        }
+
+        Map<String, Set<RoleCode>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
+
+        if (!toMap.containsKey(toId)) {
             throw new ArmsAuthException(
                     "Invalid status transition from '" + incident.getStatus().getName()
-                    + "' to '" + newStatus.getName()
-                    + "'. Allowed next statuses: " + allowedStr,
+                    + "' to '" + newStatus.getName() + "'",
                     422
+            );
+        }
+
+        if (!toMap.get(toId).contains(roleCode)) {
+            throw new ArmsAuthException(
+                    "You do not have permission to move an incident to '" + newStatus.getName() + "'",
+                    403
             );
         }
     }
