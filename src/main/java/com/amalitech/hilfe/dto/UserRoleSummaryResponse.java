@@ -9,6 +9,8 @@ public record UserRoleSummaryResponse(
         @Schema(description = "User's email address") String email,
         @Schema(description = "User's full name") String fullName,
         @Schema(description = "URL to the user's profile image", nullable = true) String profileImg,
-        @Schema(description = "User's current role. One of: CLIENT, AGENT, ADMIN, SUPER_ADMIN") RoleCode roleCode
+        @Schema(description = "User's current role. One of: CLIENT, AGENT, ADMIN, SUPER_ADMIN") RoleCode roleCode,
+        @Schema(description = "User's active/inactive status", nullable = true) Boolean status,
+        @Schema(description = "User's office location name", nullable = true) String officeLocation
 ) {
 }

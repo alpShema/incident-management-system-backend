@@ -42,7 +42,7 @@ class UserControllerTest {
     @Test
     void userRoles_adminRequest_returnsPaginatedRoles() throws Exception {
         when(userService.getUserRoles(any())).thenReturn(new PageImpl<>(
-                List.of(new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN)),
+                List.of(new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra")),
                 PageRequest.of(0, 10),
                 1
         ));
@@ -72,7 +72,7 @@ class UserControllerTest {
     @Test
     void assignUserRole_adminRequest_returnsUpdatedUserRole() throws Exception {
         when(userService.assignUserRole(anyString(), eq("u1"), eq(RoleCode.ADMIN))).thenReturn(
-                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN)
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra")
         );
 
         var principal = new com.amalitech.hilfe.services.JwtTokenService.AuthPrincipal(

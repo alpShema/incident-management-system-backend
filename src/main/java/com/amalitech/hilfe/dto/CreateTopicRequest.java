@@ -11,7 +11,7 @@ public record CreateTopicRequest(
         @Schema(description = "Description of what incidents belong under this topic", example = "Issues with projection equipment in meeting rooms")
         @NotBlank String description,
 
-        @Schema(description = "Responsible agent group ID. Required. The group must have a primary agent.", example = "agent-group-facilities")
+        @Schema(description = "Responsible agent group ID. Required. The group must have a primary agent and belong to the same department as the category.", example = "agent-group-facilities")
         @NotBlank String agentGroupId,
 
         @Schema(description = "Whether this topic is visible to group members (non-admin reporters)", example = "true")

@@ -7,6 +7,7 @@ import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
+import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.User;
@@ -50,6 +51,7 @@ class IncidentCategoryServiceTest {
                 .id("cat-1")
                 .name("Facility")
                 .description("Facility related incidents")
+                .departmentId("dept-1")
                 .status("active")
                 .build();
     }
@@ -82,11 +84,20 @@ class IncidentCategoryServiceTest {
         AgentGroup group = AgentGroup.builder()
                 .id("group-1")
                 .name("IT Support")
+                .departmentId("dept-1")
                 .primaryAgentId("agent-1")
                 .build();
         group.setPrimaryAgent(agent);
         type.setAgentGroup(group);
         return type;
+    }
+
+    private Department buildDepartment() {
+        return Department.builder()
+                .id("dept-1")
+                .name("Facilities")
+                .status(true)
+                .build();
     }
 
     // ── listCategories ────────────────────────────────────────────────────────
@@ -112,7 +123,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(saved);
         when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(saved));
 
-        when(departmentRepository.existsById("dept-1")).thenReturn(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
 
         IncidentCategoryResponse response = categoryService.createCategory(
                 new IncidentCategoryRequest("Facility", "Description", "dept-1"));
@@ -140,7 +151,7 @@ class IncidentCategoryServiceTest {
     void updateCategory_found_updatesAndReturns() {
         IncidentCategory cat = buildCategory();
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
-        when(departmentRepository.existsById("dept-1")).thenReturn(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
         when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
         when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
 
@@ -218,10 +229,10 @@ class IncidentCategoryServiceTest {
     @Test
     void createTopic_happyPath_savesAndReturns() {
         IncidentType saved = buildType();
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
-                AgentGroup.builder().id("group-1").name("IT Support").primaryAgentId("agent-1").status(true).build()));
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").primaryAgentId("agent-1").status(true).build()));
         when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
         when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
 
@@ -254,7 +265,7 @@ class IncidentCategoryServiceTest {
 
     @Test
     void createTopic_categoryNotFound_throws404() {
-        when(categoryRepository.existsById("missing")).thenReturn(false);
+        when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "missing", "admin-1",
@@ -267,7 +278,7 @@ class IncidentCategoryServiceTest {
 
     @Test
     void createTopic_duplicateName_throws409() {
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(true);
 
         assertThatThrownBy(() -> categoryService.createTopic(
@@ -281,7 +292,7 @@ class IncidentCategoryServiceTest {
 
     @Test
     void createTopic_agentGroupNotFound_throws404() {
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("missing-group")).thenReturn(Optional.empty());
 
@@ -296,10 +307,10 @@ class IncidentCategoryServiceTest {
 
     @Test
     void createTopic_agentGroupWithoutPrimaryAgent_throws400() {
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
-                AgentGroup.builder().id("group-1").name("IT Support").status(true).build()));
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "cat-1", "admin-1",

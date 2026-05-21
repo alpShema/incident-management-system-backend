@@ -6,12 +6,26 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface AgentRepository extends JpaRepository<Agent, String> {
     Optional<Agent> findByUserId(String userId);
+
+    @Query(value = """
+            SELECT a FROM Agent a
+            LEFT JOIN FETCH a.user
+            WHERE a.status = true
+            """,
+            countQuery = """
+            SELECT COUNT(a) FROM Agent a
+            WHERE a.status = true
+            """)
+    Page<Agent> findAllActiveWithUser(Pageable pageable);
 
     @Query("""
             SELECT a FROM Agent a
