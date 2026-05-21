@@ -120,8 +120,8 @@ class AutoCloseServiceTest {
         assertThat(i2.getResolvedAt()).isNull();
 
         verify(incidentRepository, times(2)).save(any(Incident.class));
-        verify(activityLogService).logIncidentStatusChange("system", "inc-1", "Resolved", "Closed");
-        verify(activityLogService).logIncidentStatusChange("system", "inc-2", "Resolved", "Closed");
+        verify(activityLogService).logIncidentStatusChange(null, "inc-1", "Resolved", "Closed");
+        verify(activityLogService).logIncidentStatusChange(null, "inc-2", "Resolved", "Closed");
     }
 
     @Test
