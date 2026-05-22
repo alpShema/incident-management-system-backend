@@ -10,7 +10,7 @@ public record UpdateTopicRequest(
         @Schema(description = "New topic description", nullable = true)
         String description,
 
-        @Schema(description = "Responsible agent group ID. The group must have a primary agent.", nullable = true)
+        @Schema(description = "Responsible agent group ID. The group must have a primary agent and belong to the same department as the category.", nullable = true)
         String agentGroupId,
 
         @Schema(description = "Whether this topic is visible to group members", nullable = true)

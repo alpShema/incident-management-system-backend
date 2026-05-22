@@ -28,9 +28,12 @@ public interface UserRepository extends JpaRepository<User, String> {
                         user.email,
                         user.fullName,
                         user.profileImg,
-                        user.roleCode
+                        user.roleCode,
+                        user.status,
+                        loc.name
                     )
                     FROM User user
+                    LEFT JOIN user.location loc
                     """,
             countQuery = """
                     SELECT COUNT(user)

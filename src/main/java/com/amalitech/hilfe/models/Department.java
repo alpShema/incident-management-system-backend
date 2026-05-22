@@ -36,6 +36,10 @@ public class Department {
     @Builder.Default
     private List<IncidentCategory> categories = new ArrayList<>();
 
+    @OneToMany(mappedBy = "department", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<AgentGroup> agentGroups = new ArrayList<>();
+
     @PrePersist
     protected void onCreate() {
         createdAt = Instant.now();

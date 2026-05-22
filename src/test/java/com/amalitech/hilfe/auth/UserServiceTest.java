@@ -39,7 +39,7 @@ class UserServiceTest {
     void getUserRoles_returnsPaginatedProjection() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of(
-                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN)
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra")
         ));
         when(userRepository.findUserRoleSummaries(pageable)).thenReturn(page);
 

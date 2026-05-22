@@ -7,6 +7,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DepartmentService {
     private final DepartmentRepository departmentRepository;
+    private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
 
     public Page<DepartmentResponse> listDepartments(Pageable pageable) {
@@ -65,6 +67,9 @@ public class DepartmentService {
         Department department = findActiveDepartment(id);
         if (categoryRepository.existsByDepartmentId(id)) {
             throw new ArmsAuthException("Department has assigned incident categories", 409);
+        }
+        if (agentGroupRepository.existsByDepartmentIdAndStatus(id, true)) {
+            throw new ArmsAuthException("Department has assigned agent groups", 409);
         }
         department.setStatus(false);
         departmentRepository.save(department);

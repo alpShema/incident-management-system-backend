@@ -8,9 +8,11 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.AgentGroupMember;
+import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.DepartmentRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,6 +28,7 @@ public class AgentGroupService {
     private final AgentGroupRepository agentGroupRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final DepartmentRepository departmentRepository;
 
     public Page<AgentGroupResponse> listAgentGroups(Pageable pageable) {
         return agentGroupRepository.findByStatus(true, pageable)
@@ -38,40 +41,53 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupResponse createAgentGroup(AgentGroupRequest request) {
+        if (isBlank(request.name())) {
+            throw new ArmsAuthException("Agent group name is required", 400);
+        }
+        if (isBlank(request.departmentId())) {
+            throw new ArmsAuthException("departmentId is required", 400);
+        }
+        if (isBlank(request.primaryAgentId())) {
+            throw new ArmsAuthException("primaryAgentId is required", 400);
+        }
         if (agentGroupRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("Agent group with this name already exists", 409);
         }
 
         String groupId = UUID.randomUUID().toString();
-        Agent primaryAgent = null;
-        if (request.primaryAgentId() != null && !request.primaryAgentId().isBlank()) {
-            primaryAgent = findAgent(request.primaryAgentId());
-        }
+        Agent primaryAgent = findAgent(request.primaryAgentId());
+        Department department = findActiveDepartment(request.departmentId());
 
         AgentGroup group = AgentGroup.builder()
                 .id(groupId)
                 .name(request.name())
                 .description(request.description())
-                .primaryAgentId(primaryAgent != null ? primaryAgent.getId() : null)
+                .departmentId(department.getId())
+                .primaryAgentId(primaryAgent.getId())
                 .status(true)
                 .build();
         AgentGroup saved = agentGroupRepository.save(group);
-        if (primaryAgent != null) {
-            addMembership(primaryAgent.getId(), saved.getId());
-        }
+        addMembership(primaryAgent.getId(), saved.getId());
         return toResponse(saved);
     }
 
     @Transactional
     public AgentGroupResponse updateAgentGroup(String id, AgentGroupRequest request) {
         AgentGroup group = findAgentGroup(id);
-        if (!group.getName().equalsIgnoreCase(request.name())
-                && agentGroupRepository.existsByNameIgnoreCase(request.name())) {
-            throw new ArmsAuthException("Agent group with this name already exists", 409);
+        if (!isBlank(request.name())) {
+            if (!group.getName().equalsIgnoreCase(request.name())
+                    && agentGroupRepository.existsByNameIgnoreCase(request.name())) {
+                throw new ArmsAuthException("Agent group with this name already exists", 409);
+            }
+            group.setName(request.name());
         }
-
-        group.setName(request.name());
-        group.setDescription(request.description());
+        if (request.description() != null) {
+            group.setDescription(request.description());
+        }
+        if (!isBlank(request.departmentId())) {
+            Department department = findActiveDepartment(request.departmentId());
+            group.setDepartmentId(department.getId());
+        }
         if (request.primaryAgentId() != null && !request.primaryAgentId().isBlank()) {
             Agent primaryAgent = findAgent(request.primaryAgentId());
             if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(primaryAgent.getId(), id)) {
@@ -133,7 +149,17 @@ public class AgentGroupService {
                             agent.getUser() != null ? agent.getUser().getFullName() : agent.getUserId()))
                     .orElse(null);
         }
-        return AgentGroupResponse.from(group, primaryAgent, agentGroupMemberRepository.countByAgentGroupId(group.getId()));
+        LookupResponse department = null;
+        if (group.getDepartmentId() != null && !group.getDepartmentId().isBlank()) {
+            department = departmentRepository.findById(group.getDepartmentId())
+                    .map(dept -> LookupResponse.from(dept.getId(), dept.getName()))
+                    .orElse(null);
+        }
+        return AgentGroupResponse.from(
+                group,
+                department,
+                primaryAgent,
+                agentGroupMemberRepository.countByAgentGroupId(group.getId()));
     }
 
     private AgentGroup findAgentGroup(String id) {
@@ -151,6 +177,12 @@ public class AgentGroupService {
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
     }
 
+    private Department findActiveDepartment(String departmentId) {
+        return departmentRepository.findById(departmentId)
+                .filter(department -> Boolean.TRUE.equals(department.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
+    }
+
     private Agent findAgentWithUser(String agentId) {
         return agentRepository.findByIdWithUser(agentId)
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
@@ -164,5 +196,9 @@ public class AgentGroupService {
                 .agentId(agentId)
                 .agentGroupId(agentGroupId)
                 .build());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
