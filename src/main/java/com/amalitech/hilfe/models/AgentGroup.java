@@ -27,6 +27,9 @@ public class AgentGroup {
     @Column(name = "primary_agent_id")
     private String primaryAgentId;
 
+    @Column(name = "department_id")
+    private String departmentId;
+
     private Boolean status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -44,6 +47,10 @@ public class AgentGroup {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "primary_agent_id", insertable = false, updatable = false)
     private Agent primaryAgent;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id", insertable = false, updatable = false)
+    private Department department;
 
     // ── Lifecycle ──
 

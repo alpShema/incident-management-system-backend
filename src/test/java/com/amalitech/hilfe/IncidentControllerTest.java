@@ -232,7 +232,7 @@ class IncidentControllerTest {
     void searchIncidents_validQuery_returns200() throws Exception {
         var response = stubResponse();
         var pagedResponse = new org.springframework.data.domain.PageImpl<>(List.of(response));
-        when(incidentService.searchIncidents(any(), any(), eq("projector"), any())).thenReturn(pagedResponse);
+        when(incidentService.searchIncidents(any(), eq("projector"), any())).thenReturn(pagedResponse);
 
         var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
 
@@ -244,7 +244,7 @@ class IncidentControllerTest {
 
     @Test
     void searchIncidents_blankQuery_returns400() throws Exception {
-        when(incidentService.searchIncidents(any(), any(), eq(""), any()))
+        when(incidentService.searchIncidents(any(), eq(""), any()))
                 .thenThrow(new ArmsAuthException("Search query must not be blank", 400));
 
         var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
@@ -272,7 +272,7 @@ class IncidentControllerTest {
     @Test
     void searchIncidents_emptyResults_returns200WithEmptyPage() throws Exception {
         var emptyPage = new org.springframework.data.domain.PageImpl<IncidentResponse>(List.of());
-        when(incidentService.searchIncidents(any(), any(), anyString(), any())).thenReturn(emptyPage);
+        when(incidentService.searchIncidents(any(), anyString(), any())).thenReturn(emptyPage);
 
         var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
 

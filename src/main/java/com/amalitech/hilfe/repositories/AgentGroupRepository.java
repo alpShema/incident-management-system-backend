@@ -13,6 +13,7 @@ import java.util.List;
 @Repository
 public interface AgentGroupRepository extends JpaRepository<AgentGroup, String> {
     boolean existsByNameIgnoreCase(String name);
+    boolean existsByDepartmentIdAndStatus(String departmentId, Boolean status);
     List<AgentGroup> findByStatus(Boolean status);
     Page<AgentGroup> findByStatus(Boolean status, Pageable pageable);
 

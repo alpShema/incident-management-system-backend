@@ -93,7 +93,7 @@ public class IncidentService {
     }
 
     public Page<IncidentResponse> listIncidents(
-            String userId, RoleCode roleCode,
+            String userId,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
@@ -101,25 +101,12 @@ public class IncidentService {
                 ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Direction.DESC, "createdAt"));
-        return switch (roleCode) {
-            case CLIENT -> incidentRepository
-                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
-                    .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupIds(userId)
-                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> incidentRepository
-                            .findByDepartmentFiltered(agentGroupIds, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
-                            .map(IncidentResponse::from))
-                    .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
-            case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
-                    .map(IncidentResponse::from);
-        };
+        return incidentRepository
+                .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
+                .map(IncidentResponse::from);
     }
 
-    public Page<IncidentResponse> searchIncidents(
-            String userId, RoleCode roleCode, String query, Pageable pageable
-    ) {
+    public Page<IncidentResponse> searchIncidents(String userId, String query, Pageable pageable) {
         if (query == null || query.isBlank()) {
             throw new ArmsAuthException("Search query must not be blank", 400);
         }
@@ -137,20 +124,9 @@ public class IncidentService {
                 .replace("_", "\\_");
         String queryPattern = "%" + escaped + "%";
 
-        return switch (roleCode) {
-            case CLIENT -> incidentRepository
-                    .searchByUserId(userId, queryPattern, sortedPageable)
-                    .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupIds(userId)
-                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> incidentRepository
-                            .searchByDepartment(agentGroupIds, queryPattern, sortedPageable)
-                            .map(IncidentResponse::from))
-                    .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
-            case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .searchAll(queryPattern, sortedPageable)
-                    .map(IncidentResponse::from);
-        };
+        return incidentRepository
+                .searchByUserId(userId, queryPattern, sortedPageable)
+                .map(IncidentResponse::from);
     }
 
     public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
