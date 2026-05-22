@@ -57,8 +57,8 @@ public interface UserRepository extends JpaRepository<User, String> {
                     FROM User user
                     LEFT JOIN user.location loc
                     WHERE (:queryPattern IS NULL OR (
-                        LOWER(user.fullName) LIKE :queryPattern ESCAPE '\\\\'
-                        OR LOWER(user.email) LIKE :queryPattern ESCAPE '\\\\'))
+                        LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
+                        OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
                     AND (:roleCode IS NULL OR user.roleCode = :roleCode)
                     AND (:locationId IS NULL OR user.locationId = :locationId)
                     AND (:status IS NULL OR user.status = :status)
@@ -67,8 +67,8 @@ public interface UserRepository extends JpaRepository<User, String> {
                     SELECT COUNT(user)
                     FROM User user
                     WHERE (:queryPattern IS NULL OR (
-                        LOWER(user.fullName) LIKE :queryPattern ESCAPE '\\\\'
-                        OR LOWER(user.email) LIKE :queryPattern ESCAPE '\\\\'))
+                        LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
+                        OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
                     AND (:roleCode IS NULL OR user.roleCode = :roleCode)
                     AND (:locationId IS NULL OR user.locationId = :locationId)
                     AND (:status IS NULL OR user.status = :status)

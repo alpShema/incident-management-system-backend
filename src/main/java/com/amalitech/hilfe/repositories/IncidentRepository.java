@@ -352,10 +352,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.createdBy
             WHERE i.userId = :userId
             AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -368,10 +368,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN it.category ic
             WHERE i.userId = :userId
             AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -408,10 +408,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 AND m.agentGroupId IN :agentGroupIds
             )
             AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -428,10 +428,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 AND m.agentGroupId IN :agentGroupIds
             )
             AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -463,10 +463,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
             WHERE (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -478,10 +478,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
             WHERE (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
