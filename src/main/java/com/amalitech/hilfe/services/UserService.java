@@ -27,9 +27,9 @@ public class UserService {
         String queryPattern = null;
         if (query != null && !query.isBlank()) {
             String escaped = query.toLowerCase()
-                    .replace("\\", "\\\\")
-                    .replace("%", "\\%")
-                    .replace("_", "\\_");
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_");
             queryPattern = "%" + escaped + "%";
         }
         return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, status, pageable);
