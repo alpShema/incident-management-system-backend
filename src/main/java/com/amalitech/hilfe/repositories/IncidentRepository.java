@@ -28,6 +28,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.userId = :userId
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
@@ -68,6 +70,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
@@ -109,6 +113,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -146,6 +152,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = i.assignedToId
@@ -194,6 +202,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = i.assignedToId
@@ -231,6 +241,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.userId = :userId
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
@@ -266,6 +278,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
@@ -302,6 +316,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
@@ -495,6 +511,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.id = :id
             """)
     Optional<Incident> findByIdWithDetails(@Param("id") String id);

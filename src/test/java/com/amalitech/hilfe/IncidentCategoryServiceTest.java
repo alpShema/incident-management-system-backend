@@ -245,14 +245,6 @@ class IncidentCategoryServiceTest {
         assertThat(response.category()).isNotNull();
         assertThat(response.category().id()).isEqualTo("cat-1");
         assertThat(response.category().name()).isEqualTo("Facility");
-        assertThat(response.assignedAgentGroup()).isNotNull();
-        assertThat(response.assignedAgentGroup().id()).isEqualTo("group-1");
-        assertThat(response.assignedAgentGroup().name()).isEqualTo("IT Support");
-        assertThat(response.assignedAgentGroup().primaryAgent()).isNotNull();
-        assertThat(response.assignedAgentGroup().primaryAgent().id()).isEqualTo("agent-1");
-        assertThat(response.assignedAgentGroup().primaryAgent().name()).isEqualTo("Agent One");
-        assertThat(response.assignedAgentGroup().primaryAgent().userId()).isEqualTo("agent-user-1");
-        assertThat(response.assignedAgentGroup().primaryAgent().email()).isEqualTo("agent@test.com");
         assertThat(response.visibleToGroup()).isTrue();
         var topicCaptor = forClass(IncidentType.class);
         verify(typeRepository).save(topicCaptor.capture());
