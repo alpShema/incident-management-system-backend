@@ -217,23 +217,45 @@ public class IncidentService {
                 && !incidentType.getAgentGroupId().isBlank()) {
             AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
                     .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
-            if (agentGroup.getPrimaryAgentId() == null || agentGroup.getPrimaryAgentId().isBlank()) {
-                throw new ArmsAuthException("Topic agent group has no primary agent", 400);
+
+            String assignedAgentId = findAvailableAgentInGroup(agentGroup);
+            if (assignedAgentId != null) {
+                incident.setAssignedToId(assignedAgentId);
+                incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
+                        .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                        .getId());
+            } else {
+                incident.setStatusId("status-open");
             }
-            incident.setAssignedToId(agentGroup.getPrimaryAgentId());
-            incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
-                    .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
-                    .getId());
             return;
         }
         if (incidentType != null && incidentType.getAgentId() != null && !incidentType.getAgentId().isBlank()) {
-            incident.setAssignedToId(incidentType.getAgentId());
-            incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
-                    .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
-                    .getId());
+            Agent agent = agentRepository.findById(incidentType.getAgentId()).orElse(null);
+            if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
+                incident.setAssignedToId(incidentType.getAgentId());
+                incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
+                        .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                        .getId());
+            } else {
+                incident.setStatusId("status-open");
+            }
             return;
         }
         incident.setStatusId("status-open");
+    }
+
+    private String findAvailableAgentInGroup(AgentGroup agentGroup) {
+        if (agentGroup.getPrimaryAgentId() != null && !agentGroup.getPrimaryAgentId().isBlank()) {
+            Agent primaryAgent = agentRepository.findById(agentGroup.getPrimaryAgentId()).orElse(null);
+            if (primaryAgent != null && Boolean.TRUE.equals(primaryAgent.getStatus())) {
+                return primaryAgent.getId();
+            }
+        }
+        List<Agent> availableAgents = agentRepository.findAvailableByAgentGroupId(agentGroup.getId());
+        if (!availableAgents.isEmpty()) {
+            return availableAgents.get(0).getId();
+        }
+        return null;
     }
 
     private Optional<List<String>> findAgentGroupIds(String userId) {

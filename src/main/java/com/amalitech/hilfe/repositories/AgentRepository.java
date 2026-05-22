@@ -59,4 +59,11 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             )
             """)
     List<Agent> findAgentsInSameDepartment(@Param("agentId") String agentId);
+
+    @Query("""
+            SELECT a FROM Agent a
+            WHERE a.agentGroupId = :agentGroupId
+            AND a.status = true
+            """)
+    List<Agent> findAvailableByAgentGroupId(@Param("agentGroupId") String agentGroupId);
 }
