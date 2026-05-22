@@ -245,34 +245,48 @@ class IncidentServiceTest {
                 .isEqualTo(404);
     }
 
-    // ── listIncidents ─────────────────────────────────────────────────────────
+    // ── queryIncidents ────────────────────────────────────────────────────────
 
     @Test
-    void listIncidents_returnsIncidentsCreatedByUser() {
+    void queryIncidents_returnsIncidentsCreatedByUser() {
         Incident incident = buildIncident();
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        Page<IncidentResponse> result = incidentService.listIncidents(
-                "user-1", null, null, null, null, null, PageRequest.of(0, 20));
+        Page<IncidentResponse> result = incidentService.queryIncidents(
+                "user-1", null, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
-        verify(incidentRepository).findByUserIdFiltered(eq("user-1"), any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test
-    void listIncidents_withFilters_passesFiltersToRepository() {
+    void queryIncidents_withFilters_passesFiltersToRepository() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        incidentService.listIncidents(
-                "user-1", "status-open", "sev-high", "type-fire", "cat-facility", null, PageRequest.of(0, 20));
+        incidentService.queryIncidents(
+                "user-1", null, "status-open", "sev-high", "type-fire", "cat-facility", null, PageRequest.of(0, 20));
 
-        verify(incidentRepository).findByUserIdFiltered(
-                eq("user-1"), eq("status-open"), eq("sev-high"), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
+        verify(incidentRepository).findByUserIdUnified(
+                eq("user-1"), isNull(), eq("status-open"), eq("sev-high"), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
+    }
+
+    @Test
+    void queryIncidents_withKeyword_buildsLikePattern() {
+        Incident incident = buildIncident();
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(incidentRepository.findByUserIdUnified(anyString(), eq("%fire%"), any(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryIncidents(
+                "user-1", "fire", null, null, null, null, null, PageRequest.of(0, 20));
+
+        assertThat(result).hasSize(1);
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), eq("%fire%"), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     // ── searchIncidents ───────────────────────────────────────────────────────

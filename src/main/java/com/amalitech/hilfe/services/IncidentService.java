@@ -92,17 +92,29 @@ public class IncidentService {
                 mediaResponses);
     }
 
-    public Page<IncidentResponse> listIncidents(
+    public Page<IncidentResponse> queryIncidents(
             String userId,
+            String query,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
+        String queryPattern = null;
+        if (query != null && !query.isBlank()) {
+            String escaped = query.toLowerCase()
+                    .replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_");
+            queryPattern = "%" + escaped + "%";
+        }
+
+        final String finalQueryPattern = queryPattern;
         Pageable sortedPageable = pageable.getSort().isSorted()
                 ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Direction.DESC, "createdAt"));
+
         return incidentRepository
-                .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
+                .findByUserIdUnified(userId, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
                 .map(IncidentResponse::from);
     }
 

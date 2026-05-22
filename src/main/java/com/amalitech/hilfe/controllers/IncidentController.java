@@ -82,7 +82,9 @@ public class IncidentController {
         summary = "List incidents",
         description = "Returns a paginated list of incidents created by the authenticated user. "
                     + "All roles (CLIENT, AGENT, ADMIN) see only incidents they raised. "
-                    + "Supports filtering by statusId, severityId, incidentTypeId, categoryId, and locationId. "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`)."
     )
     @ApiResponses({
@@ -92,6 +94,7 @@ public class IncidentController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
             @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
             @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
@@ -99,9 +102,9 @@ public class IncidentController {
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
             Pageable pageable
     ) {
-        Page<IncidentResponse> page = incidentService.listIncidents(
+        Page<IncidentResponse> page = incidentService.queryIncidents(
                 principal.userId(),
-                statusId, severityId, incidentTypeId, categoryId, locationId,
+                query, statusId, severityId, incidentTypeId, categoryId, locationId,
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
