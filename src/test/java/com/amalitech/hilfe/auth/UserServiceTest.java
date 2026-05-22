@@ -24,7 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,14 +36,14 @@ class UserServiceTest {
     @InjectMocks UserService userService;
 
     @Test
-    void getUserRoles_returnsPaginatedProjection() {
+    void getUsers_returnsPaginatedProjection() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of(
                 new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra")
         ));
-        when(userRepository.findUserRoleSummaries(pageable)).thenReturn(page);
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), isNull(), eq(pageable))).thenReturn(page);
 
-        Page<UserRoleSummaryResponse> result = userService.getUserRoles(pageable);
+        Page<UserRoleSummaryResponse> result = userService.getUsers(null, null, null, null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().roleCode()).isEqualTo(RoleCode.ADMIN);

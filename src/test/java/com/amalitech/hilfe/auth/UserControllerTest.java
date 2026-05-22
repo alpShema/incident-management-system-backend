@@ -40,8 +40,8 @@ class UserControllerTest {
     @MockitoBean TokenService tokenService;
 
     @Test
-    void userRoles_adminRequest_returnsPaginatedRoles() throws Exception {
-        when(userService.getUserRoles(any())).thenReturn(new PageImpl<>(
+    void listUsers_adminRequest_returnsPaginatedUsers() throws Exception {
+        when(userService.getUsers(isNull(), isNull(), isNull(), isNull(), any())).thenReturn(new PageImpl<>(
                 List.of(new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra")),
                 PageRequest.of(0, 10),
                 1
@@ -53,7 +53,7 @@ class UserControllerTest {
                 RoleCode.ADMIN
         );
 
-        mvc.perform(get("/users/roles")
+        mvc.perform(get("/users")
                         .param("page", "0")
                         .param("size", "10")
                         .with(authentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
@@ -62,7 +62,7 @@ class UserControllerTest {
                                 List.of(() -> "ROLE_ADMIN")
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("User roles retrieved successfully"))
+                .andExpect(jsonPath("$.message").value("Users retrieved successfully"))
                 .andExpect(jsonPath("$.data.items[0].userId").value("u1"))
                 .andExpect(jsonPath("$.data.items[0].roleCode").value("ADMIN"))
                 .andExpect(jsonPath("$.data.page").value(0))
@@ -93,6 +93,73 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.message").value("User role updated successfully"))
                 .andExpect(jsonPath("$.data.userId").value("u1"))
                 .andExpect(jsonPath("$.data.roleCode").value("ADMIN"));
+    }
+
+    private org.springframework.security.authentication.UsernamePasswordAuthenticationToken adminAuth() {
+        var principal = new com.amalitech.hilfe.services.JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
+        return new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                principal, null, List.of(() -> "ROLE_ADMIN"));
+    }
+
+    @Test
+    void listUsers_noParamsAuthenticated_returns200() throws Exception {
+        when(userService.getUsers(isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(new PageImpl<>(
+                        List.of(new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", null, RoleCode.CLIENT, true, "Accra")),
+                        PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/users").with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Users retrieved successfully"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void listUsers_keywordOnly_returns200() throws Exception {
+        when(userService.getUsers(eq("john"), isNull(), isNull(), isNull(), any()))
+                .thenReturn(new PageImpl<>(
+                        List.of(new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", null, RoleCode.CLIENT, true, "Accra")),
+                        PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/users").param("query", "john").with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].userId").value("u1"));
+    }
+
+    @Test
+    void listUsers_filterByRole_returns200() throws Exception {
+        when(userService.getUsers(isNull(), eq(RoleCode.AGENT), isNull(), isNull(), any()))
+                .thenReturn(new PageImpl<>(
+                        List.of(new UserRoleSummaryResponse("u2", "agent@test.com", "Agent One", null, RoleCode.AGENT, true, "Accra")),
+                        PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/users").param("roleCode", "AGENT").with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].roleCode").value("AGENT"));
+    }
+
+    @Test
+    void listUsers_combinedKeywordAndFilter_returns200() throws Exception {
+        when(userService.getUsers(eq("john"), eq(RoleCode.AGENT), isNull(), isNull(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/users")
+                        .param("query", "john")
+                        .param("roleCode", "AGENT")
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
+    @Test
+    void listUsers_emptyResult_returns200() throws Exception {
+        when(userService.getUsers(any(), any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/users").with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
     }
 
     @Test
