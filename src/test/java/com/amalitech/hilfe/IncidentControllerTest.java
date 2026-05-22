@@ -226,6 +226,85 @@ class IncidentControllerTest {
                 .andExpect(jsonPath("$.error").value("Authentication required. Please log in to access this resource."));
     }
 
+    @Test
+    void listIncidents_noParamsAuthenticated_returns200FullList() throws Exception {
+        var pagedResponse = new org.springframework.data.domain.PageImpl<>(List.of(stubResponse()));
+        when(incidentService.queryIncidents(any(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(pagedResponse);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value("inc-1"));
+    }
+
+    @Test
+    void listIncidents_keywordOnly_returns200() throws Exception {
+        var pagedResponse = new org.springframework.data.domain.PageImpl<>(List.of(stubResponse()));
+        when(incidentService.queryIncidents(any(), eq("projector"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(pagedResponse);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents").param("query", "projector").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value("inc-1"));
+    }
+
+    @Test
+    void listIncidents_filterOnly_returns200() throws Exception {
+        var pagedResponse = new org.springframework.data.domain.PageImpl<>(List.of(stubResponse()));
+        when(incidentService.queryIncidents(any(), isNull(), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(pagedResponse);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents").param("statusId", "status-open").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value("inc-1"));
+    }
+
+    @Test
+    void listIncidents_combinedKeywordAndFilter_returns200() throws Exception {
+        var pagedResponse = new org.springframework.data.domain.PageImpl<>(List.of(stubResponse()));
+        when(incidentService.queryIncidents(any(), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(pagedResponse);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents").param("query", "fire").param("statusId", "status-open").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value("inc-1"));
+    }
+
+    @Test
+    void listIncidents_combinedYieldsNoResults_returns200WithEmptyPage() throws Exception {
+        var emptyPage = new org.springframework.data.domain.PageImpl<IncidentResponse>(List.of());
+        when(incidentService.queryIncidents(any(), eq("nonexistent"), eq("status-closed"), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(emptyPage);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents").param("query", "nonexistent").param("statusId", "status-closed").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
+    @Test
+    void listIncidents_paginationWithKeyword_returns200() throws Exception {
+        var pagedResponse = new org.springframework.data.domain.PageImpl<>(List.of(stubResponse()));
+        when(incidentService.queryIncidents(any(), eq("test"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(pagedResponse);
+
+        var auth = new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own"));
+
+        mvc.perform(get("/incidents").param("query", "test").param("page", "0").param("size", "5").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incidents retrieved successfully"));
+    }
+
     // ── GET /incidents/search ─────────────────────────────────────────────────
 
     @Test
