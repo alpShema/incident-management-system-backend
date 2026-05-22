@@ -20,8 +20,19 @@ public class UserService {
     private final AgentRepository agentRepository;
     private final ActivityLogService activityLogService;
 
-    public Page<UserRoleSummaryResponse> getUserRoles(Pageable pageable) {
-        return userRepository.findUserRoleSummaries(pageable);
+    public Page<UserRoleSummaryResponse> getUsers(
+            String query, RoleCode roleCode, String locationId, Boolean status,
+            Pageable pageable
+    ) {
+        String queryPattern = null;
+        if (query != null && !query.isBlank()) {
+            String escaped = query.toLowerCase()
+                    .replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_");
+            queryPattern = "%" + escaped + "%";
+        }
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, status, pageable);
     }
 
     @Transactional
