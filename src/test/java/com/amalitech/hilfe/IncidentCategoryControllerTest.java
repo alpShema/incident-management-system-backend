@@ -54,15 +54,7 @@ class IncidentCategoryControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
-                null,
-                new IncidentTopicResponse.AssignedAgentGroupResponse(
-                        "group-1",
-                        "IT Support",
-                        new IncidentTopicResponse.AssignedAgentResponse(
-                                "agent-1",
-                                "agent-user-1",
-                                "Agent One",
-                                "agent@test.com")));
+                null);
     }
 
     // ── GET /incident-categories ──────────────────────────────────────────────

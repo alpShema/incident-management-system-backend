@@ -12,6 +12,7 @@ public final class RbacPermissions {
     public static final String AGENT_CREATE = "agent.create";
     public static final String AGENT_READ = "agent.read";
     public static final String AGENT_UPDATE = "agent.update";
+    public static final String AGENT_AVAILABILITY_UPDATE = "agent.availability.update";
     public static final String AGENT_DELETE = "agent.delete";
     public static final String AGENT_GROUP_READ = "agent-group.read";
     public static final String AGENT_GROUP_CREATE = "agent-group.create";
@@ -57,6 +58,7 @@ public final class RbacPermissions {
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
             AGENT_READ,
+            AGENT_AVAILABILITY_UPDATE,
             DASHBOARD_AGENT
     );
 
