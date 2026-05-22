@@ -35,7 +35,11 @@ public class AssignedIncidentsController {
             description = "Returns incidents assigned to the authenticated user's workload. "
                     + "Agents see incidents assigned to their agent group(s). "
                     + "Admins see all incidents in the system. "
-                    + "Supports filtering by statusId, severityId, incidentTypeId, categoryId, and locationId."
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
+                    + "Results are always sorted by creation date descending (newest first); sort order is not configurable. "
+                    + "Requires `dashboard.admin` or `dashboard.agent` permission."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
@@ -46,6 +50,7 @@ public class AssignedIncidentsController {
     @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAssignedIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
             @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
             @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
@@ -56,6 +61,7 @@ public class AssignedIncidentsController {
     ) {
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 principal.userId(), principal.roleCode(),
+                query,
                 statusId, severityId, incidentTypeId, categoryId, locationId,
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         );
