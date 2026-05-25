@@ -761,4 +761,96 @@ class IncidentServiceTest {
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }
+
+    // ── queryAllIncidents ─────────────────────────────────────────────────────
+
+    @Test
+    void queryAllIncidents_returnsPageFromRepository() {
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(incidentRepository.findAllUnified(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryAllIncidents(null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result).isNotNull();
+        verify(incidentRepository).findAllUnified(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+    }
+
+    @Test
+    void queryAllIncidents_withQuery_buildsLikePattern() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findAllUnified(anyString(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        incidentService.queryAllIncidents("fire", null, null, null, null, null, Pageable.unpaged());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(incidentRepository).findAllUnified(captor.capture(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+        assertThat(captor.getValue()).startsWith("%").endsWith("%").contains("fire");
+    }
+
+    // ── queryDeptIncidents ────────────────────────────────────────────────────
+
+    @Test
+    void queryDeptIncidents_agentWithGroups_returnsDeptPage() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-1")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+    }
+
+    @Test
+    void queryDeptIncidents_noAgentRecord_returnsEmptyPage() {
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(0);
+        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void queryDeptIncidents_agentWithNoGroups_returnsEmptyPage() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of());
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(0);
+        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    // ── queryAssignedIncidents ────────────────────────────────────────────────
+
+    @Test
+    void queryAssignedIncidents_agentFound_returnsPage() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.findByAssignedToIdUnified(eq("agent-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryAssignedIncidents("user-1", null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+    }
+
+    @Test
+    void queryAssignedIncidents_noAgentRecord_returnsEmptyPage() {
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = incidentService.queryAssignedIncidents("user-1", null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(0);
+        verify(incidentRepository, never()).findByAssignedToIdUnified(any(), any(), any(), any(), any(), any(), any(), any());
+    }
 }

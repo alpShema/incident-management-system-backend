@@ -79,9 +79,40 @@ public class IncidentController {
     }
 
     @Operation(
-        summary = "List incidents",
-        description = "Returns a paginated list of incidents created by the authenticated user. "
-                    + "All roles (CLIENT, AGENT, ADMIN) see only incidents they raised. "
+        summary = "List all incidents",
+        description = "Returns a paginated list of all incidents in the system. "
+                    + "Restricted to admins and super admins — agents and clients receive 403. "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
+                    + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
+                    + "Requires `dashboard.admin` permission."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping
+    @PreAuthorize("hasAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAllIncidents(
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
+            @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
+            @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
+            @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
+            @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
+            @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            Pageable pageable
+    ) {
+        Page<IncidentResponse> page = incidentService.queryAllIncidents(
+                query, statusId, severityId, incidentTypeId, categoryId, locationId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+    }
+
+    @Operation(
+        summary = "List my incidents",
+        description = "Returns a paginated list of incidents raised by the authenticated user. "
+                    + "Accessible by all roles (CLIENT, AGENT, ADMIN). "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
                     + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
@@ -91,8 +122,8 @@ public class IncidentController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
-    @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listIncidents(
+    @GetMapping("/my-incidents")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listMyIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
             @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
@@ -107,6 +138,76 @@ public class IncidentController {
                 query, statusId, severityId, incidentTypeId, categoryId, locationId,
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+    }
+
+    @Operation(
+        summary = "List department incidents",
+        description = "Returns a paginated list of incidents within the authenticated user's agent group(s). "
+                    + "Accessible by admins and agents. "
+                    + "Returns an empty list if the caller has no agent group memberships. "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
+                    + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
+                    + "Requires `dashboard.admin` or `dashboard.agent` permission."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/dept-incidents")
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listDeptIncidents(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
+            @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
+            @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
+            @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
+            @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
+            @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            Pageable pageable
+    ) {
+        Page<IncidentResponse> page = incidentService.queryDeptIncidents(
+                principal.userId(),
+                query, statusId, severityId, incidentTypeId, categoryId, locationId,
+                pageable);
+        return ResponseEntity.ok(ApiResponse.success("Department incidents retrieved successfully", PageResponse.from(page)));
+    }
+
+    @Operation(
+        summary = "List assigned incidents",
+        description = "Returns a paginated list of incidents directly assigned to the authenticated user. "
+                    + "Accessible by admins and agents. "
+                    + "Returns an empty list if the caller has no agent record. "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
+                    + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
+                    + "Requires `dashboard.admin` or `dashboard.agent` permission."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/assigned-incidents")
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAssignedIncidents(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
+            @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
+            @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
+            @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
+            @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
+            @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            Pageable pageable
+    ) {
+        Page<IncidentResponse> page = incidentService.queryAssignedIncidents(
+                principal.userId(),
+                query, statusId, severityId, incidentTypeId, categoryId, locationId,
+                pageable);
+        return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(page)));
     }
 
     @Operation(
