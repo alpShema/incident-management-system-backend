@@ -26,7 +26,13 @@ public class MessageController {
 
     private final MessageService messageService;
 
-    @Operation(summary = "Send a message", description = "Send a message on an incident thread. Requires access to the incident.")
+    @Operation(
+            summary = "Send a message",
+            description = "Send a message on an incident thread. Requires access to the incident. "
+                    + "After a successful create, the backend broadcasts the same MessageResponse payload to "
+                    + "`/topic/incidents/{incidentId}/messages` over WebSocket. "
+                    + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Message sent"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident"),
@@ -44,7 +50,12 @@ public class MessageController {
                 .body(ApiResponse.success("Message sent", response));
     }
 
-    @Operation(summary = "List messages", description = "Returns paginated message history for an incident, oldest first.")
+    @Operation(
+            summary = "List messages",
+            description = "Returns paginated message history for an incident, oldest first. "
+                    + "Use this endpoint for initial chat load and re-sync after WebSocket reconnect. "
+                    + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Messages retrieved"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident"),
@@ -63,7 +74,11 @@ public class MessageController {
                         PageRequest.of(page, size)))));
     }
 
-    @Operation(summary = "Delete a message", description = "Authors can delete their own messages. Admins can delete any message.")
+    @Operation(
+            summary = "Delete a message",
+            description = "Authors can delete their own messages. Admins can delete any message. "
+                    + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Message deleted"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Cannot delete another user's message"),
