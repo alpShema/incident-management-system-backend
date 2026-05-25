@@ -76,8 +76,16 @@ public class MessageService {
     private void enforceAccess(String userId, RoleCode role, Incident incident) {
         if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) return;
         if (userId.equals(incident.getUserId())) return;
+        if (role == RoleCode.AGENT && isAssignedToActor(userId, incident)) return;
         if (role == RoleCode.AGENT && isSameDepartment(userId, incident)) return;
         throw new ArmsAuthException("You do not have access to this incident", 403);
+    }
+
+    private boolean isAssignedToActor(String userId, Incident incident) {
+        if (incident.getAssignedToId() == null) return false;
+        return agentRepository.findByUserId(userId)
+                .map(agent -> incident.getAssignedToId().equals(agent.getId()))
+                .orElse(false);
     }
 
     private boolean isSameDepartment(String userId, Incident incident) {
