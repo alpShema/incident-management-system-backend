@@ -59,6 +59,31 @@ public class UserService {
         );
     }
 
+    @Transactional
+    public UserRoleSummaryResponse updateUserStatus(String actorUserId, RoleCode actorRole, String targetUserId, boolean status) {
+        boolean isSelf = actorUserId.equals(targetUserId);
+        boolean isAdmin = actorRole == RoleCode.ADMIN || actorRole == RoleCode.SUPER_ADMIN;
+
+        if (!isSelf && !isAdmin) {
+            throw new ArmsAuthException("You can only update your own status", 403);
+        }
+
+        User user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ArmsAuthException("User not found", 404));
+        user.setStatus(status);
+        userRepository.save(user);
+
+        return new UserRoleSummaryResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getProfileImg(),
+                user.getRoleCode(),
+                user.getStatus(),
+                user.getLocation() != null ? user.getLocation().getName() : null
+        );
+    }
+
     private void ensureAgentRecord(User user, RoleCode roleCode) {
         if (roleCode != RoleCode.AGENT || agentRepository.findByUserId(user.getId()).isPresent()) {
             return;
