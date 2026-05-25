@@ -209,8 +209,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 WHERE m.agentId = i.assignedToId
                 AND m.agentGroupId IN :agentGroupIds
             )
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(DISTINCT i) FROM Incident i
@@ -219,8 +219,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 WHERE m.agentId = i.assignedToId
                 AND m.agentGroupId IN :agentGroupIds
             )
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchByDepartment(
             @Param("agentGroupIds") List<String> agentGroupIds,
@@ -244,20 +244,20 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user
             WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
             WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchByUserId(
             @Param("userId") String userId,
@@ -281,20 +281,20 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchByAgentScope(
             @Param("userId") String userId,
@@ -318,19 +318,19 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.createdBy
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user
-            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
-            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchAll(
             @Param("queryPattern") String queryPattern,
@@ -513,10 +513,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.createdBy
             WHERE i.assignedToId = :agentId
             AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -529,10 +529,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN it.category ic
             WHERE i.assignedToId = :agentId
             AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\\\'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\\\'))
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
