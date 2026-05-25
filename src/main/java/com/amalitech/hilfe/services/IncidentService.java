@@ -20,6 +20,11 @@ public class IncidentService {
 
     private static final String DEFAULT_PRIORITY_NAME = "Low";
 
+    // Frontend sort alias → JPA field path
+    private static final Map<String, String> SORT_FIELD_ALIASES = Map.of(
+            "category", "incidentType.category.name"
+    );
+
     // from-status-id → to-status-id → roles permitted to make that transition
     private static final Map<String, Map<String, Set<RoleCode>>> VALID_TRANSITIONS = Map.of(
             "status-in-progress", Map.of(
@@ -240,10 +245,24 @@ public class IncidentService {
     }
 
     private Pageable ensureSorted(Pageable pageable) {
-        if (pageable.getSort().isSorted()) return pageable;
+        if (pageable.getSort().isSorted()) {
+            Sort translated = translateSort(pageable.getSort());
+            return pageable.isUnpaged()
+                    ? Pageable.unpaged(translated)
+                    : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), translated);
+        }
         if (pageable.isUnpaged()) return Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"));
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
+    }
+
+    private Sort translateSort(Sort sort) {
+        List<Sort.Order> orders = sort.stream()
+                .map(o -> SORT_FIELD_ALIASES.containsKey(o.getProperty())
+                        ? o.withProperty(SORT_FIELD_ALIASES.get(o.getProperty()))
+                        : o)
+                .toList();
+        return Sort.by(orders);
     }
 
     private void enforceAccess(String userId, RoleCode roleCode, Incident incident) {
