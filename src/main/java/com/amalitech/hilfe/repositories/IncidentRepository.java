@@ -350,6 +350,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.userId = :userId
             AND (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
@@ -402,6 +404,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = i.assignedToId
@@ -462,6 +466,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
@@ -511,6 +517,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.assignedToId = :agentId
             AND (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'

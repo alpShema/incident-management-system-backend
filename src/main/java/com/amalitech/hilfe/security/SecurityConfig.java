@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/login", "/auth/refresh-token", "/auth/logout").permitAll()
                         .requestMatchers("/actuator/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/graphiql/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateUserRoleRequest;
+import com.amalitech.hilfe.dto.UpdateUserStatusRequest;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
@@ -72,5 +73,26 @@ public class UserController {
             @Valid @RequestBody UpdateUserRoleRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("User role updated successfully", userService.assignUserRole(principal.userId(), userId, request.roleCode())));
+    }
+
+    @Operation(
+        summary = "Update user status",
+        description = "Updates a user's account status (active/inactive). Users can update their own status. Admins can update any user's status."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Cannot update another user's status"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @PatchMapping("/{userId}/status")
+    public ResponseEntity<ApiResponse<UserRoleSummaryResponse>> updateUserStatus(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Target user ID") @PathVariable String userId,
+            @Valid @RequestBody UpdateUserStatusRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "User status updated",
+                userService.updateUserStatus(principal.userId(), principal.roleCode(), userId, request.status())
+        ));
     }
 }
