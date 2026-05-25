@@ -324,21 +324,21 @@ class IncidentServiceTest {
     @Test
     void searchIncidents_queryWithPercentSign_escapesWildcard() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire\\%%"), any(Pageable.class))).thenReturn(page);
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire!%%"), any(Pageable.class))).thenReturn(page);
 
         incidentService.searchIncidents("user-1", "fire%", Pageable.unpaged());
 
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire\\%%"), any(Pageable.class));
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire!%%"), any(Pageable.class));
     }
 
     @Test
     void searchIncidents_queryWithUnderscore_escapesWildcard() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire\\_test%"), any(Pageable.class))).thenReturn(page);
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire!_test%"), any(Pageable.class))).thenReturn(page);
 
         incidentService.searchIncidents("user-1", "fire_test", Pageable.unpaged());
 
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire\\_test%"), any(Pageable.class));
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire!_test%"), any(Pageable.class));
     }
 
     // ── getIncident ───────────────────────────────────────────────────────────
