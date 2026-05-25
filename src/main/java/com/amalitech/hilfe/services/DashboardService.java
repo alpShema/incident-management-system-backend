@@ -96,9 +96,9 @@ public class DashboardService {
         String queryPattern = null;
         if (query != null && !query.isBlank()) {
             String escaped = query.toLowerCase()
-                    .replace("\\", "\\\\")
-                    .replace("%", "\\%")
-                    .replace("_", "\\_");
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_");
             queryPattern = "%" + escaped + "%";
         }
         final String finalQueryPattern = queryPattern;

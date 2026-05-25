@@ -234,9 +234,9 @@ public class IncidentService {
     private String buildQueryPattern(String query) {
         if (query == null || query.isBlank()) return null;
         return "%" + query.toLowerCase()
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_") + "%";
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_") + "%";
     }
 
     private Pageable ensureSorted(Pageable pageable) {
