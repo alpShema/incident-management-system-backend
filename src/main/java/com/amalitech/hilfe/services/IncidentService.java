@@ -98,24 +98,54 @@ public class IncidentService {
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
-        String queryPattern = null;
-        if (query != null && !query.isBlank()) {
-            String escaped = query.toLowerCase()
-                    .replace("\\", "\\\\")
-                    .replace("%", "\\%")
-                    .replace("_", "\\_");
-            queryPattern = "%" + escaped + "%";
-        }
-
-        final String finalQueryPattern = queryPattern;
-        Pageable sortedPageable = pageable.getSort().isSorted()
-                ? pageable
-                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                        Sort.by(Sort.Direction.DESC, "createdAt"));
-
         return incidentRepository
-                .findByUserIdUnified(userId, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
+                .findByUserIdUnified(userId, buildQueryPattern(query), statusId, severityId,
+                        incidentTypeId, categoryId, locationId, ensureSorted(pageable))
                 .map(IncidentResponse::from);
+    }
+
+    public Page<IncidentResponse> queryAllIncidents(
+            String query,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Pageable pageable
+    ) {
+        return incidentRepository
+                .findAllUnified(buildQueryPattern(query), statusId, severityId,
+                        incidentTypeId, categoryId, locationId, ensureSorted(pageable))
+                .map(IncidentResponse::from);
+    }
+
+    public Page<IncidentResponse> queryDeptIncidents(
+            String userId,
+            String query,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Pageable pageable
+    ) {
+        Pageable sorted = ensureSorted(pageable);
+        String queryPattern = buildQueryPattern(query);
+        return findAgentGroupIds(userId)
+                .filter(ids -> !ids.isEmpty())
+                .map(ids -> incidentRepository
+                        .findByDepartmentUnified(ids, queryPattern, statusId, severityId,
+                                incidentTypeId, categoryId, locationId, sorted)
+                        .map(IncidentResponse::from))
+                .orElse(new PageImpl<>(List.of(), sorted, 0));
+    }
+
+    public Page<IncidentResponse> queryAssignedIncidents(
+            String userId,
+            String query,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Pageable pageable
+    ) {
+        Pageable sorted = ensureSorted(pageable);
+        String queryPattern = buildQueryPattern(query);
+        return agentRepository.findByUserId(userId)
+                .map(agent -> incidentRepository
+                        .findByAssignedToIdUnified(agent.getId(), queryPattern, statusId, severityId,
+                                incidentTypeId, categoryId, locationId, sorted)
+                        .map(IncidentResponse::from))
+                .orElse(new PageImpl<>(List.of(), sorted, 0));
     }
 
     public Page<IncidentResponse> searchIncidents(String userId, String query, Pageable pageable) {
@@ -123,21 +153,12 @@ public class IncidentService {
             throw new ArmsAuthException("Search query must not be blank", 400);
         }
 
-        Pageable sortedPageable = pageable.getSort().isSorted()
-                ? pageable
-                : pageable.isUnpaged()
-                        ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"))
-                        : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                                Sort.by(Sort.Direction.DESC, "createdAt"));
-
-        String escaped = query.toLowerCase()
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
-        String queryPattern = "%" + escaped + "%";
+        Pageable sortedPageable = pageable.isUnpaged()
+                ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : ensureSorted(pageable);
 
         return incidentRepository
-                .searchByUserId(userId, queryPattern, sortedPageable)
+                .searchByUserId(userId, buildQueryPattern(query), sortedPageable)
                 .map(IncidentResponse::from);
     }
 
@@ -209,6 +230,21 @@ public class IncidentService {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private String buildQueryPattern(String query) {
+        if (query == null || query.isBlank()) return null;
+        return "%" + query.toLowerCase()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_") + "%";
+    }
+
+    private Pageable ensureSorted(Pageable pageable) {
+        if (pageable.getSort().isSorted()) return pageable;
+        if (pageable.isUnpaged()) return Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"));
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+    }
 
     private void enforceAccess(String userId, RoleCode roleCode, Incident incident) {
         if (roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) {
