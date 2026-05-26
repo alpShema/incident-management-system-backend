@@ -30,8 +30,16 @@ public class DepartmentService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    public Page<DepartmentResponse> listDepartments(Pageable pageable) {
-        return departmentRepository.findByStatus(true, pageable)
+    public Page<DepartmentResponse> listDepartments(String query, Boolean status, Pageable pageable) {
+        String queryPattern = null;
+        if (query != null && !query.isBlank()) {
+            queryPattern = "%" + query.toLowerCase()
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_") + "%";
+        }
+        Boolean resolvedStatus = status == null ? Boolean.TRUE : status;
+        return departmentRepository.search(queryPattern, resolvedStatus, pageable)
                 .map(this::toResponse);
     }
 
