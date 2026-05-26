@@ -19,6 +19,9 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -188,4 +191,32 @@ class IncidentCategoryControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    // ── GET /incident-categories/search ──────────────────────────────────────
+
+    @Test
+    void searchCategories_withQuery_returns200WithPage() throws Exception {
+        when(categoryService.searchCategories(eq("facility"), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 10), 1));
+
+        mvc.perform(get("/incident-categories/search")
+                        .param("query", "facility")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value("cat-1"))
+                .andExpect(jsonPath("$.data.items[0].name").value("Facility"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void searchCategories_noQuery_returns200() throws Exception {
+        when(categoryService.searchCategories(eq(null), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 10), 1));
+
+        mvc.perform(get("/incident-categories/search")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
 }
