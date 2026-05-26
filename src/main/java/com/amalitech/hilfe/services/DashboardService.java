@@ -28,11 +28,10 @@ public class DashboardService {
 
     public DashboardStats getStats(String userId, RoleCode role) {
         if (role == RoleCode.AGENT) {
-            return findAgentGroupIds(userId)
-                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> {
-                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForDepartment(agentGroupIds));
-                        long total = incidentRepository.countByDepartment(agentGroupIds);
+            return agentRepository.findByUserId(userId)
+                    .map(agent -> {
+                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agent.getId()));
+                        long total = incidentRepository.countByAssignedToId(agent.getId());
                         return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
                     })
                     .orElse(new DashboardStats(0, 0, 0, 0, 0));
@@ -65,20 +64,17 @@ public class DashboardService {
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
             }
             case AGENT -> {
-                var agentGroupIdsOpt = findAgentGroupIds(userId).filter(agentGroupIds -> !agentGroupIds.isEmpty());
-                byStatus = agentGroupIdsOpt.map(agentGroupIds -> toLabel(since != null
-                        ? incidentRepository.countByStatusForDepartmentSince(agentGroupIds, since)
-                        : incidentRepository.countByStatusForDepartment(agentGroupIds)))
+                var agentOpt = agentRepository.findByUserId(userId);
+                byStatus = agentOpt.map(agent -> toLabel(since != null
+                        ? incidentRepository.countByStatusForAgentSince(agent.getId(), since)
+                        : incidentRepository.countByStatusForAgent(agent.getId())))
                         .orElse(List.of());
 
-                List<MonthlyCount> myTrend = toMonthlyCount(
-                        incidentRepository.countByMonthForUser(userId, trendSince));
-                List<MonthlyCount> agentGroupTrend = agentGroupIdsOpt
-                        .map(agentGroupIds -> toMonthlyCount(incidentRepository.countByMonthForDepartment(agentGroupIds, trendSince)))
+                List<MonthlyCount> myTrend = agentOpt
+                        .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
                         .orElse(List.of());
                 trends = List.of(
-                        new TrendSeries("My Incidents", myTrend),
-                        new TrendSeries("Agent Group Incidents", agentGroupTrend)
+                        new TrendSeries("My Assigned Incidents", myTrend)
                 );
             }
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);

@@ -79,13 +79,12 @@ class DashboardServiceTest {
     void getStats_agentRole_agentFound_returnsAgentStats() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.countByStatusForDepartment(List.of("dept-1"))).thenReturn(List.of(
+        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of(
                 new Object[]{"Open", 4L},
                 new Object[]{"Closed", 2L},
                 new Object[]{"Resolved", 1L}
         ));
-        when(incidentRepository.countByDepartment(List.of("dept-1"))).thenReturn(7L);
+        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(7L);
 
         DashboardStats stats = dashboardService.getStats("user-1", RoleCode.AGENT);
 
@@ -134,28 +133,24 @@ class DashboardServiceTest {
     void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.countByStatusForDepartment(List.of("dept-1"))).thenReturn(List.of());
-        when(incidentRepository.countByMonthForUser(anyString(), any(Instant.class))).thenReturn(List.of());
-        when(incidentRepository.countByMonthForDepartment(eq(List.of("dept-1")), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
-        assertThat(charts.trends()).hasSize(2);
-        assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
-        assertThat(charts.trends().get(1).label()).isEqualTo("Agent Group Incidents");
+        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends().get(0).label()).isEqualTo("My Assigned Incidents");
     }
 
     @Test
-    void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndTwoSeries() {
+    void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndSeries() {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
-        when(incidentRepository.countByMonthForUser(anyString(), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
         assertThat(charts.byStatus()).isEmpty();
-        assertThat(charts.trends()).hasSize(2);
-        assertThat(charts.trends().get(1).data()).isEmpty();
+        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends().get(0).data()).isEmpty();
     }
 
     @Test
