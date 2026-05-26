@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.dto;
 
 import com.amalitech.hilfe.models.Message;
+import com.amalitech.hilfe.models.User;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -22,5 +23,14 @@ public record MessageResponse(
                 ? new SenderInfo(m.getSenderId(), m.getSender().getFullName(), m.getSender().getProfileImg())
                 : new SenderInfo(m.getSenderId(), null, null);
         return new MessageResponse(m.getId(), m.getIncidentId(), sender, m.getContent(), m.getCreatedAt(), m.getUpdatedAt());
+    }
+
+    public static MessageResponse from(Message m, User sender) {
+        SenderInfo senderInfo = new SenderInfo(
+                m.getSenderId(),
+                sender != null ? sender.getFullName() : null,
+                sender != null ? sender.getProfileImg() : null
+        );
+        return new MessageResponse(m.getId(), m.getIncidentId(), senderInfo, m.getContent(), m.getCreatedAt(), m.getUpdatedAt());
     }
 }
