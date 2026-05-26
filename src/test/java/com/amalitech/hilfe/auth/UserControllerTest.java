@@ -69,7 +69,7 @@ class UserControllerTest {
 
     @Test
     void assignUserRole_adminRequest_returnsUpdatedUserRole() throws Exception {
-        when(userService.assignUserRole(anyString(), eq("u1"), eq(RoleCode.ADMIN))).thenReturn(
+        when(userService.assignUserRole(anyString(), eq("u1"), eq("ADMIN"))).thenReturn(
                 new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra", 3L, 0L)
         );
 
@@ -111,12 +111,15 @@ class UserControllerTest {
     }
 
     @Test
-    void assignUserRole_invalidEnumValue_returns400WithSpecificMessage() throws Exception {
+    void assignUserRole_invalidRoleCode_returns404() throws Exception {
+        when(userService.assignUserRole(anyString(), eq("u1"), eq("CLIENTS")))
+                .thenThrow(new com.amalitech.hilfe.exceptions.ArmsAuthException("Role not found", 404));
+
         mvc.perform(patch("/users/u1/role")
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("{\"roleCode\":\"CLIENTS\"}")
                         .with(authentication(adminAuth())))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Invalid value 'CLIENTS' for roleCode. Accepted values: CLIENT, AGENT, ADMIN, SUPER_ADMIN"));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Role not found"));
     }
 }

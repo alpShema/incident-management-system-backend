@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.PageResponse;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.DashboardService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -60,11 +61,20 @@ public class AssignedIncidentsController {
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size
     ) {
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                principal.userId(), principal.roleCode(),
+                principal.userId(), parseRoleCode(principal.roleCode()),
                 query,
                 statusId, severityId, incidentTypeId, categoryId, locationId,
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         );
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(result)));
+    }
+
+    private RoleCode parseRoleCode(String roleCode) {
+        if (roleCode == null) return null;
+        try {
+            return RoleCode.valueOf(roleCode.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }

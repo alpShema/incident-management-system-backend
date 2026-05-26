@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
 import com.amalitech.hilfe.dto.dashboard.DashboardStats;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.DashboardService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -61,7 +62,7 @@ public class DashboardController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Stats retrieved successfully",
-                dashboardService.getStats(principal.userId(), principal.roleCode())
+                dashboardService.getStats(principal.userId(), parseRoleCode(principal.roleCode()))
         ));
     }
 
@@ -111,8 +112,17 @@ public class DashboardController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Chart data retrieved successfully",
-                dashboardService.getCharts(principal.userId(), principal.roleCode(), period)
+                dashboardService.getCharts(principal.userId(), parseRoleCode(principal.roleCode()), period)
         ));
+    }
+
+    private RoleCode parseRoleCode(String roleCode) {
+        if (roleCode == null) return null;
+        try {
+            return RoleCode.valueOf(roleCode.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
 }

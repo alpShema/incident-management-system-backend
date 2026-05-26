@@ -24,9 +24,8 @@ public class RolePermission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "role_code", nullable = false)
-    private RoleCode roleCode;
+    private String roleCode;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "permission_id", nullable = false)
@@ -47,5 +46,17 @@ public class RolePermission {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = Instant.now();
+    }
+
+    public static class RolePermissionBuilder {
+        public RolePermissionBuilder roleCode(String roleCode) {
+            this.roleCode = roleCode;
+            return this;
+        }
+
+        public RolePermissionBuilder roleCode(RoleCode roleCode) {
+            this.roleCode = roleCode == null ? null : roleCode.name();
+            return this;
+        }
     }
 }

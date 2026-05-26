@@ -14,13 +14,16 @@ import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +37,7 @@ public class MessageService {
     private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
-    public MessageResponse sendMessage(String userId, RoleCode role, String incidentId, String content) {
+    public MessageResponse sendMessage(String userId, String role, String incidentId, String content) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         enforceAccess(userId, role, incident);
@@ -56,19 +59,40 @@ public class MessageService {
         return response;
     }
 
-    public Page<MessageResponse> listMessages(String userId, RoleCode role, String incidentId, Pageable pageable) {
+    public MessageResponse sendMessage(String userId, RoleCode role, String incidentId, String content) {
+        return sendMessage(userId, role == null ? null : role.name(), incidentId, content);
+    }
+
+    public Page<MessageResponse> listMessages(String userId, String role, String incidentId, Pageable pageable) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         enforceAccess(userId, role, incident);
-        return messageRepository.findByIncidentId(incidentId, pageable).map(MessageResponse::from);
+
+        Page<Message> messagePage = messageRepository.findByIncidentId(incidentId, pageable);
+
+        List<MessageResponse> responses = messagePage.getContent().stream()
+                .map(MessageResponse::from)
+                .collect(Collectors.toList());
+
+        // If sorted DESC, reverse items so oldest appears first within the page
+        var createdAtOrder = pageable.getSort().getOrderFor("createdAt");
+        if (createdAtOrder != null && createdAtOrder.isDescending()) {
+            Collections.reverse(responses);
+        }
+
+        return new PageImpl<>(responses, pageable, messagePage.getTotalElements());
+    }
+
+    public Page<MessageResponse> listMessages(String userId, RoleCode role, String incidentId, Pageable pageable) {
+        return listMessages(userId, role == null ? null : role.name(), incidentId, pageable);
     }
 
     @Transactional
-    public void deleteMessage(String userId, RoleCode role, String messageId) {
+    public void deleteMessage(String userId, String role, String messageId) {
         Message message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new ArmsAuthException("Message not found", 404));
 
-        boolean isAdmin = role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN;
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role);
         boolean isAuthor = message.getSenderId().equals(userId);
 
         if (!isAdmin && !isAuthor) {
@@ -78,11 +102,15 @@ public class MessageService {
         messageRepository.delete(message);
     }
 
-    private void enforceAccess(String userId, RoleCode role, Incident incident) {
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) return;
+    public void deleteMessage(String userId, RoleCode role, String messageId) {
+        deleteMessage(userId, role == null ? null : role.name(), messageId);
+    }
+
+    private void enforceAccess(String userId, String role, Incident incident) {
+        if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
         if (userId.equals(incident.getUserId())) return;
-        if (role == RoleCode.AGENT && isAssignedToActor(userId, incident)) return;
-        if (role == RoleCode.AGENT && isSameDepartment(userId, incident)) return;
+        if ("AGENT".equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
+        if ("AGENT".equalsIgnoreCase(role) && isSameDepartment(userId, incident)) return;
         throw new ArmsAuthException("You do not have access to this incident", 403);
     }
 

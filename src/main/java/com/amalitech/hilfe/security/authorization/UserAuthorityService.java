@@ -1,7 +1,7 @@
 package com.amalitech.hilfe.security.authorization;
 
-import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,7 +61,7 @@ public class UserAuthorityService {
     }
 
     public ResolvedAuthorities resolve(User user) {
-        RoleCode roleCode = resolveRoleCode(user);
+        String roleCode = resolveRoleCode(user);
         Set<String> authorities = new LinkedHashSet<>();
 
         authorities.add(toRoleAuthority(roleCode));
@@ -77,20 +77,20 @@ public class UserAuthorityService {
         );
     }
 
-    private RoleCode resolveRoleCode(User user) {
+    private String resolveRoleCode(User user) {
         if (isBootstrapSuperAdmin(user)) {
-            return RoleCode.SUPER_ADMIN;
+            return "SUPER_ADMIN";
         }
         if (user.getRoleCode() != null) {
             return user.getRoleCode();
         }
         if (user.getAdmin() != null && user.getAdmin().isStatus()) {
-            return RoleCode.ADMIN;
+            return "ADMIN";
         }
         if (user.getAgent() != null && Boolean.TRUE.equals(user.getAgent().getStatus())) {
-            return RoleCode.AGENT;
+            return "AGENT";
         }
-        return RoleCode.CLIENT;
+        return "CLIENT";
     }
 
     private boolean isBootstrapSuperAdmin(User user) {
@@ -112,20 +112,29 @@ public class UserAuthorityService {
         return permissions;
     }
 
-    private Set<String> loadRolePermissionCodes(RoleCode roleCode) {
+    private Set<String> loadRolePermissionCodes(String roleCode) {
         return new LinkedHashSet<>(rolePermissionRepository.findPermissionCodesByRoleCode(roleCode));
     }
 
-    private String toRoleAuthority(RoleCode roleCode) {
-        return ROLE_PREFIX + roleCode.name();
+    private String toRoleAuthority(String roleCode) {
+        return ROLE_PREFIX + roleCode;
     }
 
     public record ResolvedAuthorities(
             String userId,
             String email,
-            RoleCode roleCode,
+            String roleCode,
             Collection<? extends GrantedAuthority> authorities,
             int tokenVersion
     ) {
+        public ResolvedAuthorities(
+                String userId,
+                String email,
+                RoleCode roleCode,
+                Collection<? extends GrantedAuthority> authorities,
+                int tokenVersion
+        ) {
+            this(userId, email, roleCode == null ? null : roleCode.name(), authorities, tokenVersion);
+        }
     }
 }

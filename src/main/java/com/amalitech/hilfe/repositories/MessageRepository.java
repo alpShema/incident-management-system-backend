@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface MessageRepository extends JpaRepository<Message, String> {
 
-    @Query("SELECT m FROM Message m LEFT JOIN FETCH m.sender WHERE m.incidentId = :incidentId ORDER BY m.createdAt ASC")
+    @Query("SELECT m FROM Message m LEFT JOIN FETCH m.sender WHERE m.incidentId = :incidentId")
     Page<Message> findByIncidentId(@Param("incidentId") String incidentId, Pageable pageable);
 
     @Query("SELECT m FROM Message m LEFT JOIN FETCH m.sender WHERE m.id = :id")
