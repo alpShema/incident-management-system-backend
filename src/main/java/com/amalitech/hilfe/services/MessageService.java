@@ -1,15 +1,20 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.dto.AttachmentRef;
 import com.amalitech.hilfe.dto.MessageResponse;
+import com.amalitech.hilfe.dto.PresignedUrlRequest;
+import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Message;
+import com.amalitech.hilfe.models.MessageMedia;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.MessageRepository;
+import com.amalitech.hilfe.repositories.MessageMediaRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -34,13 +39,27 @@ public class MessageService {
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final UserRepository userRepository;
+    private final MessageMediaRepository messageMediaRepository;
+    private final MediaService mediaService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    @Transactional
-    public MessageResponse sendMessage(String userId, String role, String incidentId, String content) {
+    public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         enforceAccess(userId, role, incident);
+        return mediaService.generateMessagePresignedUploadUrl(request);
+    }
+
+    public PresignedUrlResponse generateMessagePresignedUrl(String userId, RoleCode role, String incidentId, PresignedUrlRequest request) {
+        return generateMessagePresignedUrl(userId, role == null ? null : role.name(), incidentId, request);
+    }
+
+    @Transactional
+    public MessageResponse sendMessage(String userId, String role, String incidentId, String content, List<AttachmentRef> attachments) {
+        Incident incident = incidentRepository.findByIdWithDetails(incidentId)
+                .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+        enforceAccess(userId, role, incident);
+        validateMessagePayload(content, attachments);
 
         User sender = userRepository.findById(userId)
                 .orElseThrow(() -> new ArmsAuthException("User not found", 404));
@@ -49,18 +68,26 @@ public class MessageService {
                 .id(UUID.randomUUID().toString())
                 .senderId(userId)
                 .incidentId(incidentId)
-                .content(content)
+                .content(trimToNull(content))
                 .build());
 
+        List<MessageMedia> media = List.of();
+        if (attachments != null && !attachments.isEmpty()) {
+            media = mediaService.createMediaForMessage(incidentId, saved.getId(), attachments);
+        }
+
         messageRepository.flush();
-        MessageResponse response = MessageResponse.from(saved, sender);
+        MessageResponse response = MessageResponse.withAttachments(
+                MessageResponse.from(saved, sender),
+                mediaService.toMediaResponsesForMessage(media)
+        );
 
         messagingTemplate.convertAndSend("/topic/incidents/" + incidentId + "/messages", response);
         return response;
     }
 
-    public MessageResponse sendMessage(String userId, RoleCode role, String incidentId, String content) {
-        return sendMessage(userId, role == null ? null : role.name(), incidentId, content);
+    public MessageResponse sendMessage(String userId, RoleCode role, String incidentId, String content, List<AttachmentRef> attachments) {
+        return sendMessage(userId, role == null ? null : role.name(), incidentId, content, attachments);
     }
 
     public Page<MessageResponse> listMessages(String userId, String role, String incidentId, Pageable pageable) {
@@ -70,8 +97,17 @@ public class MessageService {
 
         Page<Message> messagePage = messageRepository.findByIncidentId(incidentId, pageable);
 
+        var messageIds = messagePage.getContent().stream().map(Message::getId).toList();
+        var attachmentsByMessageId = (messageIds.isEmpty() ? List.<MessageMedia>of() : messageMediaRepository.findByMessageIdIn(messageIds)).stream()
+                .collect(Collectors.groupingBy(MessageMedia::getMessageId));
+
         List<MessageResponse> responses = messagePage.getContent().stream()
-                .map(MessageResponse::from)
+                .map(msg -> MessageResponse.withAttachments(
+                        MessageResponse.from(msg),
+                        mediaService.toMediaResponsesForMessage(
+                                attachmentsByMessageId.getOrDefault(msg.getId(), List.of())
+                        )
+                ))
                 .collect(Collectors.toList());
 
         // If sorted DESC, reverse items so oldest appears first within the page
@@ -104,6 +140,20 @@ public class MessageService {
 
     public void deleteMessage(String userId, RoleCode role, String messageId) {
         deleteMessage(userId, role == null ? null : role.name(), messageId);
+    }
+
+    private void validateMessagePayload(String content, List<AttachmentRef> attachments) {
+        boolean hasContent = content != null && !content.trim().isEmpty();
+        boolean hasAttachments = attachments != null && !attachments.isEmpty();
+        if (!hasContent && !hasAttachments) {
+            throw new ArmsAuthException("Either content or attachments must be provided", 400);
+        }
+    }
+
+    private String trimToNull(String content) {
+        if (content == null) return null;
+        String trimmed = content.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void enforceAccess(String userId, String role, Incident incident) {
