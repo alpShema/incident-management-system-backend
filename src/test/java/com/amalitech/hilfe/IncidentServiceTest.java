@@ -860,14 +860,14 @@ class IncidentServiceTest {
     @Test
     void queryIncidents_sortByCategory_translatesToCategoryPath() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdUnified(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(incidentRepository.findByUserIdUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
-        incidentService.queryIncidents("user-1", null, null, null, null, null, null, categorySort);
+        incidentService.queryIncidents("user-1", null, null, null, null, null, null, null, null, categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
@@ -876,14 +876,14 @@ class IncidentServiceTest {
     @Test
     void queryAllIncidents_sortByCategory_translatesToCategoryPath() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllUnified(any(), any(), any(), any(), any(), any(), any()))
+        when(incidentRepository.findAllUnified(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
-        incidentService.queryAllIncidents(null, null, null, null, null, null, categorySort);
+        incidentService.queryAllIncidents(null, null, null, null, null, null, null, null, categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findAllUnified(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        verify(incidentRepository).findAllUnified(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
@@ -895,14 +895,14 @@ class IncidentServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
-        when(incidentRepository.findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(incidentRepository.findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
-        incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, categorySort);
+        incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByDepartmentUnified(any(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        verify(incidentRepository).findByDepartmentUnified(any(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
@@ -913,14 +913,14 @@ class IncidentServiceTest {
         Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAssignedToIdUnified(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(incidentRepository.findByAssignedToIdUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
-        incidentService.queryAssignedIncidents("user-1", null, null, null, null, null, null, categorySort);
+        incidentService.queryAssignedIncidents("user-1", null, null, null, null, null, null, null, null, categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
