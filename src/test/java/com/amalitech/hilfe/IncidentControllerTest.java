@@ -252,7 +252,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_adminAuth_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAllIncidents(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").with(authentication(adminAuth())))
@@ -263,7 +263,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_keywordOnly_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(eq("projector"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAllIncidents(eq("projector"), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").param("query", "projector").with(authentication(adminAuth())))
@@ -273,7 +273,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_filterOnly_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(isNull(), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAllIncidents(isNull(), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").param("statusId", "status-open").with(authentication(adminAuth())))
@@ -283,7 +283,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_combinedKeywordAndFilter_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAllIncidents(eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").param("query", "fire").param("statusId", "status-open").with(authentication(adminAuth())))
@@ -293,7 +293,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_emptyResult_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(any(), any(), any(), any(), any(), any(), any()))
+        when(incidentService.queryAllIncidents(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/incidents").with(authentication(adminAuth())))
@@ -312,7 +312,7 @@ class IncidentControllerTest {
 
     @Test
     void listMyIncidents_clientAuth_returns200() throws Exception {
-        when(incidentService.queryIncidents(eq("user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryIncidents(eq("user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/my-incidents").with(authentication(clientAuth())))
@@ -323,7 +323,7 @@ class IncidentControllerTest {
 
     @Test
     void listMyIncidents_agentAuth_returns200() throws Exception {
-        when(incidentService.queryIncidents(eq("agent-user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryIncidents(eq("agent-user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/my-incidents").with(authentication(agentAuth())))
@@ -333,7 +333,7 @@ class IncidentControllerTest {
 
     @Test
     void listMyIncidents_adminAuth_returns200() throws Exception {
-        when(incidentService.queryIncidents(eq("admin-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryIncidents(eq("admin-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/my-incidents").with(authentication(adminAuth())))
@@ -343,7 +343,7 @@ class IncidentControllerTest {
 
     @Test
     void listMyIncidents_keywordOnly_returns200() throws Exception {
-        when(incidentService.queryIncidents(anyString(), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryIncidents(anyString(), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/my-incidents").param("query", "fire").with(authentication(clientAuth())))
@@ -353,7 +353,7 @@ class IncidentControllerTest {
 
     @Test
     void listMyIncidents_combinedQueryAndFilter_returns200() throws Exception {
-        when(incidentService.queryIncidents(anyString(), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryIncidents(anyString(), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/my-incidents").param("query", "fire").param("statusId", "status-open").with(authentication(clientAuth())))
@@ -363,7 +363,7 @@ class IncidentControllerTest {
 
     @Test
     void listMyIncidents_emptyResult_returns200() throws Exception {
-        when(incidentService.queryIncidents(anyString(), any(), any(), any(), any(), any(), any(), any()))
+        when(incidentService.queryIncidents(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/incidents/my-incidents").with(authentication(clientAuth())))
@@ -388,7 +388,7 @@ class IncidentControllerTest {
 
     @Test
     void listDeptIncidents_adminAuth_returns200() throws Exception {
-        when(incidentService.queryDeptIncidents(eq("admin-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryDeptIncidents(eq("admin-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/dept-incidents").with(authentication(adminAuth())))
@@ -399,7 +399,7 @@ class IncidentControllerTest {
 
     @Test
     void listDeptIncidents_agentAuth_returns200() throws Exception {
-        when(incidentService.queryDeptIncidents(eq("agent-user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryDeptIncidents(eq("agent-user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/dept-incidents").with(authentication(agentAuth())))
@@ -409,7 +409,7 @@ class IncidentControllerTest {
 
     @Test
     void listDeptIncidents_keywordOnly_returns200() throws Exception {
-        when(incidentService.queryDeptIncidents(anyString(), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryDeptIncidents(anyString(), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/dept-incidents").param("query", "fire").with(authentication(adminAuth())))
@@ -419,7 +419,7 @@ class IncidentControllerTest {
 
     @Test
     void listDeptIncidents_combinedQueryAndFilter_returns200() throws Exception {
-        when(incidentService.queryDeptIncidents(anyString(), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryDeptIncidents(anyString(), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/dept-incidents").param("query", "fire").param("statusId", "status-open").with(authentication(adminAuth())))
@@ -429,7 +429,7 @@ class IncidentControllerTest {
 
     @Test
     void listDeptIncidents_emptyResult_returns200() throws Exception {
-        when(incidentService.queryDeptIncidents(anyString(), any(), any(), any(), any(), any(), any(), any()))
+        when(incidentService.queryDeptIncidents(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/incidents/dept-incidents").with(authentication(adminAuth())))
@@ -454,7 +454,7 @@ class IncidentControllerTest {
 
     @Test
     void listAssignedIncidents_adminAuth_returns200() throws Exception {
-        when(incidentService.queryAssignedIncidents(eq("admin-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAssignedIncidents(eq("admin-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/assigned-incidents").with(authentication(adminAuth())))
@@ -465,7 +465,7 @@ class IncidentControllerTest {
 
     @Test
     void listAssignedIncidents_agentAuth_returns200() throws Exception {
-        when(incidentService.queryAssignedIncidents(eq("agent-user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAssignedIncidents(eq("agent-user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/assigned-incidents").with(authentication(agentAuth())))
@@ -475,7 +475,7 @@ class IncidentControllerTest {
 
     @Test
     void listAssignedIncidents_keywordOnly_returns200() throws Exception {
-        when(incidentService.queryAssignedIncidents(anyString(), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAssignedIncidents(anyString(), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/assigned-incidents").param("query", "fire").with(authentication(agentAuth())))
@@ -485,7 +485,7 @@ class IncidentControllerTest {
 
     @Test
     void listAssignedIncidents_combinedQueryAndFilter_returns200() throws Exception {
-        when(incidentService.queryAssignedIncidents(anyString(), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(incidentService.queryAssignedIncidents(anyString(), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents/assigned-incidents").param("query", "fire").param("statusId", "status-open").with(authentication(agentAuth())))
@@ -495,7 +495,7 @@ class IncidentControllerTest {
 
     @Test
     void listAssignedIncidents_emptyResult_returns200() throws Exception {
-        when(incidentService.queryAssignedIncidents(anyString(), any(), any(), any(), any(), any(), any(), any()))
+        when(incidentService.queryAssignedIncidents(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/incidents/assigned-incidents").with(authentication(adminAuth())))
@@ -509,7 +509,7 @@ class IncidentControllerTest {
     @Test
     void searchIncidents_validQuery_returns200() throws Exception {
         var pagedResponse = new PageImpl<>(List.of(stubResponse()));
-        when(incidentService.searchIncidents(any(), eq("projector"), any())).thenReturn(pagedResponse);
+        when(incidentService.searchIncidents(any(), eq("projector"), any(), any(), any())).thenReturn(pagedResponse);
 
         mvc.perform(get("/incidents/search").param("query", "projector")
                         .with(authentication(new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own")))))
@@ -520,7 +520,7 @@ class IncidentControllerTest {
 
     @Test
     void searchIncidents_blankQuery_returns400() throws Exception {
-        when(incidentService.searchIncidents(any(), eq(""), any()))
+        when(incidentService.searchIncidents(any(), eq(""), any(), any(), any()))
                 .thenThrow(new ArmsAuthException("Search query must not be blank", 400));
 
         mvc.perform(get("/incidents/search").param("query", "")
@@ -545,7 +545,7 @@ class IncidentControllerTest {
 
     @Test
     void searchIncidents_emptyResults_returns200WithEmptyPage() throws Exception {
-        when(incidentService.searchIncidents(any(), anyString(), any())).thenReturn(new PageImpl<>(List.of()));
+        when(incidentService.searchIncidents(any(), anyString(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/incidents/search").param("query", "nonexistent")
                         .with(authentication(new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.read.own")))))

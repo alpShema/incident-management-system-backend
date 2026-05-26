@@ -248,6 +248,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
               OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -258,10 +260,14 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
               OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """)
     Page<Incident> searchByUserId(
             @Param("userId") String userId,
             @Param("queryPattern") String queryPattern,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
             Pageable pageable
     );
 
@@ -363,6 +369,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -379,6 +387,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """)
     Page<Incident> findByUserIdUnified(
             @Param("userId") String userId,
@@ -388,6 +398,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             @Param("incidentTypeId") String incidentTypeId,
             @Param("categoryId") String categoryId,
             @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
             Pageable pageable
     );
 
@@ -421,6 +433,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """,
             countQuery = """
             SELECT COUNT(DISTINCT i) FROM Incident i
@@ -441,6 +455,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """)
     Page<Incident> findByDepartmentUnified(
             @Param("agentGroupIds") List<String> agentGroupIds,
@@ -450,6 +466,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             @Param("incidentTypeId") String incidentTypeId,
             @Param("categoryId") String categoryId,
             @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
             Pageable pageable
     );
 
@@ -478,6 +496,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -493,6 +513,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """)
     Page<Incident> findAllUnified(
             @Param("queryPattern") String queryPattern,
@@ -501,6 +523,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             @Param("incidentTypeId") String incidentTypeId,
             @Param("categoryId") String categoryId,
             @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
             Pageable pageable
     );
 
@@ -530,6 +554,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -546,6 +572,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
             AND (:categoryId IS NULL OR it.categoryId = :categoryId)
             AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """)
     Page<Incident> findByAssignedToIdUnified(
             @Param("agentId") String agentId,
@@ -555,6 +583,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             @Param("incidentTypeId") String incidentTypeId,
             @Param("categoryId") String categoryId,
             @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
             Pageable pageable
     );
 
