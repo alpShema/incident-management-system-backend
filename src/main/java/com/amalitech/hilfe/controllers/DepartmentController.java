@@ -23,7 +23,7 @@ import java.util.List;
 public class DepartmentController {
     private final DepartmentService departmentService;
 
-    @Operation(summary = "List departments", description = "Returns internal departments as a paginated response. Supports optional text search (`query`) on name/description and optional status filter (`status`). Defaults to active departments when status is omitted. Requires `department.read` permission.")
+    @Operation(summary = "List departments", description = "Returns internal departments as a paginated response. Supports optional text search (`query`) on name/description and optional status filter (`status`). When status is omitted, both active and inactive departments are returned. Requires `department.read` permission.")
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<DepartmentResponse>>> listDepartments(
