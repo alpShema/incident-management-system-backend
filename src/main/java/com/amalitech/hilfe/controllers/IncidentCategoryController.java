@@ -54,19 +54,6 @@ public class IncidentCategoryController {
                 PageResponse.from(categoryService.searchCategories(query, pageable))));
     }
 
-    @Operation(summary = "Search incident categories", description = "Returns a paginated list of active categories filtered by an optional keyword. Searches across category name, description, and department name.")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
-    })
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> searchCategories(
-            @Parameter(description = "Keyword to search by name, description, or department") @RequestParam(required = false) String query,
-            Pageable pageable
-    ) {
-        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
-                PageResponse.from(categoryService.searchCategories(query, pageable))));
-    }
-
     @Operation(summary = "Create an incident category", description = "Creates a new category under an internal department. `departmentId` is required. Requires `incident-category.create` permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Category created"),
