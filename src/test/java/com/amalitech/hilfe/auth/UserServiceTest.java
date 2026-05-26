@@ -6,6 +6,7 @@ import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.UserService;
@@ -32,6 +33,7 @@ class UserServiceTest {
 
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
+    @Mock IncidentRepository incidentRepository;
     @Mock ActivityLogService activityLogService;
     @InjectMocks UserService userService;
 
@@ -39,7 +41,7 @@ class UserServiceTest {
     void getUsers_returnsPaginatedProjection() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of(
-                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra")
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra", 2L, 1L)
         ));
         when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), isNull(), eq(pageable))).thenReturn(page);
 
@@ -60,6 +62,8 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(incidentRepository.countByUserId("u1")).thenReturn(3L);
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
 
@@ -80,6 +84,7 @@ class UserServiceTest {
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
+        when(incidentRepository.countByUserId("u1")).thenReturn(2L);
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
 
@@ -102,6 +107,8 @@ class UserServiceTest {
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(
                 Agent.builder().id("agent-1").userId("u1").status(true).build()));
+        when(incidentRepository.countByUserId("u1")).thenReturn(4L);
+        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(5L);
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
 
@@ -128,6 +135,8 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(incidentRepository.countByUserId("u1")).thenReturn(1L);
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
 

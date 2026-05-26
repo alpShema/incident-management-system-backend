@@ -610,6 +610,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Query("SELECT COUNT(i) FROM Incident i WHERE i.assignedToId = :agentId")
     long countByAssignedToId(@Param("agentId") String agentId);
 
+    @Query("SELECT COUNT(i) FROM Incident i WHERE i.userId = :userId")
+    long countByUserId(@Param("userId") String userId);
+
     @Query("""
             SELECT COUNT(DISTINCT i) FROM Incident i
             WHERE EXISTS (
