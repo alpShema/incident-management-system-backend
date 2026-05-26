@@ -7,6 +7,7 @@ import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
     private final IncidentRepository incidentRepository;
+    private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
 
     public Page<UserRoleSummaryResponse> getUsers(
@@ -37,20 +39,25 @@ public class UserService {
             queryPattern = "%" + escaped + "%";
         }
         Pageable resolvedPageable = remapSort(pageable);
-        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, status, resolvedPageable);
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, status, resolvedPageable);
     }
 
     @Transactional
-    public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, RoleCode roleCode) {
+    public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, String roleCode) {
+        String normalizedRoleCode = normalizeRoleCode(roleCode);
+        if (!roleRepository.existsByCode(normalizedRoleCode)) {
+            throw new ArmsAuthException("Role not found", 404);
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ArmsAuthException("User not found", 404));
 
-        RoleCode previousRoleCode = user.getRoleCode();
-        user.setRoleCode(roleCode);
-        ensureAgentRecord(user, roleCode);
+        String previousRoleCode = user.getRoleCode();
+        user.setRoleCode(normalizedRoleCode);
+        ensureAgentRecord(user, normalizedRoleCode);
 
-        if (previousRoleCode != roleCode) {
-            activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, roleCode);
+        if (previousRoleCode == null || !previousRoleCode.equals(normalizedRoleCode)) {
+            activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, normalizedRoleCode);
         }
 
         return new UserRoleSummaryResponse(
@@ -64,6 +71,10 @@ public class UserService {
                 incidentRepository.countByUserId(user.getId()),
                 getAssignedIncidentsCount(user.getId())
         );
+    }
+
+    public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, RoleCode roleCode) {
+        return assignUserRole(actorUserId, userId, roleCode == null ? null : roleCode.name());
     }
 
     @Transactional
@@ -113,8 +124,8 @@ public class UserService {
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), remapped);
     }
 
-    private void ensureAgentRecord(User user, RoleCode roleCode) {
-        if (roleCode != RoleCode.AGENT || agentRepository.findByUserId(user.getId()).isPresent()) {
+    private void ensureAgentRecord(User user, String roleCode) {
+        if (!"AGENT".equalsIgnoreCase(roleCode) || agentRepository.findByUserId(user.getId()).isPresent()) {
             return;
         }
 
@@ -123,5 +134,12 @@ public class UserService {
                 .userId(user.getId())
                 .status(true)
                 .build());
+    }
+
+    private String normalizeRoleCode(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            throw new ArmsAuthException("roleCode is required", 400);
+        }
+        return roleCode.trim().toUpperCase();
     }
 }

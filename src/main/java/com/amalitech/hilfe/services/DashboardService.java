@@ -53,8 +53,7 @@ public class DashboardService {
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
 
-        switch (role) {
-            case ADMIN, SUPER_ADMIN -> {
+        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
                 byStatus = toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
                         : incidentRepository.countByStatusGlobal());
@@ -62,22 +61,21 @@ public class DashboardService {
                 List<MonthlyCount> allTrend = toMonthlyCount(
                         incidentRepository.countByMonthSince(trendSince));
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
-            }
-            case AGENT -> {
-                var agentOpt = agentRepository.findByUserId(userId);
-                byStatus = agentOpt.map(agent -> toLabel(since != null
-                        ? incidentRepository.countByStatusForAgentSince(agent.getId(), since)
-                        : incidentRepository.countByStatusForAgent(agent.getId())))
-                        .orElse(List.of());
+        } else if (role == RoleCode.AGENT) {
+            var agentOpt = agentRepository.findByUserId(userId);
+            byStatus = agentOpt.map(agent -> toLabel(since != null
+                    ? incidentRepository.countByStatusForAgentSince(agent.getId(), since)
+                    : incidentRepository.countByStatusForAgent(agent.getId())))
+                    .orElse(List.of());
 
-                List<MonthlyCount> myTrend = agentOpt
-                        .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
-                        .orElse(List.of());
-                trends = List.of(
-                        new TrendSeries("My Assigned Incidents", myTrend)
-                );
-            }
-            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
+            List<MonthlyCount> myTrend = agentOpt
+                    .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
+                    .orElse(List.of());
+            trends = List.of(
+                    new TrendSeries("My Assigned Incidents", myTrend)
+            );
+        } else {
+            throw new ArmsAuthException("Dashboard not available for this role", 403);
         }
 
         return new DashboardCharts(byStatus, trends);
@@ -99,19 +97,22 @@ public class DashboardService {
         }
         final String finalQueryPattern = queryPattern;
 
-        return switch (role) {
-            case ADMIN, SUPER_ADMIN -> incidentRepository
+        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+            return incidentRepository
                     .findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupIds(userId)
+        }
+        if (role == RoleCode.AGENT) {
+            return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
                     .map(agentGroupIds -> incidentRepository
                             .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
-            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
-        };
+        }
+        throw new ArmsAuthException("Dashboard not available for this role", 403);
     }
+
 
     public Page<IncidentResponse> getMyIncidents(
             String userId,

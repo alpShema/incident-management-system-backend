@@ -92,7 +92,16 @@ public class UserController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "User status updated",
-                userService.updateUserStatus(principal.userId(), principal.roleCode(), userId, request.status())
+                userService.updateUserStatus(principal.userId(), parseRoleCode(principal.roleCode()), userId, request.status())
         ));
+    }
+
+    private RoleCode parseRoleCode(String roleCode) {
+        if (roleCode == null) return null;
+        try {
+            return RoleCode.valueOf(roleCode.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }

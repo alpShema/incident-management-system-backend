@@ -7,6 +7,7 @@ import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.UserService;
@@ -34,6 +35,7 @@ class UserServiceTest {
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
     @Mock IncidentRepository incidentRepository;
+    @Mock RoleRepository roleRepository;
     @Mock ActivityLogService activityLogService;
     @InjectMocks UserService userService;
 
@@ -48,7 +50,7 @@ class UserServiceTest {
         Page<UserRoleSummaryResponse> result = userService.getUsers(null, null, null, null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().getFirst().roleCode()).isEqualTo(RoleCode.ADMIN);
+        assertThat(result.getContent().getFirst().roleCode()).isEqualTo("ADMIN");
     }
 
     @Test
@@ -62,15 +64,16 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
         when(incidentRepository.countByUserId("u1")).thenReturn(3L);
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
 
         assertThat(result.userId()).isEqualTo("u1");
-        assertThat(result.roleCode()).isEqualTo(RoleCode.ADMIN);
+        assertThat(result.roleCode()).isEqualTo("ADMIN");
         verify(agentRepository, never()).save(any(Agent.class));
-        verify(activityLogService).logUserRoleChange("admin-1", "u1", RoleCode.CLIENT, RoleCode.ADMIN);
+        verify(activityLogService).logUserRoleChange("admin-1", "u1", "CLIENT", "ADMIN");
     }
 
     @Test
@@ -84,11 +87,12 @@ class UserServiceTest {
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
+        when(roleRepository.existsByCode("AGENT")).thenReturn(true);
         when(incidentRepository.countByUserId("u1")).thenReturn(2L);
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
 
-        assertThat(result.roleCode()).isEqualTo(RoleCode.AGENT);
+        assertThat(result.roleCode()).isEqualTo("AGENT");
         var agentCaptor = forClass(Agent.class);
         verify(agentRepository).save(agentCaptor.capture());
         assertThat(agentCaptor.getValue().getUserId()).isEqualTo("u1");
@@ -107,18 +111,20 @@ class UserServiceTest {
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(
                 Agent.builder().id("agent-1").userId("u1").status(true).build()));
+        when(roleRepository.existsByCode("AGENT")).thenReturn(true);
         when(incidentRepository.countByUserId("u1")).thenReturn(4L);
         when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(5L);
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
 
-        assertThat(result.roleCode()).isEqualTo(RoleCode.AGENT);
+        assertThat(result.roleCode()).isEqualTo("AGENT");
         verify(agentRepository, never()).save(any(Agent.class));
     }
 
     @Test
     void assignUserRole_userNotFound_throwsNotFound() {
         when(userRepository.findById("missing")).thenReturn(Optional.empty());
+        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.assignUserRole("admin-1", "missing", RoleCode.ADMIN))
                 .isInstanceOf(ArmsAuthException.class)
@@ -135,13 +141,14 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
         when(incidentRepository.countByUserId("u1")).thenReturn(1L);
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
 
-        assertThat(result.roleCode()).isEqualTo(RoleCode.ADMIN);
+        assertThat(result.roleCode()).isEqualTo("ADMIN");
         verify(activityLogService, never())
-                .logUserRoleChange(any(), any(), any(), any());
+                .logUserRoleChange(anyString(), anyString(), anyString(), anyString());
     }
 }

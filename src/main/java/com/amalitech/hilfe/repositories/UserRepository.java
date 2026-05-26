@@ -1,7 +1,6 @@
 package com.amalitech.hilfe.repositories;
 
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
-import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -82,7 +81,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     )
     Page<UserRoleSummaryResponse> findUserRoleSummariesUnified(
             @Param("queryPattern") String queryPattern,
-            @Param("roleCode") RoleCode roleCode,
+            @Param("roleCode") String roleCode,
             @Param("locationId") String locationId,
             @Param("status") Boolean status,
             Pageable pageable

@@ -161,7 +161,7 @@ class AuthServiceTest {
         AuthResult result = authService.login(new LoginRequest("arms-token"));
 
         assertThat(result.session().getUserId()).isEqualTo("u1");
-        assertThat(user.getRoleCode()).isEqualTo(RoleCode.CLIENT);
+        assertThat(user.getRoleCode()).isEqualTo("CLIENT");
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, null, null, null);
     }
 

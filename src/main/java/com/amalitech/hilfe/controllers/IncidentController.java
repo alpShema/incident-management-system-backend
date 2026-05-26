@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.*;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -260,7 +261,7 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident retrieved successfully",
-                incidentService.getIncident(principal.userId(), principal.roleCode(), id)));
+                incidentService.getIncident(principal.userId(), parseRoleCode(principal.roleCode()), id)));
     }
 
     @Operation(
@@ -285,7 +286,7 @@ public class IncidentController {
             @Valid @RequestBody UpdateIncidentStatusRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident status updated successfully",
-                incidentService.updateStatus(principal.userId(), principal.roleCode(), id, request)));
+                incidentService.updateStatus(principal.userId(), parseRoleCode(principal.roleCode()), id, request)));
     }
 
     @Operation(
@@ -326,5 +327,14 @@ public class IncidentController {
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident assigned successfully",
                 incidentService.assignIncident(principal.userId(), id, request)));
+    }
+
+    private RoleCode parseRoleCode(String roleCode) {
+        if (roleCode == null) return null;
+        try {
+            return RoleCode.valueOf(roleCode.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }
