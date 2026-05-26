@@ -64,7 +64,7 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listCategories_returns200WithList() throws Exception {
-        when(categoryService.listCategories()).thenReturn(List.of(stubCategory()));
+        when(categoryService.listCategories(any())).thenReturn(List.of(stubCategory()));
 
         mvc.perform(get("/incident-categories")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
