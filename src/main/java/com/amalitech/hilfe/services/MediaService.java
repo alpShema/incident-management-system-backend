@@ -8,7 +8,9 @@ import com.amalitech.hilfe.dto.PresignedUrlRequest;
 import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Media;
+import com.amalitech.hilfe.models.MessageMedia;
 import com.amalitech.hilfe.repositories.MediaRepository;
+import com.amalitech.hilfe.repositories.MessageMediaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,25 +30,85 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class MediaService {
+    private static final Map<String, Set<String>> ALLOWED_EXTENSIONS_BY_CONTENT_TYPE = Map.of(
+            "image/jpeg", Set.of("jpg", "jpeg"),
+            "image/png", Set.of("png"),
+            "image/gif", Set.of("gif"),
+            "image/webp", Set.of("webp"),
+            "application/pdf", Set.of("pdf"),
+            "image/svg+xml", Set.of("svg")
+    );
 
     private final S3Presigner s3Presigner;
     private final S3Client s3Client;
     private final S3Properties s3Properties;
     private final MediaProperties mediaProperties;
     private final MediaRepository mediaRepository;
+    private final MessageMediaRepository messageMediaRepository;
 
     public PresignedUrlResponse generatePresignedUploadUrl(PresignedUrlRequest request) {
         validateContentType(request.contentType());
         validateFileSize(request.fileSize());
+        validateFileNameAndExtension(request.fileName(), request.contentType());
 
         String mediaId = UUID.randomUUID().toString();
-        String fileKey = "media/" + mediaId + "/" + sanitizeFileName(request.fileName());
+        String fileKey = buildFileKey("media", mediaId, request.fileName());
+        return presignUploadUrl(fileKey, request.contentType(), request.fileSize());
+    }
 
+    public PresignedUrlResponse generateMessagePresignedUploadUrl(PresignedUrlRequest request) {
+        validateContentType(request.contentType());
+        validateFileSize(request.fileSize());
+        validateFileNameAndExtension(request.fileName(), request.contentType());
+
+        String messageMediaId = UUID.randomUUID().toString();
+        String fileKey = buildFileKey("messages", messageMediaId, request.fileName());
+        return presignUploadUrl(fileKey, request.contentType(), request.fileSize());
+    }
+
+    public List<MessageMedia> createMediaForMessage(String incidentId, String messageId, List<AttachmentRef> attachments) {
+        validateAttachments(attachments);
+
+        return attachments.stream()
+                .map(ref -> {
+                    validateFileKey(ref.fileKey(), "messages/");
+                    validateContentType(ref.contentType());
+                    validateFileSize(ref.fileSize());
+                    validateFileNameAndExtension(ref.originalName(), ref.contentType());
+                    verifyUploadedObject(ref);
+
+                    MessageMedia messageMedia = MessageMedia.builder()
+                            .id(UUID.randomUUID().toString())
+                            .messageId(messageId)
+                            .incidentId(incidentId)
+                            .originalName(ref.originalName())
+                            .fileKey(ref.fileKey())
+                            .contentType(ref.contentType())
+                            .fileSize(ref.fileSize())
+                            .build();
+                    return messageMediaRepository.save(messageMedia);
+                })
+                .toList();
+    }
+
+    public List<MediaResponse> toMediaResponsesForMessage(List<MessageMedia> mediaList) {
+        return mediaList.stream()
+                .map(media -> new MediaResponse(
+                        media.getId(),
+                        media.getOriginalName(),
+                        media.getContentType(),
+                        media.getFileSize(),
+                        generatePresignedGetUrl(media.getFileKey())
+                ))
+                .toList();
+    }
+
+    private PresignedUrlResponse presignUploadUrl(String fileKey, String contentType, long fileSize) {
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(s3Properties.bucketName())
                 .key(fileKey)
-                .contentType(request.contentType())
-                .contentLength(request.fileSize())
+                .contentType(contentType)
+                .contentLength(fileSize)
                 .build();
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
@@ -63,9 +126,10 @@ public class MediaService {
 
         return attachments.stream()
                 .map(ref -> {
-                    validateFileKey(ref.fileKey());
+                    validateFileKey(ref.fileKey(), "media/");
                     validateContentType(ref.contentType());
                     validateFileSize(ref.fileSize());
+                    validateFileNameAndExtension(ref.originalName(), ref.contentType());
                     verifyUploadedObject(ref);
 
                     Media media = Media.builder()
@@ -118,8 +182,8 @@ public class MediaService {
         }
     }
 
-    private void validateFileKey(String fileKey) {
-        if (!fileKey.startsWith("media/")) {
+    private void validateFileKey(String fileKey, String prefix) {
+        if (!fileKey.startsWith(prefix)) {
             throw new ArmsAuthException("Invalid attachment file key", 400);
         }
     }
@@ -138,6 +202,20 @@ public class MediaService {
             throw new ArmsAuthException(
                     "File size " + fileSize + " bytes exceeds the maximum of "
                             + mediaProperties.maxFileSize() + " bytes",
+                    400);
+        }
+    }
+
+    private void validateFileNameAndExtension(String fileName, String contentType) {
+        String extension = extractFileExtension(fileName);
+        if (extension == null) {
+            throw new ArmsAuthException("File name must include a valid extension", 400);
+        }
+
+        Set<String> allowedExtensions = ALLOWED_EXTENSIONS_BY_CONTENT_TYPE.get(contentType);
+        if (allowedExtensions == null || !allowedExtensions.contains(extension)) {
+            throw new ArmsAuthException(
+                    "File extension '." + extension + "' is not allowed for content type '" + contentType + "'",
                     400);
         }
     }
@@ -179,6 +257,18 @@ public class MediaService {
 
     private String stableObjectUrl(String fileKey) {
         return "s3://" + s3Properties.bucketName() + "/" + fileKey;
+    }
+
+    private String buildFileKey(String scopePrefix, String objectId, String fileName) {
+        return scopePrefix + "/" + objectId + "/" + sanitizeFileName(fileName);
+    }
+
+    private String extractFileExtension(String fileName) {
+        if (fileName == null) return null;
+        int lastDot = fileName.lastIndexOf('.');
+        if (lastDot <= 0 || lastDot == fileName.length() - 1) return null;
+        String ext = fileName.substring(lastDot + 1).toLowerCase();
+        return ext.matches("[a-z0-9]+") ? ext : null;
     }
 
     private String sanitizeFileName(String fileName) {
