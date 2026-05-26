@@ -15,6 +15,9 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -32,6 +35,13 @@ public class IncidentCategoryService {
         return categoryRepository.findByStatusWithDepartment("active").stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
+    }
+
+    public Page<IncidentCategoryResponse> searchCategories(String query, Pageable pageable) {
+        String queryPattern = (query == null || query.isBlank()) ? null
+                : "%" + query.toLowerCase().replace("%", "\\%").replace("_", "\\_") + "%";
+        return categoryRepository.searchCategories(queryPattern, pageable)
+                .map(IncidentCategoryResponse::from);
     }
 
     @Transactional
