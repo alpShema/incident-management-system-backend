@@ -111,7 +111,7 @@ class IncidentCategoryServiceTest {
         IncidentCategory cat = buildCategory();
         when(categoryRepository.findByStatusWithDepartment("active")).thenReturn(List.of(cat));
 
-        List<IncidentCategoryResponse> result = categoryService.listCategories();
+        List<IncidentCategoryResponse> result = categoryService.listCategories("active");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("cat-1");

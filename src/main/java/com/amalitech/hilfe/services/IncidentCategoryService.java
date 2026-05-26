@@ -31,8 +31,9 @@ public class IncidentCategoryService {
     private final IncidentRepository incidentRepository;
     private final EntityManager entityManager;
 
-    public List<IncidentCategoryResponse> listCategories() {
-        return categoryRepository.findByStatusWithDepartment("active").stream()
+    public List<IncidentCategoryResponse> listCategories(String status) {
+        String resolvedStatus = (status == null || status.isBlank()) ? "active" : status.toLowerCase();
+        return categoryRepository.findByStatusWithDepartment(resolvedStatus).stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
     }

@@ -30,13 +30,15 @@ import java.util.List;
 public class IncidentCategoryController {
     private final IncidentCategoryService categoryService;
 
-    @Operation(summary = "List active incident categories", description = "Returns active categories. Requires authentication, but no role-specific permission.")
+    @Operation(summary = "List incident categories", description = "Returns categories filtered by status. Defaults to active categories. Pass `status=inactive` to get inactive ones. Requires authentication, but no role-specific permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
     })
     @GetMapping
-    public ResponseEntity<ApiResponse<List<IncidentCategoryResponse>>> listCategories() {
-        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully", categoryService.listCategories()));
+    public ResponseEntity<ApiResponse<List<IncidentCategoryResponse>>> listCategories(
+            @Parameter(description = "Filter by status: active (default) or inactive") @RequestParam(required = false, defaultValue = "active") String status
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully", categoryService.listCategories(status)));
     }
 
     @Operation(summary = "Search incident categories", description = "Returns a paginated list of active categories filtered by an optional keyword. Searches across category name, description, and department name.")
