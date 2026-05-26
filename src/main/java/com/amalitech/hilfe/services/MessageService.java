@@ -5,10 +5,12 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Message;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.MessageRepository;
+import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -28,6 +30,7 @@ public class MessageService {
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
@@ -35,6 +38,9 @@ public class MessageService {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         enforceAccess(userId, role, incident);
+
+        User sender = userRepository.findById(userId)
+                .orElseThrow(() -> new ArmsAuthException("User not found", 404));
 
         Message saved = messageRepository.save(Message.builder()
                 .id(UUID.randomUUID().toString())
@@ -44,8 +50,7 @@ public class MessageService {
                 .build());
 
         messageRepository.flush();
-        MessageResponse response = MessageResponse.from(
-                messageRepository.findByIdWithSender(saved.getId()).orElseThrow());
+        MessageResponse response = MessageResponse.from(saved, sender);
 
         messagingTemplate.convertAndSend("/topic/incidents/" + incidentId + "/messages", response);
         return response;
