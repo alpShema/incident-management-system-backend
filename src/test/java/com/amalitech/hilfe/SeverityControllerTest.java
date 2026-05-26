@@ -1,7 +1,7 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.SeverityController;
-import com.amalitech.hilfe.dto.LookupResponse;
+import com.amalitech.hilfe.dto.SeverityResponse;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.services.SeverityService;
 import com.amalitech.hilfe.services.TokenService;
@@ -14,6 +14,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.mockito.Mockito.when;
@@ -34,8 +35,8 @@ class SeverityControllerTest {
     @Test
     void listSeverities_returns200WithData() throws Exception {
         when(severityService.listSeverities()).thenReturn(List.of(
-                new LookupResponse("sev-1", "Low"),
-                new LookupResponse("sev-2", "High")
+                new SeverityResponse("sev-1", "Low", "Low priority", true, Instant.now(), Instant.now()),
+                new SeverityResponse("sev-2", "High", "High priority", true, Instant.now(), Instant.now())
         ));
 
         mvc.perform(get("/severities")
@@ -44,6 +45,8 @@ class SeverityControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Severities retrieved successfully"))
                 .andExpect(jsonPath("$.data[0].name").value("Low"))
+                .andExpect(jsonPath("$.data[0].description").value("Low priority"))
+                .andExpect(jsonPath("$.data[0].status").value(true))
                 .andExpect(jsonPath("$.data[1].name").value("High"));
     }
 }

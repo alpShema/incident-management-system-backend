@@ -27,17 +27,17 @@ public class IncidentService {
     );
 
     // from-status-id → to-status-id → roles permitted to make that transition
-    private static final Map<String, Map<String, Set<RoleCode>>> VALID_TRANSITIONS = Map.of(
+    private static final Map<String, Map<String, Set<String>>> VALID_TRANSITIONS = Map.of(
             "status-in-progress", Map.of(
-                    "status-pending",  Set.of(RoleCode.AGENT),
-                    "status-resolved", Set.of(RoleCode.AGENT)
+                    "status-pending",  Set.of("AGENT"),
+                    "status-resolved", Set.of("AGENT")
             ),
             "status-pending", Map.of(
-                    "status-in-progress", Set.of(RoleCode.AGENT)
+                    "status-in-progress", Set.of("AGENT")
             ),
             "status-resolved", Map.of(
-                    "status-closed",   Set.of(RoleCode.CLIENT),
-                    "status-reopened", Set.of(RoleCode.CLIENT)
+                    "status-closed",   Set.of("CLIENT"),
+                    "status-reopened", Set.of("CLIENT")
             )
     );
 
@@ -172,7 +172,7 @@ public class IncidentService {
                 .map(IncidentResponse::from);
     }
 
-    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
+    public IncidentResponse getIncident(String userId, String roleCode, String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
 
@@ -183,8 +183,12 @@ public class IncidentService {
         return IncidentResponse.from(incident, mediaResponses);
     }
 
+    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
+        return getIncident(userId, roleCode == null ? null : roleCode.name(), incidentId);
+    }
+
     @Transactional
-    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+    public IncidentResponse updateStatus(String actorUserId, String roleCode, String incidentId, UpdateIncidentStatusRequest request) {
         Incident incident = findIncident(incidentId);
 
         Status newStatus = statusRepository.findById(request.statusId())
@@ -208,6 +212,10 @@ public class IncidentService {
         entityManager.flush();
         entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+    }
+
+    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+        return updateStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, request);
     }
 
     @Transactional
@@ -270,14 +278,14 @@ public class IncidentService {
         return Sort.by(orders);
     }
 
-    private void enforceAccess(String userId, RoleCode roleCode, Incident incident) {
-        if (roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) {
+    private void enforceAccess(String userId, String roleCode, Incident incident) {
+        if ("ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) {
             return;
         }
         if (userId.equals(incident.getUserId())) {
             return;
         }
-        if (roleCode == RoleCode.AGENT && isSameDepartmentAsAssignedAgent(userId, incident)) {
+        if ("AGENT".equalsIgnoreCase(roleCode) && isSameDepartmentAsAssignedAgent(userId, incident)) {
             return;
         }
         throw new ArmsAuthException("You do not have access to this incident", 403);
@@ -397,20 +405,21 @@ public class IncidentService {
         }
     }
 
-    private void enforceTransition(Incident incident, Status newStatus, RoleCode roleCode) {
+    private void enforceTransition(Incident incident, Status newStatus, String roleCode) {
         String fromId = incident.getStatus() != null ? incident.getStatus().getId() : null;
         String toId   = newStatus.getId();
+        String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
 
         if (fromId == null) {
             throw new ArmsAuthException("Cannot transition an incident with no current status", 422);
         }
 
         // Admins and super-admins may force-close any incident regardless of current status
-        if ((roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) && "status-closed".equals(toId)) {
+        if (("ADMIN".equals(normalizedRole) || "SUPER_ADMIN".equals(normalizedRole)) && "status-closed".equals(toId)) {
             return;
         }
 
-        Map<String, Set<RoleCode>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
+        Map<String, Set<String>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
 
         if (!toMap.containsKey(toId)) {
             throw new ArmsAuthException(
@@ -420,7 +429,7 @@ public class IncidentService {
             );
         }
 
-        if (!toMap.get(toId).contains(roleCode)) {
+        if (!toMap.get(toId).contains(normalizedRole)) {
             throw new ArmsAuthException(
                     "You do not have permission to move an incident to '" + newStatus.getName() + "'",
                     403

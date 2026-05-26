@@ -9,6 +9,7 @@ import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.repositories.MediaRepository;
+import com.amalitech.hilfe.repositories.MessageMediaRepository;
 import com.amalitech.hilfe.services.MediaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,7 @@ class MediaServiceTest {
     @Mock S3Properties s3Properties;
     @Mock MediaProperties mediaProperties;
     @Mock MediaRepository mediaRepository;
+    @Mock MessageMediaRepository messageMediaRepository;
     @InjectMocks MediaService mediaService;
 
     private static final List<String> ALLOWED_TYPES = List.of(
@@ -92,6 +94,34 @@ class MediaServiceTest {
         assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("exceeds the maximum")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void generatePresignedUploadUrl_phpFileNameWithAllowedMime_throws400() {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("testupload1.php", "image/png", 1024L);
+
+        assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("File extension")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void generatePresignedUploadUrl_extensionMimeMismatch_throws400() {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("photo.jpg", "application/pdf", 1024L);
+
+        assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("not allowed for content type")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
