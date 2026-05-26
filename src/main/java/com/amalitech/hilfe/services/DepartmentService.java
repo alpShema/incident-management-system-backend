@@ -38,8 +38,7 @@ public class DepartmentService {
                     .replace("%", "!%")
                     .replace("_", "!_") + "%";
         }
-        Boolean resolvedStatus = status == null ? Boolean.TRUE : status;
-        return departmentRepository.search(queryPattern, resolvedStatus, pageable)
+        return departmentRepository.search(queryPattern, status, pageable)
                 .map(this::toResponse);
     }
 
