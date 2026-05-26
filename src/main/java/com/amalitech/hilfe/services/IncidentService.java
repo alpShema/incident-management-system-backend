@@ -101,22 +101,24 @@ public class IncidentService {
             String userId,
             String query,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
             Pageable pageable
     ) {
         return incidentRepository
                 .findByUserIdUnified(userId, buildQueryPattern(query), statusId, severityId,
-                        incidentTypeId, categoryId, locationId, ensureSorted(pageable))
+                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable))
                 .map(IncidentResponse::from);
     }
 
     public Page<IncidentResponse> queryAllIncidents(
             String query,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
             Pageable pageable
     ) {
         return incidentRepository
                 .findAllUnified(buildQueryPattern(query), statusId, severityId,
-                        incidentTypeId, categoryId, locationId, ensureSorted(pageable))
+                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable))
                 .map(IncidentResponse::from);
     }
 
@@ -124,6 +126,7 @@ public class IncidentService {
             String userId,
             String query,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
             Pageable pageable
     ) {
         Pageable sorted = ensureSorted(pageable);
@@ -132,7 +135,7 @@ public class IncidentService {
                 .filter(ids -> !ids.isEmpty())
                 .map(ids -> incidentRepository
                         .findByDepartmentUnified(ids, queryPattern, statusId, severityId,
-                                incidentTypeId, categoryId, locationId, sorted)
+                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted)
                         .map(IncidentResponse::from))
                 .orElse(new PageImpl<>(List.of(), sorted, 0));
     }
@@ -141,6 +144,7 @@ public class IncidentService {
             String userId,
             String query,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
             Pageable pageable
     ) {
         Pageable sorted = ensureSorted(pageable);
@@ -148,12 +152,12 @@ public class IncidentService {
         return agentRepository.findByUserId(userId)
                 .map(agent -> incidentRepository
                         .findByAssignedToIdUnified(agent.getId(), queryPattern, statusId, severityId,
-                                incidentTypeId, categoryId, locationId, sorted)
+                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted)
                         .map(IncidentResponse::from))
                 .orElse(new PageImpl<>(List.of(), sorted, 0));
     }
 
-    public Page<IncidentResponse> searchIncidents(String userId, String query, Pageable pageable) {
+    public Page<IncidentResponse> searchIncidents(String userId, String query, Instant fromDate, Instant toDate, Pageable pageable) {
         if (query == null || query.isBlank()) {
             throw new ArmsAuthException("Search query must not be blank", 400);
         }
@@ -163,7 +167,7 @@ public class IncidentService {
                 : ensureSorted(pageable);
 
         return incidentRepository
-                .searchByUserId(userId, buildQueryPattern(query), sortedPageable)
+                .searchByUserId(userId, buildQueryPattern(query), fromDate, toDate, sortedPageable)
                 .map(IncidentResponse::from);
     }
 

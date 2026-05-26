@@ -9,6 +9,8 @@ import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,6 +26,9 @@ public class DepartmentService {
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public Page<DepartmentResponse> listDepartments(Pageable pageable) {
         return departmentRepository.findByStatus(true, pageable)
@@ -87,8 +92,10 @@ public class DepartmentService {
         findActiveDepartment(departmentId);
         IncidentCategory category = findCategory(categoryId);
         category.setDepartmentId(departmentId);
-        IncidentCategory saved = categoryRepository.save(category);
-        return IncidentCategoryResponse.from(categoryRepository.findByIdWithDepartment(saved.getId()).orElse(saved));
+        categoryRepository.save(category);
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentCategoryResponse.from(categoryRepository.findByIdWithDepartment(categoryId).orElseThrow());
     }
 
     @Transactional
