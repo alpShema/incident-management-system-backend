@@ -3,6 +3,7 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
+import com.amalitech.hilfe.dto.IncidentTopicListResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
@@ -350,6 +351,33 @@ class IncidentCategoryServiceTest {
                 new CreateTopicRequest("Projector", "Projector issues", "group-1", true)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent group must have a primary agent")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void listTopics_defaultsStatusToActive() {
+        var pageable = PageRequest.of(0, 20);
+        when(typeRepository.findAllTopicsFiltered(
+                eq(null), eq(null), eq(null), eq("active"), eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+
+        var result = categoryService.listTopics(null, null, null, null, null, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        IncidentTopicListResponse row = result.getContent().get(0);
+        assertThat(row.category()).isNotNull();
+        assertThat(row.agentGroup()).isNotNull();
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, "active", null, pageable);
+    }
+
+    @Test
+    void listTopics_rejectsInvalidStatus() {
+        var pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> categoryService.listTopics(null, null, null, "archived", null, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Invalid status. Allowed values are active or inactive")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
