@@ -203,8 +203,8 @@ class IncidentCategoryControllerTest {
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].id").value("cat-1"))
-                .andExpect(jsonPath("$.data.content[0].name").value("Facility"))
+                .andExpect(jsonPath("$.data.items[0].id").value("cat-1"))
+                .andExpect(jsonPath("$.data.items[0].name").value("Facility"))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
@@ -219,5 +219,4 @@ class IncidentCategoryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
-
 }
