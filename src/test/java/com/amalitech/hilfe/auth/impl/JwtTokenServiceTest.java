@@ -77,7 +77,7 @@ class JwtTokenServiceTest {
         JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
         assertThat(principal.userId()).isEqualTo("u1");
         assertThat(principal.email()).isEqualTo("john@test.com");
-        assertThat(principal.roleCode()).isEqualTo(RoleCode.CLIENT);
+        assertThat(principal.roleCode()).isEqualTo("CLIENT");
         assertThat(auth.get().getAuthorities()).isNotEmpty();
     }
 
@@ -223,7 +223,7 @@ class JwtTokenServiceTest {
 
         assertThat(auth).isPresent();
         JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
-        assertThat(principal.roleCode()).isEqualTo(RoleCode.AGENT);
+        assertThat(principal.roleCode()).isEqualTo("AGENT");
         assertThat(auth.get().getAuthorities())
             .extracting(Object::toString)
             .contains("ROLE_AGENT", "incident.assign");
@@ -245,7 +245,7 @@ class JwtTokenServiceTest {
 
         assertThat(auth).isPresent();
         JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
-        assertThat(principal.roleCode()).isEqualTo(RoleCode.ADMIN);
+        assertThat(principal.roleCode()).isEqualTo("ADMIN");
     }
 
     @Test

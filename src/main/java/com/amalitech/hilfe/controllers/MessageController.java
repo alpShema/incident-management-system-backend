@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -52,7 +53,9 @@ public class MessageController {
 
     @Operation(
             summary = "List messages",
-            description = "Returns paginated message history for an incident, oldest first. "
+            description = "Returns paginated message history for an incident. "
+                    + "Default sort is newest first (page 0 = most recent messages). "
+                    + "Within each page, messages are ordered oldest→newest for display. "
                     + "Use this endpoint for initial chat load and re-sync after WebSocket reconnect. "
                     + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
     )
@@ -66,12 +69,19 @@ public class MessageController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @Parameter(description = "Incident ID") @PathVariable String incidentId,
             @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "50") int size
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "50") int size,
+            @Parameter(description = "Sort field and direction", example = "createdAt,desc")
+            @RequestParam(defaultValue = "createdAt,desc") String sort
     ) {
+        String[] sortParams = sort.split(",");
+        String sortField = sortParams[0];
+        Sort.Direction direction = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("asc")
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+
         return ResponseEntity.ok(ApiResponse.success("Messages retrieved",
                 PageResponse.from(messageService.listMessages(
                         principal.userId(), principal.roleCode(), incidentId,
-                        PageRequest.of(page, size)))));
+                        PageRequest.of(page, size, Sort.by(direction, sortField))))));
     }
 
     @Operation(

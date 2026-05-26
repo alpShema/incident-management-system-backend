@@ -38,9 +38,8 @@ public class User {
 
     private String signature;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "role_code")
-    private RoleCode roleCode;
+    private String roleCode;
 
     @Column(name = "location_id")
     private String locationId;
@@ -83,5 +82,12 @@ public class User {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = Instant.now();
+    }
+
+    public static class UserBuilder {
+        public UserBuilder roleCode(RoleCode roleCode) {
+            this.roleCode = roleCode == null ? null : roleCode.name();
+            return this;
+        }
     }
 }

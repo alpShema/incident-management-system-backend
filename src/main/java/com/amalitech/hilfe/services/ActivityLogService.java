@@ -37,8 +37,8 @@ public class ActivityLogService {
     public void logUserRoleChange(
             String actorUserId,
             String targetUserId,
-            RoleCode previousRoleCode,
-            RoleCode newRoleCode
+            String previousRoleCode,
+            String newRoleCode
     ) {
         try {
             activityLogRepository.save(ActivityLog.builder()
@@ -55,12 +55,26 @@ public class ActivityLogService {
         }
     }
 
-    private String buildRoleChangeDescription(String targetUserId, RoleCode previousRoleCode, RoleCode newRoleCode) {
+    public void logUserRoleChange(
+            String actorUserId,
+            String targetUserId,
+            RoleCode previousRoleCode,
+            RoleCode newRoleCode
+    ) {
+        logUserRoleChange(
+                actorUserId,
+                targetUserId,
+                previousRoleCode == null ? null : previousRoleCode.name(),
+                newRoleCode == null ? null : newRoleCode.name()
+        );
+    }
+
+    private String buildRoleChangeDescription(String targetUserId, String previousRoleCode, String newRoleCode) {
         return "Changed role for user " + targetUserId + " from " + formatRole(previousRoleCode)
                 + " to " + formatRole(newRoleCode);
     }
 
-    private String buildRoleChangeMetadata(RoleCode previousRoleCode, RoleCode newRoleCode) {
+    private String buildRoleChangeMetadata(String previousRoleCode, String newRoleCode) {
         return "{\"previousRoleCode\":\"" + formatRole(previousRoleCode)
                 + "\",\"newRoleCode\":\"" + formatRole(newRoleCode) + "\"}";
     }
@@ -116,7 +130,7 @@ public class ActivityLogService {
         }
     }
 
-    private String formatRole(RoleCode roleCode) {
-        return roleCode == null ? "null" : roleCode.name();
+    private String formatRole(String roleCode) {
+        return roleCode == null ? "null" : roleCode;
     }
 }
