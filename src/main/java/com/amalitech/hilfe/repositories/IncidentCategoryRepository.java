@@ -24,22 +24,6 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
             """)
     List<IncidentCategory> findByStatusWithDepartment(@Param("status") String status);
 
-    @Query("""
-            SELECT c FROM IncidentCategory c
-            LEFT JOIN FETCH c.department
-            WHERE c.id = :id
-            """)
-    java.util.Optional<IncidentCategory> findByIdWithDepartment(@Param("id") String id);
-
-    @Query("""
-            SELECT c FROM IncidentCategory c
-            LEFT JOIN FETCH c.department
-            WHERE c.departmentId = :departmentId AND c.status = :status
-            """)
-    List<IncidentCategory> findByDepartmentIdAndStatusWithDepartment(
-            @Param("departmentId") String departmentId,
-            @Param("status") String status);
-
     @Query(value = """
             SELECT c FROM IncidentCategory c
             LEFT JOIN FETCH c.department d
@@ -59,4 +43,20 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
                 OR LOWER(d.name) LIKE :queryPattern)
             """)
     Page<IncidentCategory> searchCategories(@Param("queryPattern") String queryPattern, Pageable pageable);
+
+    @Query("""
+            SELECT c FROM IncidentCategory c
+            LEFT JOIN FETCH c.department
+            WHERE c.id = :id
+            """)
+    java.util.Optional<IncidentCategory> findByIdWithDepartment(@Param("id") String id);
+
+    @Query("""
+            SELECT c FROM IncidentCategory c
+            LEFT JOIN FETCH c.department
+            WHERE c.departmentId = :departmentId AND c.status = :status
+            """)
+    List<IncidentCategory> findByDepartmentIdAndStatusWithDepartment(
+            @Param("departmentId") String departmentId,
+            @Param("status") String status);
 }
