@@ -6,6 +6,7 @@ import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 public class UserService {
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
+    private final IncidentRepository incidentRepository;
     private final ActivityLogService activityLogService;
 
     public Page<UserRoleSummaryResponse> getUsers(
@@ -58,7 +60,9 @@ public class UserService {
                 user.getProfileImg(),
                 user.getRoleCode(),
                 user.getStatus(),
-                user.getLocation() != null ? user.getLocation().getName() : null
+                user.getLocation() != null ? user.getLocation().getName() : null,
+                incidentRepository.countByUserId(user.getId()),
+                getAssignedIncidentsCount(user.getId())
         );
     }
 
@@ -83,8 +87,16 @@ public class UserService {
                 user.getProfileImg(),
                 user.getRoleCode(),
                 user.getStatus(),
-                user.getLocation() != null ? user.getLocation().getName() : null
+                user.getLocation() != null ? user.getLocation().getName() : null,
+                incidentRepository.countByUserId(user.getId()),
+                getAssignedIncidentsCount(user.getId())
         );
+    }
+
+    private long getAssignedIncidentsCount(String userId) {
+        return agentRepository.findByUserId(userId)
+                .map(agent -> incidentRepository.countByAssignedToId(agent.getId()))
+                .orElse(0L);
     }
 
     private Pageable remapSort(Pageable pageable) {

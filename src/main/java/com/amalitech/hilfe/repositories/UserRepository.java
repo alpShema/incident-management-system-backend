@@ -31,10 +31,13 @@ public interface UserRepository extends JpaRepository<User, String> {
                         user.profileImg,
                         user.roleCode,
                         user.status,
-                        loc.name
+                        loc.name,
+                        (SELECT COUNT(i) FROM Incident i WHERE i.userId = user.id),
+                        (SELECT COUNT(i) FROM Incident i WHERE i.assignedToId = agent.id)
                     )
                     FROM User user
                     LEFT JOIN user.location loc
+                    LEFT JOIN user.agent agent
                     """,
             countQuery = """
                     SELECT COUNT(user)
@@ -52,10 +55,13 @@ public interface UserRepository extends JpaRepository<User, String> {
                         user.profileImg,
                         user.roleCode,
                         user.status,
-                        loc.name
+                        loc.name,
+                        (SELECT COUNT(i) FROM Incident i WHERE i.userId = user.id),
+                        (SELECT COUNT(i) FROM Incident i WHERE i.assignedToId = agent.id)
                     )
                     FROM User user
                     LEFT JOIN user.location loc
+                    LEFT JOIN user.agent agent
                     WHERE (:queryPattern IS NULL OR (
                         LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
