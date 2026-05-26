@@ -23,11 +23,15 @@ import java.util.List;
 public class DepartmentController {
     private final DepartmentService departmentService;
 
-    @Operation(summary = "List departments", description = "Returns active internal departments as a paginated response. Requires `department.read` permission.")
+    @Operation(summary = "List departments", description = "Returns internal departments as a paginated response. Supports optional text search (`query`) on name/description and optional status filter (`status`). Defaults to active departments when status is omitted. Requires `department.read` permission.")
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")
-    public ResponseEntity<ApiResponse<PageResponse<DepartmentResponse>>> listDepartments(Pageable pageable) {
-        Page<DepartmentResponse> page = departmentService.listDepartments(pageable);
+    public ResponseEntity<ApiResponse<PageResponse<DepartmentResponse>>> listDepartments(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) Boolean status,
+            Pageable pageable
+    ) {
+        Page<DepartmentResponse> page = departmentService.listDepartments(query, status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Departments retrieved successfully", PageResponse.from(page)));
     }
 
