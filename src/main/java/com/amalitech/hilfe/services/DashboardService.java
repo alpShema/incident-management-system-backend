@@ -101,12 +101,12 @@ public class DashboardService {
 
         return switch (role) {
             case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                    .findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
                     .map(IncidentResponse::from);
             case AGENT -> findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
                     .map(agentGroupIds -> incidentRepository
-                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);

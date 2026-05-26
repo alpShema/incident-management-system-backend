@@ -15,6 +15,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -84,6 +86,7 @@ public class IncidentController {
                     + "Restricted to admins and super admins — agents and clients receive 403. "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
                     + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
                     + "Requires `dashboard.admin` permission."
@@ -102,10 +105,12 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAllIncidents(
-                query, statusId, severityId, incidentTypeId, categoryId, locationId, pageable);
+                query, statusId, severityId, incidentTypeId, categoryId, locationId, fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -115,6 +120,7 @@ public class IncidentController {
                     + "Accessible by all roles (CLIENT, AGENT, ADMIN). "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
                     + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`)."
     )
@@ -131,12 +137,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryIncidents(
                 principal.userId(),
                 query, statusId, severityId, incidentTypeId, categoryId, locationId,
-                pageable);
+                fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -147,6 +155,7 @@ public class IncidentController {
                     + "Returns an empty list if the caller has no agent group memberships. "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
                     + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
                     + "Requires `dashboard.admin` or `dashboard.agent` permission."
@@ -166,12 +175,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryDeptIncidents(
                 principal.userId(),
                 query, statusId, severityId, incidentTypeId, categoryId, locationId,
-                pageable);
+                fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Department incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -182,6 +193,7 @@ public class IncidentController {
                     + "Returns an empty list if the caller has no agent record. "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
                     + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
                     + "Requires `dashboard.admin` or `dashboard.agent` permission."
@@ -201,12 +213,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAssignedIncidents(
                 principal.userId(),
                 query, statusId, severityId, incidentTypeId, categoryId, locationId,
-                pageable);
+                fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -214,6 +228,7 @@ public class IncidentController {
         summary = "Search incidents by keyword",
         description = "Full-text search across incident title, description, topic name, and category name. "
                     + "Returns only incidents created by the authenticated user. "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Supports pagination and sorting via Pageable (e.g. sort=createdAt,desc)."
     )
     @ApiResponses({
@@ -226,9 +241,11 @@ public class IncidentController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @Parameter(description = "Free-text keyword to search in title, description, topic name, and category name", required = true)
             @RequestParam String query,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
-        Page<IncidentResponse> page = incidentService.searchIncidents(principal.userId(), query, pageable);
+        Page<IncidentResponse> page = incidentService.searchIncidents(principal.userId(), query, fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
