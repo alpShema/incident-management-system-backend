@@ -22,7 +22,8 @@ public class IncidentService {
 
     // Frontend sort alias → JPA field path
     private static final Map<String, String> SORT_FIELD_ALIASES = Map.of(
-            "category", "incidentType.category.name"
+            "category", "incidentType.category.name",
+            "priority", "severity.name"
     );
 
     // from-status-id → to-status-id → roles permitted to make that transition

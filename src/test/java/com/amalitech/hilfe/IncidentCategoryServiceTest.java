@@ -25,6 +25,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -32,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -295,6 +299,43 @@ class IncidentCategoryServiceTest {
                 .hasMessage("Agent group not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    // ── searchCategories ──────────────────────────────────────────────────────
+
+    @Test
+    void searchCategories_withQuery_passesPatternToRepository() {
+        var pageable = PageRequest.of(0, 10);
+        when(categoryRepository.searchCategories(any(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(buildCategory())));
+
+        var result = categoryService.searchCategories("facility", pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
+        verify(categoryRepository).searchCategories("%facility%", pageable);
+    }
+
+    @Test
+    void searchCategories_blankQuery_passesNullPatternToRepository() {
+        var pageable = PageRequest.of(0, 10);
+        when(categoryRepository.searchCategories(eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        categoryService.searchCategories("  ", pageable);
+
+        verify(categoryRepository).searchCategories(null, pageable);
+    }
+
+    @Test
+    void searchCategories_nullQuery_passesNullPatternToRepository() {
+        var pageable = PageRequest.of(0, 10);
+        when(categoryRepository.searchCategories(eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        categoryService.searchCategories(null, pageable);
+
+        verify(categoryRepository).searchCategories(null, pageable);
     }
 
     @Test
