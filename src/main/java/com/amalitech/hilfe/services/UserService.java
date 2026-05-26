@@ -10,7 +10,9 @@ import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -32,7 +34,8 @@ public class UserService {
                     .replace("_", "!_");
             queryPattern = "%" + escaped + "%";
         }
-        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, status, pageable);
+        Pageable resolvedPageable = remapSort(pageable);
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, status, resolvedPageable);
     }
 
     @Transactional
@@ -82,6 +85,20 @@ public class UserService {
                 user.getStatus(),
                 user.getLocation() != null ? user.getLocation().getName() : null
         );
+    }
+
+    private Pageable remapSort(Pageable pageable) {
+        Sort remapped = Sort.by(pageable.getSort().stream()
+                .map(order -> {
+                    if ("officeLocation".equals(order.getProperty())) {
+                        return order.isAscending()
+                                ? Sort.Order.asc("location.name")
+                                : Sort.Order.desc("location.name");
+                    }
+                    return order;
+                })
+                .toList());
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), remapped);
     }
 
     private void ensureAgentRecord(User user, RoleCode roleCode) {
