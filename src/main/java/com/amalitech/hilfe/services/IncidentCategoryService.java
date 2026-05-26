@@ -31,11 +31,11 @@ public class IncidentCategoryService {
     private final IncidentRepository incidentRepository;
     private final EntityManager entityManager;
 
-    public List<IncidentCategoryResponse> listCategories(String status) {
+    public Page<IncidentCategoryResponse> listCategories(String status, String query, Pageable pageable) {
         String resolvedStatus = (status == null || status.isBlank()) ? "active" : status.toLowerCase();
-        return categoryRepository.findByStatusWithDepartment(resolvedStatus).stream()
-                .map(IncidentCategoryResponse::from)
-                .toList();
+        String queryPattern = buildQueryPattern(query);
+        return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
+                .map(IncidentCategoryResponse::from);
     }
 
     public Page<IncidentCategoryResponse> searchCategories(String query, Pageable pageable) {

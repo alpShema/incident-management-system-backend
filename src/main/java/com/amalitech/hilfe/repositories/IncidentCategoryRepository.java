@@ -1,8 +1,6 @@
 package com.amalitech.hilfe.repositories;
 
 import com.amalitech.hilfe.models.IncidentCategory;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,6 +24,42 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
             WHERE c.status = :status
             """)
     List<IncidentCategory> findByStatusWithDepartment(@Param("status") String status);
+
+    @Query("""
+            SELECT c FROM IncidentCategory c
+            LEFT JOIN FETCH c.department d
+            WHERE c.status = :status
+              AND (:queryPattern IS NULL
+                   OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
+            """)
+    List<IncidentCategory> findByStatusWithDepartmentAndQuery(
+            @Param("status") String status,
+            @Param("queryPattern") String queryPattern);
+
+    @Query(value = """
+            SELECT c FROM IncidentCategory c
+            LEFT JOIN FETCH c.department d
+            WHERE c.status = :status
+              AND (:queryPattern IS NULL
+                   OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
+            """,
+            countQuery = """
+            SELECT COUNT(c) FROM IncidentCategory c
+            LEFT JOIN c.department d
+            WHERE c.status = :status
+              AND (:queryPattern IS NULL
+                   OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
+            """)
+    Page<IncidentCategory> findByStatusWithDepartmentAndQueryPaged(
+            @Param("status") String status,
+            @Param("queryPattern") String queryPattern,
+            Pageable pageable);
 
     @Query(value = """
             SELECT c FROM IncidentCategory c

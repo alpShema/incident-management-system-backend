@@ -110,13 +110,14 @@ class IncidentCategoryServiceTest {
     @Test
     void listCategories_returnsMappedList() {
         IncidentCategory cat = buildCategory();
-        when(categoryRepository.findByStatusWithDepartment("active")).thenReturn(List.of(cat));
+        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged("active", null, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(cat), PageRequest.of(0, 20), 1));
 
-        List<IncidentCategoryResponse> result = categoryService.listCategories("active");
+        var result = categoryService.listCategories("active", null, PageRequest.of(0, 20));
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("cat-1");
-        assertThat(result.get(0).name()).isEqualTo("Facility");
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
+        assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
     }
 
     // ── createCategory ────────────────────────────────────────────────────────
