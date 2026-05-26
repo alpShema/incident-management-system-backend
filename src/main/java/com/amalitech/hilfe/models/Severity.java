@@ -23,6 +23,9 @@ public class Severity {
 
     private String description;
 
+    @Column(nullable = false)
+    private Boolean status = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
