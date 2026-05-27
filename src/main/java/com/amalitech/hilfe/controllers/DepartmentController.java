@@ -60,12 +60,21 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success("Department updated successfully", departmentService.updateDepartment(id, request)));
     }
 
-    @Operation(summary = "Deactivate a department", description = "Soft-deactivates an internal department if no categories are linked to it. Requires `department.delete` permission.")
-    @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Update department status",
+            description = "Updates department active state. `status=true` activates and `status=false` deactivates. "
+                    + "Deactivation is blocked if categories or active agent groups are linked. "
+                    + "Requires `department.delete` permission."
+    )
+    @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_DELETE + "')")
-    public ResponseEntity<Void> deleteDepartment(@PathVariable String id) {
-        departmentService.deleteDepartment(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<ApiResponse<DepartmentResponse>> updateDepartmentStatus(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateDepartmentStatusRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Department status updated successfully",
+                departmentService.updateDepartmentStatus(id, request.status())));
     }
 
     @Operation(summary = "List department categories", description = "Returns active incident categories linked to a department. Requires `department.read` permission.")

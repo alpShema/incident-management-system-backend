@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
@@ -127,6 +128,23 @@ class IncidentCategoryControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
+    }
+
+    @Test
+    void updateCategory_duplicateName_returns409() throws Exception {
+        when(categoryService.updateCategory(eq("cat-1"), any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-category.update"));
+
+        mvc.perform(patch("/incident-categories/cat-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new IncidentCategoryRequest("Facility", "Updated description", "dept-1")))
+                        .with(authentication(auth)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A record with this value already exists"));
     }
 
     // ── DELETE /incident-categories/{id} ─────────────────────────────────────
