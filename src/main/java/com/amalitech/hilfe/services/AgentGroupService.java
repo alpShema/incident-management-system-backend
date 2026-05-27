@@ -130,7 +130,7 @@ public class AgentGroupService {
         AgentGroup group = findAgentGroup(agentGroupId);
         Agent agent = findAgentWithUser(agentId);
         if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(agentId, agentGroupId)) {
-            throw new ArmsAuthException("Agent is not a member of this agent group", 400);
+            throw new ArmsAuthException("Agent is not a member of this agent group", 404);
         }
         if (agentId.equals(group.getPrimaryAgentId())) {
             group.setPrimaryAgentId(null);

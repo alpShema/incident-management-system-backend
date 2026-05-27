@@ -23,11 +23,17 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -51,6 +57,39 @@ class AgentControllerTest {
 
     private AgentResponse stubAgentResponse(boolean status) {
         return new AgentResponse("agent-1", "user-1", "Test Agent", "agent@test.com", null, status);
+    }
+
+    // ── GET /agents ───────────────────────────────────────────────────────────
+
+    @Test
+    void listAgents_withoutDepartment_returns200() throws Exception {
+        when(agentService.listAgents(isNull(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Agents retrieved successfully"))
+                .andExpect(jsonPath("$.data.items[0].agentId").value("agent-1"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void listAgents_withDepartment_returns200() throws Exception {
+        when(agentService.listAgents(anyString(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(false)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents")
+                        .param("departmentId", "dept-1")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].status").value(false));
     }
 
     // ── PATCH /agents/status ──────────────────────────────────────────────────

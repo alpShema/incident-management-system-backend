@@ -27,7 +27,11 @@ public class AgentController {
 
     @Operation(
             summary = "List all agents",
-            description = "Returns a paginated list of all active agents with their user details. Requires `agent.read` permission."
+            description = "Returns a paginated list of agents. "
+                    + "When `departmentId` is omitted, returns active agents only. "
+                    + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
+                    + "If the department is missing or inactive, returns an empty page. "
+                    + "Requires `agent.read` permission."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Agents retrieved"),
@@ -36,8 +40,13 @@ public class AgentController {
     })
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_READ + "')")
-    public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAgents(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success("Agents retrieved successfully", PageResponse.from(agentService.listAgents(pageable))));
+    public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAgents(
+            @RequestParam(required = false) String departmentId,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Agents retrieved successfully",
+                PageResponse.from(agentService.listAgents(departmentId, pageable))));
     }
 
     @Operation(

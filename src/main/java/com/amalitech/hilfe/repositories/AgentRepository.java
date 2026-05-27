@@ -27,6 +27,31 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             """)
     Page<Agent> findAllActiveWithUser(Pageable pageable);
 
+    @Query(
+            value = """
+                    SELECT DISTINCT a FROM Agent a
+                    LEFT JOIN FETCH a.user
+                    WHERE EXISTS (
+                        SELECT 1 FROM AgentGroupMember m
+                        JOIN m.agentGroup g
+                        WHERE m.agentId = a.id
+                          AND g.departmentId = :departmentId
+                          AND g.status = true
+                    )
+                    """,
+            countQuery = """
+                    SELECT COUNT(DISTINCT a) FROM Agent a
+                    WHERE EXISTS (
+                        SELECT 1 FROM AgentGroupMember m
+                        JOIN m.agentGroup g
+                        WHERE m.agentId = a.id
+                          AND g.departmentId = :departmentId
+                          AND g.status = true
+                    )
+                    """
+    )
+    Page<Agent> findByDepartmentIdWithUser(@Param("departmentId") String departmentId, Pageable pageable);
+
     @Query("""
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user
