@@ -1,7 +1,7 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
-import com.amalitech.hilfe.dto.LookupResponse;
+import com.amalitech.hilfe.dto.StatusLookupResponse;
 import com.amalitech.hilfe.services.StatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -26,7 +26,7 @@ public class StatusController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Statuses retrieved")
     })
     @GetMapping
-    public ResponseEntity<ApiResponse<List<LookupResponse>>> listStatuses() {
+    public ResponseEntity<ApiResponse<List<StatusLookupResponse>>> listStatuses() {
         return ResponseEntity.ok(ApiResponse.success("Statuses retrieved successfully", statusService.listStatuses()));
     }
 }

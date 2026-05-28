@@ -13,12 +13,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -64,15 +64,17 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listCategories_returns200WithList() throws Exception {
-        when(categoryService.listCategories(any())).thenReturn(List.of(stubCategory()));
+        when(categoryService.listCategories(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
 
         mvc.perform(get("/incident-categories")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident categories retrieved successfully"))
-                .andExpect(jsonPath("$.data[0].id").value("cat-1"))
-                .andExpect(jsonPath("$.data[0].name").value("Facility"));
+                .andExpect(jsonPath("$.data.items[0].id").value("cat-1"))
+                .andExpect(jsonPath("$.data.items[0].name").value("Facility"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
     // ── POST /incident-categories ─────────────────────────────────────────────
@@ -126,6 +128,23 @@ class IncidentCategoryControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
+    }
+
+    @Test
+    void updateCategory_duplicateName_returns409() throws Exception {
+        when(categoryService.updateCategory(eq("cat-1"), any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-category.update"));
+
+        mvc.perform(patch("/incident-categories/cat-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new IncidentCategoryRequest("Facility", "Updated description", "dept-1")))
+                        .with(authentication(auth)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A record with this value already exists"));
     }
 
     // ── DELETE /incident-categories/{id} ─────────────────────────────────────
@@ -191,32 +210,4 @@ class IncidentCategoryControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
-    // ── GET /incident-categories/search ──────────────────────────────────────
-
-    @Test
-    void searchCategories_withQuery_returns200WithPage() throws Exception {
-        when(categoryService.searchCategories(eq("facility"), any()))
-                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 10), 1));
-
-        mvc.perform(get("/incident-categories/search")
-                        .param("query", "facility")
-                        .with(authentication(new UsernamePasswordAuthenticationToken(
-                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].id").value("cat-1"))
-                .andExpect(jsonPath("$.data.items[0].name").value("Facility"))
-                .andExpect(jsonPath("$.data.totalElements").value(1));
-    }
-
-    @Test
-    void searchCategories_noQuery_returns200() throws Exception {
-        when(categoryService.searchCategories(eq(null), any()))
-                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 10), 1));
-
-        mvc.perform(get("/incident-categories/search")
-                        .with(authentication(new UsernamePasswordAuthenticationToken(
-                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalElements").value(1));
-    }
 }

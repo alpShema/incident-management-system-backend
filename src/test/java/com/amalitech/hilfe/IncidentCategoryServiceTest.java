@@ -3,6 +3,7 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
+import com.amalitech.hilfe.dto.IncidentTopicListResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
@@ -109,13 +110,14 @@ class IncidentCategoryServiceTest {
     @Test
     void listCategories_returnsMappedList() {
         IncidentCategory cat = buildCategory();
-        when(categoryRepository.findByStatusWithDepartment("active")).thenReturn(List.of(cat));
+        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged("active", null, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(cat), PageRequest.of(0, 20), 1));
 
-        List<IncidentCategoryResponse> result = categoryService.listCategories("active");
+        var result = categoryService.listCategories("active", null, PageRequest.of(0, 20));
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("cat-1");
-        assertThat(result.get(0).name()).isEqualTo("Facility");
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
+        assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
     }
 
     // ── createCategory ────────────────────────────────────────────────────────
@@ -350,6 +352,33 @@ class IncidentCategoryServiceTest {
                 new CreateTopicRequest("Projector", "Projector issues", "group-1", true)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent group must have a primary agent")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void listTopics_defaultsStatusToActive() {
+        var pageable = PageRequest.of(0, 20);
+        when(typeRepository.findAllTopicsFiltered(
+                eq(null), eq(null), eq(null), eq("active"), eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+
+        var result = categoryService.listTopics(null, null, null, null, null, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        IncidentTopicListResponse row = result.getContent().get(0);
+        assertThat(row.category()).isNotNull();
+        assertThat(row.agentGroup()).isNotNull();
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, "active", null, pageable);
+    }
+
+    @Test
+    void listTopics_rejectsInvalidStatus() {
+        var pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> categoryService.listTopics(null, null, null, "archived", null, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Invalid status. Allowed values are active or inactive")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
