@@ -14,28 +14,40 @@ import java.util.List;
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> {
     @Query("""
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
-                activityLog.id,
-                activityLog.actorUserId,
-                activityLog.targetUserId,
-                activityLog.action,
-                activityLog.subjectType,
-                activityLog.subjectId,
-                activityLog.description,
-                activityLog.metadata,
-                activityLog.createdAt
+                al.id,
+                actor.fullName,
+                target.fullName,
+                al.action,
+                al.subjectType,
+                incident.incidentNo,
+                al.description,
+                al.metadata,
+                al.createdAt
             )
-            FROM ActivityLog activityLog
+            FROM ActivityLog al
+            LEFT JOIN al.actorUser actor
+            LEFT JOIN al.targetUser target
+            LEFT JOIN Incident incident ON incident.id = al.subjectId
             """)
     Page<ActivityLogResponse> findActivityLogResponses(Pageable pageable);
 
     @Query("""
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
-                a.id, a.actorUserId, a.targetUserId,
-                a.action, a.subjectType, a.subjectId,
-                a.description, a.metadata, a.createdAt
+                al.id,
+                actor.fullName,
+                target.fullName,
+                al.action,
+                al.subjectType,
+                incident.incidentNo,
+                al.description,
+                al.metadata,
+                al.createdAt
             )
-            FROM ActivityLog a
-            ORDER BY a.createdAt DESC
+            FROM ActivityLog al
+            LEFT JOIN al.actorUser actor
+            LEFT JOIN al.targetUser target
+            LEFT JOIN Incident incident ON incident.id = al.subjectId
+            ORDER BY al.createdAt DESC
             """)
     List<ActivityLogResponse> findRecent(Pageable pageable);
 }
