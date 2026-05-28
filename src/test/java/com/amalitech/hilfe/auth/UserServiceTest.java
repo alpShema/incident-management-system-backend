@@ -47,10 +47,43 @@ class UserServiceTest {
         ));
         when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), isNull(), eq(pageable))).thenReturn(page);
 
-        Page<UserRoleSummaryResponse> result = userService.getUsers(null, null, null, null, pageable);
+        Page<UserRoleSummaryResponse> result = userService.getUsers(null, null, null, (String) null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().roleCode()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void getUsers_activeStatusString_passesTrue() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), eq(true), eq(pageable))).thenReturn(page);
+
+        userService.getUsers(null, null, null, "Active", pageable);
+
+        verify(userRepository).findUserRoleSummariesUnified(null, null, null, true, pageable);
+    }
+
+    @Test
+    void getUsers_inactiveStatusString_passesFalse() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), eq(false), eq(pageable))).thenReturn(page);
+
+        userService.getUsers(null, null, null, "INACTIVE", pageable);
+
+        verify(userRepository).findUserRoleSummariesUnified(null, null, null, false, pageable);
+    }
+
+    @Test
+    void getUsers_locationId_passedThrough() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), eq("LOC-ACCRA"), isNull(), eq(pageable))).thenReturn(page);
+
+        userService.getUsers(null, null, "LOC-ACCRA", (String) null, pageable);
+
+        verify(userRepository).findUserRoleSummariesUnified(null, null, "LOC-ACCRA", null, pageable);
     }
 
     @Test
