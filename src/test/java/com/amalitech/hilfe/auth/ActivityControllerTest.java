@@ -42,12 +42,12 @@ class ActivityControllerTest {
                 List.of(
                         new ActivityLogResponse(
                                 1L,
-                                "admin-1",
-                                "u1",
+                                "Jane Admin",
+                                "John Doe",
                                 "ROLE_CHANGED",
                                 "USER",
-                                "u1",
-                                "Changed role for user u1 from CLIENT to ADMIN",
+                                null,
+                                "Jane Admin changed role for John Doe from CLIENT to ADMIN",
                                 "{\"previousRoleCode\":\"CLIENT\",\"newRoleCode\":\"ADMIN\"}",
                                 Instant.parse("2026-05-06T08:00:00Z")
                         )
@@ -73,8 +73,11 @@ class ActivityControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Activity logs retrieved successfully"))
                 .andExpect(jsonPath("$.data.items[0].id").value(1))
+                .andExpect(jsonPath("$.data.items[0].actorName").value("Jane Admin"))
+                .andExpect(jsonPath("$.data.items[0].targetName").value("John Doe"))
                 .andExpect(jsonPath("$.data.items[0].action").value("ROLE_CHANGED"))
                 .andExpect(jsonPath("$.data.items[0].subjectType").value("USER"))
+                .andExpect(jsonPath("$.data.items[0].subjectNo").doesNotExist())
                 .andExpect(jsonPath("$.data.page").value(0))
                 .andExpect(jsonPath("$.data.size").value(10));
     }
