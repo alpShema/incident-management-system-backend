@@ -31,11 +31,11 @@ public class IncidentCategoryService {
     private final IncidentRepository incidentRepository;
     private final EntityManager entityManager;
 
-    public List<IncidentCategoryResponse> listCategories(String status) {
+    public Page<IncidentCategoryResponse> listCategories(String status, String query, Pageable pageable) {
         String resolvedStatus = (status == null || status.isBlank()) ? "active" : status.toLowerCase();
-        return categoryRepository.findByStatusWithDepartment(resolvedStatus).stream()
-                .map(IncidentCategoryResponse::from)
-                .toList();
+        String queryPattern = buildQueryPattern(query);
+        return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
+                .map(IncidentCategoryResponse::from);
     }
 
     public Page<IncidentCategoryResponse> searchCategories(String query, Pageable pageable) {
@@ -89,6 +89,26 @@ public class IncidentCategoryService {
         return typeRepository.findByCategoryIdWithAgent(categoryId).stream()
                 .map(IncidentTopicResponse::from)
                 .toList();
+    }
+
+    public Page<IncidentTopicListResponse> listTopics(
+            String categoryId,
+            String departmentId,
+            String agentGroupId,
+            String status,
+            String query,
+            Pageable pageable
+    ) {
+        String resolvedStatus = normalizeTopicStatus(status);
+        String queryPattern = buildQueryPattern(query);
+        return typeRepository.findAllTopicsFiltered(
+                        blankToNull(categoryId),
+                        blankToNull(departmentId),
+                        blankToNull(agentGroupId),
+                        resolvedStatus,
+                        queryPattern,
+                        pageable)
+                .map(IncidentTopicListResponse::from);
     }
 
     @Transactional
@@ -198,5 +218,28 @@ public class IncidentCategoryService {
         return categoryRepository.findById(categoryId)
                 .filter(category -> "active".equalsIgnoreCase(category.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+    }
+
+    private String normalizeTopicStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "active";
+        }
+        String value = status.trim().toLowerCase();
+        if (!"active".equals(value) && !"inactive".equals(value)) {
+            throw new ArmsAuthException("Invalid status. Allowed values are active or inactive", 400);
+        }
+        return value;
+    }
+
+    private String buildQueryPattern(String query) {
+        if (query == null || query.isBlank()) return null;
+        return "%" + query.toLowerCase()
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_") + "%";
+    }
+
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 }

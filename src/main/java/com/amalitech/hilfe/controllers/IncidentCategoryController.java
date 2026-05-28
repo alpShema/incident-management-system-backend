@@ -18,7 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -30,28 +29,18 @@ import java.util.List;
 public class IncidentCategoryController {
     private final IncidentCategoryService categoryService;
 
-    @Operation(summary = "List incident categories", description = "Returns categories filtered by status. Defaults to active categories. Pass `status=inactive` to get inactive ones. Requires authentication, but no role-specific permission.")
+    @Operation(summary = "List incident categories", description = "Returns categories filtered by status and optional search query. Defaults to active categories. Pass `status=inactive` to get inactive ones. Pass `query` to search by category name, description, or department name. Requires authentication, but no role-specific permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
     })
     @GetMapping
-    public ResponseEntity<ApiResponse<List<IncidentCategoryResponse>>> listCategories(
-            @Parameter(description = "Filter by status: active (default) or inactive") @RequestParam(required = false, defaultValue = "active") String status
-    ) {
-        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully", categoryService.listCategories(status)));
-    }
-
-    @Operation(summary = "Search incident categories", description = "Returns a paginated list of active categories filtered by an optional keyword. Searches across category name, description, and department name.")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
-    })
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> searchCategories(
-            @Parameter(description = "Keyword to search by name, description, or department") @RequestParam(required = false) String query,
+    public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listCategories(
+            @Parameter(description = "Filter by status: active (default) or inactive") @RequestParam(required = false, defaultValue = "active") String status,
+            @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
-                PageResponse.from(categoryService.searchCategories(query, pageable))));
+                PageResponse.from(categoryService.listCategories(status, query, pageable))));
     }
 
     @Operation(summary = "Create an incident category", description = "Creates a new category under an internal department. `departmentId` is required. Requires `incident-category.create` permission.")

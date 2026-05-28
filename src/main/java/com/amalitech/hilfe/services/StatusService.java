@@ -1,6 +1,6 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.dto.LookupResponse;
+import com.amalitech.hilfe.dto.StatusLookupResponse;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,9 +12,9 @@ import java.util.List;
 public class StatusService {
     private final StatusRepository statusRepository;
 
-    public List<LookupResponse> listStatuses() {
+    public List<StatusLookupResponse> listStatuses() {
         return statusRepository.findAll().stream()
-                .map(s -> LookupResponse.from(s.getId(), s.getName()))
+                .map(s -> StatusLookupResponse.from(s.getId(), s.getName(), s.getDescription()))
                 .toList();
     }
 }
