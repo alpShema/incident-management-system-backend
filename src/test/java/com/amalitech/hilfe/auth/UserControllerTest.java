@@ -111,6 +111,26 @@ class UserControllerTest {
     }
 
     @Test
+    void listUsers_filterByStatusActive_passesStringToService() throws Exception {
+        when(userService.getUsers(isNull(), isNull(), isNull(), eq("Active"), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/users").param("status", "Active").with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty());
+    }
+
+    @Test
+    void listUsers_filterByLocationId_passesStringToService() throws Exception {
+        when(userService.getUsers(isNull(), isNull(), eq("LOC-ACCRA"), isNull(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/users").param("locationId", "LOC-ACCRA").with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty());
+    }
+
+    @Test
     void assignUserRole_invalidRoleCode_returns404() throws Exception {
         when(userService.assignUserRole(anyString(), eq("u1"), eq("CLIENTS")))
                 .thenThrow(new com.amalitech.hilfe.exceptions.ArmsAuthException("Role not found", 404));
