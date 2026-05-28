@@ -65,7 +65,7 @@ public interface UserRepository extends JpaRepository<User, String> {
                         LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
                     AND (:roleCode IS NULL OR user.roleCode = :roleCode)
-                    AND (:locationId IS NULL OR user.locationId = :locationId)
+                    AND (:locationId IS NULL OR LOWER(user.locationId) = LOWER(:locationId))
                     AND (:status IS NULL OR user.status = :status)
                     """,
             countQuery = """
@@ -75,7 +75,7 @@ public interface UserRepository extends JpaRepository<User, String> {
                         LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
                     AND (:roleCode IS NULL OR user.roleCode = :roleCode)
-                    AND (:locationId IS NULL OR user.locationId = :locationId)
+                    AND (:locationId IS NULL OR LOWER(user.locationId) = LOWER(:locationId))
                     AND (:status IS NULL OR user.status = :status)
                     """
     )
