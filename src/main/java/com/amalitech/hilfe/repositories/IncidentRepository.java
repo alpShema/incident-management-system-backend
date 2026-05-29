@@ -592,8 +592,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category
-            LEFT JOIN FETCH it.agent ita
-            LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
