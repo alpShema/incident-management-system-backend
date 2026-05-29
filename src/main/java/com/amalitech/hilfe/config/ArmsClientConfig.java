@@ -7,7 +7,7 @@ import org.springframework.web.client.RestClient;
 
 @Configuration
 public class ArmsClientConfig {
-
+//just a thing
     @Bean
     public RestClient armsRestClient(@Value("${arms.sso-url}") String armsSsoUrl) {
         return RestClient.builder()
