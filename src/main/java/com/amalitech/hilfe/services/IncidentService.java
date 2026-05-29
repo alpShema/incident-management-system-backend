@@ -214,6 +214,7 @@ public class IncidentService {
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
+    @Transactional
     public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
         return updateStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, request);
     }
