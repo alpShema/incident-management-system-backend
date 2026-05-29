@@ -21,6 +21,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -60,6 +63,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -100,6 +106,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -136,6 +145,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -183,6 +195,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -219,6 +234,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -259,6 +277,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -294,6 +315,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -325,6 +349,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -382,6 +409,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -447,6 +477,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -501,6 +534,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.category ic
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH ag.primaryAgent pa
+            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
@@ -556,8 +592,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category
-            LEFT JOIN FETCH it.agent ita
-            LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
