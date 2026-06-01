@@ -196,14 +196,16 @@ public class IncidentService {
 
         enforceTransition(incident, newStatus, roleCode);
         enforceReopenWindow(incident, newStatus);
+        enforceReasonRequired(newStatus, request.reason());
 
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
+        incident.setStatusReason(requiresReason(newStatus) ? request.reason() : null);
         incident.setResolvedAt("status-resolved".equals(newStatus.getId()) ? Instant.now() : null);
         incident.setClosedAt("status-closed".equals(newStatus.getId()) ? Instant.now() : null);
 
         incidentRepository.save(incident);
-        activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
+        activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName(), request.reason());
 
         if ("reopened".equalsIgnoreCase(newStatus.getName())) {
             applyReopenTransition(actorUserId, incident, incidentId);
@@ -391,6 +393,16 @@ public class IncidentService {
         incident.setResolvedAt(null);
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
+    }
+
+    private boolean requiresReason(Status newStatus) {
+        return "status-pending".equals(newStatus.getId()) || "status-reopened".equals(newStatus.getId());
+    }
+
+    private void enforceReasonRequired(Status newStatus, String reason) {
+        if (requiresReason(newStatus) && (reason == null || reason.isBlank())) {
+            throw new ArmsAuthException("A reason is required when setting status to " + newStatus.getName(), 400);
+        }
     }
 
     private void enforceReopenWindow(Incident incident, Status newStatus) {
