@@ -86,6 +86,12 @@ public class IncidentService {
         Incident saved = incidentRepository.save(incident);
         entityManager.flush();
 
+        if (saved.getAssignedToId() != null) {
+            String agentUserId = resolveAgentUserId(saved.getAssignedToId());
+            int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
+            notificationService.sendAssignmentNotification(agentUserId, saved.getId(), incidentNo);
+        }
+
         List<MediaResponse> mediaResponses = List.of();
         if (request.attachments() != null && !request.attachments().isEmpty()) {
             List<Media> mediaList = mediaService.createMediaForIncident(saved.getId(), request.attachments());
@@ -247,6 +253,11 @@ public class IncidentService {
 
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
+
+        String agentUserId = resolveAgentUserId(request.agentId());
+        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+        notificationService.sendAssignmentNotification(agentUserId, incidentId, incidentNo);
+
         entityManager.flush();
         entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
