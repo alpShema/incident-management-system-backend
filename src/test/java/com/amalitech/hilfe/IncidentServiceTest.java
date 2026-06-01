@@ -8,6 +8,7 @@ import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
+import com.amalitech.hilfe.services.NotificationService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ class IncidentServiceTest {
     @Mock SeverityRepository severityRepository;
     @Mock ActivityLogService activityLogService;
     @Mock AutoCloseService autoCloseService;
+    @Mock NotificationService notificationService;
     @Mock MediaService mediaService;
     @Mock MediaRepository mediaRepository;
     @Mock EntityManager entityManager;
