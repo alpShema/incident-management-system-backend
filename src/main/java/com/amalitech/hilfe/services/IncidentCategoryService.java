@@ -125,7 +125,6 @@ public class IncidentCategoryService {
                 .categoryId(categoryId)
                 .adminId(creatorUserId)
                 .agentGroupId(assignedGroup.getId())
-                .agentId(assignedGroup.getPrimaryAgentId())
                 .visibleToGroup(request.visibleToGroup())
                 .build();
         IncidentType saved = typeRepository.save(topic);
@@ -157,7 +156,6 @@ public class IncidentCategoryService {
         if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
             AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
             topic.setAgentGroupId(assignedGroup.getId());
-            topic.setAgentId(assignedGroup.getPrimaryAgentId());
         }
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
@@ -207,9 +205,6 @@ public class IncidentCategoryService {
                 .orElseThrow(() -> new ArmsAuthException("Agent group not found", 404));
         if (agentGroup.getDepartmentId() == null || !agentGroup.getDepartmentId().equals(category.getDepartmentId())) {
             throw new ArmsAuthException("Agent group must belong to the same department as the incident category", 400);
-        }
-        if (agentGroup.getPrimaryAgentId() == null || agentGroup.getPrimaryAgentId().isBlank()) {
-            throw new ArmsAuthException("Agent group must have a primary agent", 400);
         }
         return agentGroup;
     }

@@ -47,15 +47,11 @@ public class AgentGroupService {
         if (isBlank(request.departmentId())) {
             throw new ArmsAuthException("departmentId is required", 400);
         }
-        if (isBlank(request.primaryAgentId())) {
-            throw new ArmsAuthException("primaryAgentId is required", 400);
-        }
         if (agentGroupRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("Agent group with this name already exists", 409);
         }
 
         String groupId = UUID.randomUUID().toString();
-        Agent primaryAgent = findAgent(request.primaryAgentId());
         Department department = findActiveDepartment(request.departmentId());
 
         AgentGroup group = AgentGroup.builder()
@@ -63,12 +59,18 @@ public class AgentGroupService {
                 .name(request.name())
                 .description(request.description())
                 .departmentId(department.getId())
-                .primaryAgentId(primaryAgent.getId())
                 .status(true)
                 .build();
-        AgentGroup saved = agentGroupRepository.save(group);
-        addMembership(primaryAgent.getId(), saved.getId());
-        return toResponse(saved);
+        agentGroupRepository.save(group);
+
+        if (request.agentIds() != null) {
+            for (String agentId : request.agentIds()) {
+                findAgent(agentId);
+                addMembership(agentId, groupId);
+            }
+        }
+
+        return toResponse(group);
     }
 
     @Transactional
@@ -87,15 +89,6 @@ public class AgentGroupService {
         if (!isBlank(request.departmentId())) {
             Department department = findActiveDepartment(request.departmentId());
             group.setDepartmentId(department.getId());
-        }
-        if (request.primaryAgentId() != null && !request.primaryAgentId().isBlank()) {
-            Agent primaryAgent = findAgent(request.primaryAgentId());
-            if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(primaryAgent.getId(), id)) {
-                throw new ArmsAuthException("Primary agent must be a member of this agent group", 400);
-            }
-            group.setPrimaryAgentId(primaryAgent.getId());
-        } else {
-            group.setPrimaryAgentId(null);
         }
         return toResponse(agentGroupRepository.save(group));
     }
@@ -127,30 +120,18 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupMemberResponse removeMember(String agentGroupId, String agentId) {
-        AgentGroup group = findAgentGroup(agentGroupId);
+        ensureAgentGroupExists(agentGroupId);
         Agent agent = findAgentWithUser(agentId);
         if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(agentId, agentGroupId)) {
             throw new ArmsAuthException("Agent is not a member of this agent group", 404);
-        }
-        if (agentId.equals(group.getPrimaryAgentId())) {
-            group.setPrimaryAgentId(null);
-            agentGroupRepository.save(group);
         }
         agentGroupMemberRepository.deleteByAgentIdAndAgentGroupId(agentId, agentGroupId);
         return AgentGroupMemberResponse.from(agent);
     }
 
     private AgentGroupResponse toResponse(AgentGroup group) {
-        LookupResponse primaryAgent = null;
-        if (group.getPrimaryAgentId() != null && !group.getPrimaryAgentId().isBlank()) {
-            primaryAgent = agentRepository.findByIdWithUser(group.getPrimaryAgentId())
-                    .map(agent -> LookupResponse.from(
-                            agent.getId(),
-                            agent.getUser() != null ? agent.getUser().getFullName() : agent.getUserId()))
-                    .orElse(null);
-        }
         LookupResponse department = null;
-        if (group.getDepartmentId() != null && !group.getDepartmentId().isBlank()) {
+        if (!isBlank(group.getDepartmentId())) {
             department = departmentRepository.findById(group.getDepartmentId())
                     .map(dept -> LookupResponse.from(dept.getId(), dept.getName()))
                     .orElse(null);
@@ -158,7 +139,6 @@ public class AgentGroupService {
         return AgentGroupResponse.from(
                 group,
                 department,
-                primaryAgent,
                 agentGroupMemberRepository.countByAgentGroupId(group.getId()));
     }
 
