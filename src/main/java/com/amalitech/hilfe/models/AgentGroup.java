@@ -24,8 +24,8 @@ public class AgentGroup {
 
     private String description;
 
-    @Column(name = "primary_agent_id")
-    private String primaryAgentId;
+    @Column(name = "department_id")
+    private String departmentId;
 
     private Boolean status;
 
@@ -42,8 +42,8 @@ public class AgentGroup {
     private List<AgentGroupMember> members = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "primary_agent_id", insertable = false, updatable = false)
-    private Agent primaryAgent;
+    @JoinColumn(name = "department_id", insertable = false, updatable = false)
+    private Department department;
 
     // ── Lifecycle ──
 

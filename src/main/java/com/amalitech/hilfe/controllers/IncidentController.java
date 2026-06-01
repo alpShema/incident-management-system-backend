@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.*;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -15,6 +16,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -79,38 +82,154 @@ public class IncidentController {
     }
 
     @Operation(
-        summary = "List incidents",
-        description = "Returns a paginated list of incidents. Results are automatically scoped by role: "
-                    + "CLIENTs see only their own, AGENTs see only assigned incidents, ADMINs see all. "
-                    + "Supports filtering by statusId, severityId, incidentTypeId, categoryId, and locationId. "
+        summary = "List all incidents",
+        description = "Returns a paginated list of all incidents in the system. "
+                    + "Restricted to admins and super admins — agents and clients receive 403. "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
+                    + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
+                    + "Requires `dashboard.admin` permission."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping
+    @PreAuthorize("hasAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAllIncidents(
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
+            @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
+            @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
+            @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
+            @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
+            @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
+            Pageable pageable
+    ) {
+        Page<IncidentResponse> page = incidentService.queryAllIncidents(
+                query, statusId, severityId, incidentTypeId, categoryId, locationId, fromDate, toDate, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+    }
+
+    @Operation(
+        summary = "List my incidents",
+        description = "Returns a paginated list of incidents raised by the authenticated user. "
+                    + "Accessible by all roles (CLIENT, AGENT, ADMIN). "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`)."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
-    @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listIncidents(
+    @GetMapping("/my-incidents")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listMyIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
             @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
             @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
-        Page<IncidentResponse> page = incidentService.listIncidents(
-                principal.userId(), principal.roleCode(),
-                statusId, severityId, incidentTypeId, categoryId, locationId,
-                pageable);
+        Page<IncidentResponse> page = incidentService.queryIncidents(
+                principal.userId(),
+                query, statusId, severityId, incidentTypeId, categoryId, locationId,
+                fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+    }
+
+    @Operation(
+        summary = "List department incidents",
+        description = "Returns a paginated list of incidents within the authenticated user's agent group(s). "
+                    + "Accessible by admins and agents. "
+                    + "Returns an empty list if the caller has no agent group memberships. "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
+                    + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
+                    + "Requires `dashboard.admin` or `dashboard.agent` permission."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/dept-incidents")
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listDeptIncidents(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
+            @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
+            @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
+            @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
+            @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
+            @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
+            Pageable pageable
+    ) {
+        Page<IncidentResponse> page = incidentService.queryDeptIncidents(
+                principal.userId(),
+                query, statusId, severityId, incidentTypeId, categoryId, locationId,
+                fromDate, toDate, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Department incidents retrieved successfully", PageResponse.from(page)));
+    }
+
+    @Operation(
+        summary = "List assigned incidents",
+        description = "Returns a paginated list of incidents directly assigned to the authenticated user. "
+                    + "Accessible by admins and agents. "
+                    + "Returns an empty list if the caller has no agent record. "
+                    + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
+                    + "Both `query` and filters can be supplied together to narrow results simultaneously. "
+                    + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
+                    + "Requires `dashboard.admin` or `dashboard.agent` permission."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/assigned-incidents")
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAssignedIncidents(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
+            @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
+            @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
+            @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
+            @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
+            @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
+            Pageable pageable
+    ) {
+        Page<IncidentResponse> page = incidentService.queryAssignedIncidents(
+                principal.userId(),
+                query, statusId, severityId, incidentTypeId, categoryId, locationId,
+                fromDate, toDate, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(page)));
     }
 
     @Operation(
         summary = "Search incidents by keyword",
         description = "Full-text search across incident title, description, topic name, and category name. "
-                    + "Results are role-scoped identically to GET /incidents: "
-                    + "CLIENTs see only their own, AGENTs see assigned/created, ADMINs see all. "
+                    + "Returns only incidents created by the authenticated user. "
+                    + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Supports pagination and sorting via Pageable (e.g. sort=createdAt,desc)."
     )
     @ApiResponses({
@@ -123,10 +242,11 @@ public class IncidentController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @Parameter(description = "Free-text keyword to search in title, description, topic name, and category name", required = true)
             @RequestParam String query,
+            @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
+            @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
-        Page<IncidentResponse> page = incidentService.searchIncidents(
-                principal.userId(), principal.roleCode(), query, pageable);
+        Page<IncidentResponse> page = incidentService.searchIncidents(principal.userId(), query, fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -141,7 +261,7 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident retrieved successfully",
-                incidentService.getIncident(principal.userId(), principal.roleCode(), id)));
+                incidentService.getIncident(principal.userId(), parseRoleCode(principal.roleCode()), id)));
     }
 
     @Operation(
@@ -166,7 +286,7 @@ public class IncidentController {
             @Valid @RequestBody UpdateIncidentStatusRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident status updated successfully",
-                incidentService.updateStatus(principal.userId(), principal.roleCode(), id, request)));
+                incidentService.updateStatus(principal.userId(), parseRoleCode(principal.roleCode()), id, request)));
     }
 
     @Operation(
@@ -207,5 +327,14 @@ public class IncidentController {
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident assigned successfully",
                 incidentService.assignIncident(principal.userId(), id, request)));
+    }
+
+    private RoleCode parseRoleCode(String roleCode) {
+        if (roleCode == null) return null;
+        try {
+            return RoleCode.valueOf(roleCode.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }

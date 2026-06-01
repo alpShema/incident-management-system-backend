@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -28,16 +29,21 @@ import java.util.List;
 public class IncidentCategoryController {
     private final IncidentCategoryService categoryService;
 
-    @Operation(summary = "List active incident categories", description = "Returns active categories. Requires authentication, but no role-specific permission.")
+    @Operation(summary = "List incident categories", description = "Returns categories filtered by status and optional search query. Defaults to active categories. Pass `status=inactive` to get inactive ones. Pass `query` to search by category name, description, or department name. Requires authentication, but no role-specific permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
     })
     @GetMapping
-    public ResponseEntity<ApiResponse<List<IncidentCategoryResponse>>> listCategories() {
-        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully", categoryService.listCategories()));
+    public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listCategories(
+            @Parameter(description = "Filter by status: active (default) or inactive") @RequestParam(required = false, defaultValue = "active") String status,
+            @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
+                PageResponse.from(categoryService.listCategories(status, query, pageable))));
     }
 
-    @Operation(summary = "Create an incident category", description = "Creates a new category. Requires `incident-category.create` permission.")
+    @Operation(summary = "Create an incident category", description = "Creates a new category under an internal department. `departmentId` is required. Requires `incident-category.create` permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Category created"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
@@ -53,7 +59,7 @@ public class IncidentCategoryController {
                 .body(ApiResponse.success("Incident category created successfully", categoryService.createCategory(request)));
     }
 
-    @Operation(summary = "Update an incident category", description = "Updates the name/description of an existing category. Requires `incident-category.update` permission.")
+    @Operation(summary = "Update an incident category", description = "Updates the name, description, or linked department of an existing category. Requires `incident-category.update` permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Category updated"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
@@ -95,7 +101,8 @@ public class IncidentCategoryController {
     @Operation(
         summary = "Create a topic under a category",
         description = "Adds a new incident topic (type) to the specified category. The path `id` is the stable category ID returned by the category list endpoint, for example `cat-it`. "
-                    + "Admins must provide the responsible agentGroupId, and that agent group must have a primary agent. Requires `incident-type.create` permission."
+                    + "Admins must provide the responsible `agentGroupId`. The agent group must have a primary agent and must belong to the same department as the category. "
+                    + "Requires `incident-type.create` permission."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Topic created"),
@@ -133,7 +140,7 @@ public class IncidentCategoryController {
     }
 
     @PatchMapping("/{categoryId}/topics/{topicId}")
-    @Operation(summary = "Update a topic", description = "Updates a topic name, description, assigned agent group, or group visibility. Requires `incident-type.update` permission.")
+    @Operation(summary = "Update a topic", description = "Updates a topic name, description, assigned agent group, or group visibility. If `agentGroupId` is changed, the new group must have a primary agent and must belong to the same department as the category. Requires `incident-type.update` permission.")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_UPDATE + "')")
     public ResponseEntity<ApiResponse<IncidentTopicResponse>> updateTopic(
             @PathVariable String categoryId,

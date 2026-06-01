@@ -28,11 +28,10 @@ public class DashboardService {
 
     public DashboardStats getStats(String userId, RoleCode role) {
         if (role == RoleCode.AGENT) {
-            return findAgentGroupIds(userId)
-                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> {
-                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForDepartment(agentGroupIds));
-                        long total = incidentRepository.countByDepartment(agentGroupIds);
+            return agentRepository.findByUserId(userId)
+                    .map(agent -> {
+                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agent.getId()));
+                        long total = incidentRepository.countByAssignedToId(agent.getId());
                         return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
                     })
                     .orElse(new DashboardStats(0, 0, 0, 0, 0));
@@ -54,8 +53,7 @@ public class DashboardService {
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
 
-        switch (role) {
-            case ADMIN, SUPER_ADMIN -> {
+        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
                 byStatus = toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
                         : incidentRepository.countByStatusGlobal());
@@ -63,25 +61,21 @@ public class DashboardService {
                 List<MonthlyCount> allTrend = toMonthlyCount(
                         incidentRepository.countByMonthSince(trendSince));
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
-            }
-            case AGENT -> {
-                var agentGroupIdsOpt = findAgentGroupIds(userId).filter(agentGroupIds -> !agentGroupIds.isEmpty());
-                byStatus = agentGroupIdsOpt.map(agentGroupIds -> toLabel(since != null
-                        ? incidentRepository.countByStatusForDepartmentSince(agentGroupIds, since)
-                        : incidentRepository.countByStatusForDepartment(agentGroupIds)))
-                        .orElse(List.of());
+        } else if (role == RoleCode.AGENT) {
+            var agentOpt = agentRepository.findByUserId(userId);
+            byStatus = agentOpt.map(agent -> toLabel(since != null
+                    ? incidentRepository.countByStatusForAgentSince(agent.getId(), since)
+                    : incidentRepository.countByStatusForAgent(agent.getId())))
+                    .orElse(List.of());
 
-                List<MonthlyCount> myTrend = toMonthlyCount(
-                        incidentRepository.countByMonthForUser(userId, trendSince));
-                List<MonthlyCount> agentGroupTrend = agentGroupIdsOpt
-                        .map(agentGroupIds -> toMonthlyCount(incidentRepository.countByMonthForDepartment(agentGroupIds, trendSince)))
-                        .orElse(List.of());
-                trends = List.of(
-                        new TrendSeries("My Incidents", myTrend),
-                        new TrendSeries("Agent Group Incidents", agentGroupTrend)
-                );
-            }
-            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
+            List<MonthlyCount> myTrend = agentOpt
+                    .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
+                    .orElse(List.of());
+            trends = List.of(
+                    new TrendSeries("My Assigned Incidents", myTrend)
+            );
+        } else {
+            throw new ArmsAuthException("Dashboard not available for this role", 403);
         }
 
         return new DashboardCharts(byStatus, trends);
@@ -89,22 +83,36 @@ public class DashboardService {
 
     public Page<IncidentResponse> getIncidents(
             String userId, RoleCode role,
+            String query,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
-        return switch (role) {
-            case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+        String queryPattern = null;
+        if (query != null && !query.isBlank()) {
+            String escaped = query.toLowerCase()
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_");
+            queryPattern = "%" + escaped + "%";
+        }
+        final String finalQueryPattern = queryPattern;
+
+        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+            return incidentRepository
+                    .findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
                     .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupIds(userId)
+        }
+        if (role == RoleCode.AGENT) {
+            return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
                     .map(agentGroupIds -> incidentRepository
-                            .findByDepartmentFiltered(agentGroupIds, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
                             .map(IncidentResponse::from))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
-            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
-        };
+        }
+        throw new ArmsAuthException("Dashboard not available for this role", 403);
     }
+
 
     public Page<IncidentResponse> getMyIncidents(
             String userId,

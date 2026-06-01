@@ -1,7 +1,7 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.StatusController;
-import com.amalitech.hilfe.dto.LookupResponse;
+import com.amalitech.hilfe.dto.StatusLookupResponse;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.services.StatusService;
 import com.amalitech.hilfe.services.TokenService;
@@ -34,10 +34,10 @@ class StatusControllerTest {
     @Test
     void listStatuses_returns200WithData() throws Exception {
         when(statusService.listStatuses()).thenReturn(List.of(
-                new LookupResponse("status-1", "Open"),
-                new LookupResponse("status-2", "Pending"),
-                new LookupResponse("status-3", "Resolved"),
-                new LookupResponse("status-4", "Closed")
+                new StatusLookupResponse("status-1", "Open", "Open status"),
+                new StatusLookupResponse("status-2", "Pending", "Pending status"),
+                new StatusLookupResponse("status-3", "Resolved", "Resolved status"),
+                new StatusLookupResponse("status-4", "Closed", "Closed status")
         ));
 
         mvc.perform(get("/statuses")
@@ -46,6 +46,7 @@ class StatusControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Statuses retrieved successfully"))
                 .andExpect(jsonPath("$.data.length()").value(4))
-                .andExpect(jsonPath("$.data[0].name").value("Open"));
+                .andExpect(jsonPath("$.data[0].name").value("Open"))
+                .andExpect(jsonPath("$.data[0].description").value("Open status"));
     }
 }

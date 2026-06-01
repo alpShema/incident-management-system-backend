@@ -3,10 +3,12 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
+import com.amalitech.hilfe.dto.IncidentTopicListResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
+import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.User;
@@ -24,6 +26,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,6 +56,7 @@ class IncidentCategoryServiceTest {
                 .id("cat-1")
                 .name("Facility")
                 .description("Facility related incidents")
+                .departmentId("dept-1")
                 .status("active")
                 .build();
     }
@@ -82,11 +89,18 @@ class IncidentCategoryServiceTest {
         AgentGroup group = AgentGroup.builder()
                 .id("group-1")
                 .name("IT Support")
-                .primaryAgentId("agent-1")
+                .departmentId("dept-1")
                 .build();
-        group.setPrimaryAgent(agent);
         type.setAgentGroup(group);
         return type;
+    }
+
+    private Department buildDepartment() {
+        return Department.builder()
+                .id("dept-1")
+                .name("Facilities")
+                .status(true)
+                .build();
     }
 
     // ── listCategories ────────────────────────────────────────────────────────
@@ -94,13 +108,14 @@ class IncidentCategoryServiceTest {
     @Test
     void listCategories_returnsMappedList() {
         IncidentCategory cat = buildCategory();
-        when(categoryRepository.findByStatusWithDepartment("active")).thenReturn(List.of(cat));
+        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged("active", null, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(cat), PageRequest.of(0, 20), 1));
 
-        List<IncidentCategoryResponse> result = categoryService.listCategories();
+        var result = categoryService.listCategories("active", null, PageRequest.of(0, 20));
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("cat-1");
-        assertThat(result.get(0).name()).isEqualTo("Facility");
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
+        assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
     }
 
     // ── createCategory ────────────────────────────────────────────────────────
@@ -112,7 +127,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(saved);
         when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(saved));
 
-        when(departmentRepository.existsById("dept-1")).thenReturn(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
 
         IncidentCategoryResponse response = categoryService.createCategory(
                 new IncidentCategoryRequest("Facility", "Description", "dept-1"));
@@ -140,7 +155,7 @@ class IncidentCategoryServiceTest {
     void updateCategory_found_updatesAndReturns() {
         IncidentCategory cat = buildCategory();
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
-        when(departmentRepository.existsById("dept-1")).thenReturn(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
         when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
         when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
 
@@ -218,10 +233,10 @@ class IncidentCategoryServiceTest {
     @Test
     void createTopic_happyPath_savesAndReturns() {
         IncidentType saved = buildType();
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
-                AgentGroup.builder().id("group-1").name("IT Support").primaryAgentId("agent-1").status(true).build()));
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
         when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
         when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
 
@@ -234,27 +249,18 @@ class IncidentCategoryServiceTest {
         assertThat(response.category()).isNotNull();
         assertThat(response.category().id()).isEqualTo("cat-1");
         assertThat(response.category().name()).isEqualTo("Facility");
-        assertThat(response.assignedAgentGroup()).isNotNull();
-        assertThat(response.assignedAgentGroup().id()).isEqualTo("group-1");
-        assertThat(response.assignedAgentGroup().name()).isEqualTo("IT Support");
-        assertThat(response.assignedAgentGroup().primaryAgent()).isNotNull();
-        assertThat(response.assignedAgentGroup().primaryAgent().id()).isEqualTo("agent-1");
-        assertThat(response.assignedAgentGroup().primaryAgent().name()).isEqualTo("Agent One");
-        assertThat(response.assignedAgentGroup().primaryAgent().userId()).isEqualTo("agent-user-1");
-        assertThat(response.assignedAgentGroup().primaryAgent().email()).isEqualTo("agent@test.com");
         assertThat(response.visibleToGroup()).isTrue();
         var topicCaptor = forClass(IncidentType.class);
         verify(typeRepository).save(topicCaptor.capture());
         verify(entityManager).flush();
         verify(entityManager).clear();
         assertThat(topicCaptor.getValue().getAdminId()).isEqualTo("admin-1");
-        assertThat(topicCaptor.getValue().getAgentId()).isEqualTo("agent-1");
         assertThat(topicCaptor.getValue().getAgentGroupId()).isEqualTo("group-1");
     }
 
     @Test
     void createTopic_categoryNotFound_throws404() {
-        when(categoryRepository.existsById("missing")).thenReturn(false);
+        when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.createTopic(
                 "missing", "admin-1",
@@ -267,7 +273,7 @@ class IncidentCategoryServiceTest {
 
     @Test
     void createTopic_duplicateName_throws409() {
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(true);
 
         assertThatThrownBy(() -> categoryService.createTopic(
@@ -281,7 +287,7 @@ class IncidentCategoryServiceTest {
 
     @Test
     void createTopic_agentGroupNotFound_throws404() {
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("missing-group")).thenReturn(Optional.empty());
 
@@ -294,18 +300,67 @@ class IncidentCategoryServiceTest {
                 .isEqualTo(404);
     }
 
-    @Test
-    void createTopic_agentGroupWithoutPrimaryAgent_throws400() {
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
-        when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
-        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
-                AgentGroup.builder().id("group-1").name("IT Support").status(true).build()));
+    // ── searchCategories ──────────────────────────────────────────────────────
 
-        assertThatThrownBy(() -> categoryService.createTopic(
-                "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "group-1", true)))
+    @Test
+    void searchCategories_withQuery_passesPatternToRepository() {
+        var pageable = PageRequest.of(0, 10);
+        when(categoryRepository.searchCategories(any(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(buildCategory())));
+
+        var result = categoryService.searchCategories("facility", pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
+        verify(categoryRepository).searchCategories("%facility%", pageable);
+    }
+
+    @Test
+    void searchCategories_blankQuery_passesNullPatternToRepository() {
+        var pageable = PageRequest.of(0, 10);
+        when(categoryRepository.searchCategories(eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        categoryService.searchCategories("  ", pageable);
+
+        verify(categoryRepository).searchCategories(null, pageable);
+    }
+
+    @Test
+    void searchCategories_nullQuery_passesNullPatternToRepository() {
+        var pageable = PageRequest.of(0, 10);
+        when(categoryRepository.searchCategories(eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        categoryService.searchCategories(null, pageable);
+
+        verify(categoryRepository).searchCategories(null, pageable);
+    }
+
+
+    @Test
+    void listTopics_defaultsStatusToActive() {
+        var pageable = PageRequest.of(0, 20);
+        when(typeRepository.findAllTopicsFiltered(
+                eq(null), eq(null), eq(null), eq("active"), eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+
+        var result = categoryService.listTopics(null, null, null, null, null, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        IncidentTopicListResponse row = result.getContent().get(0);
+        assertThat(row.category()).isNotNull();
+        assertThat(row.agentGroup()).isNotNull();
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, "active", null, pageable);
+    }
+
+    @Test
+    void listTopics_rejectsInvalidStatus() {
+        var pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> categoryService.listTopics(null, null, null, "archived", null, pageable))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Agent group must have a primary agent")
+                .hasMessage("Invalid status. Allowed values are active or inactive")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }

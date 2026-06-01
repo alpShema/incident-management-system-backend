@@ -52,6 +52,9 @@ public class Incident {
     @Builder.Default
     private boolean read = false;
 
+    @Column(name = "status_reason")
+    private String statusReason;
+
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 

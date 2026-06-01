@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.Page;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -98,35 +97,5 @@ class DashboardControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         "Unsupported period '60d'. Accepted values: 7d, 30d, 90d."));
-    }
-
-    // ── GET /dashboard/incidents ──────────────────────────────────────────────
-
-    @Test
-    void getIncidents_adminAuth_returns200Paginated() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any()))
-                .thenReturn(Page.empty());
-
-        var auth = new UsernamePasswordAuthenticationToken(
-                adminPrincipal(), null, List.of(() -> "dashboard.admin"));
-
-        mvc.perform(get("/dashboard/incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Incidents retrieved successfully"));
-    }
-
-    // ── GET /dashboard/my-incidents ───────────────────────────────────────────
-
-    @Test
-    void getMyIncidents_adminAuth_returns200() throws Exception {
-        when(dashboardService.getMyIncidents(anyString(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(Page.empty());
-
-        var auth = new UsernamePasswordAuthenticationToken(
-                adminPrincipal(), null, List.of(() -> "dashboard.admin"));
-
-        mvc.perform(get("/dashboard/my-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Incidents retrieved successfully"));
     }
 }

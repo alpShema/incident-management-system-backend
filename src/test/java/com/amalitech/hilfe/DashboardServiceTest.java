@@ -79,13 +79,12 @@ class DashboardServiceTest {
     void getStats_agentRole_agentFound_returnsAgentStats() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.countByStatusForDepartment(List.of("dept-1"))).thenReturn(List.of(
+        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of(
                 new Object[]{"Open", 4L},
                 new Object[]{"Closed", 2L},
                 new Object[]{"Resolved", 1L}
         ));
-        when(incidentRepository.countByDepartment(List.of("dept-1"))).thenReturn(7L);
+        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(7L);
 
         DashboardStats stats = dashboardService.getStats("user-1", RoleCode.AGENT);
 
@@ -134,28 +133,24 @@ class DashboardServiceTest {
     void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.countByStatusForDepartment(List.of("dept-1"))).thenReturn(List.of());
-        when(incidentRepository.countByMonthForUser(anyString(), any(Instant.class))).thenReturn(List.of());
-        when(incidentRepository.countByMonthForDepartment(eq(List.of("dept-1")), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
-        assertThat(charts.trends()).hasSize(2);
-        assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
-        assertThat(charts.trends().get(1).label()).isEqualTo("Agent Group Incidents");
+        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends().get(0).label()).isEqualTo("My Assigned Incidents");
     }
 
     @Test
-    void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndTwoSeries() {
+    void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndSeries() {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
-        when(incidentRepository.countByMonthForUser(anyString(), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
         assertThat(charts.byStatus()).isEmpty();
-        assertThat(charts.trends()).hasSize(2);
-        assertThat(charts.trends().get(1).data()).isEmpty();
+        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends().get(0).data()).isEmpty();
     }
 
     @Test
@@ -169,32 +164,32 @@ class DashboardServiceTest {
     // ── getIncidents ──────────────────────────────────────────────────────────
 
     @Test
-    void getIncidents_adminRole_callsFindAllFiltered() {
+    void getIncidents_adminRole_callsFindAllUnified() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllFiltered(any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findAllUnified(isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "admin-1", RoleCode.ADMIN, null, null, null, "cat-it", null, Pageable.unpaged());
+                "admin-1", RoleCode.ADMIN, null, null, null, null, "cat-it", null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findAllFiltered(any(), any(), any(), eq("cat-it"), any(), any(Pageable.class));
+        verify(incidentRepository).findAllUnified(isNull(), any(), any(), any(), eq("cat-it"), any(), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
-    void getIncidents_agentRole_agentFound_callsFindByDepartmentFiltered() {
+    void getIncidents_agentRole_agentFound_callsFindByDepartmentUnified() {
         Agent agent = buildAgent("agent-1");
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.findByDepartmentFiltered(anyList(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByDepartmentUnified(anyList(), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByDepartmentFiltered(eq(List.of("dept-1")), any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
@@ -202,7 +197,7 @@ class DashboardServiceTest {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result).isNotNull();
         assertThat(result.getTotalElements()).isEqualTo(0);

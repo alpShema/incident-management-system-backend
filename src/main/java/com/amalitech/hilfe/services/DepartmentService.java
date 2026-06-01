@@ -7,7 +7,10 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,10 +24,21 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DepartmentService {
     private final DepartmentRepository departmentRepository;
+    private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
 
-    public Page<DepartmentResponse> listDepartments(Pageable pageable) {
-        return departmentRepository.findByStatus(true, pageable)
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public Page<DepartmentResponse> listDepartments(String query, Boolean status, Pageable pageable) {
+        String queryPattern = null;
+        if (query != null && !query.isBlank()) {
+            queryPattern = "%" + query.toLowerCase()
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_") + "%";
+        }
+        return departmentRepository.search(queryPattern, status, pageable)
                 .map(this::toResponse);
     }
 
@@ -49,7 +63,7 @@ public class DepartmentService {
 
     @Transactional
     public DepartmentResponse updateDepartment(String id, DepartmentRequest request) {
-        Department department = findActiveDepartment(id);
+        Department department = findDepartmentByIdOrThrow(id);
         if (!department.getName().equalsIgnoreCase(request.name())
                 && departmentRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("Department with this name already exists", 409);
@@ -61,13 +75,28 @@ public class DepartmentService {
     }
 
     @Transactional
-    public void deleteDepartment(String id) {
-        Department department = findActiveDepartment(id);
-        if (categoryRepository.existsByDepartmentId(id)) {
-            throw new ArmsAuthException("Department has assigned incident categories", 409);
+    public DepartmentResponse updateDepartmentStatus(String id, Boolean status) {
+        Department department = findDepartmentByIdOrThrow(id);
+
+        if (Boolean.valueOf(status).equals(department.getStatus())) {
+            throw new ArmsAuthException(
+                    Boolean.TRUE.equals(status)
+                            ? "Department is already active"
+                            : "Department is already inactive",
+                    409);
         }
-        department.setStatus(false);
-        departmentRepository.save(department);
+
+        if (Boolean.FALSE.equals(status)) {
+            if (categoryRepository.existsByDepartmentId(id)) {
+                throw new ArmsAuthException("Department has assigned incident categories", 409);
+            }
+            if (agentGroupRepository.existsByDepartmentIdAndStatus(id, true)) {
+                throw new ArmsAuthException("Department has assigned agent groups", 409);
+            }
+        }
+
+        department.setStatus(status);
+        return toResponse(departmentRepository.save(department));
     }
 
     public List<IncidentCategoryResponse> listCategories(String departmentId) {
@@ -82,8 +111,10 @@ public class DepartmentService {
         findActiveDepartment(departmentId);
         IncidentCategory category = findCategory(categoryId);
         category.setDepartmentId(departmentId);
-        IncidentCategory saved = categoryRepository.save(category);
-        return IncidentCategoryResponse.from(categoryRepository.findByIdWithDepartment(saved.getId()).orElse(saved));
+        categoryRepository.save(category);
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentCategoryResponse.from(categoryRepository.findByIdWithDepartment(categoryId).orElseThrow());
     }
 
     @Transactional
@@ -105,6 +136,11 @@ public class DepartmentService {
     private Department findActiveDepartment(String id) {
         return departmentRepository.findById(id)
                 .filter(department -> Boolean.TRUE.equals(department.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
+    }
+
+    private Department findDepartmentByIdOrThrow(String id) {
+        return departmentRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
     }
 

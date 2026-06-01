@@ -20,18 +20,24 @@ public class IncidentService {
 
     private static final String DEFAULT_PRIORITY_NAME = "Low";
 
+    // Frontend sort alias → JPA field path
+    private static final Map<String, String> SORT_FIELD_ALIASES = Map.of(
+            "category", "incidentType.category.name",
+            "priority", "severity.name"
+    );
+
     // from-status-id → to-status-id → roles permitted to make that transition
-    private static final Map<String, Map<String, Set<RoleCode>>> VALID_TRANSITIONS = Map.of(
+    private static final Map<String, Map<String, Set<String>>> VALID_TRANSITIONS = Map.of(
             "status-in-progress", Map.of(
-                    "status-pending",  Set.of(RoleCode.AGENT),
-                    "status-resolved", Set.of(RoleCode.AGENT)
+                    "status-pending",  Set.of("AGENT"),
+                    "status-resolved", Set.of("AGENT")
             ),
             "status-pending", Map.of(
-                    "status-in-progress", Set.of(RoleCode.AGENT)
+                    "status-in-progress", Set.of("AGENT")
             ),
             "status-resolved", Map.of(
-                    "status-closed",   Set.of(RoleCode.CLIENT),
-                    "status-reopened", Set.of(RoleCode.CLIENT)
+                    "status-closed",   Set.of("CLIENT"),
+                    "status-reopened", Set.of("CLIENT")
             )
     );
 
@@ -43,6 +49,7 @@ public class IncidentService {
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
     private final ActivityLogService activityLogService;
+    private final NotificationService notificationService;
     private final MediaService mediaService;
     private final MediaRepository mediaRepository;
     private final LocationRepository locationRepository;
@@ -92,68 +99,81 @@ public class IncidentService {
                 mediaResponses);
     }
 
-    public Page<IncidentResponse> listIncidents(
-            String userId, RoleCode roleCode,
+    public Page<IncidentResponse> queryIncidents(
+            String userId,
+            String query,
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
             Pageable pageable
     ) {
-        Pageable sortedPageable = pageable.getSort().isSorted()
-                ? pageable
-                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                        Sort.by(Sort.Direction.DESC, "createdAt"));
-        return switch (roleCode) {
-            case CLIENT -> incidentRepository
-                    .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
-                    .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupIds(userId)
-                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> incidentRepository
-                            .findByDepartmentFiltered(agentGroupIds, statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
-                            .map(IncidentResponse::from))
-                    .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
-            case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .findAllFiltered(statusId, severityId, incidentTypeId, categoryId, locationId, sortedPageable)
-                    .map(IncidentResponse::from);
-        };
+        return incidentRepository
+                .findByUserIdUnified(userId, buildQueryPattern(query), statusId, severityId,
+                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable))
+                .map(IncidentResponse::from);
     }
 
-    public Page<IncidentResponse> searchIncidents(
-            String userId, RoleCode roleCode, String query, Pageable pageable
+    public Page<IncidentResponse> queryAllIncidents(
+            String query,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
+            Pageable pageable
     ) {
+        return incidentRepository
+                .findAllUnified(buildQueryPattern(query), statusId, severityId,
+                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable))
+                .map(IncidentResponse::from);
+    }
+
+    public Page<IncidentResponse> queryDeptIncidents(
+            String userId,
+            String query,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
+            Pageable pageable
+    ) {
+        Pageable sorted = ensureSorted(pageable);
+        String queryPattern = buildQueryPattern(query);
+        return findAgentGroupIds(userId)
+                .filter(ids -> !ids.isEmpty())
+                .map(ids -> incidentRepository
+                        .findByDepartmentUnified(ids, queryPattern, statusId, severityId,
+                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted)
+                        .map(IncidentResponse::from))
+                .orElse(new PageImpl<>(List.of(), sorted, 0));
+    }
+
+    public Page<IncidentResponse> queryAssignedIncidents(
+            String userId,
+            String query,
+            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            Instant fromDate, Instant toDate,
+            Pageable pageable
+    ) {
+        Pageable sorted = ensureSorted(pageable);
+        String queryPattern = buildQueryPattern(query);
+        return agentRepository.findByUserId(userId)
+                .map(agent -> incidentRepository
+                        .findByAssignedToIdUnified(agent.getId(), queryPattern, statusId, severityId,
+                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted)
+                        .map(IncidentResponse::from))
+                .orElse(new PageImpl<>(List.of(), sorted, 0));
+    }
+
+    public Page<IncidentResponse> searchIncidents(String userId, String query, Instant fromDate, Instant toDate, Pageable pageable) {
         if (query == null || query.isBlank()) {
             throw new ArmsAuthException("Search query must not be blank", 400);
         }
 
-        Pageable sortedPageable = pageable.getSort().isSorted()
-                ? pageable
-                : pageable.isUnpaged()
-                        ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"))
-                        : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable sortedPageable = pageable.isUnpaged()
+                ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : ensureSorted(pageable);
 
-        String escaped = query.toLowerCase()
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
-        String queryPattern = "%" + escaped + "%";
-
-        return switch (roleCode) {
-            case CLIENT -> incidentRepository
-                    .searchByUserId(userId, queryPattern, sortedPageable)
-                    .map(IncidentResponse::from);
-            case AGENT -> findAgentGroupIds(userId)
-                    .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> incidentRepository
-                            .searchByDepartment(agentGroupIds, queryPattern, sortedPageable)
-                            .map(IncidentResponse::from))
-                    .orElse(new PageImpl<>(List.of(), sortedPageable, 0));
-            case ADMIN, SUPER_ADMIN -> incidentRepository
-                    .searchAll(queryPattern, sortedPageable)
-                    .map(IncidentResponse::from);
-        };
+        return incidentRepository
+                .searchByUserId(userId, buildQueryPattern(query), fromDate, toDate, sortedPageable)
+                .map(IncidentResponse::from);
     }
 
-    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
+    public IncidentResponse getIncident(String userId, String roleCode, String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
 
@@ -164,8 +184,12 @@ public class IncidentService {
         return IncidentResponse.from(incident, mediaResponses);
     }
 
+    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
+        return getIncident(userId, roleCode == null ? null : roleCode.name(), incidentId);
+    }
+
     @Transactional
-    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+    public IncidentResponse updateStatus(String actorUserId, String roleCode, String incidentId, UpdateIncidentStatusRequest request) {
         Incident incident = findIncident(incidentId);
 
         Status newStatus = statusRepository.findById(request.statusId())
@@ -173,14 +197,17 @@ public class IncidentService {
 
         enforceTransition(incident, newStatus, roleCode);
         enforceReopenWindow(incident, newStatus);
+        enforceReasonRequired(newStatus, request.reason());
 
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
+        incident.setStatusReason(requiresReason(newStatus) ? request.reason() : null);
         incident.setResolvedAt("status-resolved".equals(newStatus.getId()) ? Instant.now() : null);
         incident.setClosedAt("status-closed".equals(newStatus.getId()) ? Instant.now() : null);
 
         incidentRepository.save(incident);
-        activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName());
+        activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName(), request.reason());
+        dispatchStatusNotifications(incident, previousStatusName, newStatus.getName(), request.reason(), actorUserId);
 
         if ("reopened".equalsIgnoreCase(newStatus.getName())) {
             applyReopenTransition(actorUserId, incident, incidentId);
@@ -189,6 +216,11 @@ public class IncidentService {
         entityManager.flush();
         entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+    }
+
+    @Transactional
+    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+        return updateStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, request);
     }
 
     @Transactional
@@ -222,14 +254,43 @@ public class IncidentService {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private void enforceAccess(String userId, RoleCode roleCode, Incident incident) {
-        if (roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) {
+    private String buildQueryPattern(String query) {
+        if (query == null || query.isBlank()) return null;
+        return "%" + query.toLowerCase()
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_") + "%";
+    }
+
+    private Pageable ensureSorted(Pageable pageable) {
+        if (pageable.getSort().isSorted()) {
+            Sort translated = translateSort(pageable.getSort());
+            return pageable.isUnpaged()
+                    ? Pageable.unpaged(translated)
+                    : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), translated);
+        }
+        if (pageable.isUnpaged()) return Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"));
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+    }
+
+    private Sort translateSort(Sort sort) {
+        List<Sort.Order> orders = sort.stream()
+                .map(o -> SORT_FIELD_ALIASES.containsKey(o.getProperty())
+                        ? o.withProperty(SORT_FIELD_ALIASES.get(o.getProperty()))
+                        : o)
+                .toList();
+        return Sort.by(orders);
+    }
+
+    private void enforceAccess(String userId, String roleCode, Incident incident) {
+        if ("ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) {
             return;
         }
         if (userId.equals(incident.getUserId())) {
             return;
         }
-        if (roleCode == RoleCode.AGENT && isSameDepartmentAsAssignedAgent(userId, incident)) {
+        if ("AGENT".equalsIgnoreCase(roleCode) && isSameDepartmentAsAssignedAgent(userId, incident)) {
             return;
         }
         throw new ArmsAuthException("You do not have access to this incident", 403);
@@ -241,23 +302,45 @@ public class IncidentService {
                 && !incidentType.getAgentGroupId().isBlank()) {
             AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
                     .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
-            if (agentGroup.getPrimaryAgentId() == null || agentGroup.getPrimaryAgentId().isBlank()) {
-                throw new ArmsAuthException("Topic agent group has no primary agent", 400);
+
+            String assignedAgentId = findAvailableAgentInGroup(agentGroup, incident.getLocationId());
+            if (assignedAgentId != null) {
+                incident.setAssignedToId(assignedAgentId);
+                incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
+                        .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                        .getId());
+            } else {
+                incident.setStatusId("status-open");
             }
-            incident.setAssignedToId(agentGroup.getPrimaryAgentId());
-            incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
-                    .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
-                    .getId());
             return;
         }
         if (incidentType != null && incidentType.getAgentId() != null && !incidentType.getAgentId().isBlank()) {
-            incident.setAssignedToId(incidentType.getAgentId());
-            incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
-                    .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
-                    .getId());
+            Agent agent = agentRepository.findById(incidentType.getAgentId()).orElse(null);
+            if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
+                incident.setAssignedToId(incidentType.getAgentId());
+                incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
+                        .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                        .getId());
+            } else {
+                incident.setStatusId("status-open");
+            }
             return;
         }
         incident.setStatusId("status-open");
+    }
+
+    private String findAvailableAgentInGroup(AgentGroup agentGroup, String locationId) {
+        List<Agent> locationMatched = agentRepository
+                .findAvailableByAgentGroupIdAndLocation(agentGroup.getId(), locationId);
+        if (!locationMatched.isEmpty()) {
+            return locationMatched.get(0).getId();
+        }
+        List<Agent> anyAvailable = agentRepository
+                .findAvailableByAgentGroupIdViaMembership(agentGroup.getId());
+        if (!anyAvailable.isEmpty()) {
+            return anyAvailable.get(0).getId();
+        }
+        return null;
     }
 
     private Optional<List<String>> findAgentGroupIds(String userId) {
@@ -314,6 +397,39 @@ public class IncidentService {
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
     }
 
+    private boolean requiresReason(Status newStatus) {
+        return "status-pending".equals(newStatus.getId()) || "status-reopened".equals(newStatus.getId());
+    }
+
+    private void enforceReasonRequired(Status newStatus, String reason) {
+        if (requiresReason(newStatus) && (reason == null || reason.isBlank())) {
+            throw new ArmsAuthException("A reason is required when setting status to " + newStatus.getName(), 400);
+        }
+    }
+
+    private void dispatchStatusNotifications(Incident incident, String previousStatus, String newStatus, String reason, String actorUserId) {
+        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+
+        // Notify the client (incident creator) unless they are the one making the change
+        String clientUserId = incident.getUserId();
+        if (clientUserId != null && !clientUserId.equals(actorUserId)) {
+            notificationService.sendStatusChangeNotification(clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+        }
+
+        // Notify the assigned agent unless they are the one making the change
+        String agentUserId = resolveAgentUserId(incident.getAssignedToId());
+        if (agentUserId != null && !agentUserId.equals(actorUserId)) {
+            notificationService.sendStatusChangeNotification(agentUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+        }
+    }
+
+    private String resolveAgentUserId(String assignedToId) {
+        if (assignedToId == null) return null;
+        return agentRepository.findById(assignedToId)
+                .map(a -> a.getUserId())
+                .orElse(null);
+    }
+
     private void enforceReopenWindow(Incident incident, Status newStatus) {
         if (!"status-reopened".equals(newStatus.getId())) return;
         if (incident.getResolvedAt() == null) return;
@@ -327,20 +443,21 @@ public class IncidentService {
         }
     }
 
-    private void enforceTransition(Incident incident, Status newStatus, RoleCode roleCode) {
+    private void enforceTransition(Incident incident, Status newStatus, String roleCode) {
         String fromId = incident.getStatus() != null ? incident.getStatus().getId() : null;
         String toId   = newStatus.getId();
+        String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
 
         if (fromId == null) {
             throw new ArmsAuthException("Cannot transition an incident with no current status", 422);
         }
 
         // Admins and super-admins may force-close any incident regardless of current status
-        if ((roleCode == RoleCode.ADMIN || roleCode == RoleCode.SUPER_ADMIN) && "status-closed".equals(toId)) {
+        if (("ADMIN".equals(normalizedRole) || "SUPER_ADMIN".equals(normalizedRole)) && "status-closed".equals(toId)) {
             return;
         }
 
-        Map<String, Set<RoleCode>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
+        Map<String, Set<String>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
 
         if (!toMap.containsKey(toId)) {
             throw new ArmsAuthException(
@@ -350,7 +467,7 @@ public class IncidentService {
             );
         }
 
-        if (!toMap.get(toId).contains(roleCode)) {
+        if (!toMap.get(toId).contains(normalizedRole)) {
             throw new ArmsAuthException(
                     "You do not have permission to move an incident to '" + newStatus.getName() + "'",
                     403

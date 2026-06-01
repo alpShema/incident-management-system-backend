@@ -28,9 +28,15 @@ public interface UserRepository extends JpaRepository<User, String> {
                         user.email,
                         user.fullName,
                         user.profileImg,
-                        user.roleCode
+                        user.roleCode,
+                        user.status,
+                        loc.name,
+                        (SELECT COUNT(i) FROM Incident i WHERE i.userId = user.id),
+                        (SELECT COUNT(i) FROM Incident i WHERE i.assignedToId = agent.id)
                     )
                     FROM User user
+                    LEFT JOIN user.location loc
+                    LEFT JOIN user.agent agent
                     """,
             countQuery = """
                     SELECT COUNT(user)
@@ -38,6 +44,48 @@ public interface UserRepository extends JpaRepository<User, String> {
                     """
     )
     Page<UserRoleSummaryResponse> findUserRoleSummaries(Pageable pageable);
+
+    @Query(
+            value = """
+                    SELECT new com.amalitech.hilfe.dto.UserRoleSummaryResponse(
+                        user.id,
+                        user.email,
+                        user.fullName,
+                        user.profileImg,
+                        user.roleCode,
+                        user.status,
+                        loc.name,
+                        (SELECT COUNT(i) FROM Incident i WHERE i.userId = user.id),
+                        (SELECT COUNT(i) FROM Incident i WHERE i.assignedToId = agent.id)
+                    )
+                    FROM User user
+                    LEFT JOIN user.location loc
+                    LEFT JOIN user.agent agent
+                    WHERE (:queryPattern IS NULL OR (
+                        LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
+                        OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
+                    AND (:roleCode IS NULL OR user.roleCode = :roleCode)
+                    AND (:locationId IS NULL OR user.locationId = :locationId)
+                    AND (:status IS NULL OR user.status = :status)
+                    """,
+            countQuery = """
+                    SELECT COUNT(user)
+                    FROM User user
+                    WHERE (:queryPattern IS NULL OR (
+                        LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
+                        OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
+                    AND (:roleCode IS NULL OR user.roleCode = :roleCode)
+                    AND (:locationId IS NULL OR user.locationId = :locationId)
+                    AND (:status IS NULL OR user.status = :status)
+                    """
+    )
+    Page<UserRoleSummaryResponse> findUserRoleSummariesUnified(
+            @Param("queryPattern") String queryPattern,
+            @Param("roleCode") String roleCode,
+            @Param("locationId") String locationId,
+            @Param("status") Boolean status,
+            Pageable pageable
+    );
 
     @Query("""
             SELECT user

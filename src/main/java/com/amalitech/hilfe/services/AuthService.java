@@ -173,6 +173,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .profileImg(user.getProfileImg())
+                .role(user.getRoleCode())
                 .permissions(permissions)
                 .build();
     }

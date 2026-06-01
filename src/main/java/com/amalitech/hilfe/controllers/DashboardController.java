@@ -1,9 +1,9 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
-import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
 import com.amalitech.hilfe.dto.dashboard.DashboardStats;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.DashboardService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -14,9 +14,6 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -65,7 +62,7 @@ public class DashboardController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Stats retrieved successfully",
-                dashboardService.getStats(principal.userId(), principal.roleCode())
+                dashboardService.getStats(principal.userId(), parseRoleCode(principal.roleCode()))
         ));
     }
 
@@ -115,97 +112,17 @@ public class DashboardController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Chart data retrieved successfully",
-                dashboardService.getCharts(principal.userId(), principal.roleCode(), period)
+                dashboardService.getCharts(principal.userId(), parseRoleCode(principal.roleCode()), period)
         ));
     }
 
-    @Operation(
-            summary = "Dashboard incidents",
-            description = "Admin: all incidents (paginated). Agent: incidents assigned to the authenticated agent (paginated)."
-    )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "200",
-            description = "Incidents retrieved",
-            content = @Content(
-                mediaType = "application/json",
-                examples = @ExampleObject(value = """
-                    {
-                      "message": "Incidents retrieved successfully",
-                      "data": {
-                        "content": [],
-                        "totalElements": 0,
-                        "totalPages": 0,
-                        "number": 0,
-                        "size": 10
-                      }
-                    }""")
-            )
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
-    })
-    @GetMapping("/incidents")
-    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
-    public ResponseEntity<ApiResponse<Page<IncidentResponse>>> incidents(
-            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
-            @RequestParam(required = false) String statusId,
-            @RequestParam(required = false) String severityId,
-            @RequestParam(required = false) String incidentTypeId,
-            @RequestParam(required = false) String categoryId,
-            @RequestParam(required = false) String locationId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        Page<IncidentResponse> result = dashboardService.getIncidents(
-                principal.userId(), principal.roleCode(),
-                statusId, severityId, incidentTypeId, categoryId, locationId,
-                PageRequest.of(page, size, Sort.by("createdAt").descending())
-        );
-        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", result));
+    private RoleCode parseRoleCode(String roleCode) {
+        if (roleCode == null) return null;
+        try {
+            return RoleCode.valueOf(roleCode.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
-    @Operation(
-            summary = "My incidents",
-            description = "Incidents created by the authenticated user (admin or agent), paginated."
-    )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "200",
-            description = "Incidents retrieved",
-            content = @Content(
-                mediaType = "application/json",
-                examples = @ExampleObject(value = """
-                    {
-                      "message": "Incidents retrieved successfully",
-                      "data": {
-                        "content": [],
-                        "totalElements": 0,
-                        "totalPages": 0,
-                        "number": 0,
-                        "size": 10
-                      }
-                    }""")
-            )
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
-    })
-    @GetMapping("/my-incidents")
-    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
-    public ResponseEntity<ApiResponse<Page<IncidentResponse>>> myIncidents(
-            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
-            @RequestParam(required = false) String statusId,
-            @RequestParam(required = false) String severityId,
-            @RequestParam(required = false) String incidentTypeId,
-            @RequestParam(required = false) String categoryId,
-            @RequestParam(required = false) String locationId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        Page<IncidentResponse> result = dashboardService.getMyIncidents(
-                principal.userId(),
-                statusId, severityId, incidentTypeId, categoryId, locationId,
-                PageRequest.of(page, size, Sort.by("createdAt").descending())
-        );
-        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", result));
-    }
 }

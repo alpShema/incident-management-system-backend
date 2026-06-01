@@ -15,6 +15,9 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -28,10 +31,18 @@ public class IncidentCategoryService {
     private final IncidentRepository incidentRepository;
     private final EntityManager entityManager;
 
-    public List<IncidentCategoryResponse> listCategories() {
-        return categoryRepository.findByStatusWithDepartment("active").stream()
-                .map(IncidentCategoryResponse::from)
-                .toList();
+    public Page<IncidentCategoryResponse> listCategories(String status, String query, Pageable pageable) {
+        String resolvedStatus = (status == null || status.isBlank()) ? "active" : status.toLowerCase();
+        String queryPattern = buildQueryPattern(query);
+        return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
+                .map(IncidentCategoryResponse::from);
+    }
+
+    public Page<IncidentCategoryResponse> searchCategories(String query, Pageable pageable) {
+        String queryPattern = (query == null || query.isBlank()) ? null
+                : "%" + query.toLowerCase().replace("%", "\\%").replace("_", "\\_") + "%";
+        return categoryRepository.searchCategories(queryPattern, pageable)
+                .map(IncidentCategoryResponse::from);
     }
 
     @Transactional
@@ -80,15 +91,33 @@ public class IncidentCategoryService {
                 .toList();
     }
 
+    public Page<IncidentTopicListResponse> listTopics(
+            String categoryId,
+            String departmentId,
+            String agentGroupId,
+            String status,
+            String query,
+            Pageable pageable
+    ) {
+        String resolvedStatus = normalizeTopicStatus(status);
+        String queryPattern = buildQueryPattern(query);
+        return typeRepository.findAllTopicsFiltered(
+                        blankToNull(categoryId),
+                        blankToNull(departmentId),
+                        blankToNull(agentGroupId),
+                        resolvedStatus,
+                        queryPattern,
+                        pageable)
+                .map(IncidentTopicListResponse::from);
+    }
+
     @Transactional
     public IncidentTopicResponse createTopic(String categoryId, String creatorUserId, CreateTopicRequest request) {
-        if (!categoryRepository.existsById(categoryId)) {
-            throw new ArmsAuthException("Incident category not found", 404);
-        }
+        IncidentCategory category = findActiveCategory(categoryId);
         if (typeRepository.existsByNameIgnoreCase(request.name())) {
             throw new ArmsAuthException("A topic with this name already exists", 409);
         }
-        AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId());
+        AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
         IncidentType topic = IncidentType.builder()
                 .id(UUID.randomUUID().toString())
                 .name(request.name())
@@ -96,7 +125,6 @@ public class IncidentCategoryService {
                 .categoryId(categoryId)
                 .adminId(creatorUserId)
                 .agentGroupId(assignedGroup.getId())
-                .agentId(assignedGroup.getPrimaryAgentId())
                 .visibleToGroup(request.visibleToGroup())
                 .build();
         IncidentType saved = typeRepository.save(topic);
@@ -108,9 +136,7 @@ public class IncidentCategoryService {
 
     @Transactional
     public IncidentTopicResponse updateTopic(String categoryId, String topicId, UpdateTopicRequest request) {
-        if (!categoryRepository.existsById(categoryId)) {
-            throw new ArmsAuthException("Incident category not found", 404);
-        }
+        IncidentCategory category = findActiveCategory(categoryId);
         IncidentType topic = typeRepository.findById(topicId)
                 .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
         if (!categoryId.equals(topic.getCategoryId())) {
@@ -128,9 +154,8 @@ public class IncidentCategoryService {
             topic.setDescription(request.description());
         }
         if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
-            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId());
+            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
             topic.setAgentGroupId(assignedGroup.getId());
-            topic.setAgentId(assignedGroup.getPrimaryAgentId());
         }
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
@@ -169,18 +194,47 @@ public class IncidentCategoryService {
     }
 
     private void validateDepartment(String departmentId) {
-        if (!departmentRepository.existsById(departmentId)) {
-            throw new ArmsAuthException("Department not found", 404);
-        }
+        departmentRepository.findById(departmentId)
+                .filter(department -> Boolean.TRUE.equals(department.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
     }
 
-    private AgentGroup resolveAssignableAgentGroup(String agentGroupId) {
+    private AgentGroup resolveAssignableAgentGroup(String agentGroupId, IncidentCategory category) {
         AgentGroup agentGroup = agentGroupRepository.findById(agentGroupId)
                 .filter(group -> Boolean.TRUE.equals(group.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("Agent group not found", 404));
-        if (agentGroup.getPrimaryAgentId() == null || agentGroup.getPrimaryAgentId().isBlank()) {
-            throw new ArmsAuthException("Agent group must have a primary agent", 400);
+        if (agentGroup.getDepartmentId() == null || !agentGroup.getDepartmentId().equals(category.getDepartmentId())) {
+            throw new ArmsAuthException("Agent group must belong to the same department as the incident category", 400);
         }
         return agentGroup;
+    }
+
+    private IncidentCategory findActiveCategory(String categoryId) {
+        return categoryRepository.findById(categoryId)
+                .filter(category -> "active".equalsIgnoreCase(category.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+    }
+
+    private String normalizeTopicStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "active";
+        }
+        String value = status.trim().toLowerCase();
+        if (!"active".equals(value) && !"inactive".equals(value)) {
+            throw new ArmsAuthException("Invalid status. Allowed values are active or inactive", 400);
+        }
+        return value;
+    }
+
+    private String buildQueryPattern(String query) {
+        if (query == null || query.isBlank()) return null;
+        return "%" + query.toLowerCase()
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_") + "%";
+    }
+
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 }

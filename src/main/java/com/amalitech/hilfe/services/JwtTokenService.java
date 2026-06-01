@@ -1,7 +1,7 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
@@ -161,8 +161,8 @@ public class JwtTokenService implements TokenService {
         }
 
         if (includeRoleClaim) {
-            RoleCode resolvedRoleCode = userAuthorityService.resolve(user).roleCode();
-            builder.claim(CLAIM_ROLE, resolvedRoleCode.name());
+            String resolvedRoleCode = userAuthorityService.resolve(user).roleCode();
+            builder.claim(CLAIM_ROLE, resolvedRoleCode);
         }
 
         if ("access".equals(type)) {
@@ -172,10 +172,13 @@ public class JwtTokenService implements TokenService {
         return builder.signWith(signingKey, Jwts.SIG.HS256).compact();
     }
 
-    private boolean hasMatchingRoleClaim(String claimedRole, RoleCode resolvedRoleCode) {
-        return claimedRole != null && claimedRole.equals(resolvedRoleCode.name());
+    private boolean hasMatchingRoleClaim(String claimedRole, String resolvedRoleCode) {
+        return claimedRole != null && claimedRole.equals(resolvedRoleCode);
     }
 
-    public record AuthPrincipal(String userId, String email, RoleCode roleCode) {
+    public record AuthPrincipal(String userId, String email, String roleCode) {
+        public AuthPrincipal(String userId, String email, RoleCode roleCode) {
+            this(userId, email, roleCode == null ? null : roleCode.name());
+        }
     }
 }

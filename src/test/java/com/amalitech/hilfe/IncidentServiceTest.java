@@ -5,8 +5,10 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
 import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
+import com.amalitech.hilfe.services.NotificationService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -40,6 +43,8 @@ class IncidentServiceTest {
     @Mock StatusRepository statusRepository;
     @Mock SeverityRepository severityRepository;
     @Mock ActivityLogService activityLogService;
+    @Mock AutoCloseService autoCloseService;
+    @Mock NotificationService notificationService;
     @Mock MediaService mediaService;
     @Mock MediaRepository mediaRepository;
     @Mock EntityManager entityManager;
@@ -245,90 +250,67 @@ class IncidentServiceTest {
                 .isEqualTo(404);
     }
 
-    // ── listIncidents ─────────────────────────────────────────────────────────
+    // ── queryIncidents ────────────────────────────────────────────────────────
 
     @Test
-    void listIncidents_returnsIncidentsCreatedByUser() {
+    void queryIncidents_returnsIncidentsCreatedByUser() {
         Incident incident = buildIncident();
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        Page<IncidentResponse> result = incidentService.listIncidents(
-                "user-1", RoleCode.CLIENT, null, null, null, null, null, PageRequest.of(0, 20));
+        Page<IncidentResponse> result = incidentService.queryIncidents(
+                "user-1", null, null, null, null, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
-        verify(incidentRepository).findByUserIdFiltered(eq("user-1"), any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test
-    void listIncidents_withFilters_passesFiltersToRepository() {
+    void queryIncidents_withFilters_passesFiltersToRepository() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
 
-        incidentService.listIncidents(
-                "user-1", RoleCode.CLIENT, "status-open", "sev-high", "type-fire", "cat-facility", null, PageRequest.of(0, 20));
+        incidentService.queryIncidents(
+                "user-1", null, "status-open", "sev-high", "type-fire", "cat-facility", null, null, null, PageRequest.of(0, 20));
 
-        verify(incidentRepository).findByUserIdFiltered(
-                eq("user-1"), eq("status-open"), eq("sev-high"), eq("type-fire"), eq("cat-facility"), any(), any(Pageable.class));
+        verify(incidentRepository).findByUserIdUnified(
+                eq("user-1"), isNull(), eq("status-open"), eq("sev-high"), eq("type-fire"), eq("cat-facility"), any(), any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void queryIncidents_withKeyword_buildsLikePattern() {
+        Incident incident = buildIncident();
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(incidentRepository.findByUserIdUnified(anyString(), eq("%fire%"), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryIncidents(
+                "user-1", "fire", null, null, null, null, null, null, null, PageRequest.of(0, 20));
+
+        assertThat(result).hasSize(1);
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), eq("%fire%"), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     // ── searchIncidents ───────────────────────────────────────────────────────
 
     @Test
-    void searchIncidents_clientRole_delegatesToSearchByUserId() {
+    void searchIncidents_searchesByUserId() {
         Incident incident = buildIncident();
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire%"), any(Pageable.class))).thenReturn(page);
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire%"), any(), any(), any(Pageable.class))).thenReturn(page);
 
-        Page<IncidentResponse> result = incidentService.searchIncidents("user-1", RoleCode.CLIENT, "fire", Pageable.unpaged());
-
-        assertThat(result).hasSize(1);
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire%"), any(Pageable.class));
-    }
-
-    @Test
-    void searchIncidents_agentRole_delegatesToSearchByDepartment() {
-        Incident incident = buildIncident();
-        Page<Incident> page = new PageImpl<>(List.of(incident));
-        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
-        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.searchByDepartment(eq(List.of("dept-1")), eq("%projector%"), any(Pageable.class)))
-                .thenReturn(page);
-
-        Page<IncidentResponse> result = incidentService.searchIncidents("agent-user-1", RoleCode.AGENT, "projector", Pageable.unpaged());
+        Page<IncidentResponse> result = incidentService.searchIncidents("user-1", "fire", null, null, Pageable.unpaged());
 
         assertThat(result).hasSize(1);
-        verify(incidentRepository).searchByDepartment(eq(List.of("dept-1")), eq("%projector%"), any(Pageable.class));
-    }
-
-    @Test
-    void searchIncidents_adminRole_delegatesToSearchAll() {
-        Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchAll(eq("%network%"), any(Pageable.class))).thenReturn(page);
-
-        Page<IncidentResponse> result = incidentService.searchIncidents("admin-1", RoleCode.ADMIN, "network", Pageable.unpaged());
-
-        assertThat(result).isEmpty();
-        verify(incidentRepository).searchAll(eq("%network%"), any(Pageable.class));
-    }
-
-    @Test
-    void searchIncidents_superAdminRole_delegatesToSearchAll() {
-        Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchAll(eq("%access%"), any(Pageable.class))).thenReturn(page);
-
-        incidentService.searchIncidents("super-1", RoleCode.SUPER_ADMIN, "access", Pageable.unpaged());
-
-        verify(incidentRepository).searchAll(eq("%access%"), any(Pageable.class));
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire%"), any(), any(), any(Pageable.class));
     }
 
     @Test
     void searchIncidents_blankQuery_throws400() {
-        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", RoleCode.CLIENT, "  ", Pageable.unpaged()))
+        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", "  ", null, null, Pageable.unpaged()))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Search query must not be blank")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -337,7 +319,7 @@ class IncidentServiceTest {
 
     @Test
     void searchIncidents_nullQuery_throws400() {
-        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", RoleCode.CLIENT, null, Pageable.unpaged()))
+        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", null, null, null, Pageable.unpaged()))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Search query must not be blank")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -345,32 +327,23 @@ class IncidentServiceTest {
     }
 
     @Test
-    void searchIncidents_agentWithoutAgentRecord_returnsEmptyPage() {
-        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.empty());
-
-        Page<IncidentResponse> result = incidentService.searchIncidents("agent-user-1", RoleCode.AGENT, "incident", Pageable.unpaged());
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
     void searchIncidents_queryWithPercentSign_escapesWildcard() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire\\%%"), any(Pageable.class))).thenReturn(page);
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire!%%"), any(), any(), any(Pageable.class))).thenReturn(page);
 
-        incidentService.searchIncidents("user-1", RoleCode.CLIENT, "fire%", Pageable.unpaged());
+        incidentService.searchIncidents("user-1", "fire%", null, null, Pageable.unpaged());
 
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire\\%%"), any(Pageable.class));
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire!%%"), any(), any(), any(Pageable.class));
     }
 
     @Test
     void searchIncidents_queryWithUnderscore_escapesWildcard() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire\\_test%"), any(Pageable.class))).thenReturn(page);
+        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire!_test%"), any(), any(), any(Pageable.class))).thenReturn(page);
 
-        incidentService.searchIncidents("user-1", RoleCode.CLIENT, "fire_test", Pageable.unpaged());
+        incidentService.searchIncidents("user-1", "fire_test", null, null, Pageable.unpaged());
 
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire\\_test%"), any(Pageable.class));
+        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire!_test%"), any(), any(), any(Pageable.class));
     }
 
     // ── getIncident ───────────────────────────────────────────────────────────
@@ -479,10 +452,10 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending"));
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "Waiting for parts"));
 
         verify(incidentRepository).save(any(Incident.class));
-        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "In Progress", "Pending");
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "In Progress", "Pending", "Waiting for parts");
     }
 
     @Test
@@ -497,7 +470,7 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved"));
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null));
 
         verify(incidentRepository).save(any(Incident.class));
     }
@@ -514,7 +487,7 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-in-progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-in-progress"));
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-in-progress", null));
 
         verify(incidentRepository).save(any(Incident.class));
     }
@@ -531,7 +504,7 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-closed"));
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-closed", null));
 
         verify(incidentRepository).save(any(Incident.class));
     }
@@ -554,11 +527,11 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened"));
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
 
         assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
         assertThat(incident.getAssignedToId()).isEqualTo("agent-1");
-        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Resolved", "Reopened");
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Resolved", "Reopened", "Issue recurred");
         verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Reopened", "In Progress");
     }
 
@@ -580,11 +553,11 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(inactiveAgent));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened"));
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
 
         assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
         assertThat(incident.getAssignedToId()).isNull();
-        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Resolved", "Reopened");
+        verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Resolved", "Reopened", "Issue recurred");
         verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Reopened", "In Progress");
     }
 
@@ -600,7 +573,7 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.ADMIN, "inc-1", new UpdateIncidentStatusRequest("status-closed"));
+        incidentService.updateStatus("actor-1", RoleCode.ADMIN, "inc-1", new UpdateIncidentStatusRequest("status-closed", null));
 
         verify(incidentRepository).save(any(Incident.class));
     }
@@ -617,7 +590,7 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-open")).thenReturn(Optional.of(openStatus));
 
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open", null)))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(422);
@@ -636,7 +609,7 @@ class IncidentServiceTest {
 
         // closed → open is not a defined path at all
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open", null)))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(422);
@@ -655,7 +628,7 @@ class IncidentServiceTest {
 
         // in-progress → resolved is a valid path but only for AGENT, not CLIENT
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved")))
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null)))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
@@ -673,7 +646,7 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
 
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-pending")))
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "Waiting for parts")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -689,7 +662,7 @@ class IncidentServiceTest {
         when(statusRepository.findById("bad-status")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("bad-status")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("bad-status", null)))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Status not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -701,7 +674,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "missing", new UpdateIncidentStatusRequest("status-pending")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "missing", new UpdateIncidentStatusRequest("status-pending", "Waiting for parts")))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -719,9 +692,69 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-closed"));
+        incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-closed", null));
 
         assertThat(incident.getClosedAt()).isNotNull();
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    // ── reason enforcement ────────────────────────────────────────────────────
+
+    @Test
+    void updateStatus_pendingWithoutReason_throws400() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        Incident incident = buildIncident();
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", null)))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("A reason is required when setting status to Pending")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void updateStatus_reopenedWithoutReason_throws400() {
+        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
+        Status reopenedStatus = buildStatus("status-reopened", "Reopened");
+
+        Incident incident = buildIncident();
+        incident.setStatus(resolvedStatus);
+        incident.setResolvedAt(java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.HOURS));
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
+        when(autoCloseService.readDurationHours()).thenReturn(72);
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("A reason is required when setting status to Reopened")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void updateStatus_pendingWithReason_savesReason() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        Incident incident = buildIncident();
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "Waiting for parts"));
+
+        assertThat(incident.getStatusReason()).isEqualTo("Waiting for parts");
         verify(incidentRepository).save(any(Incident.class));
     }
 
@@ -792,5 +825,168 @@ class IncidentServiceTest {
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    // ── queryAllIncidents ─────────────────────────────────────────────────────
+
+    @Test
+    void queryAllIncidents_returnsPageFromRepository() {
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(incidentRepository.findAllUnified(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryAllIncidents(null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result).isNotNull();
+        verify(incidentRepository).findAllUnified(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+    }
+
+    @Test
+    void queryAllIncidents_withQuery_buildsLikePattern() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findAllUnified(anyString(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        incidentService.queryAllIncidents("fire", null, null, null, null, null, null, null, Pageable.unpaged());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(incidentRepository).findAllUnified(captor.capture(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+        assertThat(captor.getValue()).startsWith("%").endsWith("%").contains("fire");
+    }
+
+    // ── queryDeptIncidents ────────────────────────────────────────────────────
+
+    @Test
+    void queryDeptIncidents_agentWithGroups_returnsDeptPage() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-1")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+    }
+
+    @Test
+    void queryDeptIncidents_noAgentRecord_returnsEmptyPage() {
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(0);
+        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void queryDeptIncidents_agentWithNoGroups_returnsEmptyPage() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of());
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(0);
+        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    // ── queryAssignedIncidents ────────────────────────────────────────────────
+
+    @Test
+    void queryAssignedIncidents_agentFound_returnsPage() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.findByAssignedToIdUnified(eq("agent-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryAssignedIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+    }
+
+    @Test
+    void queryAssignedIncidents_noAgentRecord_returnsEmptyPage() {
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = incidentService.queryAssignedIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(0);
+        verify(incidentRepository, never()).findByAssignedToIdUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    // ── sort field translation ────────────────────────────────────────────────
+
+    @Test
+    void queryIncidents_sortByCategory_translatesToCategoryPath() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findByUserIdUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
+        incidentService.queryIncidents("user-1", null, null, null, null, null, null, null, null, categorySort);
+
+        var captor = forClass(Pageable.class);
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
+        assertThat(captured.getOrderFor("category")).isNull();
+    }
+
+    @Test
+    void queryAllIncidents_sortByCategory_translatesToCategoryPath() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findAllUnified(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
+        incidentService.queryAllIncidents(null, null, null, null, null, null, null, null, categorySort);
+
+        var captor = forClass(Pageable.class);
+        verify(incidentRepository).findAllUnified(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
+        assertThat(captured.getOrderFor("category")).isNull();
+    }
+
+    @Test
+    void queryDeptIncidents_sortByCategory_translatesToCategoryPath() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
+        when(incidentRepository.findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
+        incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, categorySort);
+
+        var captor = forClass(Pageable.class);
+        verify(incidentRepository).findByDepartmentUnified(any(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
+        assertThat(captured.getOrderFor("category")).isNull();
+    }
+
+    @Test
+    void queryAssignedIncidents_sortByCategory_translatesToCategoryPath() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.findByAssignedToIdUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
+        incidentService.queryAssignedIncidents("user-1", null, null, null, null, null, null, null, null, categorySort);
+
+        var captor = forClass(Pageable.class);
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
+        assertThat(captured.getOrderFor("category")).isNull();
     }
 }

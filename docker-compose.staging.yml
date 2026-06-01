@@ -31,7 +31,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET:  ${JWT_SECRET}
       ARMS_SSO_URL:                ${ARMS_SSO_URL}
-      CORS_ALLOWED_ORIGINS:        ${CORS_ALLOWED_ORIGINS}
+      CORS_ALLOWED_ORIGINS:        ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
       COOKIE_SECURE:               ${COOKIE_SECURE}
       COOKIE_SAME_SITE:            ${COOKIE_SAME_SITE:-Lax}
       S3_BUCKET_NAME:              ${S3_BUCKET_NAME}

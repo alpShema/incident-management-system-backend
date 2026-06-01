@@ -22,12 +22,12 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.userId = :userId
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
@@ -62,12 +62,12 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
             AND (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
@@ -103,12 +103,12 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (:statusId IS NULL OR i.statusId = :statusId)
             AND (:severityId IS NULL OR i.severityId = :severityId)
             AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
@@ -140,12 +140,12 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = i.assignedToId
@@ -188,19 +188,19 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = i.assignedToId
                 AND m.agentGroupId IN :agentGroupIds
             )
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(DISTINCT i) FROM Incident i
@@ -209,8 +209,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 WHERE m.agentId = i.assignedToId
                 AND m.agentGroupId IN :agentGroupIds
             )
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchByDepartment(
             @Param("agentGroupIds") List<String> agentGroupIds,
@@ -225,31 +225,37 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
             WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
             """)
     Page<Incident> searchByUserId(
             @Param("userId") String userId,
             @Param("queryPattern") String queryPattern,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
             Pageable pageable
     );
 
@@ -260,27 +266,27 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchByAgentScope(
             @Param("userId") String userId,
@@ -296,28 +302,265 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH it.agent ita
             LEFT JOIN FETCH ita.user
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
-            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
+            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
-            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '\\'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '\\')
+            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchAll(
             @Param("queryPattern") String queryPattern,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
+            WHERE i.userId = :userId
+            AND (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            LEFT JOIN i.incidentType it
+            LEFT JOIN it.category ic
+            WHERE i.userId = :userId
+            AND (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """)
+    Page<Incident> findByUserIdUnified(
+            @Param("userId") String userId,
+            @Param("queryPattern") String queryPattern,
+            @Param("statusId") String statusId,
+            @Param("severityId") String severityId,
+            @Param("incidentTypeId") String incidentTypeId,
+            @Param("categoryId") String categoryId,
+            @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
+            AND (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """,
+            countQuery = """
+            SELECT COUNT(DISTINCT i) FROM Incident i
+            LEFT JOIN i.incidentType it
+            LEFT JOIN it.category ic
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
+            AND (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """)
+    Page<Incident> findByDepartmentUnified(
+            @Param("agentGroupIds") List<String> agentGroupIds,
+            @Param("queryPattern") String queryPattern,
+            @Param("statusId") String statusId,
+            @Param("severityId") String severityId,
+            @Param("incidentTypeId") String incidentTypeId,
+            @Param("categoryId") String categoryId,
+            @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
+            WHERE (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            LEFT JOIN i.incidentType it
+            LEFT JOIN it.category ic
+            WHERE (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """)
+    Page<Incident> findAllUnified(
+            @Param("queryPattern") String queryPattern,
+            @Param("statusId") String statusId,
+            @Param("severityId") String severityId,
+            @Param("incidentTypeId") String incidentTypeId,
+            @Param("categoryId") String categoryId,
+            @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
+            WHERE i.assignedToId = :agentId
+            AND (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            LEFT JOIN i.incidentType it
+            LEFT JOIN it.category ic
+            WHERE i.assignedToId = :agentId
+            AND (:queryPattern IS NULL OR (
+                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+            AND (:statusId IS NULL OR i.statusId = :statusId)
+            AND (:severityId IS NULL OR i.severityId = :severityId)
+            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
+            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
+            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
+            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            """)
+    Page<Incident> findByAssignedToIdUnified(
+            @Param("agentId") String agentId,
+            @Param("queryPattern") String queryPattern,
+            @Param("statusId") String statusId,
+            @Param("severityId") String severityId,
+            @Param("incidentTypeId") String incidentTypeId,
+            @Param("categoryId") String categoryId,
+            @Param("locationId") String locationId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
             Pageable pageable
     );
 
@@ -325,21 +568,21 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category
-            LEFT JOIN FETCH it.agent ita
-            LEFT JOIN FETCH ita.user
-            LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             LEFT JOIN FETCH i.location
             LEFT JOIN FETCH i.severity
             LEFT JOIN FETCH i.status
             LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user
             WHERE i.id = :id
             """)
     Optional<Incident> findByIdWithDetails(@Param("id") String id);
 
     @Query("SELECT COUNT(i) FROM Incident i WHERE i.assignedToId = :agentId")
     long countByAssignedToId(@Param("agentId") String agentId);
+
+    @Query("SELECT COUNT(i) FROM Incident i WHERE i.userId = :userId")
+    long countByUserId(@Param("userId") String userId);
 
     @Query("""
             SELECT COUNT(DISTINCT i) FROM Incident i
@@ -526,4 +769,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     List<Incident> findOverdueResolved(@Param("cutoff") Instant cutoff);
 
     boolean existsByIncidentTypeId(String incidentTypeId);
+
+    boolean existsBySeverityId(String severityId);
 }

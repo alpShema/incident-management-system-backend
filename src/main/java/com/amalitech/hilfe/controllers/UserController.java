@@ -3,7 +3,9 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateUserRoleRequest;
+import com.amalitech.hilfe.dto.UpdateUserStatusRequest;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.UserService;
@@ -19,7 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Users", description = "User role management — list users with their roles and update role assignments")
+@Tag(name = "Users", description = "User management — search, filter, and list users; update role assignments")
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -27,17 +29,30 @@ public class UserController {
     private final UserService userService;
 
     @Operation(
-        summary = "List users with roles",
-        description = "Returns a paginated list of all users showing their ID, name, email, and current role. Requires `rbac.role.read` permission."
+        summary = "List users",
+        description = "Returns a paginated list of all users showing their ID, name, email, role, status, and office location. "
+                    + "Accepts an optional `query` keyword that searches across full name and email. "
+                    + "Optionally filter by role (`roleCode`), office location (`locationId`), or account status (`status`). Both `locationId` and `status` filters are case-insensitive. "
+                    + "All filters are independent and can be combined with each other or with `query` to narrow results. "
+                    + "Supports sorting via `sort=field,direction` (e.g. `sort=fullName,asc`). "
+                    + "Requires `rbac.role.read` permission."
     )
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Users retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
-    @GetMapping("/roles")
+    @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_ROLE_READ + "')")
-    public ResponseEntity<ApiResponse<PageResponse<UserRoleSummaryResponse>>> userRoles(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success("User roles retrieved successfully", PageResponse.from(userService.getUserRoles(pageable))));
+    public ResponseEntity<ApiResponse<PageResponse<UserRoleSummaryResponse>>> listUsers(
+            @Parameter(description = "Keyword search across full name and email") @RequestParam(required = false) String query,
+            @Parameter(description = "Filter by role code") @RequestParam(required = false) RoleCode roleCode,
+            @Parameter(description = "Filter by office location ID (case-insensitive)") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by account status. Pass `active` for active users, `inactive` for inactive users (case-insensitive)") @RequestParam(required = false) String status,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully",
+                PageResponse.from(userService.getUsers(query, roleCode, locationId, status, pageable))));
     }
 
     @Operation(
@@ -58,5 +73,35 @@ public class UserController {
             @Valid @RequestBody UpdateUserRoleRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("User role updated successfully", userService.assignUserRole(principal.userId(), userId, request.roleCode())));
+    }
+
+    @Operation(
+        summary = "Update user status",
+        description = "Updates a user's account status (active/inactive). Users can update their own status. Admins can update any user's status."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Cannot update another user's status"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
+    })
+    @PatchMapping("/{userId}/status")
+    public ResponseEntity<ApiResponse<UserRoleSummaryResponse>> updateUserStatus(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Target user ID") @PathVariable String userId,
+            @Valid @RequestBody UpdateUserStatusRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "User status updated",
+                userService.updateUserStatus(principal.userId(), parseRoleCode(principal.roleCode()), userId, request.status())
+        ));
+    }
+
+    private RoleCode parseRoleCode(String roleCode) {
+        if (roleCode == null) return null;
+        try {
+            return RoleCode.valueOf(roleCode.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }

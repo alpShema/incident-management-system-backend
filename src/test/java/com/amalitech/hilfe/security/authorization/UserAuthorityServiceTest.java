@@ -42,12 +42,12 @@ class UserAuthorityServiceTest {
             .permissions(List.of("create-agent"))
             .build();
 
-        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.ADMIN))
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("ADMIN"))
                 .thenReturn(List.of("agent.read"));
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 
-        assertThat(resolvedAuthorities.roleCode()).isEqualTo(RoleCode.ADMIN);
+        assertThat(resolvedAuthorities.roleCode()).isEqualTo("ADMIN");
         assertThat(resolvedAuthorities.authorities())
             .extracting(Object::toString)
             .contains("ROLE_ADMIN", "agent.read", "agent.create");
@@ -61,11 +61,11 @@ class UserAuthorityServiceTest {
             .admin(Admin.builder().status(true).build())
             .build();
 
-        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.ADMIN)).thenReturn(List.of());
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("ADMIN")).thenReturn(List.of());
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 
-        assertThat(resolvedAuthorities.roleCode()).isEqualTo(RoleCode.ADMIN);
+        assertThat(resolvedAuthorities.roleCode()).isEqualTo("ADMIN");
         assertThat(resolvedAuthorities.authorities())
             .extracting(Object::toString)
             .contains("ROLE_ADMIN");
@@ -79,11 +79,11 @@ class UserAuthorityServiceTest {
             .agent(Agent.builder().status(true).build())
             .build();
 
-        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.AGENT)).thenReturn(List.of());
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("AGENT")).thenReturn(List.of());
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 
-        assertThat(resolvedAuthorities.roleCode()).isEqualTo(RoleCode.AGENT);
+        assertThat(resolvedAuthorities.roleCode()).isEqualTo("AGENT");
         assertThat(resolvedAuthorities.authorities())
             .extracting(Object::toString)
             .contains("ROLE_AGENT");
@@ -97,11 +97,11 @@ class UserAuthorityServiceTest {
             .roleCode(RoleCode.CLIENT)
             .build();
 
-        when(rolePermissionRepository.findPermissionCodesByRoleCode(RoleCode.SUPER_ADMIN)).thenReturn(List.of());
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("SUPER_ADMIN")).thenReturn(List.of());
 
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
 
-        assertThat(resolvedAuthorities.roleCode()).isEqualTo(RoleCode.SUPER_ADMIN);
+        assertThat(resolvedAuthorities.roleCode()).isEqualTo("SUPER_ADMIN");
         assertThat(resolvedAuthorities.authorities())
             .extracting(Object::toString)
             .contains("ROLE_SUPER_ADMIN");
