@@ -2,8 +2,12 @@ package com.amalitech.hilfe.auth;
 
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.UserService;
@@ -21,29 +25,65 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentCaptor.forClass;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
     @Mock UserRepository userRepository;
+    @Mock AgentRepository agentRepository;
+    @Mock IncidentRepository incidentRepository;
+    @Mock RoleRepository roleRepository;
     @Mock ActivityLogService activityLogService;
     @InjectMocks UserService userService;
 
     @Test
-    void getUserRoles_returnsPaginatedProjection() {
+    void getUsers_returnsPaginatedProjection() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of(
-                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN)
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra", 2L, 1L)
         ));
-        when(userRepository.findUserRoleSummaries(pageable)).thenReturn(page);
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), isNull(), eq(pageable))).thenReturn(page);
 
-        Page<UserRoleSummaryResponse> result = userService.getUserRoles(pageable);
+        Page<UserRoleSummaryResponse> result = userService.getUsers(null, null, null, (String) null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().getFirst().roleCode()).isEqualTo(RoleCode.ADMIN);
+        assertThat(result.getContent().getFirst().roleCode()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void getUsers_activeStatusString_passesTrue() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), eq(true), eq(pageable))).thenReturn(page);
+
+        userService.getUsers(null, null, null, "Active", pageable);
+
+        verify(userRepository).findUserRoleSummariesUnified(null, null, null, true, pageable);
+    }
+
+    @Test
+    void getUsers_inactiveStatusString_passesFalse() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), eq(false), eq(pageable))).thenReturn(page);
+
+        userService.getUsers(null, null, null, "INACTIVE", pageable);
+
+        verify(userRepository).findUserRoleSummariesUnified(null, null, null, false, pageable);
+    }
+
+    @Test
+    void getUsers_locationId_passedThrough() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
+        when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), eq("LOC-ACCRA"), isNull(), eq(pageable))).thenReturn(page);
+
+        userService.getUsers(null, null, "LOC-ACCRA", (String) null, pageable);
+
+        verify(userRepository).findUserRoleSummariesUnified(null, null, "LOC-ACCRA", null, pageable);
     }
 
     @Test
@@ -57,17 +97,67 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
+        when(incidentRepository.countByUserId("u1")).thenReturn(3L);
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
 
         assertThat(result.userId()).isEqualTo("u1");
-        assertThat(result.roleCode()).isEqualTo(RoleCode.ADMIN);
-        verify(activityLogService).logUserRoleChange("admin-1", "u1", RoleCode.CLIENT, RoleCode.ADMIN);
+        assertThat(result.roleCode()).isEqualTo("ADMIN");
+        verify(agentRepository, never()).save(any(Agent.class));
+        verify(activityLogService).logUserRoleChange("admin-1", "u1", "CLIENT", "ADMIN");
+    }
+
+    @Test
+    void assignUserRole_toAgent_createsAgentRecordWhenMissing() {
+        User user = User.builder()
+                .id("u1")
+                .email("john@test.com")
+                .fullName("John Doe")
+                .roleCode(RoleCode.CLIENT)
+                .build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
+        when(roleRepository.existsByCode("AGENT")).thenReturn(true);
+        when(incidentRepository.countByUserId("u1")).thenReturn(2L);
+
+        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
+
+        assertThat(result.roleCode()).isEqualTo("AGENT");
+        var agentCaptor = forClass(Agent.class);
+        verify(agentRepository).save(agentCaptor.capture());
+        assertThat(agentCaptor.getValue().getUserId()).isEqualTo("u1");
+        assertThat(agentCaptor.getValue().getStatus()).isTrue();
+    }
+
+    @Test
+    void assignUserRole_toAgentWithExistingAgentRecord_doesNotCreateDuplicate() {
+        User user = User.builder()
+                .id("u1")
+                .email("john@test.com")
+                .fullName("John Doe")
+                .roleCode(RoleCode.CLIENT)
+                .build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(
+                Agent.builder().id("agent-1").userId("u1").status(true).build()));
+        when(roleRepository.existsByCode("AGENT")).thenReturn(true);
+        when(incidentRepository.countByUserId("u1")).thenReturn(4L);
+        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(5L);
+
+        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
+
+        assertThat(result.roleCode()).isEqualTo("AGENT");
+        verify(agentRepository, never()).save(any(Agent.class));
     }
 
     @Test
     void assignUserRole_userNotFound_throwsNotFound() {
         when(userRepository.findById("missing")).thenReturn(Optional.empty());
+        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.assignUserRole("admin-1", "missing", RoleCode.ADMIN))
                 .isInstanceOf(ArmsAuthException.class)
@@ -84,11 +174,14 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
+        when(incidentRepository.countByUserId("u1")).thenReturn(1L);
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
 
-        assertThat(result.roleCode()).isEqualTo(RoleCode.ADMIN);
-        verify(activityLogService, org.mockito.Mockito.never())
-                .logUserRoleChange(any(), any(), any(), any());
+        assertThat(result.roleCode()).isEqualTo("ADMIN");
+        verify(activityLogService, never())
+                .logUserRoleChange(anyString(), anyString(), anyString(), anyString());
     }
 }

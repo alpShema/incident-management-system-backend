@@ -28,16 +28,52 @@ public class ArmsClientImpl implements ArmsClient {
     private static final String API_KEY_HEADER = "x-api-key";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private static final String GET_EMPLOYEE_BIO_QUERY = """
-                query GetEmployeeBio($id: ID!) {
-                    getEmployeeBio(id: $id) {
+    private static final String GET_EMPLOYEE_ACTIVE_INFO_QUERY = """
+                query GetEmployeeActiveInfo($userId: ID!) {
+                    getEmployeeActiveInfo(user_id: $userId) {
                         user_id
-                        first_name
-                        last_name
-                        profile_image
                         user {
+                            first_name
+                            last_name
+                            other_name
                             email
                         }
+                        employee_bio {
+                            profile_image
+                        }
+                        position {
+                            position_name
+                        }
+                        office {
+                            id
+                            name
+                            archive
+                            organization_id
+                            organization {
+                                offices {
+                                    id
+                                    name
+                                    archive
+                                    organization_id
+                                }
+                            }
+                        }
+                    }
+                    getEmployeeContact(id: $userId) {
+                        id
+                        user_id
+                        work_email
+                        personal_email
+                        phone_number_1
+                        created_by
+                        postal_address
+                        street_address
+                        province_state
+                        country
+                        city
+                        digital_address
+                        created_at
+                        updated_at
                     }
                 }
             """;
@@ -75,13 +111,14 @@ public class ArmsClientImpl implements ArmsClient {
         String userId = extractUserIdFromToken(armsToken);
 
         try {
-            EmployeeBioResponse response = postGraphQlWithBearerToken(
+            EmployeeActiveInfoResponse response = postGraphQlWithBearerToken(
                 properties.ssoUrl(),
                 armsToken,
-                new GraphQlRequest(GET_EMPLOYEE_BIO_QUERY, Map.of("id", userId)),
-                EmployeeBioResponse.class
+                new GraphQlRequest(GET_EMPLOYEE_ACTIVE_INFO_QUERY, Map.of("userId", userId)),
+                EmployeeActiveInfoResponse.class
             );
-            return toArmsUserInfo(requireEmployeeBio(response, userId));
+            log.debug("ARMS getEmployeeActiveInfo response for user {}: {}", userId, response);
+            return toArmsUserInfo(requireEmployeeActiveInfo(response, userId), response.data().contact());
         } catch (HttpClientErrorException | HttpServerErrorException | ResourceAccessException exception) {
             throw handleTokenRequestFailure(userId, exception);
         }
@@ -95,6 +132,11 @@ public class ArmsClientImpl implements ArmsClient {
                 new GraphQlRequest(LIST_EMPLOYEE_INFOS_QUERY, null),
                 EmployeeListResponse.class
             );
+            log.debug("ARMS listEmployeeInfos response: {} entries",
+                    response != null && response.data() != null
+                            && response.data().listEmployeeInfosWithFilters() != null
+                            && response.data().listEmployeeInfosWithFilters().employeeInfo() != null
+                            ? response.data().listEmployeeInfosWithFilters().employeeInfo().size() : "null");
             return requireEmployeeList(response);
         } catch (HttpClientErrorException | HttpServerErrorException | ResourceAccessException exception) {
             throw handleApiKeyRequestFailure("employee list request", exception);
@@ -109,6 +151,7 @@ public class ArmsClientImpl implements ArmsClient {
                 new GraphQlRequest(GET_EMPLOYEE_BIO_FOR_EXTERNAL_SERVICE_QUERY, Map.of("id", userId)),
                 UserByIdResponse.class
             );
+            log.debug("ARMS getUserById response for user {}: {}", userId, response);
             return toArmsUserInfo(requireUserById(response, userId));
         } catch (HttpClientErrorException | HttpServerErrorException | ResourceAccessException exception) {
             throw handleApiKeyRequestFailure("user lookup request", exception);
@@ -145,11 +188,16 @@ public class ArmsClientImpl implements ArmsClient {
             .body(responseType);
     }
 
-    private EmployeeBio requireEmployeeBio(EmployeeBioResponse response, String userId) {
-        if (response == null || response.data() == null || response.data().employeeBio() == null) {
-            throw new ArmsAuthException("ARMS returned empty employee bio for user: " + userId);
+    private EmployeeActiveInfo requireEmployeeActiveInfo(EmployeeActiveInfoResponse response, String userId) {
+        if (response != null && response.errors() != null && !response.errors().isEmpty()) {
+            log.warn("ARMS rejected token for user {}: {}", userId, response.errors().get(0).message());
+            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
         }
-        return response.data().employeeBio();
+        if (response == null || response.data() == null || response.data().activeInfo() == null) {
+            log.warn("ARMS returned no employee data for user {}", userId);
+            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
+        }
+        return response.data().activeInfo();
     }
 
     private List<ArmsEmployeeInfo> requireEmployeeList(EmployeeListResponse response) {
@@ -169,14 +217,25 @@ public class ArmsClientImpl implements ArmsClient {
         return response.data().user();
     }
 
-    private ArmsUserInfo toArmsUserInfo(EmployeeBio bio) {
-        String email = bio.user() != null ? bio.user().email() : "";
+    private ArmsUserInfo toArmsUserInfo(EmployeeActiveInfo activeInfo, EmployeeContact contact) {
+        EmployeeActiveUser user = activeInfo.user();
+        String email = firstNonBlank(
+                contact != null ? contact.personalEmail() : null,
+                contact != null ? contact.workEmail() : null,
+                user != null ? user.email() : null
+        );
         return new ArmsUserInfo(
-            bio.userId(),
-            bio.firstName(),
-            bio.lastName(),
+            activeInfo.userId(),
+            user != null ? user.firstName() : "",
+            user != null ? user.lastName() : "",
+            user != null ? user.otherName() : null,
             email,
-            bio.profileImage()
+            activeInfo.employeeBio() != null ? activeInfo.employeeBio().profileImage() : null,
+            activeInfo.position() != null ? activeInfo.position().positionName() : null,
+            activeInfo.office() != null ? activeInfo.office().name() : null,
+            contact != null ? contact.workEmail() : null,
+            contact != null ? contact.personalEmail() : null,
+            contact != null ? contact.phoneNumber1() : null
         );
     }
 
@@ -187,8 +246,18 @@ public class ArmsClientImpl implements ArmsClient {
             nameParts[0],
             nameParts.length > 1 ? nameParts[1] : "",
             raw.email(),
-            raw.profileImage()
+            raw.profileImage(),
+            null
         );
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private String extractUserIdFromToken(String token) {
@@ -246,23 +315,63 @@ public class ArmsClientImpl implements ArmsClient {
     private record GraphQlRequest(String query, Object variables) {
     }
 
-    private record EmployeeBioResponse(@JsonProperty("data") EmployeeBioData data) {
-    }
+    private record GraphQlError(@JsonProperty("message") String message) {}
 
-    private record EmployeeBioData(@JsonProperty("getEmployeeBio") EmployeeBio employeeBio) {
-    }
+    private record EmployeeActiveInfoResponse(
+        @JsonProperty("data") EmployeeActiveInfoData data,
+        @JsonProperty("errors") List<GraphQlError> errors
+    ) {}
 
-    private record EmployeeBio(
+    private record EmployeeActiveInfoData(
+        @JsonProperty("getEmployeeActiveInfo") EmployeeActiveInfo activeInfo,
+        @JsonProperty("getEmployeeContact") EmployeeContact contact
+    ) {}
+
+    private record EmployeeActiveInfo(
         @JsonProperty("user_id") String userId,
+        @JsonProperty("user") EmployeeActiveUser user,
+        @JsonProperty("employee_bio") EmployeeActiveBio employeeBio,
+        @JsonProperty("position") EmployeePosition position,
+        @JsonProperty("office") EmployeeOffice office
+    ) {}
+
+    private record EmployeeActiveUser(
         @JsonProperty("first_name") String firstName,
         @JsonProperty("last_name") String lastName,
-        @JsonProperty("profile_image") String profileImage,
-        @JsonProperty("user") EmployeeBioUser user
-    ) {
-    }
+        @JsonProperty("other_name") String otherName,
+        @JsonProperty("email") String email
+    ) {}
 
-    private record EmployeeBioUser(@JsonProperty("email") String email) {
-    }
+    private record EmployeeActiveBio(@JsonProperty("profile_image") String profileImage) {}
+
+    private record EmployeePosition(@JsonProperty("position_name") String positionName) {}
+
+    private record EmployeeOffice(
+        @JsonProperty("id") String id,
+        @JsonProperty("name") String name,
+        @JsonProperty("archive") Boolean archive,
+        @JsonProperty("organization_id") String organizationId,
+        @JsonProperty("organization") EmployeeOrganization organization
+    ) {}
+
+    private record EmployeeOrganization(@JsonProperty("offices") List<EmployeeOffice> offices) {}
+
+    private record EmployeeContact(
+        @JsonProperty("id") String id,
+        @JsonProperty("user_id") String userId,
+        @JsonProperty("work_email") String workEmail,
+        @JsonProperty("personal_email") String personalEmail,
+        @JsonProperty("phone_number_1") String phoneNumber1,
+        @JsonProperty("created_by") String createdBy,
+        @JsonProperty("postal_address") String postalAddress,
+        @JsonProperty("street_address") String streetAddress,
+        @JsonProperty("province_state") String provinceState,
+        @JsonProperty("country") String country,
+        @JsonProperty("city") String city,
+        @JsonProperty("digital_address") String digitalAddress,
+        @JsonProperty("created_at") String createdAt,
+        @JsonProperty("updated_at") String updatedAt
+    ) {}
 
     private record EmployeeListResponse(@JsonProperty("data") EmployeeListData data) {
     }
@@ -292,4 +401,5 @@ public class ArmsClientImpl implements ArmsClient {
         @JsonProperty("profile_image") String profileImage
     ) {
     }
+
 }

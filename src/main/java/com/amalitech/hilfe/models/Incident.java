@@ -2,8 +2,11 @@ package com.amalitech.hilfe.models;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 import java.time.Instant;
+import java.util.List;
 
 
 @Entity
@@ -20,6 +23,7 @@ public class Incident {
     @Column(nullable = false)
     private String title;
 
+    @Generated(event = EventType.INSERT)
     @Column(name = "incident_no", nullable = false, insertable = false, updatable = false)
     private Integer incidentNo;
 
@@ -47,6 +51,15 @@ public class Incident {
     @Column(nullable = false)
     @Builder.Default
     private boolean read = false;
+
+    @Column(name = "status_reason")
+    private String statusReason;
+
+    @Column(name = "resolved_at")
+    private Instant resolvedAt;
+
+    @Column(name = "closed_at")
+    private Instant closedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -79,6 +92,10 @@ public class Incident {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to_id", insertable = false, updatable = false)
     private Agent assignedTo;
+
+    @OneToMany(fetch = FetchType.LAZY)
+    @JoinColumn(name = "incident_id", insertable = false, updatable = false)
+    private List<Media> media;
 
     // ── Lifecycle ──
 

@@ -1,0 +1,2 @@
+ALTER TABLE "IncidentCategory"
+    ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'active';

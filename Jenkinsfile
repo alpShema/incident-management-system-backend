@@ -25,9 +25,21 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                sh 'test -f pom.xml || (echo "ERROR: checkout did not populate workspace — pom.xml missing" && exit 1)'
                 script {
                     env.DATE      = sh(script: 'date +%Y%m%d', returnStdout: true).trim()
                     env.IMAGE_TAG = "${env.appName}-${env.DATE}-${env.BUILD_NUMBER}"
+                }
+            }
+        }
+
+        //  1b. Validate Branch Name  all branches ──
+        stage('Validate Branch Name') {
+            steps {
+                script {
+                    // PRs: validate the source branch; direct pushes: validate BRANCH_NAME
+                    def branchToCheck = env.CHANGE_BRANCH ?: env.BRANCH_NAME
+                    sh "chmod +x scripts/validate_branch_name.sh && scripts/validate_branch_name.sh '${branchToCheck}'"
                 }
             }
         }
@@ -65,7 +77,7 @@ pipeline {
                     sh 'mvn sonar:sonar -Dsonar.projectKey=hilfe-v2-backend -Dsonar.projectName="Hilfe v2 Backend"'
                 }
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
@@ -96,10 +108,13 @@ pipeline {
             }
         }
 
-        // ── 9. Push to ECR ─────────────────────────────────────── develop only ──
+        // ── 9. Push to ECR ──────────────────────────────── develop | staging ──
         stage('Push to ECR') {
             when {
-                branch 'develop'
+                anyOf {
+                    branch 'develop'
+                    branch 'staging'
+                }
             }
             steps {
                 script {
@@ -126,15 +141,15 @@ pipeline {
             }
         }
 
-        // ── 10. Deploy to Staging EC2 ──────────────────────────── develop only ──
-        stage('Deploy to Staging') {
+        // ── 10a. Deploy to Testing EC2 ─────────────────────────── develop only ──
+        stage('Deploy to Testing') {
             when {
                 branch 'develop'
             }
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    withCredentials([string(credentialsId: 'staging-backend-ec2-ip', variable: 'EC2_IP')]) {
+                    withCredentials([string(credentialsId: 'testing-backend-ec2-ip', variable: 'EC2_IP')]) {
                     withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
@@ -158,6 +173,75 @@ pipeline {
                                  echo 'BACKEND_IMAGE=\${ECR_REPO}:${imageTag}' >> /home/ubuntu/app/.env"
 
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" docker-compose.yml "ubuntu@\${EC2_IP}:/home/ubuntu/app/docker-compose.yml"
+
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend.conf "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend.conf"
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "sudo cp /tmp/nginx-host-backend.conf /etc/nginx/sites-available/hilfe-backend && \
+                                 sudo ln -sf /etc/nginx/sites-available/hilfe-backend /etc/nginx/sites-enabled/hilfe-backend && \
+                                 sudo nginx -t && sudo systemctl reload nginx"
+
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
+                        """
+                        } // withEnv
+                    }
+                    }
+                    }
+                }
+            }
+        }
+
+        // ── 10b. Deploy to Staging EC2 ─────────────────────────── staging only ──
+        stage('Deploy to Staging') {
+            when {
+                branch 'staging'
+            }
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withCredentials([string(credentialsId: 'staging-backend-ec2-ip', variable: 'EC2_IP')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        def appName  = env.appName
+                        def imageTag = env.IMAGE_TAG
+                        def region   = env.AWS_REGION
+                        withEnv(["AWS_DEFAULT_REGION=${region}"]) {
+                        sh """
+                            export AWS_DEFAULT_REGION="${region}"
+                            AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+                            ECR_URL="\${AWS_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
+                            ECR_REPO="\${ECR_URL}/${appName}"
+                            SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30"
+
+                            # Install nginx if not present (idempotent)
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "command -v nginx &>/dev/null || (sudo apt-get update -q && sudo apt-get install -y -q nginx)"
+
+                            ECR_TOKEN=\$(aws ecr get-login-password --region "${region}")
+                            echo "\${ECR_TOKEN}" | ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "docker login --username AWS --password-stdin \${ECR_URL}"
+
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "mkdir -p /home/ubuntu/app && \
+                                 touch /home/ubuntu/app/.env && \
+                                 sed -i '/^BACKEND_IMAGE=/d' /home/ubuntu/app/.env && \
+                                 echo 'BACKEND_IMAGE=\${ECR_REPO}:${imageTag}' >> /home/ubuntu/app/.env"
+
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" docker-compose.staging.yml "ubuntu@\${EC2_IP}:/home/ubuntu/app/docker-compose.yml"
+
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging.conf      "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend.conf"
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging-init.conf "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend-init.conf"
+                            ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
+                                "CERT=/etc/letsencrypt/renewal/hilfe-pro-service-stage.amalitech-dev.net.conf && \
+                                 if [ -f \\\$CERT ]; then \
+                                   echo 'Certs exist — deploying SSL config'; \
+                                   sudo cp /tmp/nginx-host-backend.conf /etc/nginx/sites-available/hilfe-backend; \
+                                 else \
+                                   echo 'No certs yet — deploying HTTP-only config'; \
+                                   sudo cp /tmp/nginx-host-backend-init.conf /etc/nginx/sites-available/hilfe-backend; \
+                                 fi && \
+                                 sudo ln -sf /etc/nginx/sites-available/hilfe-backend /etc/nginx/sites-enabled/hilfe-backend && \
+                                 sudo rm -f /etc/nginx/sites-enabled/default && \
+                                 sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
 
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"

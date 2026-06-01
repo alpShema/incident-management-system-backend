@@ -1,11 +1,7 @@
 package com.amalitech.hilfe.auth;
 
 import com.amalitech.hilfe.controllers.AuthController;
-import com.amalitech.hilfe.dto.AuthResult;
-import com.amalitech.hilfe.dto.AuthSessionResponse;
-import com.amalitech.hilfe.dto.AuthTokens;
-import com.amalitech.hilfe.dto.LoginRequest;
-import com.amalitech.hilfe.dto.UserPermissionsResponse;
+import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.services.AuthService;
@@ -23,15 +19,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,7 +71,7 @@ class AuthControllerTest {
         assertThat(cookies).anyMatch(c -> c.startsWith("access_token="));
         assertThat(cookies).anyMatch(c -> c.startsWith("refresh_token="));
         assertThat(cookies).anyMatch(c -> c.startsWith("arms_token="));
-        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=Lax"));
+        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=None"));
     }
 
     @Test

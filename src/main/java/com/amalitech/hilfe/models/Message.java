@@ -23,7 +23,7 @@ public class Message {
     @Column(name = "incident_id", nullable = false)
     private String incidentId;
 
-    @Column(nullable = false)
+    @Column
     private String content;
 
     @Column(name = "created_at", nullable = false, updatable = false)

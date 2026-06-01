@@ -2,35 +2,71 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final AgentRepository agentRepository;
+    private final IncidentRepository incidentRepository;
+    private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
 
-    public Page<UserRoleSummaryResponse> getUserRoles(Pageable pageable) {
-        return userRepository.findUserRoleSummaries(pageable);
+    public Page<UserRoleSummaryResponse> getUsers(
+            String query, RoleCode roleCode, String locationId, String status,
+            Pageable pageable
+    ) {
+        String queryPattern = null;
+        if (query != null && !query.isBlank()) {
+            String escaped = query.toLowerCase()
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_");
+            queryPattern = "%" + escaped + "%";
+        }
+        Pageable resolvedPageable = remapSort(pageable);
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, parseStatus(status), resolvedPageable);
+    }
+
+    private Boolean parseStatus(String status) {
+        if (status == null || status.isBlank()) return null;
+        return switch (status.trim().toLowerCase()) {
+            case "active" -> true;
+            case "inactive" -> false;
+            default -> null;
+        };
     }
 
     @Transactional
-    public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, RoleCode roleCode) {
+    public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, String roleCode) {
+        String normalizedRoleCode = normalizeRoleCode(roleCode);
+        if (!roleRepository.existsByCode(normalizedRoleCode)) {
+            throw new ArmsAuthException("Role not found", 404);
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ArmsAuthException("User not found", 404));
 
-        RoleCode previousRoleCode = user.getRoleCode();
-        user.setRoleCode(roleCode);
+        String previousRoleCode = user.getRoleCode();
+        user.setRoleCode(normalizedRoleCode);
+        ensureAgentRecord(user, normalizedRoleCode);
 
-        if (previousRoleCode != roleCode) {
-            activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, roleCode);
+        if (previousRoleCode == null || !previousRoleCode.equals(normalizedRoleCode)) {
+            activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, normalizedRoleCode);
         }
 
         return new UserRoleSummaryResponse(
@@ -38,7 +74,81 @@ public class UserService {
                 user.getEmail(),
                 user.getFullName(),
                 user.getProfileImg(),
-                user.getRoleCode()
+                user.getRoleCode(),
+                user.getStatus(),
+                user.getLocation() != null ? user.getLocation().getName() : null,
+                incidentRepository.countByUserId(user.getId()),
+                getAssignedIncidentsCount(user.getId())
         );
+    }
+
+    public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, RoleCode roleCode) {
+        return assignUserRole(actorUserId, userId, roleCode == null ? null : roleCode.name());
+    }
+
+    @Transactional
+    public UserRoleSummaryResponse updateUserStatus(String actorUserId, RoleCode actorRole, String targetUserId, boolean status) {
+        boolean isSelf = actorUserId.equals(targetUserId);
+        boolean isAdmin = actorRole == RoleCode.ADMIN || actorRole == RoleCode.SUPER_ADMIN;
+
+        if (!isSelf && !isAdmin) {
+            throw new ArmsAuthException("You can only update your own status", 403);
+        }
+
+        User user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ArmsAuthException("User not found", 404));
+        user.setStatus(status);
+        userRepository.save(user);
+
+        return new UserRoleSummaryResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getProfileImg(),
+                user.getRoleCode(),
+                user.getStatus(),
+                user.getLocation() != null ? user.getLocation().getName() : null,
+                incidentRepository.countByUserId(user.getId()),
+                getAssignedIncidentsCount(user.getId())
+        );
+    }
+
+    private long getAssignedIncidentsCount(String userId) {
+        return agentRepository.findByUserId(userId)
+                .map(agent -> incidentRepository.countByAssignedToId(agent.getId()))
+                .orElse(0L);
+    }
+
+    private Pageable remapSort(Pageable pageable) {
+        Sort remapped = Sort.by(pageable.getSort().stream()
+                .map(order -> {
+                    if ("officeLocation".equals(order.getProperty())) {
+                        return order.isAscending()
+                                ? Sort.Order.asc("location.name")
+                                : Sort.Order.desc("location.name");
+                    }
+                    return order;
+                })
+                .toList());
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), remapped);
+    }
+
+    private void ensureAgentRecord(User user, String roleCode) {
+        if (!"AGENT".equalsIgnoreCase(roleCode) || agentRepository.findByUserId(user.getId()).isPresent()) {
+            return;
+        }
+
+        agentRepository.save(Agent.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .userId(user.getId())
+                .status(true)
+                .build());
+    }
+
+    private String normalizeRoleCode(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            throw new ArmsAuthException("roleCode is required", 400);
+        }
+        return roleCode.trim().toUpperCase();
     }
 }

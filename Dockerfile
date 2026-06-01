@@ -41,12 +41,21 @@ RUN mvn package -DskipTests
 ##############################################################################
 FROM eclipse-temurin:21-jre-alpine
 
+# Create a non-root user and group to run the application
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Set the working directory inside the container
 WORKDIR /app
 
 # Copy only the built JAR from the builder stage
 # A wildcard is used so the version number in the filename doesn't matter
 COPY --from=builder /app/target/*.jar app.jar
+
+# Transfer ownership of the JAR to the non-root user
+RUN chown appuser:appgroup app.jar
+
+# Drop root — all subsequent commands and the running container use appuser
+USER appuser
 
 # Tell Docker this container listens on port 8080 (default Spring Boot port)
 # This is documentation — it doesn't actually publish the port

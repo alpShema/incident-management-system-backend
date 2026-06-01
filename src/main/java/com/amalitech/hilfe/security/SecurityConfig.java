@@ -26,6 +26,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final Http401AuthenticationEntryPoint authenticationEntryPoint;
 
     @Value("${cors.allowed-origins}")
     private List<String> allowedOrigins;
@@ -36,9 +37,13 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 - stateless REST API using HttpOnly JWT cookies; CSRF not applicable
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login", "/auth/refresh-token", "/auth/logout").permitAll()
                         .requestMatchers("/actuator/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/graphiql/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -56,7 +61,17 @@ public class SecurityConfig {
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
+        // WebSocket upgrade requests must pass the security CORS filter before reaching
+        // WebSocketConfig's setAllowedOriginPatterns("*"), so allow all origins here too.
+        CorsConfiguration wsConfig = new CorsConfiguration();
+        wsConfig.setAllowedOriginPatterns(List.of("*"));
+        wsConfig.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        wsConfig.setAllowedHeaders(List.of("*"));
+        wsConfig.setAllowCredentials(true);
+        wsConfig.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/ws/**", wsConfig);
         source.registerCorsConfiguration("/**", config);
         return source;
     }

@@ -12,10 +12,18 @@ public final class RbacPermissions {
     public static final String AGENT_CREATE = "agent.create";
     public static final String AGENT_READ = "agent.read";
     public static final String AGENT_UPDATE = "agent.update";
+    public static final String AGENT_AVAILABILITY_UPDATE = "agent.availability.update";
+    public static final String AGENT_AVAILABILITY_UPDATE_ANY = "agent.availability.update.any";
+    public static final String ADMIN_AVAILABILITY_UPDATE = "admin.availability.update";
     public static final String AGENT_DELETE = "agent.delete";
+    public static final String AGENT_GROUP_READ = "agent-group.read";
     public static final String AGENT_GROUP_CREATE = "agent-group.create";
     public static final String AGENT_GROUP_UPDATE = "agent-group.update";
     public static final String AGENT_GROUP_DELETE = "agent-group.delete";
+    public static final String DEPARTMENT_READ = "department.read";
+    public static final String DEPARTMENT_CREATE = "department.create";
+    public static final String DEPARTMENT_UPDATE = "department.update";
+    public static final String DEPARTMENT_DELETE = "department.delete";
     public static final String STATUS_CREATE = "status.create";
     public static final String STATUS_UPDATE = "status.update";
     public static final String STATUS_DELETE = "status.delete";
@@ -28,14 +36,22 @@ public final class RbacPermissions {
     public static final String INCIDENT_TYPE_CREATE = "incident-type.create";
     public static final String INCIDENT_TYPE_UPDATE = "incident-type.update";
     public static final String INCIDENT_TYPE_DELETE = "incident-type.delete";
+    public static final String INCIDENT_CATEGORY_CREATE = "incident-category.create";
+    public static final String INCIDENT_CATEGORY_UPDATE = "incident-category.update";
+    public static final String INCIDENT_CATEGORY_DELETE = "incident-category.delete";
     public static final String RBAC_ROLE_READ = "rbac.role.read";
     public static final String RBAC_ROLE_UPDATE = "rbac.role.update";
     public static final String RBAC_USER_ROLE_UPDATE = "rbac.user-role.update";
     public static final String RBAC_PERMISSION_READ = "rbac.permission.read";
+    public static final String DASHBOARD_AGENT = "dashboard.agent";
+    public static final String DASHBOARD_ADMIN = "dashboard.admin";
+    public static final String SYSTEM_CONFIG_READ = "system.config.read";
+    public static final String SYSTEM_CONFIG_UPDATE = "system.config.update";
 
     public static final List<String> CLIENT_DEFAULTS = List.of(
             INCIDENT_CREATE,
-            INCIDENT_READ_OWN
+            INCIDENT_READ_OWN,
+            INCIDENT_STATUS_CHANGE
     );
 
     public static final List<String> AGENT_DEFAULTS = List.of(
@@ -43,17 +59,30 @@ public final class RbacPermissions {
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
-            AGENT_READ
+            AGENT_READ,
+            AGENT_AVAILABILITY_UPDATE,
+            DASHBOARD_AGENT
     );
 
     public static final List<String> ADMIN_DEFAULTS = List.of(
+            INCIDENT_READ_ASSIGNED,
+            INCIDENT_ASSIGN,
+            INCIDENT_STATUS_CHANGE,
+            INCIDENT_SEVERITY_CHANGE,
             AGENT_CREATE,
             AGENT_READ,
             AGENT_UPDATE,
             AGENT_DELETE,
+            AGENT_AVAILABILITY_UPDATE_ANY,
+            ADMIN_AVAILABILITY_UPDATE,
+            AGENT_GROUP_READ,
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,
             AGENT_GROUP_DELETE,
+            DEPARTMENT_READ,
+            DEPARTMENT_CREATE,
+            DEPARTMENT_UPDATE,
+            DEPARTMENT_DELETE,
             STATUS_CREATE,
             STATUS_UPDATE,
             STATUS_DELETE,
@@ -66,17 +95,33 @@ public final class RbacPermissions {
             INCIDENT_TYPE_CREATE,
             INCIDENT_TYPE_UPDATE,
             INCIDENT_TYPE_DELETE,
-            RBAC_PERMISSION_READ
+            RBAC_ROLE_READ,
+            RBAC_USER_ROLE_UPDATE,
+            RBAC_PERMISSION_READ,
+            DASHBOARD_ADMIN,
+            SYSTEM_CONFIG_READ,
+            SYSTEM_CONFIG_UPDATE
     );
 
     public static final List<String> SUPER_ADMIN_DEFAULTS = List.of(
+            INCIDENT_READ_ASSIGNED,
+            INCIDENT_ASSIGN,
+            INCIDENT_STATUS_CHANGE,
+            INCIDENT_SEVERITY_CHANGE,
             AGENT_CREATE,
             AGENT_READ,
             AGENT_UPDATE,
             AGENT_DELETE,
+            AGENT_AVAILABILITY_UPDATE_ANY,
+            ADMIN_AVAILABILITY_UPDATE,
+            AGENT_GROUP_READ,
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,
             AGENT_GROUP_DELETE,
+            DEPARTMENT_READ,
+            DEPARTMENT_CREATE,
+            DEPARTMENT_UPDATE,
+            DEPARTMENT_DELETE,
             STATUS_CREATE,
             STATUS_UPDATE,
             STATUS_DELETE,
@@ -92,7 +137,10 @@ public final class RbacPermissions {
             RBAC_ROLE_READ,
             RBAC_ROLE_UPDATE,
             RBAC_USER_ROLE_UPDATE,
-            RBAC_PERMISSION_READ
+            RBAC_PERMISSION_READ,
+            DASHBOARD_ADMIN,
+            SYSTEM_CONFIG_READ,
+            SYSTEM_CONFIG_UPDATE
     );
 
     private RbacPermissions() {

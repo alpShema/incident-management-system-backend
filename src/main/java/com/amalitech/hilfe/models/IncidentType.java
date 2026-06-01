@@ -23,11 +23,17 @@ public class IncidentType {
     @Column(nullable = false)
     private String description;
 
+    @Column(name = "category_id")
+    private String categoryId;
+
     @Column(name = "admin_id", nullable = false)
     private String adminId;
 
     @Column(name = "agent_id", nullable = false)
     private String agentId;
+
+    @Column(name = "agent_group_id")
+    private String agentGroupId;
 
     @Column(name = "visible_to_group", nullable = false)
     @Builder.Default
@@ -42,8 +48,16 @@ public class IncidentType {
     // ── Relationships ──
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", insertable = false, updatable = false)
+    private IncidentCategory category;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id", insertable = false, updatable = false)
     private Agent agent;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agent_group_id", insertable = false, updatable = false)
+    private AgentGroup agentGroup;
 
     // ── Lifecycle ──
 

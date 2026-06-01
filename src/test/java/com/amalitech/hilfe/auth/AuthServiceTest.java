@@ -5,15 +5,13 @@ import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.services.ArmsTokenExpiryService;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
-import com.amalitech.hilfe.services.ArmsClient;
-import com.amalitech.hilfe.services.AuthService;
-import com.amalitech.hilfe.services.TokenRevocationService;
-import com.amalitech.hilfe.services.TokenService;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
+import com.amalitech.hilfe.services.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,14 +22,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -41,6 +35,7 @@ class AuthServiceTest {
     @Mock TokenService tokenService;
     @Mock TokenRevocationService tokenRevocationService;
     @Mock UserRepository userRepository;
+    @Mock LocationRepository locationRepository;
     @Mock UserAuthorityService userAuthorityService;
     @InjectMocks AuthService authService;
 
@@ -49,8 +44,8 @@ class AuthServiceTest {
 
     @Test
     void login_happyPath_upsertsUserAndReturnsTokens() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png");
-        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png", null);
+        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").roleCode(RoleCode.CLIENT).build();
 
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
         when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(7200L);
@@ -67,13 +62,13 @@ class AuthServiceTest {
         assertThat(result.tokens().getRefreshTokenExpiresIn()).isEqualTo(7200L);
         assertThat(result.session().getUserId()).isEqualTo("u1");
         assertThat(result.session().getEmail()).isEqualTo("john@test.com");
-        verify(userRepository).upsert("u1", "john@test.com", "John Doe", "http://img.png");
+        verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, "http://img.png", null, null);
     }
 
     @Test
     void login_concatenatesFirstAndLastName() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u2", "Alice", "Smith", "alice@test.com", null);
-        User user = User.builder().id("u2").email("alice@test.com").fullName("Alice Smith").build();
+        ArmsUserInfo armsUser = new ArmsUserInfo("u2", "Alice", "Smith", "alice@test.com", null, null);
+        User user = User.builder().id("u2").email("alice@test.com").fullName("Alice Smith").roleCode(RoleCode.CLIENT).build();
 
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
         when(armsTokenExpiryService.getRemainingLifetimeSeconds("token")).thenReturn(5400L);
@@ -83,7 +78,51 @@ class AuthServiceTest {
 
         authService.login(new LoginRequest("token"));
 
-        verify(userRepository).upsert("u2", "alice@test.com", "Alice Smith", null);
+        verify(userRepository).upsert("u2", "alice@test.com", "Alice Smith", null, null, null, null);
+    }
+
+    @Test
+    void login_mapsContactPositionAndNormalizedOfficeToExistingColumns() {
+        ArmsUserInfo armsUser = new ArmsUserInfo(
+                "1170",
+                "Sofia",
+                "Patel",
+                null,
+                "sofia.patel@amalitech.com",
+                "https://example.com/profile.webp",
+                "Head of Department Level 1",
+                "Takoradi Office",
+                "sofia.patel@amalitech.com",
+                "sofia.patel@amalitech.com",
+                "23305578708"
+        );
+        Location location = Location.builder().id("loc-takoradi").name("Takoradi").build();
+        User user = User.builder()
+                .id("1170")
+                .email("sofia.patel@amalitech.com")
+                .fullName("Sofia Patel")
+                .roleCode(RoleCode.CLIENT)
+                .build();
+
+        when(armsClient.getUserByToken("token")).thenReturn(armsUser);
+        when(locationRepository.findByNameIgnoreCase("Takoradi Office")).thenReturn(Optional.empty());
+        when(locationRepository.findByNameIgnoreCase("Takoradi")).thenReturn(Optional.of(location));
+        when(armsTokenExpiryService.getRemainingLifetimeSeconds("token")).thenReturn(5400L);
+        when(userRepository.findAuthUserById("1170")).thenReturn(Optional.of(user));
+        when(tokenService.generateAccessToken(any())).thenReturn("at");
+        when(tokenService.generateRefreshToken(any(), anyLong())).thenReturn("rt");
+
+        authService.login(new LoginRequest("token"));
+
+        verify(userRepository).upsert(
+                "1170",
+                "sofia.patel@amalitech.com",
+                "Sofia Patel",
+                "23305578708",
+                "https://example.com/profile.webp",
+                "Head of Department Level 1",
+                "loc-takoradi"
+        );
     }
 
     @Test
@@ -97,7 +136,7 @@ class AuthServiceTest {
 
     @Test
     void login_userNotFoundAfterUpsert_throwsIllegalState() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null);
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null, null);
 
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
         when(userRepository.findAuthUserById("u1")).thenReturn(Optional.empty());
@@ -108,8 +147,27 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_firstLoginPersistsClientRole() {
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null, null);
+        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").roleCode(RoleCode.CLIENT).build();
+
+        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
+        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(7200L);
+        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
+        when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
+        when(tokenService.generateRefreshToken(user, 7200L)).thenReturn("refresh-jwt");
+        when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
+
+        AuthResult result = authService.login(new LoginRequest("arms-token"));
+
+        assertThat(result.session().getUserId()).isEqualTo("u1");
+        assertThat(user.getRoleCode()).isEqualTo("CLIENT");
+        verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, null, null, null);
+    }
+
+    @Test
     void refresh_happyPath_reissuesTokensUsingArmsExpiry() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png");
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png", null);
         User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
 
         when(tokenService.authenticateRefreshToken("rt"))
@@ -129,12 +187,12 @@ class AuthServiceTest {
         assertThat(result.tokens().getAccessTokenExpiresIn()).isEqualTo(3600L);
         assertThat(result.tokens().getRefreshTokenExpiresIn()).isEqualTo(1800L);
         assertThat(result.session().getUserId()).isEqualTo("u1");
-        verify(userRepository).upsert("u1", "john@test.com", "John Doe", "http://img.png");
+        verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, "http://img.png", null, null);
     }
 
     @Test
     void refresh_successfulRefresh_revokesOldJti() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png");
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png", null);
         User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
 
         when(tokenService.authenticateRefreshToken("rt"))
@@ -185,7 +243,7 @@ class AuthServiceTest {
 
     @Test
     void refresh_mismatchedArmsUser_throwsUnauthorized() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u2", "John", "Doe", "john@test.com", null);
+        ArmsUserInfo armsUser = new ArmsUserInfo("u2", "John", "Doe", "john@test.com", null, null);
 
         when(tokenService.authenticateRefreshToken("rt"))
                 .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
