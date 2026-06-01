@@ -55,6 +55,36 @@ public class NotificationService {
         }
     }
 
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sendAssignmentNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo
+    ) {
+        if (recipientUserId == null) return;
+        try {
+            String title = "Incident #" + incidentNo + " assigned to you";
+            String message = "Incident #" + incidentNo + " has been assigned to you.";
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
+                    .type("INCIDENT_ASSIGNED")
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
+        } catch (Exception ex) {
+            log.error("Failed to send assignment notification to user {} for incident {}", recipientUserId, incidentId, ex);
+        }
+    }
+
     public List<NotificationResponse> getNotifications(String userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
