@@ -303,7 +303,7 @@ public class IncidentService {
             AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
                     .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
 
-            String assignedAgentId = findAvailableAgentInGroup(agentGroup);
+            String assignedAgentId = findAvailableAgentInGroup(agentGroup, incident.getLocationId());
             if (assignedAgentId != null) {
                 incident.setAssignedToId(assignedAgentId);
                 incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
@@ -329,10 +329,16 @@ public class IncidentService {
         incident.setStatusId("status-open");
     }
 
-    private String findAvailableAgentInGroup(AgentGroup agentGroup) {
-        List<Agent> availableAgents = agentRepository.findAvailableByAgentGroupId(agentGroup.getId());
-        if (!availableAgents.isEmpty()) {
-            return availableAgents.get(0).getId();
+    private String findAvailableAgentInGroup(AgentGroup agentGroup, String locationId) {
+        List<Agent> locationMatched = agentRepository
+                .findAvailableByAgentGroupIdAndLocation(agentGroup.getId(), locationId);
+        if (!locationMatched.isEmpty()) {
+            return locationMatched.get(0).getId();
+        }
+        List<Agent> anyAvailable = agentRepository
+                .findAvailableByAgentGroupIdViaMembership(agentGroup.getId());
+        if (!anyAvailable.isEmpty()) {
+            return anyAvailable.get(0).getId();
         }
         return null;
     }
