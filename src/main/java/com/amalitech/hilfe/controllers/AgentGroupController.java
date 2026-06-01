@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "Agent Groups", description = "Manage department-linked agent groups, membership, and primary routing agents")
+@Tag(name = "Agent Groups", description = "Manage department-linked agent groups and membership")
 @RestController
 @RequestMapping("/agent-groups")
 @RequiredArgsConstructor
@@ -34,7 +34,7 @@ public class AgentGroupController {
         return ResponseEntity.ok(ApiResponse.success("Agent groups retrieved successfully", PageResponse.from(page)));
     }
 
-    @Operation(summary = "Get an agent group", description = "Returns an agent group by ID, including its linked department and primary agent. Requires `agent-group.read` permission.")
+    @Operation(summary = "Get an agent group", description = "Returns an agent group by ID, including its linked department. Requires `agent-group.read` permission.")
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
     public ResponseEntity<ApiResponse<AgentGroupResponse>> getAgentGroup(@PathVariable String id) {
@@ -44,7 +44,7 @@ public class AgentGroupController {
     @Operation(
             summary = "Create an agent group",
             description = "Creates an agent group under an internal department. `departmentId` is required on create. "
-                    + "If `primaryAgentId` is supplied, that agent is also added as a member of the new group. Requires `agent-group.create` permission.",
+                    + "Optionally pass `agentIds` to bulk-add members immediately. Requires `agent-group.create` permission.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
                     content = @Content(
@@ -56,7 +56,7 @@ public class AgentGroupController {
                                               "name": "Facilities Support",
                                               "description": "Handles facilities-related incident routing",
                                               "departmentId": "dept-facilities",
-                                              "primaryAgentId": "agent-seed-001"
+                                              "agentIds": ["agent-seed-001", "agent-seed-002"]
                                             }
                                             """
                             )
@@ -72,8 +72,7 @@ public class AgentGroupController {
 
     @Operation(
             summary = "Update an agent group",
-            description = "Updates an agent group's name, description, department, or primary agent. "
-                    + "When setting `primaryAgentId`, the agent must already be a member of this group. Requires `agent-group.update` permission."
+            description = "Updates an agent group's name, description, or department. Requires `agent-group.update` permission."
     )
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_UPDATE + "')")
@@ -109,7 +108,7 @@ public class AgentGroupController {
         return ResponseEntity.ok(ApiResponse.success("Agent group member added successfully", agentGroupService.addMember(id, request.agentId())));
     }
 
-    @Operation(summary = "Remove agent group member", description = "Removes only this agent/group membership. If the removed agent was the group's primary agent, the primary agent is cleared. Requires `agent-group.update` permission.")
+    @Operation(summary = "Remove agent group member", description = "Removes only this agent/group membership. Requires `agent-group.update` permission.")
     @DeleteMapping("/{id}/members/{agentId}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_UPDATE + "')")
     public ResponseEntity<ApiResponse<AgentGroupMemberResponse>> removeMember(

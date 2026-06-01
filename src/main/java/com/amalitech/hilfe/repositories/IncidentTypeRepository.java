@@ -22,8 +22,6 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
             SELECT it FROM IncidentType it
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             WHERE it.categoryId = :categoryId
             """)
     List<IncidentType> findByCategoryIdWithAgent(@Param("categoryId") String categoryId);
@@ -32,8 +30,6 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
             SELECT it FROM IncidentType it
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH ag.primaryAgent pa
-            LEFT JOIN FETCH pa.user
             WHERE it.id = :id
             """)
     java.util.Optional<IncidentType> findByIdWithDetails(@Param("id") String id);
@@ -43,8 +39,6 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
                     SELECT it FROM IncidentType it
                     LEFT JOIN FETCH it.category c
                     LEFT JOIN FETCH it.agentGroup ag
-                    LEFT JOIN FETCH ag.primaryAgent pa
-                    LEFT JOIN FETCH pa.user
                     WHERE (:categoryId IS NULL OR it.categoryId = :categoryId)
                       AND (:departmentId IS NULL OR c.departmentId = :departmentId)
                       AND (:agentGroupId IS NULL OR it.agentGroupId = :agentGroupId)

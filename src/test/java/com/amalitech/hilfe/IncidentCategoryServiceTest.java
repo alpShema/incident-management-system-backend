@@ -90,9 +90,7 @@ class IncidentCategoryServiceTest {
                 .id("group-1")
                 .name("IT Support")
                 .departmentId("dept-1")
-                .primaryAgentId("agent-1")
                 .build();
-        group.setPrimaryAgent(agent);
         type.setAgentGroup(group);
         return type;
     }
@@ -238,7 +236,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
-                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").primaryAgentId("agent-1").status(true).build()));
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
         when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
         when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
 
@@ -257,7 +255,6 @@ class IncidentCategoryServiceTest {
         verify(entityManager).flush();
         verify(entityManager).clear();
         assertThat(topicCaptor.getValue().getAdminId()).isEqualTo("admin-1");
-        assertThat(topicCaptor.getValue().getAgentId()).isEqualTo("agent-1");
         assertThat(topicCaptor.getValue().getAgentGroupId()).isEqualTo("group-1");
     }
 
@@ -340,21 +337,6 @@ class IncidentCategoryServiceTest {
         verify(categoryRepository).searchCategories(null, pageable);
     }
 
-    @Test
-    void createTopic_agentGroupWithoutPrimaryAgent_throws400() {
-        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
-        when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
-        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
-                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
-
-        assertThatThrownBy(() -> categoryService.createTopic(
-                "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "group-1", true)))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Agent group must have a primary agent")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
-    }
 
     @Test
     void listTopics_defaultsStatusToActive() {

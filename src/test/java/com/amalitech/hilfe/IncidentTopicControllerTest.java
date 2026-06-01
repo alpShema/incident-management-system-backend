@@ -56,8 +56,7 @@ class IncidentTopicControllerTest {
                 LookupResponse.from("cat-1", "Facilities"),
                 new IncidentTopicListResponse.AgentGroupSummary(
                         "group-1",
-                        "IT Support",
-                        LookupResponse.from("agent-1", "Agent One"))
+                        "IT Support")
         );
         when(incidentCategoryService.listTopics(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1));

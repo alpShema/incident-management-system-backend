@@ -328,12 +328,6 @@ public class IncidentService {
     }
 
     private String findAvailableAgentInGroup(AgentGroup agentGroup) {
-        if (agentGroup.getPrimaryAgentId() != null && !agentGroup.getPrimaryAgentId().isBlank()) {
-            Agent primaryAgent = agentRepository.findById(agentGroup.getPrimaryAgentId()).orElse(null);
-            if (primaryAgent != null && Boolean.TRUE.equals(primaryAgent.getStatus())) {
-                return primaryAgent.getId();
-            }
-        }
         List<Agent> availableAgents = agentRepository.findAvailableByAgentGroupId(agentGroup.getId());
         if (!availableAgents.isEmpty()) {
             return availableAgents.get(0).getId();
