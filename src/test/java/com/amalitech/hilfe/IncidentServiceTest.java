@@ -653,6 +653,66 @@ class IncidentServiceTest {
                 .isEqualTo(403);
     }
 
+    // ── creator-level permissions ─────────────────────────────────────────────
+
+    @Test
+    void updateStatus_agentWhoCreatedIncident_canCloseLikeClient() {
+        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
+        Status closedStatus   = buildStatus("status-closed",   "Closed");
+
+        Incident incident = buildIncident();
+        incident.setUserId("actor-1"); // actor is also the creator
+        incident.setStatus(resolvedStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        // actor-1 is an AGENT but also the incident creator — should be allowed
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-closed", null));
+
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_agentWhoCreatedIncident_canReopenLikeClient() {
+        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
+        Status reopenedStatus = buildStatus("status-reopened", "Reopened");
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+
+        Incident incident = buildIncident();
+        incident.setUserId("actor-1"); // actor is also the creator
+        incident.setStatus(resolvedStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
+
+        verify(incidentRepository, atLeastOnce()).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_agentWhoDidNotCreateIncident_cannotCloseLikeClient() {
+        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
+        Status closedStatus   = buildStatus("status-closed",   "Closed");
+
+        Incident incident = buildIncident(); // userId = "user-1", actor = "actor-1" — different
+        incident.setStatus(resolvedStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-closed", null)))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("You do not have permission to move an incident to 'Closed'")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
     @Test
     void updateStatus_statusNotFound_throws404() {
         Incident incident = buildIncident();
