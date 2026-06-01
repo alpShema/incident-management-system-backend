@@ -71,7 +71,7 @@ class IncidentControllerTest {
                 "inc-1", 1, "Test Incident", "Description",
                 null, null, new LookupResponse("sev-low", "Low"), null,
                 new com.amalitech.hilfe.dto.CreatorResponse("user-1", "John Doe", "http://img.png"),
-                null, false, null, null, null, null);
+                null, false, null, null, null, null, null);
     }
 
     // ── POST /incidents ───────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ class IncidentControllerTest {
 
         mvc.perform(patch("/incidents/inc-1/status")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new UpdateIncidentStatusRequest("status-pending")))
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentStatusRequest("status-pending", "Waiting for parts")))
                         .with(authentication(new UsernamePasswordAuthenticationToken(agentPrincipal(), null, List.of(() -> "incident.status.change")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident status updated successfully"));

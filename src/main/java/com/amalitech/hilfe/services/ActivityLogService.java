@@ -90,16 +90,26 @@ public class ActivityLogService {
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logIncidentStatusChange(String actorUserId, String incidentId, String previousStatus, String newStatus) {
+        logIncidentStatusChange(actorUserId, incidentId, previousStatus, newStatus, null);
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentStatusChange(String actorUserId, String incidentId, String previousStatus, String newStatus, String reason) {
         try {
             String actorName = resolveUserName(actorUserId);
             String incidentLabel = resolveIncidentLabel(incidentId);
+            String reasonPart = (reason != null && !reason.isBlank()) ? ". Reason: " + reason : "";
+            String metadata = reason != null && !reason.isBlank()
+                    ? "{\"previousStatus\":\"" + previousStatus + "\",\"newStatus\":\"" + newStatus + "\",\"reason\":\"" + reason.replace("\"", "\\\"") + "\"}"
+                    : "{\"previousStatus\":\"" + previousStatus + "\",\"newStatus\":\"" + newStatus + "\"}";
             activityLogRepository.save(ActivityLog.builder()
                     .actorUserId(actorUserId)
                     .action("INCIDENT_STATUS_CHANGED")
                     .subjectType("INCIDENT")
                     .subjectId(incidentId)
-                    .description(incidentLabel + " status changed from " + previousStatus + " to " + newStatus + " by " + actorName)
-                    .metadata("{\"previousStatus\":\"" + previousStatus + "\",\"newStatus\":\"" + newStatus + "\"}")
+                    .description(incidentLabel + " status changed from " + previousStatus + " to " + newStatus + " by " + actorName + reasonPart)
+                    .metadata(metadata)
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log status change for incident {}", incidentId, ex);
