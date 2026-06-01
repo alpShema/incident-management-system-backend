@@ -19,15 +19,7 @@ public record IncidentTopicListResponse(
 
         AgentGroupSummary group = null;
         if (type.getAgentGroup() != null) {
-            LookupResponse primaryAgent = type.getAgentGroup().getPrimaryAgent() != null
-                    ? LookupResponse.from(
-                            type.getAgentGroup().getPrimaryAgent().getId(),
-                            type.getAgentGroup().getPrimaryAgent().getUser() != null
-                                    ? type.getAgentGroup().getPrimaryAgent().getUser().getFullName()
-                                    : type.getAgentGroup().getPrimaryAgent().getUserId()
-                    )
-                    : null;
-            group = new AgentGroupSummary(type.getAgentGroup().getId(), type.getAgentGroup().getName(), primaryAgent);
+            group = new AgentGroupSummary(type.getAgentGroup().getId(), type.getAgentGroup().getName());
         }
 
         return new IncidentTopicListResponse(
@@ -43,7 +35,6 @@ public record IncidentTopicListResponse(
     @Schema(description = "Assigned agent group details")
     public record AgentGroupSummary(
             @Schema(description = "Agent group ID", example = "agent-group-it-support") String id,
-            @Schema(description = "Agent group name", example = "IT Support") String name,
-            @Schema(description = "Primary agent for the group (id + name)", nullable = true) LookupResponse primaryAgent
+            @Schema(description = "Agent group name", example = "IT Support") String name
     ) {}
 }
