@@ -91,4 +91,30 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             AND a.status = true
             """)
     List<Agent> findAvailableByAgentGroupId(@Param("agentGroupId") String agentGroupId);
+
+    @Query("""
+            SELECT a FROM Agent a
+            LEFT JOIN FETCH a.user u
+            WHERE a.status = true
+            AND EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
+            )
+            AND u.locationId = :locationId
+            """)
+    List<Agent> findAvailableByAgentGroupIdAndLocation(
+            @Param("agentGroupId") String agentGroupId,
+            @Param("locationId") String locationId
+    );
+
+    @Query("""
+            SELECT a FROM Agent a
+            LEFT JOIN FETCH a.user u
+            WHERE a.status = true
+            AND EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
+            )
+            """)
+    List<Agent> findAvailableByAgentGroupIdViaMembership(@Param("agentGroupId") String agentGroupId);
 }
