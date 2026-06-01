@@ -71,4 +71,27 @@ public class AgentController {
                 agentService.updateAvailability(principal.userId(), request.available())
         ));
     }
+
+    @Operation(
+            summary = "Update agent availability (admin)",
+            description = "Allows an admin to toggle any agent's availability status on or off."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Agent not found")
+    })
+    @PatchMapping("/{agentId}/status")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_AVAILABILITY_UPDATE_ANY + "')")
+    public ResponseEntity<ApiResponse<AgentResponse>> updateAgentStatus(
+            @PathVariable String agentId,
+            @Valid @RequestBody UpdateAvailabilityRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Status updated",
+                agentService.updateAvailabilityById(agentId, request.available())
+        ));
+    }
 }
