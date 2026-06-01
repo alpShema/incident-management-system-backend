@@ -49,6 +49,7 @@ public class IncidentService {
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
     private final ActivityLogService activityLogService;
+    private final NotificationService notificationService;
     private final MediaService mediaService;
     private final MediaRepository mediaRepository;
     private final LocationRepository locationRepository;
@@ -206,6 +207,7 @@ public class IncidentService {
 
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName(), request.reason());
+        dispatchStatusNotifications(incident, previousStatusName, newStatus.getName(), request.reason(), actorUserId);
 
         if ("reopened".equalsIgnoreCase(newStatus.getName())) {
             applyReopenTransition(actorUserId, incident, incidentId);
@@ -397,6 +399,29 @@ public class IncidentService {
         if (requiresReason(newStatus) && (reason == null || reason.isBlank())) {
             throw new ArmsAuthException("A reason is required when setting status to " + newStatus.getName(), 400);
         }
+    }
+
+    private void dispatchStatusNotifications(Incident incident, String previousStatus, String newStatus, String reason, String actorUserId) {
+        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+
+        // Notify the client (incident creator) unless they are the one making the change
+        String clientUserId = incident.getUserId();
+        if (clientUserId != null && !clientUserId.equals(actorUserId)) {
+            notificationService.sendStatusChangeNotification(clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+        }
+
+        // Notify the assigned agent unless they are the one making the change
+        String agentUserId = resolveAgentUserId(incident.getAssignedToId());
+        if (agentUserId != null && !agentUserId.equals(actorUserId)) {
+            notificationService.sendStatusChangeNotification(agentUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+        }
+    }
+
+    private String resolveAgentUserId(String assignedToId) {
+        if (assignedToId == null) return null;
+        return agentRepository.findById(assignedToId)
+                .map(a -> a.getUserId())
+                .orElse(null);
     }
 
     private void enforceReopenWindow(Incident incident, Status newStatus) {
