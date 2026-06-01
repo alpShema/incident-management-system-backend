@@ -41,4 +41,12 @@ public class AgentService {
         Agent saved = agentRepository.save(agent);
         return AgentResponse.from(saved);
     }
+
+    public AgentResponse updateAvailabilityById(String agentId, boolean available) {
+        Agent agent = agentRepository.findByIdWithUser(agentId)
+                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+        agent.setStatus(available);
+        Agent saved = agentRepository.save(agent);
+        return AgentResponse.from(saved);
+    }
 }
