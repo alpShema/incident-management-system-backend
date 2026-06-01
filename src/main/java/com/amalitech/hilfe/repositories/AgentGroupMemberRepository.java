@@ -26,7 +26,8 @@ public interface AgentGroupMemberRepository extends JpaRepository<AgentGroupMemb
 
     @Query("""
             SELECT m.agent FROM AgentGroupMember m
-            LEFT JOIN FETCH m.agent.user
+            LEFT JOIN FETCH m.agent.user u
+            LEFT JOIN FETCH u.location
             WHERE m.agentGroupId = :agentGroupId
             """)
     List<Agent> findAgentsByAgentGroupIdWithUser(@Param("agentGroupId") String agentGroupId);
