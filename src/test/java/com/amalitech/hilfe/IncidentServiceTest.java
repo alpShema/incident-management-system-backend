@@ -131,10 +131,43 @@ class IncidentServiceTest {
     }
 
     @Test
-    void createIncident_noAutoAssignment_notifiesAllActiveAdmins() {
-        // Incident with no assignedToId — auto-assignment failed
+    void createIncident_autoAssigned_notifiesClient() {
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        Agent agent = Agent.builder().id("agent-1").userId("agent-user-1").status(true).build();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationService).sendAutoAssignedClientNotification("user-1", incident.getId(), 1);
+        verify(notificationService).sendAssignmentNotification("agent-user-1", incident.getId(), 1);
+    }
+
+    @Test
+    void createIncident_noAutoAssignment_doesNotNotifyClient() {
         Incident incident = buildIncident(); // assignedToId = null
 
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationService, never()).sendAutoAssignedClientNotification(any(), any(), anyInt());
+    }
+
+    @Test
+    void createIncident_noAutoAssignment_notifiesAllActiveAdmins() {
+        Incident incident = buildIncident(); // assignedToId = null
         Admin admin1 = Admin.builder().id("admin-1").userId("admin-user-1").build();
         Admin admin2 = Admin.builder().id("admin-2").userId("admin-user-2").build();
 
@@ -148,16 +181,13 @@ class IncidentServiceTest {
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        // Both active admins must be notified
         verify(notificationService).sendEscalationNotification("admin-user-1", incident.getId(), 1);
         verify(notificationService).sendEscalationNotification("admin-user-2", incident.getId(), 1);
-        // Client must NOT receive an auto-assigned notification (no agent was assigned)
         verify(notificationService, never()).sendAutoAssignedClientNotification(any(), any(), anyInt());
     }
 
     @Test
     void createIncident_noAutoAssignment_noActiveAdmins_doesNotThrow() {
-        // Verifies silent handling when admin table is empty — no NPE, no crash
         Incident incident = buildIncident();
 
         when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
@@ -1003,6 +1033,29 @@ class IncidentServiceTest {
     }
 
     @Test
+    void updateSeverity_notifyClient_whenActorIsNotCreator() {
+        Incident incident = buildIncident(); // userId = "user-1", actor = "actor-1"
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
+
+        verify(notificationService).sendSeverityChangedNotification("user-1", "inc-1", 1, "none", "sev-high");
+    }
+
+    @Test
+    void updateSeverity_doesNotNotifyClient_whenActorIsCreator() {
+        Incident incident = buildIncident();
+        incident.setUserId("actor-1"); // actor IS the creator
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
+
+        verify(notificationService, never()).sendSeverityChangedNotification(any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
     void updateSeverity_incidentNotFound_throws404() {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
@@ -1014,6 +1067,20 @@ class IncidentServiceTest {
     }
 
     // ── assignIncident ────────────────────────────────────────────────────────
+
+    @Test
+    void assignIncident_notifiesClient_onAssignment() {
+        Incident incident = buildIncident(); // userId = "user-1"
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1"));
+
+        verify(notificationService).sendClientReassignedNotification("user-1", "inc-1", 1);
+    }
 
     @Test
     void assignIncident_happyPath_setsAgentAndStatusAndLogs() {

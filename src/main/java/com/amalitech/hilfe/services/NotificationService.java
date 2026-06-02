@@ -209,16 +209,29 @@ public class NotificationService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void sendAutoAssignedClientNotification(String recipientUserId, String incidentId, int incidentNo) {
+    public void sendAutoAssignedClientNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo
+    ) {
         if (recipientUserId == null) return;
         try {
-            Notification saved = notificationRepository.save(Notification.builder()
-                    .userId(recipientUserId).incidentId(incidentId)
+            String title = "Incident #" + incidentNo + " is being handled";
+            String message = "An agent has been assigned to your Incident #" + incidentNo + " and will be in touch shortly.";
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
                     .type("INCIDENT_AUTO_ASSIGNED_CLIENT")
-                    .title("Incident #" + incidentNo + " is being handled")
-                    .message("An agent has been assigned to your Incident #" + incidentNo + " and will be in touch shortly.")
-                    .build());
-            messagingTemplate.convertAndSend("/topic/users/" + recipientUserId + "/notifications", NotificationResponse.from(saved));
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
         } catch (Exception ex) {
             log.error("Failed to send auto-assignment client notification to user {} for incident {}", recipientUserId, incidentId, ex);
         }
@@ -226,16 +239,32 @@ public class NotificationService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void sendSeverityChangedNotification(String recipientUserId, String incidentId, int incidentNo, String previousSeverity, String newSeverity) {
+    public void sendSeverityChangedNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo,
+            String previousSeverity,
+            String newSeverity
+    ) {
         if (recipientUserId == null) return;
         try {
-            Notification saved = notificationRepository.save(Notification.builder()
-                    .userId(recipientUserId).incidentId(incidentId)
+            String title = "Incident #" + incidentNo + " priority updated";
+            String message = "The priority of Incident #" + incidentNo + " has been changed from "
+                    + previousSeverity + " to " + newSeverity + ".";
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
                     .type("INCIDENT_PRIORITY_CHANGED")
-                    .title("Incident #" + incidentNo + " priority updated")
-                    .message("The priority of Incident #" + incidentNo + " has been changed from " + previousSeverity + " to " + newSeverity + ".")
-                    .build());
-            messagingTemplate.convertAndSend("/topic/users/" + recipientUserId + "/notifications", NotificationResponse.from(saved));
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
         } catch (Exception ex) {
             log.error("Failed to send severity change notification to user {} for incident {}", recipientUserId, incidentId, ex);
         }
@@ -243,16 +272,29 @@ public class NotificationService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void sendClientReassignedNotification(String recipientUserId, String incidentId, int incidentNo) {
+    public void sendClientReassignedNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo
+    ) {
         if (recipientUserId == null) return;
         try {
-            Notification saved = notificationRepository.save(Notification.builder()
-                    .userId(recipientUserId).incidentId(incidentId)
+            String title = "Incident #" + incidentNo + " has a new agent";
+            String message = "A new agent has been assigned to Incident #" + incidentNo + ".";
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
                     .type("INCIDENT_REASSIGNED_CLIENT")
-                    .title("Incident #" + incidentNo + " has a new agent")
-                    .message("A new agent has been assigned to Incident #" + incidentNo + ".")
-                    .build());
-            messagingTemplate.convertAndSend("/topic/users/" + recipientUserId + "/notifications", NotificationResponse.from(saved));
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
         } catch (Exception ex) {
             log.error("Failed to send client reassignment notification to user {} for incident {}", recipientUserId, incidentId, ex);
         }
