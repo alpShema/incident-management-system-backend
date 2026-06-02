@@ -115,6 +115,98 @@ public class NotificationService {
         }
     }
 
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sendReopenedNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo
+    ) {
+        if (recipientUserId == null) return;
+        try {
+            String title = "Incident #" + incidentNo + " has been reopened";
+            String message = "Incident #" + incidentNo + " has been reopened and is now In Progress. Please review and take action.";
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
+                    .type("INCIDENT_REOPENED")
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
+        } catch (Exception ex) {
+            log.error("Failed to send reopened notification to user {} for incident {}", recipientUserId, incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sendPendingNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo,
+            String reason
+    ) {
+        if (recipientUserId == null) return;
+        try {
+            String title = "Incident #" + incidentNo + " is pending";
+            String message = "Incident #" + incidentNo + " has been placed in Pending status."
+                    + (reason != null && !reason.isBlank() ? " Reason: " + reason : "");
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
+                    .type("INCIDENT_PENDING")
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
+        } catch (Exception ex) {
+            log.error("Failed to send pending notification to user {} for incident {}", recipientUserId, incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sendUnassignedNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo
+    ) {
+        if (recipientUserId == null) return;
+        try {
+            String title = "Incident #" + incidentNo + " reassigned";
+            String message = "Incident #" + incidentNo + " has been reassigned to another agent.";
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
+                    .type("INCIDENT_UNASSIGNED")
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
+        } catch (Exception ex) {
+            log.error("Failed to send unassigned notification to user {} for incident {}", recipientUserId, incidentId, ex);
+        }
+    }
+
     public List<NotificationResponse> getNotifications(String userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
