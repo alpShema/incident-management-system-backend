@@ -124,7 +124,22 @@ class IncidentCategoryControllerTest {
         mvc.perform(patch("/incident-categories/cat-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Updated", "Updated description", "dept-1")))
+                                new UpdateIncidentCategoryRequest("Updated", "Updated description", "dept-1")))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
+    }
+
+    @Test
+    void updateCategory_nameOnly_returns200() throws Exception {
+        when(categoryService.updateCategory(eq("cat-1"), any())).thenReturn(stubCategory());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-category.update"));
+
+        mvc.perform(patch("/incident-categories/cat-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Updated Category Name\"}")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
@@ -141,7 +156,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(patch("/incident-categories/cat-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Facility", "Updated description", "dept-1")))
+                                new UpdateIncidentCategoryRequest("Facility", "Updated description", "dept-1")))
                         .with(authentication(auth)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("A record with this value already exists"));

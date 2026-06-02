@@ -70,7 +70,7 @@ public class IncidentCategoryController {
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_CATEGORY_UPDATE + "')")
     public ResponseEntity<ApiResponse<IncidentCategoryResponse>> updateCategory(
             @Parameter(description = "Stable category ID", example = "cat-facilities") @PathVariable String id,
-            @Valid @RequestBody IncidentCategoryRequest request
+            @RequestBody UpdateIncidentCategoryRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident category updated successfully", categoryService.updateCategory(id, request)));
     }
