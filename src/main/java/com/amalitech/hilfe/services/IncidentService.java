@@ -98,8 +98,11 @@ public class IncidentService {
             // Notify the client (incident author) that an agent has been auto-assigned
             notificationService.sendAutoAssignedClientNotification(userId, saved.getId(), incidentNo);
         } else {
-            String adminUserId = findAnyAdminUserId();
-            notificationService.sendEscalationNotification(adminUserId, saved.getId(), incidentNo);
+            // Auto-assignment failed — notify ALL active admins so no incident goes unowned
+            List<String> adminUserIds = findAllActiveAdminUserIds();
+            for (String adminUserId : adminUserIds) {
+                notificationService.sendEscalationNotification(adminUserId, saved.getId(), incidentNo);
+            }
         }
 
         List<MediaResponse> mediaResponses = List.of();
@@ -485,12 +488,12 @@ public class IncidentService {
                 .orElse(null);
     }
 
-    private String findAnyAdminUserId() {
-        return adminRepository.findAllActive(PageRequest.of(0, 1))
+    private List<String> findAllActiveAdminUserIds() {
+        return adminRepository.findAllActive(Pageable.unpaged())
                 .stream()
-                .findFirst()
                 .map(Admin::getUserId)
-                .orElse(null);
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private void enforceReopenWindow(Incident incident, Status newStatus) {
