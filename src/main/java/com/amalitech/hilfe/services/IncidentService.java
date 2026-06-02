@@ -201,7 +201,7 @@ public class IncidentService {
         Status newStatus = statusRepository.findById(request.statusId())
                 .orElseThrow(() -> new ArmsAuthException("Status not found", 404));
 
-        enforceTransition(incident, newStatus, roleCode);
+        enforceTransition(incident, newStatus, roleCode, actorUserId);
         enforceReopenWindow(incident, newStatus);
         enforceReasonRequired(newStatus, request.reason());
 
@@ -454,7 +454,7 @@ public class IncidentService {
         }
     }
 
-    private void enforceTransition(Incident incident, Status newStatus, String roleCode) {
+    private void enforceTransition(Incident incident, Status newStatus, String roleCode, String actorUserId) {
         String fromId = incident.getStatus() != null ? incident.getStatus().getId() : null;
         String toId   = newStatus.getId();
         String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
@@ -478,11 +478,22 @@ public class IncidentService {
             );
         }
 
-        if (!toMap.get(toId).contains(normalizedRole)) {
-            throw new ArmsAuthException(
-                    "You do not have permission to move an incident to '" + newStatus.getName() + "'",
-                    403
-            );
+        // Check base role permission first
+        if (toMap.get(toId).contains(normalizedRole)) {
+            return;
         }
+
+        // If the requesting user is the incident creator, also check client-level permissions.
+        // This allows an Agent (or any role) who created the incident to perform transitions
+        // that are available to CLIENT regardless of their base role.
+        boolean isCreator = actorUserId != null && actorUserId.equals(incident.getUserId());
+        if (isCreator && toMap.get(toId).contains("CLIENT")) {
+            return;
+        }
+
+        throw new ArmsAuthException(
+                "You do not have permission to move an incident to '" + newStatus.getName() + "'",
+                403
+        );
     }
 }
