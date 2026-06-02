@@ -67,6 +67,10 @@ public class IncidentCategoryService {
     public IncidentCategoryResponse updateCategory(String id, IncidentCategoryRequest request) {
         IncidentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+        if (!category.getName().equalsIgnoreCase(request.name())
+                && categoryRepository.existsByNameIgnoreCase(request.name())) {
+            throw new ArmsAuthException("Incident category with this name already exists", 409);
+        }
         validateDepartment(request.departmentId());
         category.setName(request.name());
         category.setDescription(request.description());
