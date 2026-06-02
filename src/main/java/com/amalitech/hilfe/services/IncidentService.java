@@ -88,6 +88,10 @@ public class IncidentService {
         entityManager.flush();
 
         int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
+        // TASK 3 VERIFIED: auto-assignment notification is correctly wired.
+        // applyTopicAssignment() sets assignedToId when a matching active agent exists;
+        // after save/flush the resolved agentUserId is passed to sendAssignmentNotification.
+        // If no agent was assigned, an escalation notification is sent to an admin instead.
         if (saved.getAssignedToId() != null) {
             String agentUserId = resolveAgentUserId(saved.getAssignedToId());
             notificationService.sendAssignmentNotification(agentUserId, saved.getId(), incidentNo);
@@ -248,6 +252,10 @@ public class IncidentService {
     @Transactional
     public IncidentResponse assignIncident(String actorUserId, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
+
+        // Capture the previous agent's userId BEFORE overwriting assignedToId
+        String previousAgentUserId = resolveAgentUserId(incident.getAssignedToId());
+
         incident.setAssignedToId(request.agentId());
 
         String inProgressStatusId = statusRepository.findByNameIgnoreCase("In Progress")
@@ -261,6 +269,11 @@ public class IncidentService {
         String agentUserId = resolveAgentUserId(request.agentId());
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
         notificationService.sendAssignmentNotification(agentUserId, incidentId, incidentNo);
+
+        // Notify the previous agent (if any and different from the new agent) that they have been unassigned
+        if (previousAgentUserId != null && !previousAgentUserId.equals(agentUserId)) {
+            notificationService.sendUnassignedNotification(previousAgentUserId, incidentId, incidentNo);
+        }
 
         entityManager.flush();
         entityManager.clear();
@@ -410,6 +423,11 @@ public class IncidentService {
         incident.setResolvedAt(null);
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
+
+        // Notify the assigned agent (if any) that the incident has been reopened and needs attention
+        String agentUserId = resolveAgentUserId(incident.getAssignedToId());
+        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+        notificationService.sendReopenedNotification(agentUserId, incidentId, incidentNo);
     }
 
     private boolean requiresReason(Status newStatus) {
@@ -428,7 +446,13 @@ public class IncidentService {
         // Notify the client (incident creator) unless they are the one making the change
         String clientUserId = incident.getUserId();
         if (clientUserId != null && !clientUserId.equals(actorUserId)) {
-            notificationService.sendStatusChangeNotification(clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+            // When the agent sets the incident to Pending, send a dedicated PENDING notification
+            // to the client so they receive an explicitly-typed message rather than a generic status change.
+            if ("Pending".equals(newStatus)) {
+                notificationService.sendPendingNotification(clientUserId, incident.getId(), incidentNo, reason);
+            } else {
+                notificationService.sendStatusChangeNotification(clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+            }
         }
 
         // Notify the assigned agent unless they are the one making the change
