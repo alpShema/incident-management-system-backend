@@ -86,10 +86,13 @@ public class IncidentService {
         Incident saved = incidentRepository.save(incident);
         entityManager.flush();
 
+        int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
         if (saved.getAssignedToId() != null) {
             String agentUserId = resolveAgentUserId(saved.getAssignedToId());
-            int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
             notificationService.sendAssignmentNotification(agentUserId, saved.getId(), incidentNo);
+        } else {
+            String adminUserId = findAnyAdminUserId();
+            notificationService.sendEscalationNotification(adminUserId, saved.getId(), incidentNo);
         }
 
         List<MediaResponse> mediaResponses = List.of();
@@ -441,6 +444,17 @@ public class IncidentService {
                 .orElse(null);
     }
 
+<<<<<<< Updated upstream
+=======
+    private String findAnyAdminUserId() {
+        return adminRepository.findAllActive(PageRequest.of(0, 1))
+                .stream()
+                .findFirst()
+                .map(Admin::getUserId)
+                .orElse(null);
+    }
+
+>>>>>>> Stashed changes
     private void enforceReopenWindow(Incident incident, Status newStatus) {
         if (!"status-reopened".equals(newStatus.getId())) return;
         if (incident.getResolvedAt() == null) return;
