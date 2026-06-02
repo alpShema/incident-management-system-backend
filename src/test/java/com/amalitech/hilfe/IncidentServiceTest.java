@@ -40,6 +40,7 @@ class IncidentServiceTest {
     @Mock LocationRepository locationRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock AgentRepository agentRepository;
+    @Mock AdminRepository adminRepository;
     @Mock StatusRepository statusRepository;
     @Mock SeverityRepository severityRepository;
     @Mock ActivityLogService activityLogService;
