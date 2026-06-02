@@ -38,7 +38,7 @@ class ActivityControllerTest {
 
     @Test
     void activityLogs_adminRequest_returnsPaginatedLogs() throws Exception {
-        when(activityLogService.getActivityLogs(any())).thenReturn(new PageImpl<>(
+        when(activityLogService.getActivityLogs(any(), any(), any(), any())).thenReturn(new PageImpl<>(
                 List.of(
                         new ActivityLogResponse(
                                 1L,
