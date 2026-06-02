@@ -209,6 +209,33 @@ public class NotificationService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sendAutoClosedNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo
+    ) {
+        if (recipientUserId == null) return;
+        try {
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
+                    .type("INCIDENT_AUTO_CLOSED")
+                    .title("Incident #" + incidentNo + " has been automatically closed")
+                    .message("Incident #" + incidentNo + " was automatically closed by the system after the resolution window elapsed.")
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
+        } catch (Exception ex) {
+            log.error("Failed to send auto-close notification to user {} for incident {}", recipientUserId, incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendAutoAssignedClientNotification(
             String recipientUserId,
             String incidentId,
