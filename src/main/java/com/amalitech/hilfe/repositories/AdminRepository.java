@@ -6,7 +6,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface AdminRepository extends JpaRepository<Admin, String> {
@@ -16,4 +18,11 @@ public interface AdminRepository extends JpaRepository<Admin, String> {
             WHERE a.userId = :userId
             """)
     Optional<Admin> findByUserIdWithUser(@Param("userId") String userId);
+
+    @Query("""
+            SELECT a FROM Admin a
+            WHERE a.status = true
+            ORDER BY a.createdAt ASC
+            """)
+    List<Admin> findAllActive(Pageable pageable);
 }
