@@ -23,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -722,6 +723,7 @@ class IncidentServiceTest {
         Incident incident = buildIncident();
         incident.setUserId("actor-1"); // creator
         incident.setStatus(resolvedStatus);
+        incident.setResolvedAt(Instant.now().minusSeconds(3600)); // resolved 1 hour ago
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
@@ -729,11 +731,12 @@ class IncidentServiceTest {
 
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-closed", null));
 
+        assertThat(incident.getClosedAt()).isNotNull();
         verify(incidentRepository).save(any(Incident.class));
     }
 
     @Test
-    void updateStatus_creatorAgent_toReopened_returns200() {
+    void updateStatus_creatorAgent_toReopened_withinWindow_returns200() {
         Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
         Status reopenedStatus   = buildStatus("status-reopened",    "Reopened");
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
@@ -741,10 +744,12 @@ class IncidentServiceTest {
         Incident incident = buildIncident();
         incident.setUserId("actor-1"); // creator
         incident.setStatus(resolvedStatus);
+        incident.setResolvedAt(Instant.now().minusSeconds(3600)); // resolved 1 hour ago
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(autoCloseService.readDurationHours()).thenReturn(72); // window = 72h, resolved 1h ago → within window
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
