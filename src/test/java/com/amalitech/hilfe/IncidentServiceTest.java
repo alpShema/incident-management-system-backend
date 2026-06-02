@@ -1072,8 +1072,10 @@ class IncidentServiceTest {
     void assignIncident_notifiesClient_onAssignment() {
         Incident incident = buildIncident(); // userId = "user-1"
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Agent agent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
@@ -1086,8 +1088,10 @@ class IncidentServiceTest {
     void assignIncident_happyPath_setsAgentAndStatusAndLogs() {
         Incident incident = buildIncident();
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Agent agent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
@@ -1102,7 +1106,9 @@ class IncidentServiceTest {
     @Test
     void assignIncident_inProgressStatusNotConfigured_throws500() {
         Incident incident = buildIncident();
+        Agent agent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -1122,6 +1128,35 @@ class IncidentServiceTest {
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    @Test
+    void assignIncident_agentNotFound_throws404() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-999")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-999")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void assignIncident_unavailableAgent_throws400() {
+        Incident incident = buildIncident();
+        Agent unavailableAgent = Agent.builder().id("agent-1").userId("actor-1").status(false).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAgent));
+
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Cannot assign incident to an unavailable agent")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
     }
 
     // ── notification: sendReopenedNotification ────────────────────────────────
