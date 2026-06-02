@@ -2,6 +2,7 @@ package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
+import com.amalitech.hilfe.dto.UpdateIncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicListResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
@@ -160,7 +161,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
 
         IncidentCategoryResponse response = categoryService.updateCategory(
-                "cat-1", new IncidentCategoryRequest("Updated", "New description", "dept-1"));
+                "cat-1", new UpdateIncidentCategoryRequest("Updated", "New description", "dept-1"));
 
         assertThat(response).isNotNull();
         verify(categoryRepository).save(any(IncidentCategory.class));
@@ -171,7 +172,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.updateCategory(
-                "missing", new IncidentCategoryRequest("Updated", "Desc", "dept-1")))
+                "missing", new UpdateIncidentCategoryRequest("Updated", "Desc", "dept-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -185,7 +186,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.existsByNameIgnoreCase("Other Name")).thenReturn(true);
 
         assertThatThrownBy(() -> categoryService.updateCategory(
-                "cat-1", new IncidentCategoryRequest("Other Name", "Desc", "dept-1")))
+                "cat-1", new UpdateIncidentCategoryRequest("Other Name", "Desc", "dept-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -202,10 +203,39 @@ class IncidentCategoryServiceTest {
 
         // Updating to the same name (case-insensitive) must not trigger the duplicate check
         IncidentCategoryResponse response = categoryService.updateCategory(
-                "cat-1", new IncidentCategoryRequest("FACILITY", "Updated desc", "dept-1"));
+                "cat-1", new UpdateIncidentCategoryRequest("FACILITY", "Updated desc", "dept-1"));
 
         assertThat(response).isNotNull();
         verify(categoryRepository).save(any(IncidentCategory.class));
+    }
+
+    @Test
+    void updateCategory_nameOnly_doesNotRequireDepartmentId() {
+        IncidentCategory cat = buildCategory(); // departmentId = "dept-1"
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
+        when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
+
+        // No departmentId supplied — should not throw and should preserve existing departmentId
+        categoryService.updateCategory("cat-1", new UpdateIncidentCategoryRequest("New Name", null, null));
+
+        assertThat(cat.getDepartmentId()).isEqualTo("dept-1"); // unchanged
+        assertThat(cat.getName()).isEqualTo("New Name");
+        verify(categoryRepository).save(any(IncidentCategory.class));
+    }
+
+    @Test
+    void updateCategory_emptyRequest_changesNothing() {
+        IncidentCategory cat = buildCategory();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
+        when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
+
+        // All nulls — nothing changes
+        categoryService.updateCategory("cat-1", new UpdateIncidentCategoryRequest(null, null, null));
+
+        assertThat(cat.getName()).isEqualTo("Facility");
+        assertThat(cat.getDepartmentId()).isEqualTo("dept-1");
     }
 
     // ── deleteCategory ────────────────────────────────────────────────────────

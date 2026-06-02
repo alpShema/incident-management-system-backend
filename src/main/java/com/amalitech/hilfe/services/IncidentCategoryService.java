@@ -64,17 +64,25 @@ public class IncidentCategoryService {
     }
 
     @Transactional
-    public IncidentCategoryResponse updateCategory(String id, IncidentCategoryRequest request) {
+    public IncidentCategoryResponse updateCategory(String id, UpdateIncidentCategoryRequest request) {
         IncidentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
-        if (!category.getName().equalsIgnoreCase(request.name())
-                && categoryRepository.existsByNameIgnoreCase(request.name())) {
-            throw new ArmsAuthException("Incident category with this name already exists", 409);
+
+        if (request.name() != null && !request.name().isBlank()) {
+            if (!category.getName().equalsIgnoreCase(request.name())
+                    && categoryRepository.existsByNameIgnoreCase(request.name())) {
+                throw new ArmsAuthException("Incident category with this name already exists", 409);
+            }
+            category.setName(request.name());
         }
-        validateDepartment(request.departmentId());
-        category.setName(request.name());
-        category.setDescription(request.description());
-        category.setDepartmentId(request.departmentId());
+        if (request.description() != null) {
+            category.setDescription(request.description());
+        }
+        if (request.departmentId() != null && !request.departmentId().isBlank()) {
+            validateDepartment(request.departmentId());
+            category.setDepartmentId(request.departmentId());
+        }
+
         IncidentCategory saved = categoryRepository.save(category);
         entityManager.flush();
         entityManager.clear();
