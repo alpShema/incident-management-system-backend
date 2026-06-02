@@ -65,13 +65,19 @@ public class AutoCloseService {
             activityLogService.logIncidentStatusChange(
                     null, incident.getId(), "Resolved", "Closed");
 
+            int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+
             // Notify the assigned agent that their incident was auto-closed
             if (incident.getAssignedToId() != null) {
                 String agentUserId = agentRepository.findById(incident.getAssignedToId())
                         .map(a -> a.getUserId())
                         .orElse(null);
-                int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
                 notificationService.sendAutoClosedNotification(agentUserId, incident.getId(), incidentNo);
+            }
+
+            // Notify the client (incident author) that their incident was auto-closed
+            if (incident.getUserId() != null) {
+                notificationService.sendAutoClosedClientNotification(incident.getUserId(), incident.getId(), incidentNo);
             }
         }
 
