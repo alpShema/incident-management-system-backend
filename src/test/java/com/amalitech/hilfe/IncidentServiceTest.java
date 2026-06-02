@@ -69,6 +69,19 @@ class IncidentServiceTest {
         return incident;
     }
 
+    /** Builds an incident assigned to actor-1 (agentId=agent-1, userId=actor-1). */
+    private Incident buildAssignedIncident() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-1");
+        return incident;
+    }
+
+    /** Stubs agentRepository so agent-1 resolves to userId actor-1. */
+    private void stubAssignedAgent() {
+        Agent agent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+    }
+
     private Status buildStatus(String id, String name) {
         Status s = new Status();
         s.setId(id);
@@ -445,8 +458,9 @@ class IncidentServiceTest {
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Status pendingStatus    = buildStatus("status-pending",     "Pending");
 
-        Incident incident = buildIncident();
+        Incident incident = buildAssignedIncident();
         incident.setStatus(inProgressStatus);
+        stubAssignedAgent();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
@@ -463,8 +477,9 @@ class IncidentServiceTest {
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
 
-        Incident incident = buildIncident();
+        Incident incident = buildAssignedIncident();
         incident.setStatus(inProgressStatus);
+        stubAssignedAgent();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
@@ -480,8 +495,9 @@ class IncidentServiceTest {
         Status pendingStatus    = buildStatus("status-pending",     "Pending");
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
-        Incident incident = buildIncident();
+        Incident incident = buildAssignedIncident();
         incident.setStatus(pendingStatus);
+        stubAssignedAgent();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-in-progress")).thenReturn(Optional.of(inProgressStatus));
@@ -737,12 +753,14 @@ class IncidentServiceTest {
     }
 
     @Test
-    void updateStatus_nonCreatorAgent_toPending_returns200() {
+    void updateStatus_assignedNonCreatorAgent_toPending_returns200() {
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Status pendingStatus    = buildStatus("status-pending",     "Pending");
 
-        Incident incident = buildIncident(); // userId = "user-1", actor = "actor-1" — not the creator
+        // userId="user-1" (creator), assignedToId="agent-1" resolved to actorUserId="actor-1"
+        Incident incident = buildAssignedIncident();
         incident.setStatus(inProgressStatus);
+        stubAssignedAgent();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
@@ -754,12 +772,13 @@ class IncidentServiceTest {
     }
 
     @Test
-    void updateStatus_nonCreatorAgent_toResolved_returns200() {
+    void updateStatus_assignedNonCreatorAgent_toResolved_returns200() {
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
 
-        Incident incident = buildIncident(); // not the creator
+        Incident incident = buildAssignedIncident();
         incident.setStatus(inProgressStatus);
+        stubAssignedAgent();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
@@ -768,6 +787,49 @@ class IncidentServiceTest {
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null));
 
         verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_unassignedAgent_toPending_throws403() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        // Incident assigned to a different agent (agent-1 → userId "other-user"), actor is "actor-1"
+        Incident incident = buildAssignedIncident();
+        incident.setStatus(inProgressStatus);
+        Agent otherAgent = Agent.builder().id("agent-1").userId("other-user").status(true).build();
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(otherAgent));
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "reason")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You are not the assigned agent for this incident")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void updateStatus_unassignedAgent_statusUnchangedAfterRejection() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        Incident incident = buildAssignedIncident();
+        incident.setStatus(inProgressStatus);
+        Agent otherAgent = Agent.builder().id("agent-1").userId("other-user").status(true).build();
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(otherAgent));
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "reason")))
+                .isInstanceOf(ArmsAuthException.class);
+
+        assertThat(incident.getStatusId()).isEqualTo("status-open"); // unchanged
+        verify(incidentRepository, never()).save(any(Incident.class));
     }
 
     @Test
@@ -822,8 +884,9 @@ class IncidentServiceTest {
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Status pendingStatus    = buildStatus("status-pending",     "Pending");
 
-        Incident incident = buildIncident();
+        Incident incident = buildAssignedIncident();
         incident.setStatus(inProgressStatus);
+        stubAssignedAgent();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
@@ -862,8 +925,9 @@ class IncidentServiceTest {
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Status pendingStatus    = buildStatus("status-pending",     "Pending");
 
-        Incident incident = buildIncident();
+        Incident incident = buildAssignedIncident();
         incident.setStatus(inProgressStatus);
+        stubAssignedAgent();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
