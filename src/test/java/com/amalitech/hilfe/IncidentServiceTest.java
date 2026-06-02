@@ -653,35 +653,77 @@ class IncidentServiceTest {
                 .isEqualTo(403);
     }
 
-    // ── creator-level permissions ─────────────────────────────────────────────
+    // ── creator contextual role ───────────────────────────────────────────────
+    // When the actor is the incident creator they are treated as CLIENT
+    // regardless of their base role. Agent-only transitions are blocked;
+    // client-only transitions are allowed.
 
     @Test
-    void updateStatus_agentWhoCreatedIncident_canCloseLikeClient() {
+    void updateStatus_creatorAgent_toPending_throws403() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
+
+        Incident incident = buildIncident();
+        incident.setUserId("actor-1"); // creator
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "reason")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void updateStatus_creatorAgent_toResolved_throws403() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+
+        Incident incident = buildIncident();
+        incident.setUserId("actor-1"); // creator
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null)))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("You do not have permission to move an incident to 'Resolved'")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void updateStatus_creatorAgent_toClosed_returns200() {
         Status resolvedStatus = buildStatus("status-resolved", "Resolved");
         Status closedStatus   = buildStatus("status-closed",   "Closed");
 
         Incident incident = buildIncident();
-        incident.setUserId("actor-1"); // actor is also the creator
+        incident.setUserId("actor-1"); // creator
         incident.setStatus(resolvedStatus);
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        // actor-1 is an AGENT but also the incident creator — should be allowed
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-closed", null));
 
         verify(incidentRepository).save(any(Incident.class));
     }
 
     @Test
-    void updateStatus_agentWhoCreatedIncident_canReopenLikeClient() {
-        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
-        Status reopenedStatus = buildStatus("status-reopened", "Reopened");
+    void updateStatus_creatorAgent_toReopened_returns200() {
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+        Status reopenedStatus   = buildStatus("status-reopened",    "Reopened");
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         Incident incident = buildIncident();
-        incident.setUserId("actor-1"); // actor is also the creator
+        incident.setUserId("actor-1"); // creator
         incident.setStatus(resolvedStatus);
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
@@ -695,22 +737,37 @@ class IncidentServiceTest {
     }
 
     @Test
-    void updateStatus_agentWhoDidNotCreateIncident_cannotCloseLikeClient() {
-        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
-        Status closedStatus   = buildStatus("status-closed",   "Closed");
+    void updateStatus_nonCreatorAgent_toPending_returns200() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status pendingStatus    = buildStatus("status-pending",     "Pending");
 
-        Incident incident = buildIncident(); // userId = "user-1", actor = "actor-1" — different
-        incident.setStatus(resolvedStatus);
+        Incident incident = buildIncident(); // userId = "user-1", actor = "actor-1" — not the creator
+        incident.setStatus(inProgressStatus);
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
-        when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
+        when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-closed", null)))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("You do not have permission to move an incident to 'Closed'")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(403);
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "Waiting for parts"));
+
+        verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_nonCreatorAgent_toResolved_returns200() {
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+
+        Incident incident = buildIncident(); // not the creator
+        incident.setStatus(inProgressStatus);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null));
+
+        verify(incidentRepository).save(any(Incident.class));
     }
 
     @Test
