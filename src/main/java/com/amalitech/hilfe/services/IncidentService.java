@@ -95,6 +95,8 @@ public class IncidentService {
         if (saved.getAssignedToId() != null) {
             String agentUserId = resolveAgentUserId(saved.getAssignedToId());
             notificationService.sendAssignmentNotification(agentUserId, saved.getId(), incidentNo);
+            // Notify the client (incident author) that an agent has been auto-assigned
+            notificationService.sendAutoAssignedClientNotification(userId, saved.getId(), incidentNo);
         } else {
             String adminUserId = findAnyAdminUserId();
             notificationService.sendEscalationNotification(adminUserId, saved.getId(), incidentNo);
@@ -244,6 +246,14 @@ public class IncidentService {
         incident.setSeverityId(request.severityId());
         incidentRepository.save(incident);
         activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
+
+        // Notify the client (incident creator) that priority was changed, unless they made the change themselves
+        String clientUserId = incident.getUserId();
+        if (clientUserId != null && !clientUserId.equals(actorUserId)) {
+            int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+            notificationService.sendSeverityChangedNotification(clientUserId, incidentId, incidentNo, previousSeverityName, request.severityId());
+        }
+
         entityManager.flush();
         entityManager.clear();
         return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
@@ -273,6 +283,12 @@ public class IncidentService {
         // Notify the previous agent (if any and different from the new agent) that they have been unassigned
         if (previousAgentUserId != null && !previousAgentUserId.equals(agentUserId)) {
             notificationService.sendUnassignedNotification(previousAgentUserId, incidentId, incidentNo);
+        }
+
+        // Notify the client (incident creator) that a new agent has been assigned
+        String clientUserId = incident.getUserId();
+        if (clientUserId != null) {
+            notificationService.sendClientReassignedNotification(clientUserId, incidentId, incidentNo);
         }
 
         entityManager.flush();
