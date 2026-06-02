@@ -501,5 +501,17 @@ public class IncidentService {
                     403
             );
         }
+
+        // For agent-level transitions, verify the actor is the assigned agent on this incident.
+        // Role permission alone is not enough — only the assigned agent may act.
+        if ("AGENT".equals(effectiveRole)) {
+            String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
+            if (!actorUserId.equals(assignedAgentUserId)) {
+                throw new ArmsAuthException(
+                        "You are not the assigned agent for this incident",
+                        403
+                );
+            }
+        }
     }
 }
