@@ -266,6 +266,12 @@ public class IncidentService {
     public IncidentResponse assignIncident(String actorUserId, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
 
+        Agent agent = agentRepository.findById(request.agentId())
+                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+        if (!Boolean.TRUE.equals(agent.getStatus())) {
+            throw new ArmsAuthException("Cannot assign incident to an unavailable agent", 400);
+        }
+
         // Capture the previous agent's userId BEFORE overwriting assignedToId
         String previousAgentUserId = resolveAgentUserId(incident.getAssignedToId());
 
