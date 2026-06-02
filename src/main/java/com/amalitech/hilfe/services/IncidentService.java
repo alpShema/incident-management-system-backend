@@ -480,6 +480,12 @@ public class IncidentService {
             return;
         }
 
+        // If the requester is the incident creator, treat them as CLIENT for this incident
+        // regardless of their base role. A creator agent loses agent-only transitions
+        // (e.g. Pending, Resolved) and gains client-only transitions (e.g. Closed, Reopened).
+        boolean isCreator = actorUserId != null && actorUserId.equals(incident.getUserId());
+        String effectiveRole = isCreator ? "CLIENT" : normalizedRole;
+
         Map<String, Set<String>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
 
         if (!toMap.containsKey(toId)) {
@@ -490,22 +496,23 @@ public class IncidentService {
             );
         }
 
-        // Check base role permission first
-        if (toMap.get(toId).contains(normalizedRole)) {
-            return;
+        if (!toMap.get(toId).contains(effectiveRole)) {
+            throw new ArmsAuthException(
+                    "You do not have permission to move an incident to '" + newStatus.getName() + "'",
+                    403
+            );
         }
 
-        // If the requesting user is the incident creator, also check client-level permissions.
-        // This allows an Agent (or any role) who created the incident to perform transitions
-        // that are available to CLIENT regardless of their base role.
-        boolean isCreator = actorUserId != null && actorUserId.equals(incident.getUserId());
-        if (isCreator && toMap.get(toId).contains("CLIENT")) {
-            return;
+        // For agent-level transitions, verify the actor is the assigned agent on this incident.
+        // Role permission alone is not enough — only the assigned agent may act.
+        if ("AGENT".equals(effectiveRole)) {
+            String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
+            if (!actorUserId.equals(assignedAgentUserId)) {
+                throw new ArmsAuthException(
+                        "You are not the assigned agent for this incident",
+                        403
+                );
+            }
         }
-
-        throw new ArmsAuthException(
-                "You do not have permission to move an incident to '" + newStatus.getName() + "'",
-                403
-        );
     }
 }
