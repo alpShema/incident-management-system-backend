@@ -1,12 +1,17 @@
 package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.ActivityLogResponse;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.ActivityLog;
+import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,6 +41,46 @@ public class ActivityLogService {
                         Sort.by(Sort.Direction.DESC, "createdAt")
                 );
         return activityLogRepository.findActivityLogResponses(sortedPageable);
+    }
+
+    public Page<ActivityLogResponse> getActivityLogs(String incidentId, Pageable pageable, String userId, String roleCode) {
+        Pageable sortedPageable = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(
+                        pageable.getPageNumber(),
+                        pageable.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "createdAt")
+                );
+
+        if (incidentId == null) {
+            if (!hasAuthority(RbacPermissions.RBAC_ROLE_READ)) {
+                throw new ArmsAuthException("Access denied", 403);
+            }
+            return activityLogRepository.findActivityLogResponses(sortedPageable);
+        }
+
+        Incident incident = incidentRepository.findById(incidentId)
+                .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+        enforceIncidentAccess(userId, roleCode, incident);
+        return activityLogRepository.findActivityLogResponsesByIncidentId(incidentId, sortedPageable);
+    }
+
+    private void enforceIncidentAccess(String userId, String roleCode, Incident incident) {
+        if ("ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) return;
+        if (userId.equals(incident.getUserId())) return;
+        if ("AGENT".equalsIgnoreCase(roleCode)) {
+            boolean isAssignee = agentRepository.findByUserId(userId)
+                    .map(a -> a.getId().equals(incident.getAssignedToId()))
+                    .orElse(false);
+            if (isAssignee) return;
+        }
+        throw new ArmsAuthException("You do not have access to this incident's activity log", 403);
+    }
+
+    private boolean hasAuthority(String permission) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals(permission));
     }
 
     @Async("applicationTaskExecutor")
