@@ -48,6 +48,7 @@ public class IncidentService {
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
+    private final AdminRepository adminRepository;
     private final ActivityLogService activityLogService;
     private final NotificationService notificationService;
     private final MediaService mediaService;
@@ -86,10 +87,13 @@ public class IncidentService {
         Incident saved = incidentRepository.save(incident);
         entityManager.flush();
 
+        int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
         if (saved.getAssignedToId() != null) {
             String agentUserId = resolveAgentUserId(saved.getAssignedToId());
-            int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
             notificationService.sendAssignmentNotification(agentUserId, saved.getId(), incidentNo);
+        } else if (incidentType != null && incidentType.getAdminId() != null) {
+            String adminUserId = resolveAdminUserId(incidentType.getAdminId());
+            notificationService.sendEscalationNotification(adminUserId, saved.getId(), incidentNo);
         }
 
         List<MediaResponse> mediaResponses = List.of();
@@ -438,6 +442,13 @@ public class IncidentService {
         if (assignedToId == null) return null;
         return agentRepository.findById(assignedToId)
                 .map(a -> a.getUserId())
+                .orElse(null);
+    }
+
+    private String resolveAdminUserId(String adminId) {
+        if (adminId == null) return null;
+        return adminRepository.findById(adminId)
+                .map(Admin::getUserId)
                 .orElse(null);
     }
 
