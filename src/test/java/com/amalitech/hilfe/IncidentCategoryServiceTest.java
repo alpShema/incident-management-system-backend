@@ -178,6 +178,36 @@ class IncidentCategoryServiceTest {
                 .isEqualTo(404);
     }
 
+    @Test
+    void updateCategory_duplicateName_throws409() {
+        IncidentCategory cat = buildCategory(); // name = "Facility"
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(categoryRepository.existsByNameIgnoreCase("Other Name")).thenReturn(true);
+
+        assertThatThrownBy(() -> categoryService.updateCategory(
+                "cat-1", new IncidentCategoryRequest("Other Name", "Desc", "dept-1")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Incident category with this name already exists")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
+    void updateCategory_sameNameIgnoreCase_doesNotThrow409() {
+        IncidentCategory cat = buildCategory(); // name = "Facility"
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+        when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
+        when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
+
+        // Updating to the same name (case-insensitive) must not trigger the duplicate check
+        IncidentCategoryResponse response = categoryService.updateCategory(
+                "cat-1", new IncidentCategoryRequest("FACILITY", "Updated desc", "dept-1"));
+
+        assertThat(response).isNotNull();
+        verify(categoryRepository).save(any(IncidentCategory.class));
+    }
+
     // ── deleteCategory ────────────────────────────────────────────────────────
 
     @Test
