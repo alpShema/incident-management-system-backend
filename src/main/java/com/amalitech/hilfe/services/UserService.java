@@ -2,9 +2,11 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Admin;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.AdminRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 public class UserService {
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
+    private final AdminRepository adminRepository;
     private final IncidentRepository incidentRepository;
     private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
@@ -64,6 +67,7 @@ public class UserService {
         String previousRoleCode = user.getRoleCode();
         user.setRoleCode(normalizedRoleCode);
         ensureAgentRecord(user, normalizedRoleCode);
+        ensureAdminRecord(user, normalizedRoleCode);
 
         if (previousRoleCode == null || !previousRoleCode.equals(normalizedRoleCode)) {
             activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, normalizedRoleCode);
@@ -131,6 +135,18 @@ public class UserService {
                 })
                 .toList());
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), remapped);
+    }
+
+    private void ensureAdminRecord(User user, String roleCode) {
+        boolean isAdminRole = "ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
+        if (!isAdminRole || adminRepository.findByUserIdWithUser(user.getId()).isPresent()) {
+            return;
+        }
+        adminRepository.save(Admin.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .userId(user.getId())
+                .status(true)
+                .build());
     }
 
     private void ensureAgentRecord(User user, String roleCode) {
