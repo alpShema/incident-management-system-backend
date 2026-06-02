@@ -145,9 +145,7 @@ class IncidentServiceTest {
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        // Client (user-1) must receive auto-assignment notification
         verify(notificationService).sendAutoAssignedClientNotification("user-1", incident.getId(), 1);
-        // Agent also still receives their assignment notification
         verify(notificationService).sendAssignmentNotification("agent-user-1", incident.getId(), 1);
     }
 
@@ -164,8 +162,45 @@ class IncidentServiceTest {
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        // No auto-assignment → no client notification
         verify(notificationService, never()).sendAutoAssignedClientNotification(any(), any(), anyInt());
+    }
+
+    @Test
+    void createIncident_noAutoAssignment_notifiesAllActiveAdmins() {
+        Incident incident = buildIncident(); // assignedToId = null
+        Admin admin1 = Admin.builder().id("admin-1").userId("admin-user-1").build();
+        Admin admin2 = Admin.builder().id("admin-2").userId("admin-user-2").build();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(adminRepository.findAllActive(any())).thenReturn(List.of(admin1, admin2));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationService).sendEscalationNotification("admin-user-1", incident.getId(), 1);
+        verify(notificationService).sendEscalationNotification("admin-user-2", incident.getId(), 1);
+        verify(notificationService, never()).sendAutoAssignedClientNotification(any(), any(), anyInt());
+    }
+
+    @Test
+    void createIncident_noAutoAssignment_noActiveAdmins_doesNotThrow() {
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(adminRepository.findAllActive(any())).thenReturn(List.of());
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationService, never()).sendEscalationNotification(any(), any(), anyInt());
     }
 
     @Test
