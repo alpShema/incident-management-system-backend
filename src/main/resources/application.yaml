@@ -140,7 +140,7 @@ cookie:
 # CORS
 # ──────────────────────────────────────────
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:[*]}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
 
 # ──────────────────────────────────────────
 # AWS S3
