@@ -140,7 +140,10 @@ cookie:
 # CORS
 # ──────────────────────────────────────────
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+  # Extra origins always added on top of allowed-origins (e.g. local dev ports).
+  # Override via CORS_EXTRA_ALLOWED_ORIGINS if needed; set to empty string to disable.
+  extra-allowed-origins: ${CORS_EXTRA_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:3000}
 
 # ──────────────────────────────────────────
 # AWS S3
