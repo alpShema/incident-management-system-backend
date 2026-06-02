@@ -48,6 +48,7 @@ public class IncidentService {
     private final AgentRepository agentRepository;
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
+    private final AdminRepository adminRepository;
     private final ActivityLogService activityLogService;
     private final NotificationService notificationService;
     private final MediaService mediaService;
@@ -444,8 +445,6 @@ public class IncidentService {
                 .orElse(null);
     }
 
-<<<<<<< Updated upstream
-=======
     private String findAnyAdminUserId() {
         return adminRepository.findAllActive(PageRequest.of(0, 1))
                 .stream()
@@ -454,7 +453,6 @@ public class IncidentService {
                 .orElse(null);
     }
 
->>>>>>> Stashed changes
     private void enforceReopenWindow(Incident incident, Status newStatus) {
         if (!"status-reopened".equals(newStatus.getId())) return;
         if (incident.getResolvedAt() == null) return;

@@ -85,6 +85,36 @@ public class NotificationService {
         }
     }
 
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sendEscalationNotification(
+            String recipientUserId,
+            String incidentId,
+            int incidentNo
+    ) {
+        if (recipientUserId == null) return;
+        try {
+            String title = "Incident #" + incidentNo + " requires attention";
+            String message = "Incident #" + incidentNo + " could not be automatically assigned. Please review and assign it manually.";
+
+            Notification notification = Notification.builder()
+                    .userId(recipientUserId)
+                    .incidentId(incidentId)
+                    .type("INCIDENT_ESCALATED")
+                    .title(title)
+                    .message(message)
+                    .build();
+
+            Notification saved = notificationRepository.save(notification);
+            messagingTemplate.convertAndSend(
+                    "/topic/users/" + recipientUserId + "/notifications",
+                    NotificationResponse.from(saved)
+            );
+        } catch (Exception ex) {
+            log.error("Failed to send escalation notification to user {} for incident {}", recipientUserId, incidentId, ex);
+        }
+    }
+
     public List<NotificationResponse> getNotifications(String userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
