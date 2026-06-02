@@ -187,7 +187,28 @@ class IncidentServiceTest {
     }
 
     @Test
-    void createIncident_noAutoAssignment_noActiveAdmins_doesNotThrow() {
+    void createIncident_noAutoAssignment_noActiveAdmins_fallsBackToAllAdmins() {
+        // When all admins are unavailable (status=false), escalation must still reach them
+        Incident incident = buildIncident();
+        Admin unavailableAdmin = Admin.builder().id("admin-1").userId("admin-user-1").build();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(adminRepository.findAllActive(any())).thenReturn(List.of()); // no active admins
+        when(adminRepository.findAll()).thenReturn(List.of(unavailableAdmin)); // fallback
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        // Must fall back and notify the unavailable admin
+        verify(notificationService).sendEscalationNotification("admin-user-1", incident.getId(), 1);
+    }
+
+    @Test
+    void createIncident_noAutoAssignment_noAdminsAtAll_doesNotThrow() {
         Incident incident = buildIncident();
 
         when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
@@ -196,6 +217,7 @@ class IncidentServiceTest {
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
         when(adminRepository.findAllActive(any())).thenReturn(List.of());
+        when(adminRepository.findAll()).thenReturn(List.of()); // truly no admins
 
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
@@ -1053,6 +1075,46 @@ class IncidentServiceTest {
         incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
 
         verify(notificationService, never()).sendSeverityChangedNotification(any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void updateSeverity_notifiesAssignedAgent_whenActorIsNotAgent() {
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        stubAssignedAgent(); // agent-1 → userId "actor-1"... use a different agent user
+        Agent agent = Agent.builder().id("agent-1").userId("agent-user-1").status(true).build();
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateSeverity("admin-actor", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
+
+        verify(notificationService).sendSeverityChangedNotification("agent-user-1", "inc-1", 1, "none", "sev-high");
+    }
+
+    @Test
+    void updateSeverity_doesNotNotifyAgent_whenActorIsAgent() {
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        Agent agent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        // actor IS the assigned agent — no self-notification
+        incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
+
+        verify(notificationService, never()).sendSeverityChangedNotification(eq("actor-1"), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void updateSeverity_unassignedIncident_doesNotNotifyAgent() {
+        Incident incident = buildIncident(); // no assignedToId
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
+
+        // client gets notified, but no agent notification (no assignedToId)
+        verify(notificationService, never()).sendSeverityChangedNotification(isNull(), any(), anyInt(), any(), any());
     }
 
     @Test
