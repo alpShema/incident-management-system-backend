@@ -5,11 +5,14 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.models.SystemConfig;
+import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.AutoCloseService;
+import com.amalitech.hilfe.services.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,7 +35,9 @@ class AutoCloseServiceTest {
     @Mock SystemConfigRepository systemConfigRepository;
     @Mock IncidentRepository     incidentRepository;
     @Mock StatusRepository       statusRepository;
+    @Mock AgentRepository        agentRepository;
     @Mock ActivityLogService     activityLogService;
+    @Mock NotificationService    notificationService;
 
     @InjectMocks AutoCloseService autoCloseService;
 
@@ -152,6 +157,45 @@ class AutoCloseServiceTest {
         Instant expectedCutoff = Instant.now().minusSeconds(24 * 3600);
         // allow 5 seconds of test execution drift
         assertThat(cutoff).isBetween(expectedCutoff.minusSeconds(5), expectedCutoff.plusSeconds(5));
+    }
+
+    @Test
+    void autoClose_assignedIncident_notifiesAgent() {
+        when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
+
+        Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
+                .resolvedAt(Instant.now().minusSeconds(300))
+                .assignedToId("agent-1")
+                .build();
+        incident.setIncidentNo(42);
+
+        Agent agent = Agent.builder().id("agent-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findOverdueResolved(any(Instant.class))).thenReturn(List.of(incident));
+        when(statusRepository.findByNameIgnoreCase("Closed"))
+                .thenReturn(Optional.of(status("status-closed", "Closed")));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+
+        autoCloseService.autoCloseResolvedIncidents();
+
+        verify(notificationService).sendAutoClosedNotification("agent-user-1", "inc-1", 42);
+    }
+
+    @Test
+    void autoClose_unassignedIncident_doesNotSendAgentNotification() {
+        when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
+
+        Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
+                .resolvedAt(Instant.now().minusSeconds(300))
+                .build(); // no assignedToId
+
+        when(incidentRepository.findOverdueResolved(any(Instant.class))).thenReturn(List.of(incident));
+        when(statusRepository.findByNameIgnoreCase("Closed"))
+                .thenReturn(Optional.of(status("status-closed", "Closed")));
+
+        autoCloseService.autoCloseResolvedIncidents();
+
+        verify(notificationService, never()).sendAutoClosedNotification(any(), any(), anyInt());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

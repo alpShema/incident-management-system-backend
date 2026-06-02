@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.AutoCloseConfigResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.SystemConfig;
+import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
@@ -27,7 +28,9 @@ public class AutoCloseService {
     private final SystemConfigRepository systemConfigRepository;
     private final IncidentRepository incidentRepository;
     private final StatusRepository statusRepository;
+    private final AgentRepository agentRepository;
     private final ActivityLogService activityLogService;
+    private final NotificationService notificationService;
 
     public AutoCloseConfigResponse getConfig() {
         return new AutoCloseConfigResponse(readDurationHours());
@@ -61,6 +64,15 @@ public class AutoCloseService {
             incidentRepository.save(incident);
             activityLogService.logIncidentStatusChange(
                     null, incident.getId(), "Resolved", "Closed");
+
+            // Notify the assigned agent that their incident was auto-closed
+            if (incident.getAssignedToId() != null) {
+                String agentUserId = agentRepository.findById(incident.getAssignedToId())
+                        .map(a -> a.getUserId())
+                        .orElse(null);
+                int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+                notificationService.sendAutoClosedNotification(agentUserId, incident.getId(), incidentNo);
+            }
         }
 
         log.info("Auto-closed {} resolved incident(s) after {} hours", overdue.size(), hours);
