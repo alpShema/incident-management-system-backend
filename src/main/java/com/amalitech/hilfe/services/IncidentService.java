@@ -250,11 +250,18 @@ public class IncidentService {
         incidentRepository.save(incident);
         activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
 
+        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+
         // Notify the client (incident creator) that priority was changed, unless they made the change themselves
         String clientUserId = incident.getUserId();
         if (clientUserId != null && !clientUserId.equals(actorUserId)) {
-            int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
             notificationService.sendSeverityChangedNotification(clientUserId, incidentId, incidentNo, previousSeverityName, request.severityId());
+        }
+
+        // Notify the assigned agent that priority was changed, unless they made the change themselves
+        String agentUserId = resolveAgentUserId(incident.getAssignedToId());
+        if (agentUserId != null && !agentUserId.equals(actorUserId)) {
+            notificationService.sendSeverityChangedNotification(agentUserId, incidentId, incidentNo, previousSeverityName, request.severityId());
         }
 
         entityManager.flush();
@@ -489,7 +496,16 @@ public class IncidentService {
     }
 
     private List<String> findAllActiveAdminUserIds() {
-        return adminRepository.findAllActive(Pageable.unpaged())
+        List<String> activeIds = adminRepository.findAllActive(Pageable.unpaged())
+                .stream()
+                .map(Admin::getUserId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (!activeIds.isEmpty()) return activeIds;
+
+        // Fallback: if no active admins are found (all unavailable), escalate to all admins
+        // so unassigned incidents never go completely unnoticed.
+        return adminRepository.findAll()
                 .stream()
                 .map(Admin::getUserId)
                 .filter(Objects::nonNull)
