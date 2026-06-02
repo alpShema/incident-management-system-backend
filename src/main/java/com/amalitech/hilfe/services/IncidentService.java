@@ -91,8 +91,8 @@ public class IncidentService {
         if (saved.getAssignedToId() != null) {
             String agentUserId = resolveAgentUserId(saved.getAssignedToId());
             notificationService.sendAssignmentNotification(agentUserId, saved.getId(), incidentNo);
-        } else if (incidentType != null && incidentType.getAdminId() != null) {
-            String adminUserId = resolveAdminUserId(incidentType.getAdminId());
+        } else {
+            String adminUserId = findAnyAdminUserId();
             notificationService.sendEscalationNotification(adminUserId, saved.getId(), incidentNo);
         }
 
@@ -445,9 +445,10 @@ public class IncidentService {
                 .orElse(null);
     }
 
-    private String resolveAdminUserId(String adminId) {
-        if (adminId == null) return null;
-        return adminRepository.findById(adminId)
+    private String findAnyAdminUserId() {
+        return adminRepository.findAllActive(PageRequest.of(0, 1))
+                .stream()
+                .findFirst()
                 .map(Admin::getUserId)
                 .orElse(null);
     }
