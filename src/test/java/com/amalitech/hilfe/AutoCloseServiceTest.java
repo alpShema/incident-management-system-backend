@@ -159,6 +159,8 @@ class AutoCloseServiceTest {
         assertThat(cutoff).isBetween(expectedCutoff.minusSeconds(5), expectedCutoff.plusSeconds(5));
     }
 
+    // ── notifications ─────────────────────────────────────────────────────────
+
     @Test
     void autoClose_assignedIncident_notifiesAgent() {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
@@ -166,6 +168,7 @@ class AutoCloseServiceTest {
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
                 .resolvedAt(Instant.now().minusSeconds(300))
                 .assignedToId("agent-1")
+                .userId("client-1")
                 .build();
         incident.setIncidentNo(42);
 
@@ -182,11 +185,31 @@ class AutoCloseServiceTest {
     }
 
     @Test
+    void autoClose_incident_notifiesClient() {
+        when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
+
+        Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
+                .resolvedAt(Instant.now().minusSeconds(300))
+                .userId("client-user-1")
+                .build();
+        incident.setIncidentNo(7);
+
+        when(incidentRepository.findOverdueResolved(any(Instant.class))).thenReturn(List.of(incident));
+        when(statusRepository.findByNameIgnoreCase("Closed"))
+                .thenReturn(Optional.of(status("status-closed", "Closed")));
+
+        autoCloseService.autoCloseResolvedIncidents();
+
+        verify(notificationService).sendAutoClosedClientNotification("client-user-1", "inc-1", 7);
+    }
+
+    @Test
     void autoClose_unassignedIncident_doesNotSendAgentNotification() {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
                 .resolvedAt(Instant.now().minusSeconds(300))
+                .userId("client-user-1")
                 .build(); // no assignedToId
 
         when(incidentRepository.findOverdueResolved(any(Instant.class))).thenReturn(List.of(incident));
@@ -196,6 +219,7 @@ class AutoCloseServiceTest {
         autoCloseService.autoCloseResolvedIncidents();
 
         verify(notificationService, never()).sendAutoClosedNotification(any(), any(), anyInt());
+        verify(notificationService).sendAutoClosedClientNotification("client-user-1", "inc-1", 0);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
