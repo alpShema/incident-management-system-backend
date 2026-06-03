@@ -144,11 +144,13 @@ class IncidentServiceTest {
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+        when(userRepository.findById("agent-user-1")).thenReturn(Optional.of(
+                com.amalitech.hilfe.models.User.builder().id("agent-user-1").fullName("Jane Doe").build()));
 
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        verify(notificationEventPublisher).publish(new IncidentAutoAssignedClientEvent("user-1", incident.getId(), 1));
+        verify(notificationEventPublisher).publish(new IncidentAutoAssignedClientEvent("user-1", incident.getId(), 1, "Jane Doe"));
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
                 && "agent-user-1".equals(ev.recipientUserId()) && incident.getId().equals(ev.incidentId()) && ev.incidentNo() == 1));
     }

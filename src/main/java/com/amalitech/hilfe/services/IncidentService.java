@@ -97,8 +97,9 @@ public class IncidentService {
         List<String> adminUserIds = assignedToId == null ? findAllActiveAdminUserIds() : List.of();
 
         if (assignedToId != null) {
+            String assigneeName = resolveAgentFullName(assignedToId);
             notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo, "System"));
-            notificationEventPublisher.publish(new IncidentAutoAssignedClientEvent(userId, incidentId, incidentNo));
+            notificationEventPublisher.publish(new IncidentAutoAssignedClientEvent(userId, incidentId, incidentNo, assigneeName));
             activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
         } else {
             for (String adminId : adminUserIds) {

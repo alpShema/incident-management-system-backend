@@ -68,7 +68,8 @@ class AgentGroupControllerTest {
                 "Handles IT incidents",
                 LookupResponse.from("dept-1", "Facilities"),
                 false,
-                2
+                2,
+                null
         ));
 
         mvc.perform(get("/agent-groups/group-1")
