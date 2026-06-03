@@ -48,6 +48,7 @@ public class IncidentService {
     private final AgentGroupRepository agentGroupRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final AgentRepository agentRepository;
+    private final UserRepository userRepository;
     private final StatusRepository statusRepository;
     private final SeverityRepository severityRepository;
     private final AdminRepository adminRepository;
@@ -518,20 +519,9 @@ public class IncidentService {
     }
 
     private List<String> findAllActiveAdminUserIds() {
-        List<String> activeIds = adminRepository.findAllActive(Pageable.unpaged())
-                .stream()
-                .map(Admin::getUserId)
-                .filter(Objects::nonNull)
-                .toList();
-        if (!activeIds.isEmpty()) return activeIds;
-
-        // Fallback: if no active admins are found (all unavailable), escalate to all admins
-        // so unassigned incidents never go completely unnoticed.
-        return adminRepository.findAll()
-                .stream()
-                .map(Admin::getUserId)
-                .filter(Objects::nonNull)
-                .toList();
+        // Query User table directly — does not depend on Admin table being populated,
+        // so admins who were promoted before ensureAdminRecord was added are included.
+        return userRepository.findActiveAdminUserIds();
     }
 
     private void enforceReopenWindow(Incident incident, Status newStatus) {
