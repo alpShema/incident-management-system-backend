@@ -149,7 +149,7 @@ public class MessageController {
 
     @Operation(
             summary = "Delete a message",
-            description = "Authors can delete their own messages. Admins can delete any message. "
+            description = "Only the message author can delete their own message. "
                     + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
     )
     @ApiResponses({

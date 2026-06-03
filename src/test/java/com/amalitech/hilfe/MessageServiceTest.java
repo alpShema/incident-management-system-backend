@@ -113,6 +113,60 @@ class MessageServiceTest {
     }
 
     @Test
+    void deleteMessage_byAuthor_succeeds() {
+        Message message = Message.builder().id("msg-1").senderId("u1").incidentId("inc-1").build();
+        when(messageRepository.findById("msg-1")).thenReturn(Optional.of(message));
+
+        messageService.deleteMessage("u1", "CLIENT", "msg-1");
+
+        verify(messageRepository).delete(message);
+    }
+
+    @Test
+    void deleteMessage_byNonAuthor_throws403() {
+        Message message = Message.builder().id("msg-1").senderId("u2").incidentId("inc-1").build();
+        when(messageRepository.findById("msg-1")).thenReturn(Optional.of(message));
+
+        assertThatThrownBy(() -> messageService.deleteMessage("u1", "CLIENT", "msg-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("You can only delete your own messages")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void deleteMessage_adminDeletingOwnMessage_succeeds() {
+        Message message = Message.builder().id("msg-1").senderId("admin1").incidentId("inc-1").build();
+        when(messageRepository.findById("msg-1")).thenReturn(Optional.of(message));
+
+        messageService.deleteMessage("admin1", "ADMIN", "msg-1");
+
+        verify(messageRepository).delete(message);
+    }
+
+    @Test
+    void deleteMessage_adminDeletingAnotherUsersMessage_throws403() {
+        Message message = Message.builder().id("msg-1").senderId("u2").incidentId("inc-1").build();
+        when(messageRepository.findById("msg-1")).thenReturn(Optional.of(message));
+
+        assertThatThrownBy(() -> messageService.deleteMessage("admin1", "ADMIN", "msg-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("You can only delete your own messages")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void deleteMessage_notFound_throws404() {
+        when(messageRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> messageService.deleteMessage("u1", "CLIENT", "missing"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
     void listMessages_includesAttachmentResponses() {
         Incident incident = Incident.builder().id("inc-1").userId("u1").build();
         Message message = Message.builder()
