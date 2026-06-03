@@ -19,6 +19,15 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
     @Query(value = """
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user
+            """,
+            countQuery = """
+            SELECT COUNT(a) FROM Agent a
+            """)
+    Page<Agent> findAllWithUser(Pageable pageable);
+
+    @Query(value = """
+            SELECT a FROM Agent a
+            LEFT JOIN FETCH a.user
             WHERE a.status = true
             """,
             countQuery = """
