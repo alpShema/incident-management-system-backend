@@ -263,22 +263,25 @@ public class IncidentService {
     public IncidentResponse updateSeverity(String actorUserId, String incidentId, UpdateIncidentSeverityRequest request) {
         Incident incident = findIncident(incidentId);
         String previousSeverityName = incident.getSeverity() != null ? incident.getSeverity().getName() : "none";
+        String newSeverityName = severityRepository.findById(request.severityId())
+                .map(s -> s.getName())
+                .orElse(request.severityId());
         incident.setSeverityId(request.severityId());
         incidentRepository.save(incident);
-        activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, request.severityId());
+        activityLogService.logIncidentSeverityChange(actorUserId, incidentId, previousSeverityName, newSeverityName);
 
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
 
         // Notify the client (incident creator) that priority was changed, unless they made the change themselves
         String clientUserId = incident.getUserId();
         if (clientUserId != null && !clientUserId.equals(actorUserId)) {
-            notificationService.sendSeverityChangedNotification(clientUserId, incidentId, incidentNo, previousSeverityName, request.severityId());
+            notificationService.sendSeverityChangedNotification(clientUserId, incidentId, incidentNo, previousSeverityName, newSeverityName);
         }
 
         // Notify the assigned agent that priority was changed, unless they made the change themselves
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         if (agentUserId != null && !agentUserId.equals(actorUserId)) {
-            notificationService.sendSeverityChangedNotification(agentUserId, incidentId, incidentNo, previousSeverityName, request.severityId());
+            notificationService.sendSeverityChangedNotification(agentUserId, incidentId, incidentNo, previousSeverityName, newSeverityName);
         }
 
         entityManager.flush();
