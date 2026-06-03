@@ -3,6 +3,8 @@ package com.amalitech.hilfe.dto;
 import com.amalitech.hilfe.models.AgentGroup;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.Instant;
+
 @Schema(description = "Agent group details")
 public record AgentGroupResponse(
         @Schema(description = "Agent group ID") String id,
@@ -10,7 +12,8 @@ public record AgentGroupResponse(
         @Schema(description = "Agent group description", nullable = true) String description,
         @Schema(description = "Internal department this agent group belongs to", nullable = true) LookupResponse department,
         @Schema(description = "Whether the agent group is active") Boolean status,
-        @Schema(description = "Number of agents in this agent group") long memberCount
+        @Schema(description = "Number of agents in this agent group") long memberCount,
+        @Schema(description = "Timestamp when the agent group was last updated (UTC)") Instant updatedAt
 ) {
     public static AgentGroupResponse from(AgentGroup group, LookupResponse department, long memberCount) {
         return new AgentGroupResponse(
@@ -19,7 +22,8 @@ public record AgentGroupResponse(
                 group.getDescription(),
                 department,
                 group.getStatus(),
-                memberCount
+                memberCount,
+                group.getUpdatedAt()
         );
     }
 }

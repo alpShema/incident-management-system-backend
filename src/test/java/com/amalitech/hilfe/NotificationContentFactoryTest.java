@@ -99,7 +99,7 @@ class NotificationContentFactoryTest {
         assertThat(factory.from(new IncidentEscalatedEvent("user-1", "inc-1", 12)).type()).isEqualTo("INCIDENT_ESCALATED");
         assertThat(factory.from(new IncidentAutoClosedAgentEvent("user-1", "inc-1", 12)).type()).isEqualTo("INCIDENT_AUTO_CLOSED");
         assertThat(factory.from(new IncidentAutoClosedClientEvent("user-1", "inc-1", 12)).type()).isEqualTo("INCIDENT_AUTO_CLOSED_CLIENT");
-        assertThat(factory.from(new IncidentAutoAssignedClientEvent("user-1", "inc-1", 12)).type()).isEqualTo("INCIDENT_AUTO_ASSIGNED_CLIENT");
+        assertThat(factory.from(new IncidentAutoAssignedClientEvent("user-1", "inc-1", 12, "Jane Doe")).type()).isEqualTo("INCIDENT_AUTO_ASSIGNED_CLIENT");
     }
 
     @Test

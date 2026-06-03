@@ -106,7 +106,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_AUTO_ASSIGNED_CLIENT",
                 "Incident #" + event.incidentNo() + " is being handled",
-                "An agent has been assigned to your Incident #" + event.incidentNo() + " and will be in touch shortly."
+                event.assigneeName() + " has been assigned to your Incident #" + event.incidentNo() + " and will be in touch shortly."
         );
     }
 
