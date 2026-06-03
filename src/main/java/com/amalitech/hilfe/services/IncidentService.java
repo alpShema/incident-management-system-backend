@@ -3,6 +3,8 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
+import com.amalitech.hilfe.notifications.NotificationEventPublisher;
+import com.amalitech.hilfe.notifications.events.*;
 import com.amalitech.hilfe.repositories.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -10,8 +12,6 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.*;
@@ -53,7 +53,7 @@ public class IncidentService {
     private final SeverityRepository severityRepository;
     private final AdminRepository adminRepository;
     private final ActivityLogService activityLogService;
-    private final NotificationService notificationService;
+    private final NotificationEventPublisher notificationEventPublisher;
     private final MediaService mediaService;
     private final MediaRepository mediaRepository;
     private final LocationRepository locationRepository;
@@ -91,36 +91,19 @@ public class IncidentService {
         entityManager.flush();
 
         int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
-        // Defer notification and logging dispatch to AFTER the main transaction commits.
-        // Notification methods are @Async + @Transactional(REQUIRES_NEW), so they run
-        // in a separate DB connection. If called before commit, the incident FK is
-        // not yet visible and the INSERT into notifications fails silently.
-        final String incidentId = saved.getId();
-        final String assignedToId = saved.getAssignedToId();
-        final String agentUserId = resolveAgentUserId(assignedToId);
-        final List<String> adminUserIds = assignedToId == null ? findAllActiveAdminUserIds() : List.of();
+        String incidentId = saved.getId();
+        String assignedToId = saved.getAssignedToId();
+        String agentUserId = resolveAgentUserId(assignedToId);
+        List<String> adminUserIds = assignedToId == null ? findAllActiveAdminUserIds() : List.of();
 
-        Runnable dispatchNotifications = () -> {
-            if (assignedToId != null) {
-                notificationService.sendAssignmentNotification(agentUserId, incidentId, incidentNo);
-                notificationService.sendAutoAssignedClientNotification(userId, incidentId, incidentNo);
-                activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
-            } else {
-                for (String adminId : adminUserIds) {
-                    notificationService.sendEscalationNotification(adminId, incidentId, incidentNo);
-                }
-            }
-        };
-
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    dispatchNotifications.run();
-                }
-            });
+        if (assignedToId != null) {
+            notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo));
+            notificationEventPublisher.publish(new IncidentAutoAssignedClientEvent(userId, incidentId, incidentNo));
+            activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
         } else {
-            dispatchNotifications.run();
+            for (String adminId : adminUserIds) {
+                notificationEventPublisher.publish(new IncidentEscalatedEvent(adminId, incidentId, incidentNo));
+            }
         }
 
         List<MediaResponse> mediaResponses = List.of();
@@ -276,13 +259,15 @@ public class IncidentService {
         // Notify the client (incident creator) that priority was changed, unless they made the change themselves
         String clientUserId = incident.getUserId();
         if (clientUserId != null && !clientUserId.equals(actorUserId)) {
-            notificationService.sendSeverityChangedNotification(clientUserId, incidentId, incidentNo, previousSeverityName, newSeverityName);
+            notificationEventPublisher.publish(new IncidentSeverityChangedEvent(
+                    clientUserId, incidentId, incidentNo, previousSeverityName, newSeverityName));
         }
 
         // Notify the assigned agent that priority was changed, unless they made the change themselves
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         if (agentUserId != null && !agentUserId.equals(actorUserId)) {
-            notificationService.sendSeverityChangedNotification(agentUserId, incidentId, incidentNo, previousSeverityName, newSeverityName);
+            notificationEventPublisher.publish(new IncidentSeverityChangedEvent(
+                    agentUserId, incidentId, incidentNo, previousSeverityName, newSeverityName));
         }
 
         entityManager.flush();
@@ -315,17 +300,17 @@ public class IncidentService {
 
         String agentUserId = resolveAgentUserId(request.agentId());
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
-        notificationService.sendAssignmentNotification(agentUserId, incidentId, incidentNo);
+        notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo));
 
         // Notify the previous agent (if any and different from the new agent) that they have been unassigned
         if (previousAgentUserId != null && !previousAgentUserId.equals(agentUserId)) {
-            notificationService.sendUnassignedNotification(previousAgentUserId, incidentId, incidentNo);
+            notificationEventPublisher.publish(new IncidentUnassignedEvent(previousAgentUserId, incidentId, incidentNo));
         }
 
         // Notify the client (incident creator) that a new agent has been assigned
         String clientUserId = incident.getUserId();
         if (clientUserId != null) {
-            notificationService.sendClientReassignedNotification(clientUserId, incidentId, incidentNo);
+            notificationEventPublisher.publish(new IncidentClientReassignedEvent(clientUserId, incidentId, incidentNo));
         }
 
         entityManager.flush();
@@ -484,7 +469,7 @@ public class IncidentService {
         // Notify the assigned agent (if any) that the incident has been reopened and needs attention
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
-        notificationService.sendReopenedNotification(agentUserId, incidentId, incidentNo);
+        notificationEventPublisher.publish(new IncidentReopenedEvent(agentUserId, incidentId, incidentNo));
     }
 
     private boolean requiresReason(Status newStatus) {
@@ -506,16 +491,18 @@ public class IncidentService {
             // When the agent sets the incident to Pending, send a dedicated PENDING notification
             // to the client so they receive an explicitly-typed message rather than a generic status change.
             if ("Pending".equals(newStatus)) {
-                notificationService.sendPendingNotification(clientUserId, incident.getId(), incidentNo, reason);
+                notificationEventPublisher.publish(new IncidentPendingEvent(clientUserId, incident.getId(), incidentNo, reason));
             } else {
-                notificationService.sendStatusChangeNotification(clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+                notificationEventPublisher.publish(new IncidentStatusChangedEvent(
+                        clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason));
             }
         }
 
         // Notify the assigned agent unless they are the one making the change
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         if (agentUserId != null && !agentUserId.equals(actorUserId)) {
-            notificationService.sendStatusChangeNotification(agentUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
+            notificationEventPublisher.publish(new IncidentStatusChangedEvent(
+                    agentUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason));
         }
     }
 
