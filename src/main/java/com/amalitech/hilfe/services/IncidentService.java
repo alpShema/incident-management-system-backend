@@ -97,7 +97,7 @@ public class IncidentService {
         List<String> adminUserIds = assignedToId == null ? findAllActiveAdminUserIds() : List.of();
 
         if (assignedToId != null) {
-            notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo));
+            notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo, "System"));
             notificationEventPublisher.publish(new IncidentAutoAssignedClientEvent(userId, incidentId, incidentNo));
             activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
         } else {
@@ -258,16 +258,17 @@ public class IncidentService {
 
         // Notify the client (incident creator) that priority was changed, unless they made the change themselves
         String clientUserId = incident.getUserId();
+        String actorName = resolveActorName(actorUserId);
         if (clientUserId != null && !clientUserId.equals(actorUserId)) {
             notificationEventPublisher.publish(new IncidentSeverityChangedEvent(
-                    clientUserId, incidentId, incidentNo, previousSeverityName, newSeverityName));
+                    clientUserId, incidentId, incidentNo, previousSeverityName, newSeverityName, actorName));
         }
 
         // Notify the assigned agent that priority was changed, unless they made the change themselves
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         if (agentUserId != null && !agentUserId.equals(actorUserId)) {
             notificationEventPublisher.publish(new IncidentSeverityChangedEvent(
-                    agentUserId, incidentId, incidentNo, previousSeverityName, newSeverityName));
+                    agentUserId, incidentId, incidentNo, previousSeverityName, newSeverityName, actorName));
         }
 
         entityManager.flush();
@@ -300,17 +301,19 @@ public class IncidentService {
 
         String agentUserId = resolveAgentUserId(request.agentId());
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
-        notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo));
+        String actorName = resolveActorName(actorUserId);
+        String newAssigneeName = resolveAgentFullName(request.agentId());
+        notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo, actorName));
 
         // Notify the previous agent (if any and different from the new agent) that they have been unassigned
         if (previousAgentUserId != null && !previousAgentUserId.equals(agentUserId)) {
-            notificationEventPublisher.publish(new IncidentUnassignedEvent(previousAgentUserId, incidentId, incidentNo));
+            notificationEventPublisher.publish(new IncidentUnassignedEvent(previousAgentUserId, incidentId, incidentNo, actorName, newAssigneeName));
         }
 
         // Notify the client (incident creator) that a new agent has been assigned
         String clientUserId = incident.getUserId();
         if (clientUserId != null) {
-            notificationEventPublisher.publish(new IncidentClientReassignedEvent(clientUserId, incidentId, incidentNo));
+            notificationEventPublisher.publish(new IncidentClientReassignedEvent(clientUserId, incidentId, incidentNo, actorName, newAssigneeName));
         }
 
         entityManager.flush();
@@ -469,7 +472,7 @@ public class IncidentService {
         // Notify the assigned agent (if any) that the incident has been reopened and needs attention
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
-        notificationEventPublisher.publish(new IncidentReopenedEvent(agentUserId, incidentId, incidentNo));
+        notificationEventPublisher.publish(new IncidentReopenedEvent(agentUserId, incidentId, incidentNo, resolveActorName(actorUserId)));
     }
 
     private boolean requiresReason(Status newStatus) {
@@ -484,6 +487,7 @@ public class IncidentService {
 
     private void dispatchStatusNotifications(Incident incident, String previousStatus, String newStatus, String reason, String actorUserId) {
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+        String actorName = resolveActorName(actorUserId);
 
         // Notify the client (incident creator) unless they are the one making the change
         String clientUserId = incident.getUserId();
@@ -491,10 +495,10 @@ public class IncidentService {
             // When the agent sets the incident to Pending, send a dedicated PENDING notification
             // to the client so they receive an explicitly-typed message rather than a generic status change.
             if ("Pending".equals(newStatus)) {
-                notificationEventPublisher.publish(new IncidentPendingEvent(clientUserId, incident.getId(), incidentNo, reason));
+                notificationEventPublisher.publish(new IncidentPendingEvent(clientUserId, incident.getId(), incidentNo, reason, actorName));
             } else {
                 notificationEventPublisher.publish(new IncidentStatusChangedEvent(
-                        clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason));
+                        clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason, actorName));
             }
         }
 
@@ -502,7 +506,7 @@ public class IncidentService {
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         if (agentUserId != null && !agentUserId.equals(actorUserId)) {
             notificationEventPublisher.publish(new IncidentStatusChangedEvent(
-                    agentUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason));
+                    agentUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason, actorName));
         }
     }
 
@@ -511,6 +515,18 @@ public class IncidentService {
         return agentRepository.findById(assignedToId)
                 .map(a -> a.getUserId())
                 .orElse(null);
+    }
+
+    private String resolveActorName(String userId) {
+        if (userId == null) return "System";
+        return userRepository.findById(userId)
+                .map(u -> u.getFullName())
+                .orElse("Deactivated User");
+    }
+
+    private String resolveAgentFullName(String agentId) {
+        if (agentId == null) return "Unknown Agent";
+        return resolveActorName(resolveAgentUserId(agentId));
     }
 
     private List<String> findAllActiveAdminUserIds() {
