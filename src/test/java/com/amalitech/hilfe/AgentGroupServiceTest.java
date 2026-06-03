@@ -3,6 +3,7 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
+import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
@@ -15,9 +16,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,20 +34,29 @@ class AgentGroupServiceTest {
 
     @InjectMocks AgentGroupService agentGroupService;
 
-    @Test
-    void removeMember_nonMember_throws404() {
-        AgentGroup group = AgentGroup.builder()
+    private AgentGroup group(boolean status) {
+        return AgentGroup.builder()
                 .id("group-1")
                 .name("IT Support")
-                .status(true)
+                .departmentId("dept-1")
+                .status(status)
                 .build();
+    }
 
+    private Agent memberAgent() {
         Agent agent = Agent.builder()
                 .id("agent-1")
                 .userId("user-1")
                 .status(true)
                 .build();
         agent.setUser(User.builder().id("user-1").fullName("Agent One").build());
+        return agent;
+    }
+
+    @Test
+    void removeMember_nonMember_throws404() {
+        AgentGroup group = group(true);
+        Agent agent = memberAgent();
 
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
         when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
@@ -53,6 +66,78 @@ class AgentGroupServiceTest {
         assertThatThrownBy(() -> agentGroupService.removeMember("group-1", "agent-1"))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent is not a member of this agent group")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void deleteAgentGroup_withMembers_succeedsAndPreservesState() {
+        AgentGroup group = group(true);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+
+        agentGroupService.deleteAgentGroup("group-1");
+
+        assertThat(group.getStatus()).isFalse();
+        verify(agentGroupRepository).save(group);
+    }
+
+    @Test
+    void deleteAgentGroup_alreadyInactive_throws409() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(false)));
+
+        assertThatThrownBy(() -> agentGroupService.deleteAgentGroup("group-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group is already inactive")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
+    void getAgentGroup_inactive_returnsResponse() {
+        AgentGroup group = group(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(1L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(
+                Department.builder().id("dept-1").name("Facilities").status(false).build()));
+
+        var response = agentGroupService.getAgentGroup("group-1");
+
+        assertThat(response.id()).isEqualTo("group-1");
+        assertThat(response.status()).isFalse();
+        assertThat(response.memberCount()).isEqualTo(1L);
+    }
+
+    @Test
+    void listMembers_inactiveGroup_returnsMembers() {
+        AgentGroup group = group(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupMemberRepository.findAgentsByAgentGroupIdWithUser("group-1"))
+                .thenReturn(List.of(memberAgent()));
+
+        var members = agentGroupService.listMembers("group-1");
+
+        assertThat(members).hasSize(1);
+        assertThat(members.getFirst().agentId()).isEqualTo("agent-1");
+    }
+
+    @Test
+    void addMember_inactiveGroup_throws404() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(false)));
+
+        assertThatThrownBy(() -> agentGroupService.addMember("group-1", "agent-2"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void removeMember_inactiveGroup_throws404() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(false)));
+
+        assertThatThrownBy(() -> agentGroupService.removeMember("group-1", "agent-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }
