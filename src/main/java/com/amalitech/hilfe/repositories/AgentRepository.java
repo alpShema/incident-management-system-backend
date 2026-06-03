@@ -68,6 +68,13 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             """)
     Optional<Agent> findByIdWithUser(@Param("agentId") String agentId);
 
+    @Query("""
+            SELECT a FROM Agent a
+            LEFT JOIN FETCH a.user
+            WHERE a.userId = :userId
+            """)
+    Optional<Agent> findByUserIdWithUser(@Param("userId") String userId);
+
     long countByAgentGroupId(String agentGroupId);
 
     @Query("SELECT a.userId FROM Agent a WHERE a.id = :agentId")
