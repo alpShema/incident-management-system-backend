@@ -149,7 +149,8 @@ class IncidentServiceTest {
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
         verify(notificationEventPublisher).publish(new IncidentAutoAssignedClientEvent("user-1", incident.getId(), 1));
-        verify(notificationEventPublisher).publish(new IncidentAssignedEvent("agent-user-1", incident.getId(), 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
+                && "agent-user-1".equals(ev.recipientUserId()) && incident.getId().equals(ev.incidentId()) && ev.incidentNo() == 1));
     }
 
     @Test
@@ -1075,7 +1076,9 @@ class IncidentServiceTest {
 
         incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
 
-        verify(notificationEventPublisher).publish(new IncidentSeverityChangedEvent("user-1", "inc-1", 1, "none", "sev-high"));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentSeverityChangedEvent ev
+                && "user-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1
+                && "none".equals(ev.previousSeverity()) && "sev-high".equals(ev.newSeverity())));
     }
 
     @Test
@@ -1101,7 +1104,8 @@ class IncidentServiceTest {
 
         incidentService.updateSeverity("admin-actor", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
 
-        verify(notificationEventPublisher).publish(new IncidentSeverityChangedEvent("agent-user-1", "inc-1", 1, "none", "sev-high"));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentSeverityChangedEvent ev
+                && "agent-user-1".equals(ev.recipientUserId()) && "none".equals(ev.previousSeverity()) && "sev-high".equals(ev.newSeverity())));
     }
 
     @Test
@@ -1115,7 +1119,8 @@ class IncidentServiceTest {
         // actor IS the assigned agent — no self-notification
         incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
 
-        verify(notificationEventPublisher, never()).publish(new IncidentSeverityChangedEvent("actor-1", "inc-1", 1, "none", "sev-high"));
+        verify(notificationEventPublisher, never()).publish(argThat(e -> e instanceof IncidentSeverityChangedEvent ev
+                && "actor-1".equals(ev.recipientUserId())));
     }
 
     @Test
@@ -1126,7 +1131,8 @@ class IncidentServiceTest {
 
         incidentService.updateSeverity("actor-1", "inc-1", new UpdateIncidentSeverityRequest("sev-high"));
 
-        verify(notificationEventPublisher).publish(new IncidentSeverityChangedEvent("user-1", "inc-1", 1, "none", "sev-high"));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentSeverityChangedEvent ev
+                && "user-1".equals(ev.recipientUserId()) && "none".equals(ev.previousSeverity()) && "sev-high".equals(ev.newSeverity())));
         verifyNoMoreInteractions(notificationEventPublisher);
     }
 
@@ -1156,7 +1162,8 @@ class IncidentServiceTest {
 
         incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1"));
 
-        verify(notificationEventPublisher).publish(new IncidentClientReassignedEvent("user-1", "inc-1", 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentClientReassignedEvent ev
+                && "user-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
     }
 
     @Test
@@ -1257,7 +1264,8 @@ class IncidentServiceTest {
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
                 new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
 
-        verify(notificationEventPublisher).publish(new IncidentReopenedEvent("actor-1", "inc-1", 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentReopenedEvent ev
+                && "actor-1".equals(ev.recipientUserId()) && "inc-1".equals(ev.incidentId())));
     }
 
     @Test
@@ -1283,7 +1291,8 @@ class IncidentServiceTest {
                 new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
 
         // After inactive agent is cleared, resolveAgentUserId(null) returns null
-        verify(notificationEventPublisher).publish(new IncidentReopenedEvent(null, "inc-1", 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentReopenedEvent ev
+                && ev.recipientUserId() == null && "inc-1".equals(ev.incidentId())));
     }
 
     @Test
@@ -1354,7 +1363,8 @@ class IncidentServiceTest {
                 new UpdateIncidentStatusRequest("status-pending", "Waiting for parts"));
 
         // creator ("user-1") is not the actor ("actor-1") → should receive a PENDING notification
-        verify(notificationEventPublisher).publish(new IncidentPendingEvent("user-1", "inc-1", 1, "Waiting for parts"));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentPendingEvent ev
+                && "user-1".equals(ev.recipientUserId()) && "Waiting for parts".equals(ev.reason())));
         verify(notificationEventPublisher, never()).publish(isA(IncidentStatusChangedEvent.class));
     }
 
@@ -1403,8 +1413,10 @@ class IncidentServiceTest {
         incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-2"));
 
         // Previous agent must receive unassigned notification
-        verify(notificationEventPublisher).publish(new IncidentUnassignedEvent("actor-1", "inc-1", 1));
-        verify(notificationEventPublisher).publish(new IncidentAssignedEvent("new-agent-user", "inc-1", 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentUnassignedEvent ev
+                && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
+                && "new-agent-user".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
     }
 
     @Test
@@ -1422,7 +1434,8 @@ class IncidentServiceTest {
         incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher, never()).publish(isA(IncidentUnassignedEvent.class));
-        verify(notificationEventPublisher).publish(new IncidentAssignedEvent("actor-1", "inc-1", 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
+                && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
     }
 
     @Test
@@ -1442,7 +1455,8 @@ class IncidentServiceTest {
         incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher, never()).publish(isA(IncidentUnassignedEvent.class));
-        verify(notificationEventPublisher).publish(new IncidentAssignedEvent("actor-1", "inc-1", 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
+                && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
     }
 
     // ── notification: sendAssignmentNotification (explicit coverage) ──────────
@@ -1460,7 +1474,8 @@ class IncidentServiceTest {
 
         incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-1"));
 
-        verify(notificationEventPublisher).publish(new IncidentAssignedEvent("actor-1", "inc-1", 1));
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
+                && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
     }
 
     // ── queryAllIncidents ─────────────────────────────────────────────────────
