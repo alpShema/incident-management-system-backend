@@ -10,6 +10,8 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.*;
@@ -88,21 +90,35 @@ public class IncidentService {
         entityManager.flush();
 
         int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
-        // TASK 3 VERIFIED: auto-assignment notification is correctly wired.
-        // applyTopicAssignment() sets assignedToId when a matching active agent exists;
-        // after save/flush the resolved agentUserId is passed to sendAssignmentNotification.
-        // If no agent was assigned, an escalation notification is sent to an admin instead.
-        if (saved.getAssignedToId() != null) {
-            String agentUserId = resolveAgentUserId(saved.getAssignedToId());
-            notificationService.sendAssignmentNotification(agentUserId, saved.getId(), incidentNo);
-            // Notify the client (incident author) that an agent has been auto-assigned
-            notificationService.sendAutoAssignedClientNotification(userId, saved.getId(), incidentNo);
-        } else {
-            // Auto-assignment failed — notify ALL active admins so no incident goes unowned
-            List<String> adminUserIds = findAllActiveAdminUserIds();
-            for (String adminUserId : adminUserIds) {
-                notificationService.sendEscalationNotification(adminUserId, saved.getId(), incidentNo);
+        // Defer notification dispatch to AFTER the main transaction commits.
+        // Notification methods are @Async + @Transactional(REQUIRES_NEW), so they run
+        // in a separate DB connection. If called before commit, the incident FK is
+        // not yet visible and the INSERT into notifications fails silently.
+        final String incidentId = saved.getId();
+        final String assignedToId = saved.getAssignedToId();
+        final String agentUserId = resolveAgentUserId(assignedToId);
+        final List<String> adminUserIds = assignedToId == null ? findAllActiveAdminUserIds() : List.of();
+
+        Runnable dispatchNotifications = () -> {
+            if (assignedToId != null) {
+                notificationService.sendAssignmentNotification(agentUserId, incidentId, incidentNo);
+                notificationService.sendAutoAssignedClientNotification(userId, incidentId, incidentNo);
+            } else {
+                for (String adminId : adminUserIds) {
+                    notificationService.sendEscalationNotification(adminId, incidentId, incidentNo);
+                }
             }
+        };
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatchNotifications.run();
+                }
+            });
+        } else {
+            dispatchNotifications.run();
         }
 
         List<MediaResponse> mediaResponses = List.of();
