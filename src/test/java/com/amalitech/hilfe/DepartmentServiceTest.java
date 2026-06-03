@@ -58,8 +58,6 @@ class DepartmentServiceTest {
     void updateDepartmentStatus_deactivate_noLinks_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(categoryRepository.existsByDepartmentId("dept-1")).thenReturn(false);
-        when(agentGroupRepository.existsByDepartmentIdAndStatus("dept-1", true)).thenReturn(false);
         when(departmentRepository.save(dept)).thenReturn(dept);
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
 
@@ -70,34 +68,29 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void updateDepartmentStatus_deactivate_withCategories_throws409() {
+    void updateDepartmentStatus_deactivate_withCategories_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(categoryRepository.existsByDepartmentId("dept-1")).thenReturn(true);
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
 
-        assertThatThrownBy(() -> departmentService.updateDepartmentStatus("dept-1", false))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Department has assigned incident categories")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(409);
+        DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
-        verify(departmentRepository, never()).save(dept);
+        assertThat(response.status()).isFalse();
+        verify(departmentRepository).save(dept);
     }
 
     @Test
-    void updateDepartmentStatus_deactivate_withActiveAgentGroups_throws409() {
+    void updateDepartmentStatus_deactivate_withActiveAgentGroups_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(categoryRepository.existsByDepartmentId("dept-1")).thenReturn(false);
-        when(agentGroupRepository.existsByDepartmentIdAndStatus("dept-1", true)).thenReturn(true);
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
 
-        assertThatThrownBy(() -> departmentService.updateDepartmentStatus("dept-1", false))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Department has assigned agent groups")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(409);
+        DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
-        verify(departmentRepository, never()).save(dept);
+        assertThat(response.status()).isFalse();
+        verify(departmentRepository).save(dept);
     }
 
     @Test
@@ -137,5 +130,17 @@ class DepartmentServiceTest {
         assertThat(response.name()).isEqualTo("Facilities Updated");
         assertThat(response.description()).isEqualTo("Updated description");
         verify(departmentRepository).save(dept);
+    }
+
+    @Test
+    void getDepartment_inactiveDepartment_isReturned() {
+        Department dept = department(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+
+        DepartmentResponse response = departmentService.getDepartment("dept-1");
+
+        assertThat(response.status()).isFalse();
+        assertThat(response.id()).isEqualTo("dept-1");
     }
 }
