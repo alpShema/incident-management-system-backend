@@ -26,7 +26,7 @@ class NotificationEventListenerTest {
 
     @Test
     void assignedEvent_persistsAndBroadcasts() {
-        IncidentAssignedEvent event = new IncidentAssignedEvent("user-1", "inc-1", 5);
+        IncidentAssignedEvent event = new IncidentAssignedEvent("user-1", "inc-1", 5, "System");
         NotificationDraft draft = new NotificationDraft("user-1", "inc-1", "INCIDENT_ASSIGNED", "Assigned", "Assigned message");
         Notification saved = Notification.builder()
                 .id("notif-1")
@@ -48,7 +48,7 @@ class NotificationEventListenerTest {
 
     @Test
     void assignedEvent_withNullRecipient_skipsPersistenceAndBroadcast() {
-        IncidentAssignedEvent event = new IncidentAssignedEvent(null, "inc-1", 5);
+        IncidentAssignedEvent event = new IncidentAssignedEvent(null, "inc-1", 5, "System");
         NotificationDraft draft = new NotificationDraft(null, "inc-1", "INCIDENT_ASSIGNED", "Assigned", "Assigned message");
 
         when(contentFactory.from(event)).thenReturn(draft);
@@ -61,7 +61,7 @@ class NotificationEventListenerTest {
 
     @Test
     void assignedEvent_persistenceFailure_isSwallowed() {
-        IncidentAssignedEvent event = new IncidentAssignedEvent("user-1", "inc-1", 5);
+        IncidentAssignedEvent event = new IncidentAssignedEvent("user-1", "inc-1", 5, "System");
         NotificationDraft draft = new NotificationDraft("user-1", "inc-1", "INCIDENT_ASSIGNED", "Assigned", "Assigned message");
 
         when(contentFactory.from(event)).thenReturn(draft);
@@ -75,7 +75,7 @@ class NotificationEventListenerTest {
 
     @Test
     void assignedEvent_broadcastFailure_isSwallowedAfterPersistence() {
-        IncidentAssignedEvent event = new IncidentAssignedEvent("user-1", "inc-1", 5);
+        IncidentAssignedEvent event = new IncidentAssignedEvent("user-1", "inc-1", 5, "System");
         NotificationDraft draft = new NotificationDraft("user-1", "inc-1", "INCIDENT_ASSIGNED", "Assigned", "Assigned message");
         Notification saved = Notification.builder().id("notif-1").userId("user-1").incidentId("inc-1").build();
 

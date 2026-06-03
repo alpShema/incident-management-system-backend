@@ -12,7 +12,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_ASSIGNED",
                 "Incident #" + event.incidentNo() + " assigned to you",
-                "Incident #" + event.incidentNo() + " has been assigned to you."
+                event.actorName() + " assigned Incident #" + event.incidentNo() + " to you."
         );
     }
 
@@ -32,12 +32,12 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_STATUS_CHANGED",
                 "Incident #" + event.incidentNo() + " status updated",
-                buildStatusMessage(event.incidentNo(), event.previousStatus(), event.newStatus(), event.reason())
+                buildStatusMessage(event.actorName(), event.incidentNo(), event.previousStatus(), event.newStatus(), event.reason())
         );
     }
 
     public NotificationDraft from(IncidentPendingEvent event) {
-        String message = "Incident #" + event.incidentNo() + " has been placed in Pending status."
+        String message = event.actorName() + " placed Incident #" + event.incidentNo() + " in Pending status."
                 + (event.reason() != null && !event.reason().isBlank() ? " Reason: " + event.reason() : "");
         return new NotificationDraft(
                 event.recipientUserId(),
@@ -54,7 +54,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_REOPENED",
                 "Incident #" + event.incidentNo() + " has been reopened",
-                "Incident #" + event.incidentNo() + " has been reopened and is now In Progress. Please review and take action."
+                event.actorName() + " reopened Incident #" + event.incidentNo() + ". It is now In Progress — please review and take action."
         );
     }
 
@@ -64,8 +64,8 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_PRIORITY_CHANGED",
                 "Incident #" + event.incidentNo() + " priority updated",
-                "The priority of Incident #" + event.incidentNo() + " has been changed from "
-                        + event.previousSeverity() + " to " + event.newSeverity() + "."
+                event.actorName() + " changed the priority of Incident #" + event.incidentNo()
+                        + " from " + event.previousSeverity() + " to " + event.newSeverity() + "."
         );
     }
 
@@ -75,7 +75,8 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_UNASSIGNED",
                 "Incident #" + event.incidentNo() + " reassigned",
-                "Incident #" + event.incidentNo() + " has been reassigned to another agent."
+                event.actorName() + " reassigned Incident #" + event.incidentNo()
+                        + " from you to " + event.newAssigneeName() + "."
         );
     }
 
@@ -115,12 +116,12 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_REASSIGNED_CLIENT",
                 "Incident #" + event.incidentNo() + " has a new agent",
-                "A new agent has been assigned to Incident #" + event.incidentNo() + "."
+                event.actorName() + " reassigned Incident #" + event.incidentNo() + " to " + event.newAssigneeName() + "."
         );
     }
 
-    private String buildStatusMessage(int incidentNo, String previousStatus, String newStatus, String reason) {
-        String base = "Incident #" + incidentNo + " has moved from " + previousStatus + " to " + newStatus + ".";
+    private String buildStatusMessage(String actorName, int incidentNo, String previousStatus, String newStatus, String reason) {
+        String base = actorName + " transitioned Incident #" + incidentNo + " from " + previousStatus + " to " + newStatus + ".";
         if (reason != null && !reason.isBlank()) {
             base += " Reason: " + reason;
         }
