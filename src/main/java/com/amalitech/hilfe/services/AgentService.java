@@ -61,7 +61,7 @@ public class AgentService {
         Agent agent = agentRepository.findByIdWithUser(agentId)
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
         agent.setStatus(available);
-        Agent saved = agentRepository.save(agent);
-        return AgentResponse.from(saved);
+        agentRepository.save(agent);
+        return AgentResponse.from(agent);
     }
 }
