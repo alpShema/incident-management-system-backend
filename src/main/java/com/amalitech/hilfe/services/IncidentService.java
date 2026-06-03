@@ -10,8 +10,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.*;
@@ -58,6 +57,7 @@ public class IncidentService {
     private final MediaRepository mediaRepository;
     private final LocationRepository locationRepository;
     private final AutoCloseService autoCloseService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -91,37 +91,21 @@ public class IncidentService {
         entityManager.flush();
 
         int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
-        // Defer notification and logging dispatch to AFTER the main transaction commits.
-        // Notification methods are @Async + @Transactional(REQUIRES_NEW), so they run
-        // in a separate DB connection. If called before commit, the incident FK is
-        // not yet visible and the INSERT into notifications fails silently.
-        final String incidentId = saved.getId();
-        final String assignedToId = saved.getAssignedToId();
-        final String agentUserId = resolveAgentUserId(assignedToId);
-        final List<String> adminUserIds = assignedToId == null ? findAllActiveAdminUserIds() : List.of();
+        String assignedToId = saved.getAssignedToId();
 
-        Runnable dispatchNotifications = () -> {
-            if (assignedToId != null) {
-                notificationService.sendAssignmentNotification(agentUserId, incidentId, incidentNo);
-                notificationService.sendAutoAssignedClientNotification(userId, incidentId, incidentNo);
-                activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
-            } else {
-                for (String adminId : adminUserIds) {
-                    notificationService.sendEscalationNotification(adminId, incidentId, incidentNo);
-                }
-            }
-        };
-
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    dispatchNotifications.run();
-                }
-            });
-        } else {
-            dispatchNotifications.run();
+        if (assignedToId != null) {
+            activityLogService.logIncidentAutoAssignment(saved.getId(), assignedToId);
         }
+
+        // Publish event — @TransactionalEventListener(AFTER_COMMIT) fires the notifications
+        // only after the transaction commits, so the incident FK is always visible.
+        eventPublisher.publishEvent(new com.amalitech.hilfe.events.IncidentCreatedEvent(
+                saved.getId(),
+                incidentNo,
+                userId,
+                resolveAgentUserId(assignedToId),
+                assignedToId == null ? findAllActiveAdminUserIds() : List.of()
+        ));
 
         List<MediaResponse> mediaResponses = List.of();
         if (request.attachments() != null && !request.attachments().isEmpty()) {
@@ -244,11 +228,20 @@ public class IncidentService {
 
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName(), request.reason());
-        dispatchStatusNotifications(incident, previousStatusName, newStatus.getName(), request.reason(), actorUserId);
 
         if ("reopened".equalsIgnoreCase(newStatus.getName())) {
             applyReopenTransition(actorUserId, incident, incidentId);
         }
+
+        // Publish event after all in-memory changes — listener fires AFTER_COMMIT so
+        // the incident is fully visible when @Async notification saves run.
+        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+        eventPublisher.publishEvent(new com.amalitech.hilfe.events.IncidentStatusChangedEvent(
+                incidentId, incidentNo, actorUserId,
+                incident.getUserId(),
+                resolveAgentUserId(incident.getAssignedToId()),
+                previousStatusName, newStatus.getName(), request.reason()
+        ));
 
         entityManager.flush();
         entityManager.clear();
@@ -480,11 +473,6 @@ public class IncidentService {
         if (incident.getAssignedToId() == null && previousAgentId != null) {
             activityLogService.logIncidentUnassignment(actorUserId, incidentId, previousAgentId);
         }
-
-        // Notify the assigned agent (if any) that the incident has been reopened and needs attention
-        String agentUserId = resolveAgentUserId(incident.getAssignedToId());
-        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
-        notificationService.sendReopenedNotification(agentUserId, incidentId, incidentNo);
     }
 
     private boolean requiresReason(Status newStatus) {
@@ -494,28 +482,6 @@ public class IncidentService {
     private void enforceReasonRequired(Status newStatus, String reason) {
         if (requiresReason(newStatus) && (reason == null || reason.isBlank())) {
             throw new ArmsAuthException("A reason is required when setting status to " + newStatus.getName(), 400);
-        }
-    }
-
-    private void dispatchStatusNotifications(Incident incident, String previousStatus, String newStatus, String reason, String actorUserId) {
-        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
-
-        // Notify the client (incident creator) unless they are the one making the change
-        String clientUserId = incident.getUserId();
-        if (clientUserId != null && !clientUserId.equals(actorUserId)) {
-            // When the agent sets the incident to Pending, send a dedicated PENDING notification
-            // to the client so they receive an explicitly-typed message rather than a generic status change.
-            if ("Pending".equals(newStatus)) {
-                notificationService.sendPendingNotification(clientUserId, incident.getId(), incidentNo, reason);
-            } else {
-                notificationService.sendStatusChangeNotification(clientUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
-            }
-        }
-
-        // Notify the assigned agent unless they are the one making the change
-        String agentUserId = resolveAgentUserId(incident.getAssignedToId());
-        if (agentUserId != null && !agentUserId.equals(actorUserId)) {
-            notificationService.sendStatusChangeNotification(agentUserId, incident.getId(), incidentNo, previousStatus, newStatus, reason);
         }
     }
 
