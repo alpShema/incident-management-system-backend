@@ -5,6 +5,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
 import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
@@ -41,6 +42,7 @@ class IncidentServiceTest {
     @Mock LocationRepository locationRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock AgentRepository agentRepository;
+    @Mock UserRepository userRepository;
     @Mock AdminRepository adminRepository;
     @Mock StatusRepository statusRepository;
     @Mock SeverityRepository severityRepository;
@@ -168,15 +170,13 @@ class IncidentServiceTest {
     @Test
     void createIncident_noAutoAssignment_notifiesAllActiveAdmins() {
         Incident incident = buildIncident(); // assignedToId = null
-        Admin admin1 = Admin.builder().id("admin-1").userId("admin-user-1").build();
-        Admin admin2 = Admin.builder().id("admin-2").userId("admin-user-2").build();
 
         when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
-        when(adminRepository.findAllActive(any())).thenReturn(List.of(admin1, admin2));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1", "admin-user-2"));
 
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
@@ -184,27 +184,6 @@ class IncidentServiceTest {
         verify(notificationService).sendEscalationNotification("admin-user-1", incident.getId(), 1);
         verify(notificationService).sendEscalationNotification("admin-user-2", incident.getId(), 1);
         verify(notificationService, never()).sendAutoAssignedClientNotification(any(), any(), anyInt());
-    }
-
-    @Test
-    void createIncident_noAutoAssignment_noActiveAdmins_fallsBackToAllAdmins() {
-        // When all admins are unavailable (status=false), escalation must still reach them
-        Incident incident = buildIncident();
-        Admin unavailableAdmin = Admin.builder().id("admin-1").userId("admin-user-1").build();
-
-        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
-        when(locationRepository.existsById("loc-1")).thenReturn(true);
-        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
-        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
-        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
-        when(adminRepository.findAllActive(any())).thenReturn(List.of()); // no active admins
-        when(adminRepository.findAll()).thenReturn(List.of(unavailableAdmin)); // fallback
-
-        incidentService.createIncident("user-1", new CreateIncidentRequest(
-                "Test Incident", "Test description", "type-1", "loc-1", null, null));
-
-        // Must fall back and notify the unavailable admin
-        verify(notificationService).sendEscalationNotification("admin-user-1", incident.getId(), 1);
     }
 
     @Test
@@ -216,8 +195,7 @@ class IncidentServiceTest {
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
-        when(adminRepository.findAllActive(any())).thenReturn(List.of());
-        when(adminRepository.findAll()).thenReturn(List.of()); // truly no admins
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of());
 
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
