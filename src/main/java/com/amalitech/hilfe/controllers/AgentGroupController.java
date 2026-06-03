@@ -34,7 +34,7 @@ public class AgentGroupController {
         return ResponseEntity.ok(ApiResponse.success("Agent groups retrieved successfully", PageResponse.from(page)));
     }
 
-    @Operation(summary = "Get an agent group", description = "Returns an agent group by ID, including its linked department. Requires `agent-group.read` permission.")
+    @Operation(summary = "Get an agent group", description = "Returns an agent group by ID, including its linked department. Inactive groups remain retrievable for admin management. Requires `agent-group.read` permission.")
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
     public ResponseEntity<ApiResponse<AgentGroupResponse>> getAgentGroup(@PathVariable String id) {
@@ -83,7 +83,7 @@ public class AgentGroupController {
         return ResponseEntity.ok(ApiResponse.success("Agent group updated successfully", agentGroupService.updateAgentGroup(id, request)));
     }
 
-    @Operation(summary = "Deactivate an agent group", description = "Soft-deactivates an agent group if no agents are linked as members. Requires `agent-group.delete` permission.")
+    @Operation(summary = "Deactivate an agent group", description = "Soft-deactivates an agent group while preserving existing member associations. Requires `agent-group.delete` permission.")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_DELETE + "')")
     public ResponseEntity<Void> deleteAgentGroup(@PathVariable String id) {

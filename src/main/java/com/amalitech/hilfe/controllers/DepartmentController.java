@@ -35,7 +35,7 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success("Departments retrieved successfully", PageResponse.from(page)));
     }
 
-    @Operation(summary = "Get a department", description = "Returns an internal department by ID. Requires `department.read` permission.")
+    @Operation(summary = "Get a department", description = "Returns an internal department by ID. Inactive departments remain retrievable for admin management. Requires `department.read` permission.")
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")
     public ResponseEntity<ApiResponse<DepartmentResponse>> getDepartment(@PathVariable String id) {
@@ -63,7 +63,7 @@ public class DepartmentController {
     @Operation(
             summary = "Update department status",
             description = "Updates department active state. `status=true` activates and `status=false` deactivates. "
-                    + "Deactivation is blocked if categories or active agent groups are linked. "
+                    + "Existing category and agent-group associations are preserved across deactivation and reactivation. "
                     + "Requires `department.delete` permission."
     )
     @PatchMapping("/{id}/status")
