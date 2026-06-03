@@ -23,6 +23,7 @@ public record IncidentResponse(
         @Schema(description = "Timestamp when the incident was marked resolved, or null if not yet resolved", nullable = true) Instant resolvedAt,
         @Schema(description = "Timestamp when the incident was closed, or null if still open", nullable = true) Instant closedAt,
         @Schema(description = "Timestamp when the incident was created (UTC)") Instant createdAt,
+        @Schema(description = "Timestamp when the incident was last updated (UTC)") Instant updatedAt,
         @Schema(description = "File attachments (populated on detail view, null on list view)", nullable = true) List<MediaResponse> attachments
 ) {
     public static IncidentResponse from(Incident incident) {
@@ -46,6 +47,7 @@ public record IncidentResponse(
                 incident.getResolvedAt(),
                 incident.getClosedAt(),
                 incident.getCreatedAt(),
+                incident.getUpdatedAt(),
                 attachments
         );
     }
