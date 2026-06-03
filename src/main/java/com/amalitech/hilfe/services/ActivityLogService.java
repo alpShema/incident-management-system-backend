@@ -200,6 +200,44 @@ public class ActivityLogService {
         }
     }
 
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentAutoAssignment(String incidentId, String agentId) {
+        try {
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            String agentName = resolveAgentName(agentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .action("INCIDENT_ASSIGNED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description(incidentLabel + " auto-assigned to " + agentName + " by System")
+                    .metadata("{\"agentId\":\"" + agentId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log auto-assignment for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentUnassignment(String actorUserId, String incidentId, String previousAgentId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            String agentName = resolveAgentName(previousAgentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INCIDENT_UNASSIGNED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description(incidentLabel + " unassigned from " + agentName + " (agent inactive) by " + actorName)
+                    .metadata("{\"previousAgentId\":\"" + previousAgentId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log unassignment for incident {}", incidentId, ex);
+        }
+    }
+
     private String resolveUserName(String userId) {
         if (userId == null) return "Unknown";
         return userRepository.findById(userId)

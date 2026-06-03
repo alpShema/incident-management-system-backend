@@ -91,7 +91,7 @@ public class IncidentService {
         entityManager.flush();
 
         int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
-        // Defer notification dispatch to AFTER the main transaction commits.
+        // Defer notification and logging dispatch to AFTER the main transaction commits.
         // Notification methods are @Async + @Transactional(REQUIRES_NEW), so they run
         // in a separate DB connection. If called before commit, the incident FK is
         // not yet visible and the INSERT into notifications fails silently.
@@ -104,6 +104,7 @@ public class IncidentService {
             if (assignedToId != null) {
                 notificationService.sendAssignmentNotification(agentUserId, incidentId, incidentNo);
                 notificationService.sendAutoAssignedClientNotification(userId, incidentId, incidentNo);
+                activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
             } else {
                 for (String adminId : adminUserIds) {
                     notificationService.sendEscalationNotification(adminId, incidentId, incidentNo);
@@ -462,8 +463,9 @@ public class IncidentService {
         Status inProgressStatus = statusRepository.findByNameIgnoreCase("In Progress")
                 .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500));
 
-        if (incident.getAssignedToId() != null) {
-            boolean agentActive = agentRepository.findById(incident.getAssignedToId())
+        String previousAgentId = incident.getAssignedToId();
+        if (previousAgentId != null) {
+            boolean agentActive = agentRepository.findById(previousAgentId)
                     .map(a -> Boolean.TRUE.equals(a.getStatus()))
                     .orElse(false);
             if (!agentActive) {
@@ -475,6 +477,9 @@ public class IncidentService {
         incident.setResolvedAt(null);
         incidentRepository.save(incident);
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
+        if (incident.getAssignedToId() == null && previousAgentId != null) {
+            activityLogService.logIncidentUnassignment(actorUserId, incidentId, previousAgentId);
+        }
 
         // Notify the assigned agent (if any) that the incident has been reopened and needs attention
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
