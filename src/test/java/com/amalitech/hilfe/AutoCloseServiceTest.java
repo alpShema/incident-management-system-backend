@@ -6,13 +6,15 @@ import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.models.SystemConfig;
 import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.notifications.NotificationEventPublisher;
+import com.amalitech.hilfe.notifications.events.IncidentAutoClosedAgentEvent;
+import com.amalitech.hilfe.notifications.events.IncidentAutoClosedClientEvent;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.AutoCloseService;
-import com.amalitech.hilfe.services.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -37,7 +39,7 @@ class AutoCloseServiceTest {
     @Mock StatusRepository       statusRepository;
     @Mock AgentRepository        agentRepository;
     @Mock ActivityLogService     activityLogService;
-    @Mock NotificationService    notificationService;
+    @Mock NotificationEventPublisher notificationEventPublisher;
 
     @InjectMocks AutoCloseService autoCloseService;
 
@@ -181,7 +183,7 @@ class AutoCloseServiceTest {
 
         autoCloseService.autoCloseResolvedIncidents();
 
-        verify(notificationService).sendAutoClosedNotification("agent-user-1", "inc-1", 42);
+        verify(notificationEventPublisher).publish(new IncidentAutoClosedAgentEvent("agent-user-1", "inc-1", 42));
     }
 
     @Test
@@ -200,7 +202,7 @@ class AutoCloseServiceTest {
 
         autoCloseService.autoCloseResolvedIncidents();
 
-        verify(notificationService).sendAutoClosedClientNotification("client-user-1", "inc-1", 7);
+        verify(notificationEventPublisher).publish(new IncidentAutoClosedClientEvent("client-user-1", "inc-1", 7));
     }
 
     @Test
@@ -218,8 +220,8 @@ class AutoCloseServiceTest {
 
         autoCloseService.autoCloseResolvedIncidents();
 
-        verify(notificationService, never()).sendAutoClosedNotification(any(), any(), anyInt());
-        verify(notificationService).sendAutoClosedClientNotification("client-user-1", "inc-1", 0);
+        verify(notificationEventPublisher, never()).publish(isA(IncidentAutoClosedAgentEvent.class));
+        verify(notificationEventPublisher).publish(new IncidentAutoClosedClientEvent("client-user-1", "inc-1", 0));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
