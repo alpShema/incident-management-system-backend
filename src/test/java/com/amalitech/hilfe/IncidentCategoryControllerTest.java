@@ -48,7 +48,7 @@ class IncidentCategoryControllerTest {
     }
 
     private IncidentCategoryResponse stubCategory() {
-        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", null, "active");
+        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", null, "active", null);
     }
 
     private IncidentTopicResponse stubTopic() {
@@ -57,6 +57,7 @@ class IncidentCategoryControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
+                null,
                 null);
     }
 

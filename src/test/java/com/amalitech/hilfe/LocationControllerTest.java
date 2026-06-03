@@ -34,7 +34,7 @@ class LocationControllerTest {
     @Test
     void listLocations_returns200WithData() throws Exception {
         when(locationService.listLocations()).thenReturn(List.of(
-                new LocationResponse("loc-1", "Accra")
+                new LocationResponse("loc-1", "Accra", null)
         ));
 
         mvc.perform(get("/locations")
