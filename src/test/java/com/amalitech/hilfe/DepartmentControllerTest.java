@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -104,5 +105,18 @@ class DepartmentControllerTest {
                         .content(objectMapper.writeValueAsString(new UpdateDepartmentStatusRequest(false)))
                         .with(authentication(auth)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getDepartment_inactive_returns200() throws Exception {
+        when(departmentService.getDepartment("dept-1")).thenReturn(department(false));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.read"));
+
+        mvc.perform(get("/departments/dept-1")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(false));
     }
 }

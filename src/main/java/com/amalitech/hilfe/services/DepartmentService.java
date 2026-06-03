@@ -43,7 +43,7 @@ public class DepartmentService {
     }
 
     public DepartmentResponse getDepartment(String id) {
-        return toResponse(findActiveDepartment(id));
+        return toResponse(findDepartmentByIdOrThrow(id));
     }
 
     @Transactional
@@ -86,21 +86,12 @@ public class DepartmentService {
                     409);
         }
 
-        if (Boolean.FALSE.equals(status)) {
-            if (categoryRepository.existsByDepartmentId(id)) {
-                throw new ArmsAuthException("Department has assigned incident categories", 409);
-            }
-            if (agentGroupRepository.existsByDepartmentIdAndStatus(id, true)) {
-                throw new ArmsAuthException("Department has assigned agent groups", 409);
-            }
-        }
-
         department.setStatus(status);
         return toResponse(departmentRepository.save(department));
     }
 
     public List<IncidentCategoryResponse> listCategories(String departmentId) {
-        findActiveDepartment(departmentId);
+        findDepartmentByIdOrThrow(departmentId);
         return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, "active").stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
