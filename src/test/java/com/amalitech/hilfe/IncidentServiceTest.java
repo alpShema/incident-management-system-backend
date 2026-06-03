@@ -10,7 +10,10 @@ import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.NotificationService;
+import com.amalitech.hilfe.events.IncidentCreatedEvent;
+import com.amalitech.hilfe.events.IncidentStatusChangedEvent;
 import jakarta.persistence.EntityManager;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +52,7 @@ class IncidentServiceTest {
     @Mock ActivityLogService activityLogService;
     @Mock AutoCloseService autoCloseService;
     @Mock NotificationService notificationService;
+    @Mock ApplicationEventPublisher eventPublisher;
     @Mock MediaService mediaService;
     @Mock MediaRepository mediaRepository;
     @Mock EntityManager entityManager;
@@ -147,8 +151,10 @@ class IncidentServiceTest {
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        verify(notificationService).sendAutoAssignedClientNotification("user-1", incident.getId(), 1);
-        verify(notificationService).sendAssignmentNotification("agent-user-1", incident.getId(), 1);
+        var eventCaptor = forClass(IncidentCreatedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().clientUserId()).isEqualTo("user-1");
+        assertThat(eventCaptor.getValue().assignedAgentUserId()).isEqualTo("agent-user-1");
     }
 
     @Test
@@ -198,11 +204,13 @@ class IncidentServiceTest {
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        verify(notificationService, never()).sendAutoAssignedClientNotification(any(), any(), anyInt());
+        var eventCaptor = forClass(IncidentCreatedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().assignedAgentUserId()).isNull();
     }
 
     @Test
-    void createIncident_noAutoAssignment_notifiesAllActiveAdmins() {
+    void createIncident_noAutoAssignment_publishesEventWithAdminIds() {
         Incident incident = buildIncident(); // assignedToId = null
 
         when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
@@ -215,9 +223,10 @@ class IncidentServiceTest {
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        verify(notificationService).sendEscalationNotification("admin-user-1", incident.getId(), 1);
-        verify(notificationService).sendEscalationNotification("admin-user-2", incident.getId(), 1);
-        verify(notificationService, never()).sendAutoAssignedClientNotification(any(), any(), anyInt());
+        var eventCaptor = forClass(IncidentCreatedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().adminUserIds()).containsExactly("admin-user-1", "admin-user-2");
+        assertThat(eventCaptor.getValue().assignedAgentUserId()).isNull();
     }
 
     @Test
@@ -234,7 +243,9 @@ class IncidentServiceTest {
         incidentService.createIncident("user-1", new CreateIncidentRequest(
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
-        verify(notificationService, never()).sendEscalationNotification(any(), any(), anyInt());
+        var eventCaptor = forClass(IncidentCreatedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().adminUserIds()).isEmpty();
     }
 
     @Test
@@ -1256,11 +1267,14 @@ class IncidentServiceTest {
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
                 new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
 
-        verify(notificationService).sendReopenedNotification("actor-1", "inc-1", 1);
+        var eventCaptor = forClass(IncidentStatusChangedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().assignedAgentUserId()).isEqualTo("actor-1");
+        assertThat(eventCaptor.getValue().newStatus()).isEqualTo("Reopened");
     }
 
     @Test
-    void applyReopenTransition_agentInactive_sendsReopenedNotificationWithNullUserId() {
+    void applyReopenTransition_agentInactive_eventHasNullAgentUserId() {
         Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
         Status reopenedStatus   = buildStatus("status-reopened",    "Reopened");
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
@@ -1281,8 +1295,9 @@ class IncidentServiceTest {
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
                 new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
 
-        // After inactive agent is cleared, resolveAgentUserId(null) returns null
-        verify(notificationService).sendReopenedNotification(null, "inc-1", 1);
+        var eventCaptor = forClass(IncidentStatusChangedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().assignedAgentUserId()).isNull();
     }
 
     @Test
@@ -1352,11 +1367,12 @@ class IncidentServiceTest {
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1",
                 new UpdateIncidentStatusRequest("status-pending", "Waiting for parts"));
 
-        // creator ("user-1") is not the actor ("actor-1") → should receive a PENDING notification
-        verify(notificationService).sendPendingNotification("user-1", "inc-1", 1, "Waiting for parts");
-        // sendStatusChangeNotification must NOT be used for Pending
-        verify(notificationService, never()).sendStatusChangeNotification(
-                eq("user-1"), any(), anyInt(), any(), any(), any());
+        // Verify the event is published with the correct status — the listener handles notification routing
+        var eventCaptor = forClass(IncidentStatusChangedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().newStatus()).isEqualTo("Pending");
+        assertThat(eventCaptor.getValue().clientUserId()).isEqualTo("user-1");
+        assertThat(eventCaptor.getValue().reason()).isEqualTo("Waiting for parts");
     }
 
     @Test
