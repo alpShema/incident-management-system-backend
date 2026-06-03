@@ -27,7 +27,7 @@ public class AgentController {
 
     @Operation(
             summary = "List all agents",
-            description = "Returns a paginated list of agents. "
+            description = "Returns a paginated list of agents for operational use. "
                     + "When `departmentId` is omitted, returns active agents only. "
                     + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
                     + "If the department is missing or inactive, returns an empty page. "
@@ -47,6 +47,30 @@ public class AgentController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Agents retrieved successfully",
                 PageResponse.from(agentService.listAgents(departmentId, pageable))));
+    }
+
+    @Operation(
+            summary = "List all agents regardless of status",
+            description = "Returns a paginated list of agents including both active and inactive records. "
+                    + "When `departmentId` is omitted, all agents are returned regardless of status. "
+                    + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
+                    + "If the department is missing or inactive, returns an empty page. "
+                    + "Requires `agent.read` permission."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Agents retrieved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/all")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_READ + "')")
+    public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAllAgents(
+            @RequestParam(required = false) String departmentId,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Agents retrieved successfully",
+                PageResponse.from(agentService.listAllAgents(departmentId, pageable))));
     }
 
     @Operation(

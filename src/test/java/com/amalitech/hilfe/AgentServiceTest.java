@@ -53,6 +53,19 @@ class AgentServiceTest {
     }
 
     @Test
+    void listAllAgents_withoutDepartment_usesAllStatusesQuery() {
+        var pageable = PageRequest.of(0, 10);
+        when(agentRepository.findAllWithUser(pageable))
+                .thenReturn(new PageImpl<>(List.of(agent("a1", true), agent("a2", false)), pageable, 2));
+
+        var result = agentService.listAllAgents(null, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        verify(agentRepository).findAllWithUser(pageable);
+        verify(agentRepository, never()).findAllActiveWithUser(pageable);
+    }
+
+    @Test
     void listAgents_withActiveDepartment_usesDepartmentQuery() {
         var pageable = PageRequest.of(0, 10);
         when(departmentRepository.findById("dept-1"))
@@ -85,6 +98,33 @@ class AgentServiceTest {
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.empty());
 
         var result = agentService.listAgents("dept-1", pageable);
+
+        assertThat(result.getTotalElements()).isZero();
+        assertThat(result.getContent()).isEmpty();
+        verify(agentRepository, never()).findByDepartmentIdWithUser("dept-1", pageable);
+    }
+
+    @Test
+    void listAllAgents_withActiveDepartment_usesDepartmentQuery() {
+        var pageable = PageRequest.of(0, 10);
+        when(departmentRepository.findById("dept-1"))
+                .thenReturn(Optional.of(Department.builder().id("dept-1").status(true).build()));
+        when(agentRepository.findByDepartmentIdWithUser("dept-1", pageable))
+                .thenReturn(new PageImpl<>(List.of(agent("a1", true), agent("a2", false)), pageable, 2));
+
+        var result = agentService.listAllAgents("dept-1", pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        verify(agentRepository).findByDepartmentIdWithUser("dept-1", pageable);
+    }
+
+    @Test
+    void listAllAgents_withInactiveDepartment_returnsEmptyPage() {
+        var pageable = PageRequest.of(0, 10);
+        when(departmentRepository.findById("dept-1"))
+                .thenReturn(Optional.of(Department.builder().id("dept-1").status(false).build()));
+
+        var result = agentService.listAllAgents("dept-1", pageable);
 
         assertThat(result.getTotalElements()).isZero();
         assertThat(result.getContent()).isEmpty();
