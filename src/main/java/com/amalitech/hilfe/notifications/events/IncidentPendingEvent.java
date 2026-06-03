@@ -4,6 +4,7 @@ public record IncidentPendingEvent(
         String recipientUserId,
         String incidentId,
         int incidentNo,
-        String reason
+        String reason,
+        String actorName
 ) {
 }

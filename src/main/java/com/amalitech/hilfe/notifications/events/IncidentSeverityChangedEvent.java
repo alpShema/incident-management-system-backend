@@ -5,6 +5,7 @@ public record IncidentSeverityChangedEvent(
         String incidentId,
         int incidentNo,
         String previousSeverity,
-        String newSeverity
+        String newSeverity,
+        String actorName
 ) {
 }

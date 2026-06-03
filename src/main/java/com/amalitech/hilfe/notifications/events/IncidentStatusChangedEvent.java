@@ -6,6 +6,7 @@ public record IncidentStatusChangedEvent(
         int incidentNo,
         String previousStatus,
         String newStatus,
-        String reason
+        String reason,
+        String actorName
 ) {
 }
