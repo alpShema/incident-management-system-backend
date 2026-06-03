@@ -8,6 +8,7 @@ import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
 import com.amalitech.hilfe.security.JwtAuthenticationFilter;
 import com.amalitech.hilfe.security.SecurityConfig;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
@@ -40,6 +41,7 @@ class IncidentControllerTest {
     @Autowired MockMvc mvc;
     final ObjectMapper objectMapper = new ObjectMapper();
     @MockitoBean IncidentService incidentService;
+    @MockitoBean ActivityLogService activityLogService;
     @MockitoBean TokenService tokenService;
 
     private JwtTokenService.AuthPrincipal clientPrincipal() {
