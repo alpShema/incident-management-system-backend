@@ -34,6 +34,21 @@ public class AgentService {
         return agentRepository.findByDepartmentIdWithUser(departmentId, pageable).map(AgentResponse::from);
     }
 
+    public Page<AgentResponse> listAllAgents(String departmentId, Pageable pageable) {
+        if (departmentId == null || departmentId.isBlank()) {
+            return agentRepository.findAllWithUser(pageable).map(AgentResponse::from);
+        }
+
+        boolean activeDepartment = departmentRepository.findById(departmentId)
+                .map(department -> Boolean.TRUE.equals(department.getStatus()))
+                .orElse(false);
+        if (!activeDepartment) {
+            return new PageImpl<>(List.of(), pageable, 0);
+        }
+
+        return agentRepository.findByDepartmentIdWithUser(departmentId, pageable).map(AgentResponse::from);
+    }
+
     public AgentResponse updateAvailability(String userId, boolean available) {
         Agent agent = agentRepository.findByUserId(userId)
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));

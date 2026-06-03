@@ -92,6 +92,36 @@ class AgentControllerTest {
                 .andExpect(jsonPath("$.data.items[0].status").value(false));
     }
 
+    @Test
+    void listAllAgents_returns200() throws Exception {
+        when(agentService.listAllAgents(isNull(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true), stubAgentResponse(false)), PageRequest.of(0, 20), 2));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Agents retrieved successfully"))
+                .andExpect(jsonPath("$.data.totalElements").value(2));
+    }
+
+    @Test
+    void listAllAgents_withDepartment_returns200() throws Exception {
+        when(agentService.listAllAgents(anyString(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(false)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .param("departmentId", "dept-1")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].status").value(false));
+    }
+
     // ── PATCH /agents/status ──────────────────────────────────────────────────
 
     @Test
