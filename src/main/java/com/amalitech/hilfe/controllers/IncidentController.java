@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class IncidentController {
     private final IncidentService incidentService;
+    private final ActivityLogService activityLogService;
 
     @Operation(
         summary = "Create a new incident",
@@ -327,6 +329,27 @@ public class IncidentController {
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident assigned successfully",
                 incidentService.assignIncident(principal.userId(), id, request)));
+    }
+
+    @Operation(
+        summary = "Get incident history",
+        description = "Returns a paginated, reverse-chronological audit log for a specific incident. "
+                    + "Accessible to the incident reporter, assigned agent, or any admin."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident history retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
+    })
+    @GetMapping("/{id}/history")
+    public ResponseEntity<ApiResponse<PageResponse<ActivityLogResponse>>> getIncidentHistory(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Incident ID") @PathVariable String id,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Incident history retrieved successfully",
+                PageResponse.from(activityLogService.getActivityLogs(id, pageable, principal.userId(), principal.roleCode()))
+        ));
     }
 
     private RoleCode parseRoleCode(String roleCode) {
