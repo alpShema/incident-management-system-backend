@@ -128,10 +128,7 @@ public class MessageService {
         Message message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new ArmsAuthException("Message not found", 404));
 
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role);
-        boolean isAuthor = message.getSenderId().equals(userId);
-
-        if (!isAdmin && !isAuthor) {
+        if (!message.getSenderId().equals(userId)) {
             throw new ArmsAuthException("You can only delete your own messages", 403);
         }
 
