@@ -64,6 +64,48 @@ class MessageServiceTest {
     }
 
     @Test
+    void generateMessagePresignedUrl_byUnassignedAgentInSameDepartment_throws403() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .userId("u1")
+                .assignedToId("agent-assignee")
+                .build();
+        Agent teammateAgent = Agent.builder().id("agent-teammate").userId("u-teammate").status(true).build();
+        PresignedUrlRequest request = new PresignedUrlRequest("img.png", "image/png", 1024L);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("u-teammate")).thenReturn(Optional.of(teammateAgent));
+
+        assertThatThrownBy(() -> messageService.generateMessagePresignedUrl("u-teammate", "AGENT", "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You do not have access to this incident")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(mediaService, never()).generateMessagePresignedUploadUrl(any(PresignedUrlRequest.class));
+    }
+
+    @Test
+    void generateMessagePresignedUrl_byAssignedAgent_returnsPresignedResponse() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .userId("u1")
+                .assignedToId("agent-assignee")
+                .build();
+        Agent assigneeAgent = Agent.builder().id("agent-assignee").userId("u-assignee").status(true).build();
+        PresignedUrlRequest request = new PresignedUrlRequest("img.png", "image/png", 1024L);
+        PresignedUrlResponse presigned = new PresignedUrlResponse("https://upload", "messages/a/img.png", 900);
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("u-assignee")).thenReturn(Optional.of(assigneeAgent));
+        when(mediaService.generateMessagePresignedUploadUrl(request)).thenReturn(presigned);
+
+        PresignedUrlResponse result = messageService.generateMessagePresignedUrl("u-assignee", "AGENT", "inc-1", request);
+
+        assertThat(result).isEqualTo(presigned);
+    }
+
+    @Test
     void sendMessage_attachmentsOnly_persistsAndBroadcastsWithAttachments() {
         Incident incident = Incident.builder().id("inc-1").userId("u1").build();
         User sender = User.builder().id("u1").fullName("Jane").email("jane@test.com").build();
