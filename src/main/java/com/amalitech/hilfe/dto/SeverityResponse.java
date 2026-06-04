@@ -11,6 +11,8 @@ public record SeverityResponse(
         @Schema(description = "Severity name") String name,
         @Schema(description = "Severity description") String description,
         @Schema(description = "Whether this severity is active") Boolean status,
+        @Schema(description = "Configured response SLA threshold in minutes", nullable = true) Integer responseTimeMinutes,
+        @Schema(description = "Configured resolution SLA threshold in minutes", nullable = true) Integer resolutionTimeMinutes,
         @Schema(description = "Created timestamp") Instant createdAt,
         @Schema(description = "Updated timestamp") Instant updatedAt
 ) {
@@ -20,6 +22,8 @@ public record SeverityResponse(
                 s.getName(),
                 s.getDescription(),
                 s.getStatus(),
+                s.getResponseTimeMinutes(),
+                s.getResolutionTimeMinutes(),
                 s.getCreatedAt(),
                 s.getUpdatedAt()
         );

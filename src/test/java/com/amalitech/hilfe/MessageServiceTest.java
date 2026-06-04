@@ -19,6 +19,7 @@ import com.amalitech.hilfe.repositories.MessageRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.MessageService;
+import com.amalitech.hilfe.services.SlaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -47,6 +48,7 @@ class MessageServiceTest {
     @Mock UserRepository userRepository;
     @Mock MessageMediaRepository messageMediaRepository;
     @Mock MediaService mediaService;
+    @Mock SlaService slaService;
     @Mock SimpMessagingTemplate messagingTemplate;
     @InjectMocks MessageService messageService;
 
@@ -189,6 +191,7 @@ class MessageServiceTest {
         MessageResponse result = messageService.sendMessage("u-assignee", "AGENT", "inc-1", "hi", List.of());
 
         assertThat(result.id()).isEqualTo("msg-1");
+        verify(slaService).onAgentMessageSent(incident, "u-assignee");
         verify(messagingTemplate).convertAndSend(eq("/topic/incidents/inc-1/messages"), any(MessageResponse.class));
     }
 

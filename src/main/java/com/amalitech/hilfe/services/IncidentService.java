@@ -58,6 +58,7 @@ public class IncidentService {
     private final MediaRepository mediaRepository;
     private final LocationRepository locationRepository;
     private final AutoCloseService autoCloseService;
+    private final SlaService slaService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -89,6 +90,7 @@ public class IncidentService {
 
         Incident saved = incidentRepository.save(incident);
         entityManager.flush();
+        slaService.onIncidentCreated(saved);
 
         int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
         String incidentId = saved.getId();
@@ -115,7 +117,7 @@ public class IncidentService {
         }
 
         entityManager.clear();
-        return IncidentResponse.from(
+        return slaService.toIncidentResponse(
                 incidentRepository.findByIdWithDetails(saved.getId()).orElseThrow(),
                 mediaResponses);
     }
@@ -127,10 +129,9 @@ public class IncidentService {
             Instant fromDate, Instant toDate,
             Pageable pageable
     ) {
-        return incidentRepository
+        return slaService.toIncidentResponsePage(incidentRepository
                 .findByUserIdUnified(userId, buildQueryPattern(query), statusId, severityId,
-                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable))
-                .map(IncidentResponse::from);
+                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable)));
     }
 
     public Page<IncidentResponse> queryAllIncidents(
@@ -139,10 +140,9 @@ public class IncidentService {
             Instant fromDate, Instant toDate,
             Pageable pageable
     ) {
-        return incidentRepository
+        return slaService.toIncidentResponsePage(incidentRepository
                 .findAllUnified(buildQueryPattern(query), statusId, severityId,
-                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable))
-                .map(IncidentResponse::from);
+                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable)));
     }
 
     public Page<IncidentResponse> queryDeptIncidents(
@@ -158,8 +158,8 @@ public class IncidentService {
                 .filter(ids -> !ids.isEmpty())
                 .map(ids -> incidentRepository
                         .findByDepartmentUnified(ids, queryPattern, statusId, severityId,
-                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted)
-                        .map(IncidentResponse::from))
+                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted))
+                .map(slaService::toIncidentResponsePage)
                 .orElse(new PageImpl<>(List.of(), sorted, 0));
     }
 
@@ -175,8 +175,8 @@ public class IncidentService {
         return agentRepository.findByUserId(userId)
                 .map(agent -> incidentRepository
                         .findByAssignedToIdUnified(agent.getId(), queryPattern, statusId, severityId,
-                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted)
-                        .map(IncidentResponse::from))
+                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted))
+                .map(slaService::toIncidentResponsePage)
                 .orElse(new PageImpl<>(List.of(), sorted, 0));
     }
 
@@ -189,9 +189,9 @@ public class IncidentService {
                 ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"))
                 : ensureSorted(pageable);
 
-        return incidentRepository
+        return slaService.toIncidentResponsePage(incidentRepository
                 .searchByUserId(userId, buildQueryPattern(query), fromDate, toDate, sortedPageable)
-                .map(IncidentResponse::from);
+        );
     }
 
     public IncidentResponse getIncident(String userId, String roleCode, String incidentId) {
@@ -202,7 +202,7 @@ public class IncidentService {
 
         List<Media> mediaList = mediaRepository.findByIncidentId(incidentId);
         List<MediaResponse> mediaResponses = mediaService.toMediaResponses(mediaList);
-        return IncidentResponse.from(incident, mediaResponses);
+        return slaService.toIncidentResponse(incident, mediaResponses);
     }
 
     public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
@@ -220,6 +220,7 @@ public class IncidentService {
         enforceReopenWindow(incident, newStatus);
         enforceReasonRequired(newStatus, request.reason());
 
+        String previousStatusId = incident.getStatus() != null ? incident.getStatus().getId() : null;
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
         incident.setStatusReason(requiresReason(newStatus) ? request.reason() : null);
@@ -227,6 +228,7 @@ public class IncidentService {
         incident.setClosedAt("status-closed".equals(newStatus.getId()) ? Instant.now() : null);
 
         incidentRepository.save(incident);
+        slaService.onStatusChanged(incident, previousStatusId, request.statusId());
         activityLogService.logIncidentStatusChange(actorUserId, incidentId, previousStatusName, newStatus.getName(), request.reason());
         dispatchStatusNotifications(incident, previousStatusName, newStatus.getName(), request.reason(), actorUserId);
 
@@ -236,7 +238,7 @@ public class IncidentService {
 
         entityManager.flush();
         entityManager.clear();
-        return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+        return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     @Transactional
@@ -274,7 +276,7 @@ public class IncidentService {
 
         entityManager.flush();
         entityManager.clear();
-        return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+        return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     @Transactional
@@ -319,7 +321,7 @@ public class IncidentService {
 
         entityManager.flush();
         entityManager.clear();
-        return IncidentResponse.from(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+        return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -376,8 +378,8 @@ public class IncidentService {
             String assignedAgentId = findAvailableAgentInGroup(agentGroup, incident.getLocationId());
             if (assignedAgentId != null) {
                 incident.setAssignedToId(assignedAgentId);
-                incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
-                        .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                incident.setStatusId(statusRepository.findByNameIgnoreCase("In Progress")
+                        .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
                         .getId());
             } else {
                 incident.setStatusId("status-open");
@@ -388,8 +390,8 @@ public class IncidentService {
             Agent agent = agentRepository.findById(incidentType.getAgentId()).orElse(null);
             if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
                 incident.setAssignedToId(incidentType.getAgentId());
-                incident.setStatusId(statusRepository.findByNameIgnoreCase("Pending")
-                        .orElseThrow(() -> new ArmsAuthException("Default 'Pending' status not configured", 500))
+                incident.setStatusId(statusRepository.findByNameIgnoreCase("In Progress")
+                        .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
                         .getId());
             } else {
                 incident.setStatusId("status-open");
