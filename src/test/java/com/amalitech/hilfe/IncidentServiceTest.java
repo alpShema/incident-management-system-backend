@@ -1562,18 +1562,55 @@ class IncidentServiceTest {
     // ── queryDeptIncidents ────────────────────────────────────────────────────
 
     @Test
-    void queryDeptIncidents_agentWithGroups_returnsDeptPage() {
+    void queryDeptIncidents_expandsToDepartmentScope() {
         Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
         Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-A"))).thenReturn(List.of("dept-IT"));
+        when(agentGroupRepository.findIdsByDepartmentIds(List.of("dept-IT"))).thenReturn(List.of("group-A", "group-B", "group-C"));
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-C")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
 
         assertThat(result.getTotalElements()).isEqualTo(1);
-        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-1")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-C")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+    }
+
+    @Test
+    void queryDeptIncidents_multipleDeptsUnion() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A", "group-X"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-A", "group-X"))).thenReturn(List.of("dept-IT", "dept-HR"));
+        when(agentGroupRepository.findIdsByDepartmentIds(List.of("dept-IT", "dept-HR"))).thenReturn(List.of("group-A", "group-B", "group-X", "group-Y"));
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-X", "group-Y")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(agentGroupRepository).findDepartmentIdsByGroupIds(List.of("group-A", "group-X"));
+        verify(agentGroupRepository).findIdsByDepartmentIds(List.of("dept-IT", "dept-HR"));
+    }
+
+    @Test
+    void queryDeptIncidents_groupWithNoDept_fallsBackToGroupLevel() {
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-orphan"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-orphan"))).thenReturn(List.of());
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-orphan")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, null, null, null, null, null, null, null, Pageable.unpaged());
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(agentGroupRepository, never()).findIdsByDepartmentIds(any());
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-orphan")), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
     }
 
     @Test
@@ -1664,6 +1701,8 @@ class IncidentServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of("dept-1"));
+        when(agentGroupRepository.findIdsByDepartmentIds(List.of("dept-1"))).thenReturn(List.of("group-1"));
         when(incidentRepository.findByDepartmentUnified(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(page);
 

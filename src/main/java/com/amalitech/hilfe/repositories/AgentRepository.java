@@ -19,30 +19,57 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
     @Query(value = """
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
-            LEFT JOIN FETCH u.location
+            LEFT JOIN FETCH u.location l
+            WHERE (:queryPattern IS NULL OR (
+                LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
+            ))
             """,
             countQuery = """
             SELECT COUNT(a) FROM Agent a
+            LEFT JOIN a.user u
+            LEFT JOIN u.location l
+            WHERE (:queryPattern IS NULL OR (
+                LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
+            ))
             """)
-    Page<Agent> findAllWithUser(Pageable pageable);
+    Page<Agent> findAllWithUserAndQuery(@Param("queryPattern") String queryPattern, Pageable pageable);
 
     @Query(value = """
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
-            LEFT JOIN FETCH u.location
+            LEFT JOIN FETCH u.location l
             WHERE a.status = true
+            AND (:queryPattern IS NULL OR (
+                LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
+                OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
+            ))
             """,
             countQuery = """
             SELECT COUNT(a) FROM Agent a
             WHERE a.status = true
+            AND (:queryPattern IS NULL OR EXISTS (
+                SELECT 1 FROM User u
+                LEFT JOIN u.location l
+                WHERE u.id = a.userId
+                AND (
+                    LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
+                    OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
+                    OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
+                )
+            ))
             """)
-    Page<Agent> findAllActiveWithUser(Pageable pageable);
+    Page<Agent> findAllActiveWithUserAndQuery(@Param("queryPattern") String queryPattern, Pageable pageable);
 
     @Query(
             value = """
                     SELECT DISTINCT a FROM Agent a
                     LEFT JOIN FETCH a.user u
-                    LEFT JOIN FETCH u.location
+                    LEFT JOIN FETCH u.location l
                     WHERE EXISTS (
                         SELECT 1 FROM AgentGroupMember m
                         JOIN m.agentGroup g
@@ -50,6 +77,11 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.departmentId = :departmentId
                           AND g.status = true
                     )
+                    AND (:queryPattern IS NULL OR (
+                        LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
+                        OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
+                        OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
+                    ))
                     """,
             countQuery = """
                     SELECT COUNT(DISTINCT a) FROM Agent a
@@ -60,9 +92,23 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.departmentId = :departmentId
                           AND g.status = true
                     )
+                    AND (:queryPattern IS NULL OR EXISTS (
+                        SELECT 1 FROM User u
+                        LEFT JOIN u.location l
+                        WHERE u.id = a.userId
+                        AND (
+                            LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
+                            OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
+                            OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
+                        )
+                    ))
                     """
     )
-    Page<Agent> findByDepartmentIdWithUser(@Param("departmentId") String departmentId, Pageable pageable);
+    Page<Agent> findByDepartmentIdWithUserAndQuery(
+            @Param("departmentId") String departmentId,
+            @Param("queryPattern") String queryPattern,
+            Pageable pageable
+    );
 
     @Query("""
             SELECT a FROM Agent a

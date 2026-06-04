@@ -12,18 +12,15 @@ public record AgentResponse(
         @Schema(description = "Agent's full name", nullable = true) String fullName,
         @Schema(description = "Agent's email address", nullable = true) String email,
         @Schema(description = "URL to agent's profile image", nullable = true) String profileImg,
-        @Schema(description = "Agent's location ID", nullable = true) String locationId,
-        @Schema(description = "Agent's location name", nullable = true) String locationName,
+        @Schema(description = "Agent's office location name", nullable = true) String officeLocation,
         @Schema(description = "Whether the agent is active") Boolean status,
         @Schema(description = "Timestamp when the agent record was last updated (UTC)") Instant updatedAt
 ) {
     public static AgentResponse from(Agent agent) {
-        String locationId = null;
-        String locationName = null;
+        String officeLocation = null;
         if (agent.getUser() != null) {
-            locationId = agent.getUser().getLocationId();
             if (agent.getUser().getLocation() != null) {
-                locationName = agent.getUser().getLocation().getName();
+                officeLocation = agent.getUser().getLocation().getName();
             }
         }
         return new AgentResponse(
@@ -32,8 +29,7 @@ public record AgentResponse(
                 agent.getUser() != null ? agent.getUser().getFullName() : null,
                 agent.getUser() != null ? agent.getUser().getEmail() : null,
                 agent.getUser() != null ? agent.getUser().getProfileImg() : null,
-                locationId,
-                locationName,
+                officeLocation,
                 agent.getStatus(),
                 agent.getUpdatedAt()
         );

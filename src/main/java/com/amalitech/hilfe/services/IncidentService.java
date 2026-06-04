@@ -154,13 +154,23 @@ public class IncidentService {
     ) {
         Pageable sorted = ensureSorted(pageable);
         String queryPattern = buildQueryPattern(query);
-        return findAgentGroupIds(userId)
-                .filter(ids -> !ids.isEmpty())
-                .map(ids -> incidentRepository
-                        .findByDepartmentUnified(ids, queryPattern, statusId, severityId,
-                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted))
-                .map(slaService::toIncidentResponsePage)
-                .orElse(new PageImpl<>(List.of(), sorted, 0));
+
+        List<String> userGroupIds = findAgentGroupIds(userId).orElse(List.of());
+        if (userGroupIds.isEmpty()) {
+            return new PageImpl<>(List.of(), sorted, 0);
+        }
+
+        List<String> deptIds = agentGroupRepository.findDepartmentIdsByGroupIds(userGroupIds);
+        List<String> groupIdsToQuery;
+        if (deptIds.isEmpty()) {
+            groupIdsToQuery = userGroupIds;
+        } else {
+            groupIdsToQuery = agentGroupRepository.findIdsByDepartmentIds(deptIds);
+        }
+
+        return slaService.toIncidentResponsePage(incidentRepository
+                .findByDepartmentUnified(groupIdsToQuery, queryPattern, statusId, severityId,
+                        incidentTypeId, categoryId, locationId, fromDate, toDate, sorted));
     }
 
     public Page<IncidentResponse> queryAssignedIncidents(
