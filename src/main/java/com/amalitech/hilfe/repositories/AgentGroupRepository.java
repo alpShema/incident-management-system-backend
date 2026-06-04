@@ -22,4 +22,16 @@ public interface AgentGroupRepository extends JpaRepository<AgentGroup, String> 
 
     @Query("SELECT ag.id FROM AgentGroup ag WHERE ag.departmentId IN :deptIds AND ag.status = true")
     List<String> findIdsByDepartmentIds(@Param("deptIds") List<String> deptIds);
+
+    @Query("""
+        SELECT ag FROM AgentGroup ag
+        LEFT JOIN ag.department d
+        WHERE ag.status = true
+          AND (:query IS NULL OR LOWER(ag.name) LIKE :query OR LOWER(ag.description) LIKE :query OR LOWER(d.name) LIKE :query)
+          AND (:departmentId IS NULL OR ag.departmentId = :departmentId)
+        """)
+    Page<AgentGroup> searchAgentGroups(
+            @Param("query") String query,
+            @Param("departmentId") String departmentId,
+            Pageable pageable);
 }

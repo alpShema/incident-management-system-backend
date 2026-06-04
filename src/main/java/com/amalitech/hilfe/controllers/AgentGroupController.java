@@ -28,11 +28,21 @@ import java.util.List;
 public class AgentGroupController {
     private final AgentGroupService agentGroupService;
 
-    @Operation(summary = "List agent groups", description = "Returns active agent groups as a paginated response. Each agent group belongs to one internal department. Requires `agent-group.read` permission.")
+    @Operation(
+            summary = "List agent groups",
+            description = "Returns active agent groups as a paginated response. Each agent group belongs to one internal department. "
+                    + "Accepts an optional `query` keyword that searches across name, description, and department name. "
+                    + "Accepts an optional `departmentId` filter. "
+                    + "Requires `agent-group.read` permission."
+    )
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
-    public ResponseEntity<ApiResponse<PageResponse<AgentGroupResponse>>> listAgentGroups(Pageable pageable) {
-        Page<AgentGroupResponse> page = agentGroupService.listAgentGroups(pageable);
+    public ResponseEntity<ApiResponse<PageResponse<AgentGroupResponse>>> listAgentGroups(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String departmentId,
+            Pageable pageable
+    ) {
+        Page<AgentGroupResponse> page = agentGroupService.listAgentGroups(query, departmentId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Agent groups retrieved successfully", PageResponse.from(page)));
     }
 
