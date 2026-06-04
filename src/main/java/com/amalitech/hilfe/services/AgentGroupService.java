@@ -29,6 +29,7 @@ public class AgentGroupService {
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final DepartmentRepository departmentRepository;
+    private final ActivityLogService activityLogService;
 
     public Page<AgentGroupResponse> listAgentGroups(Pageable pageable) {
         return agentGroupRepository.findByStatus(true, pageable)
@@ -94,13 +95,22 @@ public class AgentGroupService {
     }
 
     @Transactional
-    public void deleteAgentGroup(String id) {
+    public AgentGroupResponse updateAgentGroupStatus(String actorUserId, String id, Boolean status) {
         AgentGroup group = findAgentGroupByIdOrThrow(id);
-        if (!Boolean.TRUE.equals(group.getStatus())) {
-            throw new ArmsAuthException("Agent group is already inactive", 409);
+
+        if (Boolean.valueOf(status).equals(group.getStatus())) {
+            throw new ArmsAuthException(
+                    Boolean.TRUE.equals(status)
+                            ? "Agent group is already active"
+                            : "Agent group is already inactive",
+                    409);
         }
-        group.setStatus(false);
-        agentGroupRepository.save(group);
+
+        Boolean previousStatus = group.getStatus();
+        group.setStatus(status);
+        AgentGroup saved = agentGroupRepository.save(group);
+        activityLogService.logAgentGroupStatusChange(actorUserId, id, previousStatus, status);
+        return toResponse(saved);
     }
 
     public List<AgentGroupMemberResponse> listMembers(String agentGroupId) {
