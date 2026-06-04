@@ -242,6 +242,23 @@ public class ActivityLogService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentSlaBreached(String incidentId, String slaType, long minutesOverdue) {
+        try {
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .action("INCIDENT_SLA_BREACHED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description(incidentLabel + " " + slaType.toLowerCase() + " SLA breached by " + minutesOverdue + " minute(s)")
+                    .metadata("{\"slaType\":\"" + slaType + "\",\"minutesOverdue\":" + minutesOverdue + "}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log SLA breach for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logAgentGroupStatusChange(String actorUserId, String agentGroupId, Boolean previousStatus, Boolean newStatus) {
         try {
             String actorName = resolveUserName(actorUserId);

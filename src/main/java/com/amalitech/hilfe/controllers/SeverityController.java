@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.SeverityRequest;
 import com.amalitech.hilfe.dto.SeverityResponse;
+import com.amalitech.hilfe.dto.UpdateSeveritySlaRequest;
 import com.amalitech.hilfe.services.SeverityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -72,6 +73,21 @@ public class SeverityController {
             @Valid @RequestBody SeverityRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("Severity updated", severityService.updateSeverity(id, request)));
+    }
+
+    @Operation(summary = "Update severity SLA thresholds", description = "Updates response and resolution SLA thresholds for a severity.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Severity SLA updated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Severity not found")
+    })
+    @PatchMapping("/{id}/sla")
+    @PreAuthorize("hasAuthority('severity.update')")
+    public ResponseEntity<ApiResponse<SeverityResponse>> updateSeveritySla(
+            @Parameter(description = "Severity ID") @PathVariable String id,
+            @Valid @RequestBody UpdateSeveritySlaRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Severity SLA updated", severityService.updateSeveritySla(id, request)));
     }
 
     @Operation(summary = "Deactivate a severity", description = "Soft-deletes a severity by setting status to false.")

@@ -56,7 +56,7 @@ class AgentControllerTest {
     }
 
     private AgentResponse stubAgentResponse(boolean status) {
-        return new AgentResponse("agent-1", "user-1", "Test Agent", "agent@test.com", null, status, null);
+        return new AgentResponse("agent-1", "user-1", "Test Agent", "agent@test.com", null, null, null, status, null);
     }
 
     // ── GET /agents ───────────────────────────────────────────────────────────

@@ -24,13 +24,18 @@ public record IncidentResponse(
         @Schema(description = "Timestamp when the incident was closed, or null if still open", nullable = true) Instant closedAt,
         @Schema(description = "Timestamp when the incident was created (UTC)") Instant createdAt,
         @Schema(description = "Timestamp when the incident was last updated (UTC)") Instant updatedAt,
+        @Schema(description = "Current SLA state for the incident", nullable = true) IncidentSlaResponse sla,
         @Schema(description = "File attachments (populated on detail view, null on list view)", nullable = true) List<MediaResponse> attachments
 ) {
     public static IncidentResponse from(Incident incident) {
-        return from(incident, null);
+        return from(incident, null, null);
     }
 
     public static IncidentResponse from(Incident incident, List<MediaResponse> attachments) {
+        return from(incident, attachments, null);
+    }
+
+    public static IncidentResponse from(Incident incident, List<MediaResponse> attachments, IncidentSlaResponse sla) {
         return new IncidentResponse(
                 incident.getId(),
                 incident.getIncidentNo(),
@@ -48,6 +53,7 @@ public record IncidentResponse(
                 incident.getClosedAt(),
                 incident.getCreatedAt(),
                 incident.getUpdatedAt(),
+                sla,
                 attachments
         );
     }
