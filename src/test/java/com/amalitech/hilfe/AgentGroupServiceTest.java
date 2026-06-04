@@ -9,6 +9,7 @@ import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.AgentGroupService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,7 @@ class AgentGroupServiceTest {
     @Mock AgentRepository agentRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock DepartmentRepository departmentRepository;
+    @Mock ActivityLogService activityLogService;
 
     @InjectMocks AgentGroupService agentGroupService;
 
@@ -71,25 +73,62 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void deleteAgentGroup_withMembers_succeedsAndPreservesState() {
+    void updateAgentGroupStatus_deactivate_succeedsAndPreservesMembers() {
         AgentGroup group = group(true);
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
 
-        agentGroupService.deleteAgentGroup("group-1");
+        agentGroupService.updateAgentGroupStatus("admin-1", "group-1", false);
 
         assertThat(group.getStatus()).isFalse();
         verify(agentGroupRepository).save(group);
+        verify(activityLogService).logAgentGroupStatusChange("admin-1", "group-1", true, false);
     }
 
     @Test
-    void deleteAgentGroup_alreadyInactive_throws409() {
+    void updateAgentGroupStatus_activate_succeeds() {
+        AgentGroup group = group(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        agentGroupService.updateAgentGroupStatus("admin-1", "group-1", true);
+
+        assertThat(group.getStatus()).isTrue();
+        verify(agentGroupRepository).save(group);
+        verify(activityLogService).logAgentGroupStatusChange("admin-1", "group-1", false, true);
+    }
+
+    @Test
+    void updateAgentGroupStatus_alreadyInactive_throws409() {
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(false)));
 
-        assertThatThrownBy(() -> agentGroupService.deleteAgentGroup("group-1"))
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroupStatus("admin-1", "group-1", false))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent group is already inactive")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
+    }
+
+    @Test
+    void updateAgentGroupStatus_alreadyActive_throws409() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(true)));
+
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroupStatus("admin-1", "group-1", true))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group is already active")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
+    void updateAgentGroupStatus_notFound_throws404() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroupStatus("admin-1", "group-1", true))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
     }
 
     @Test
