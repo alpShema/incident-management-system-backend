@@ -103,8 +103,26 @@ class NotificationContentFactoryTest {
     }
 
     @Test
-    void buildsAutoClosedNotification_containsSystemLanguage() {
+    void buildsEscalatedNotification_containsSystemActor() {
+        NotificationDraft draft = factory.from(new IncidentEscalatedEvent("user-1", "inc-1", 4));
+        assertThat(draft.message()).startsWith("System was unable to automatically assign Incident #4");
+    }
+
+    @Test
+    void buildsAutoClosedAgentNotification_containsSystemActor() {
         NotificationDraft draft = factory.from(new IncidentAutoClosedAgentEvent("user-1", "inc-1", 7));
-        assertThat(draft.message()).contains("automatically closed by the system");
+        assertThat(draft.message()).isEqualTo("System automatically closed Incident #7 after the resolution window elapsed.");
+    }
+
+    @Test
+    void buildsAutoClosedClientNotification_containsSystemActor() {
+        NotificationDraft draft = factory.from(new IncidentAutoClosedClientEvent("user-1", "inc-1", 7));
+        assertThat(draft.message()).isEqualTo("System automatically closed Incident #7 after the resolution period elapsed.");
+    }
+
+    @Test
+    void buildsNotification_nullActorName_fallsBackToDeactivatedUser() {
+        NotificationDraft draft = factory.from(new IncidentReopenedEvent("agent-1", "inc-1", 9, null));
+        assertThat(draft.message()).startsWith("Deactivated User reopened Incident #9");
     }
 }
