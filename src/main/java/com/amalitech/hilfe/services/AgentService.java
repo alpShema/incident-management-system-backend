@@ -19,9 +19,10 @@ public class AgentService {
     private final AgentRepository agentRepository;
     private final DepartmentRepository departmentRepository;
 
-    public Page<AgentResponse> listAgents(String departmentId, Pageable pageable) {
+    public Page<AgentResponse> listAgents(String departmentId, String query, Pageable pageable) {
+        String queryPattern = buildQueryPattern(query);
         if (departmentId == null || departmentId.isBlank()) {
-            return agentRepository.findAllActiveWithUser(pageable).map(AgentResponse::from);
+            return agentRepository.findAllActiveWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
         }
 
         boolean activeDepartment = departmentRepository.findById(departmentId)
@@ -31,12 +32,13 @@ public class AgentService {
             return new PageImpl<>(List.of(), pageable, 0);
         }
 
-        return agentRepository.findByDepartmentIdWithUser(departmentId, pageable).map(AgentResponse::from);
+        return agentRepository.findByDepartmentIdWithUserAndQuery(departmentId, queryPattern, pageable).map(AgentResponse::from);
     }
 
-    public Page<AgentResponse> listAllAgents(String departmentId, Pageable pageable) {
+    public Page<AgentResponse> listAllAgents(String departmentId, String query, Pageable pageable) {
+        String queryPattern = buildQueryPattern(query);
         if (departmentId == null || departmentId.isBlank()) {
-            return agentRepository.findAllWithUser(pageable).map(AgentResponse::from);
+            return agentRepository.findAllWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
         }
 
         boolean activeDepartment = departmentRepository.findById(departmentId)
@@ -46,7 +48,7 @@ public class AgentService {
             return new PageImpl<>(List.of(), pageable, 0);
         }
 
-        return agentRepository.findByDepartmentIdWithUser(departmentId, pageable).map(AgentResponse::from);
+        return agentRepository.findByDepartmentIdWithUserAndQuery(departmentId, queryPattern, pageable).map(AgentResponse::from);
     }
 
     public AgentResponse updateAvailability(String userId, boolean available) {
@@ -63,5 +65,16 @@ public class AgentService {
         agent.setStatus(available);
         agentRepository.save(agent);
         return AgentResponse.from(agent);
+    }
+
+    private String buildQueryPattern(String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+
+        return "%" + query.toLowerCase()
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_") + "%";
     }
 }
