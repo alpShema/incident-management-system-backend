@@ -6,6 +6,7 @@ import com.amalitech.hilfe.dto.MessageResponse;
 import com.amalitech.hilfe.dto.PresignedUrlRequest;
 import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Message;
 import com.amalitech.hilfe.models.MessageMedia;
@@ -97,6 +98,55 @@ class MessageServiceTest {
         assertThat(result.id()).isEqualTo("msg-1");
         assertThat(result.attachments()).hasSize(1);
         assertThat(result.attachments().getFirst().fileSize()).isEqualTo(1024L);
+        verify(messagingTemplate).convertAndSend(eq("/topic/incidents/inc-1/messages"), any(MessageResponse.class));
+    }
+
+    @Test
+    void sendMessage_byUnassignedAgentInSameDepartment_throws403() {
+        // Incident is owned by client "u1" and assigned to agent record "agent-assignee".
+        // Actor is a different agent ("agent-teammate") who shares an agent group with the assignee.
+        // Under the old rule this passed; the strict send check now rejects.
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .userId("u1")
+                .assignedToId("agent-assignee")
+                .build();
+        Agent teammateAgent = Agent.builder().id("agent-teammate").userId("u-teammate").status(true).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("u-teammate")).thenReturn(Optional.of(teammateAgent));
+
+        assertThatThrownBy(() -> messageService.sendMessage("u-teammate", "AGENT", "inc-1", "hi", List.of()))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You do not have access to this incident")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(messageRepository, never()).save(any());
+        verify(messagingTemplate, never()).convertAndSend(anyString(), any(MessageResponse.class));
+    }
+
+    @Test
+    void sendMessage_byAssignedAgent_succeeds() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .userId("u1")
+                .assignedToId("agent-assignee")
+                .build();
+        Agent assigneeAgent = Agent.builder().id("agent-assignee").userId("u-assignee").status(true).build();
+        User sender = User.builder().id("u-assignee").fullName("Assignee").email("a@test.com").build();
+        Message saved = Message.builder()
+                .id("msg-1").incidentId("inc-1").senderId("u-assignee").content("hi")
+                .createdAt(Instant.now()).updatedAt(Instant.now()).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("u-assignee")).thenReturn(Optional.of(assigneeAgent));
+        when(userRepository.findById("u-assignee")).thenReturn(Optional.of(sender));
+        when(messageRepository.save(any(Message.class))).thenReturn(saved);
+
+        MessageResponse result = messageService.sendMessage("u-assignee", "AGENT", "inc-1", "hi", List.of());
+
+        assertThat(result.id()).isEqualTo("msg-1");
         verify(messagingTemplate).convertAndSend(eq("/topic/incidents/inc-1/messages"), any(MessageResponse.class));
     }
 
