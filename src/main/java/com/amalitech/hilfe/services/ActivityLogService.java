@@ -6,6 +6,7 @@ import com.amalitech.hilfe.models.ActivityLog;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
+import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
@@ -31,6 +32,7 @@ public class ActivityLogService {
     private final UserRepository userRepository;
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
+    private final AgentGroupRepository agentGroupRepository;
 
     public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
         Pageable sortedPageable = pageable.getSort().isSorted()
@@ -236,6 +238,34 @@ public class ActivityLogService {
         } catch (RuntimeException ex) {
             log.error("Failed to log unassignment for incident {}", incidentId, ex);
         }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logAgentGroupStatusChange(String actorUserId, String agentGroupId, Boolean previousStatus, Boolean newStatus) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String groupName = resolveAgentGroupName(agentGroupId);
+            String action = Boolean.TRUE.equals(newStatus) ? "AGENT_GROUP_ACTIVATED" : "AGENT_GROUP_DEACTIVATED";
+            String verb = Boolean.TRUE.equals(newStatus) ? "activated" : "deactivated";
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(action)
+                    .subjectType("AGENT_GROUP")
+                    .subjectId(agentGroupId)
+                    .description(actorName + " " + verb + " agent group " + groupName)
+                    .metadata("{\"previousStatus\":" + previousStatus + ",\"newStatus\":" + newStatus + "}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log status change for agent group {}", agentGroupId, ex);
+        }
+    }
+
+    private String resolveAgentGroupName(String agentGroupId) {
+        if (agentGroupId == null) return "Unknown";
+        return agentGroupRepository.findById(agentGroupId)
+                .map(g -> g.getName())
+                .orElse("Unknown");
     }
 
     private String resolveUserName(String userId) {

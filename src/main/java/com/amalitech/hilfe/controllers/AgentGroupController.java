@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.AgentGroupService;
+import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -15,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -83,12 +85,22 @@ public class AgentGroupController {
         return ResponseEntity.ok(ApiResponse.success("Agent group updated successfully", agentGroupService.updateAgentGroup(id, request)));
     }
 
-    @Operation(summary = "Deactivate an agent group", description = "Soft-deactivates an agent group while preserving existing member associations. Requires `agent-group.delete` permission.")
-    @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Update agent group status",
+            description = "Activates or deactivates an agent group. `status=true` activates and `status=false` deactivates. "
+                    + "Existing member associations are preserved across deactivation and reactivation. "
+                    + "Requires `agent-group.delete` permission."
+    )
+    @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_DELETE + "')")
-    public ResponseEntity<Void> deleteAgentGroup(@PathVariable String id) {
-        agentGroupService.deleteAgentGroup(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<ApiResponse<AgentGroupResponse>> updateAgentGroupStatus(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @PathVariable String id,
+            @Valid @RequestBody UpdateAgentGroupStatusRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Agent group status updated successfully",
+                agentGroupService.updateAgentGroupStatus(principal.userId(), id, request.status())));
     }
 
     @Operation(summary = "List agent group members", description = "Returns agents linked to an agent group. Agents can belong to multiple agent groups. Requires `agent-group.read` permission.")
