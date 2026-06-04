@@ -28,8 +28,10 @@ public class AgentController {
     @Operation(
             summary = "List all agents",
             description = "Returns a paginated list of agents for operational use. "
+                    + "Accepts an optional `query` keyword that searches across full name, email, and office location. "
                     + "When `departmentId` is omitted, returns active agents only. "
                     + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
+                    + "Both `query` and `departmentId` can be supplied together to narrow results simultaneously. "
                     + "If the department is missing or inactive, returns an empty page. "
                     + "Requires `agent.read` permission."
     )
@@ -41,19 +43,22 @@ public class AgentController {
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAgents(
+            @RequestParam(required = false) String query,
             @RequestParam(required = false) String departmentId,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Agents retrieved successfully",
-                PageResponse.from(agentService.listAgents(departmentId, pageable))));
+                PageResponse.from(agentService.listAgents(departmentId, query, pageable))));
     }
 
     @Operation(
             summary = "List all agents regardless of status",
             description = "Returns a paginated list of agents including both active and inactive records. "
+                    + "Accepts an optional `query` keyword that searches across full name, email, and office location. "
                     + "When `departmentId` is omitted, all agents are returned regardless of status. "
                     + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
+                    + "Both `query` and `departmentId` can be supplied together to narrow results simultaneously. "
                     + "If the department is missing or inactive, returns an empty page. "
                     + "Requires `agent.read` permission."
     )
@@ -65,12 +70,13 @@ public class AgentController {
     @GetMapping("/all")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAllAgents(
+            @RequestParam(required = false) String query,
             @RequestParam(required = false) String departmentId,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Agents retrieved successfully",
-                PageResponse.from(agentService.listAllAgents(departmentId, pageable))));
+                PageResponse.from(agentService.listAllAgents(departmentId, query, pageable))));
     }
 
     @Operation(
