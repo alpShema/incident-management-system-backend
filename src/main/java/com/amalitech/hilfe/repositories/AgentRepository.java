@@ -18,7 +18,8 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
 
     @Query(value = """
             SELECT a FROM Agent a
-            LEFT JOIN FETCH a.user
+            LEFT JOIN FETCH a.user u
+            LEFT JOIN FETCH u.location
             """,
             countQuery = """
             SELECT COUNT(a) FROM Agent a
@@ -27,7 +28,8 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
 
     @Query(value = """
             SELECT a FROM Agent a
-            LEFT JOIN FETCH a.user
+            LEFT JOIN FETCH a.user u
+            LEFT JOIN FETCH u.location
             WHERE a.status = true
             """,
             countQuery = """
@@ -39,7 +41,8 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
     @Query(
             value = """
                     SELECT DISTINCT a FROM Agent a
-                    LEFT JOIN FETCH a.user
+                    LEFT JOIN FETCH a.user u
+                    LEFT JOIN FETCH u.location
                     WHERE EXISTS (
                         SELECT 1 FROM AgentGroupMember m
                         JOIN m.agentGroup g
@@ -63,14 +66,16 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
 
     @Query("""
             SELECT a FROM Agent a
-            LEFT JOIN FETCH a.user
+            LEFT JOIN FETCH a.user u
+            LEFT JOIN FETCH u.location
             WHERE a.id = :agentId
             """)
     Optional<Agent> findByIdWithUser(@Param("agentId") String agentId);
 
     @Query("""
             SELECT a FROM Agent a
-            LEFT JOIN FETCH a.user
+            LEFT JOIN FETCH a.user u
+            LEFT JOIN FETCH u.location
             WHERE a.userId = :userId
             """)
     Optional<Agent> findByUserIdWithUser(@Param("userId") String userId);

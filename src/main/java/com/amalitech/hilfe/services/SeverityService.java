@@ -2,6 +2,7 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.SeverityRequest;
 import com.amalitech.hilfe.dto.SeverityResponse;
+import com.amalitech.hilfe.dto.UpdateSeveritySlaRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Severity;
 import com.amalitech.hilfe.repositories.IncidentRepository;
@@ -62,6 +63,15 @@ public class SeverityService {
                 });
         severity.setName(request.name());
         severity.setDescription(request.description());
+        return SeverityResponse.from(severityRepository.save(severity));
+    }
+
+    @Transactional
+    public SeverityResponse updateSeveritySla(String id, UpdateSeveritySlaRequest request) {
+        Severity severity = severityRepository.findById(id)
+                .orElseThrow(() -> new ArmsAuthException("Severity not found", 404));
+        severity.setResponseTimeMinutes(request.responseTimeMinutes());
+        severity.setResolutionTimeMinutes(request.resolutionTimeMinutes());
         return SeverityResponse.from(severityRepository.save(severity));
     }
 

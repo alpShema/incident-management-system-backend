@@ -25,6 +25,7 @@ public class DashboardService {
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final SlaService slaService;
 
     public DashboardStats getStats(String userId, RoleCode role) {
         if (role == RoleCode.AGENT) {
@@ -98,16 +99,15 @@ public class DashboardService {
         final String finalQueryPattern = queryPattern;
 
         if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
-            return incidentRepository
-                    .findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
-                    .map(IncidentResponse::from);
+            return slaService.toIncidentResponsePage(
+                    incidentRepository.findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
+            );
         }
         if (role == RoleCode.AGENT) {
             return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> incidentRepository
-                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
-                            .map(IncidentResponse::from))
+                    .map(agentGroupIds -> slaService.toIncidentResponsePage(incidentRepository
+                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
         throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -119,9 +119,13 @@ public class DashboardService {
             String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
             Pageable pageable
     ) {
-        return incidentRepository
-                .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
-                .map(IncidentResponse::from);
+        return slaService.toIncidentResponsePage(
+                incidentRepository.findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+        );
+    }
+
+    public SlaReportResponse getSlaReport(Instant from, Instant to, String severityId) {
+        return slaService.getReport(from, to, severityId);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

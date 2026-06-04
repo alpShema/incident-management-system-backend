@@ -120,6 +120,28 @@ public class NotificationContentFactory {
         );
     }
 
+    public NotificationDraft from(IncidentSlaAtRiskEvent event) {
+        return new NotificationDraft(
+                event.recipientUserId(),
+                event.incidentId(),
+                "INCIDENT_SLA_AT_RISK",
+                "Incident #" + event.incidentNo() + " " + event.slaType().toLowerCase() + " SLA at risk",
+                "Incident #" + event.incidentNo() + " has about " + event.minutesRemaining()
+                        + " minute(s) remaining before the " + event.slaType().toLowerCase() + " SLA is breached."
+        );
+    }
+
+    public NotificationDraft from(IncidentSlaBreachedEvent event) {
+        return new NotificationDraft(
+                event.recipientUserId(),
+                event.incidentId(),
+                "INCIDENT_SLA_BREACHED",
+                "Incident #" + event.incidentNo() + " " + event.slaType().toLowerCase() + " SLA breached",
+                "Incident #" + event.incidentNo() + " exceeded the " + event.slaType().toLowerCase()
+                        + " SLA by " + event.minutesOverdue() + " minute(s)."
+        );
+    }
+
     private String buildStatusMessage(String actorName, int incidentNo, String previousStatus, String newStatus, String reason) {
         String base = actorName + " transitioned Incident #" + incidentNo + " from " + previousStatus + " to " + newStatus + ".";
         if (reason != null && !reason.isBlank()) {

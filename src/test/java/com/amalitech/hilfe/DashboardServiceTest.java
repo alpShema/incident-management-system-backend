@@ -11,6 +11,7 @@ import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.services.DashboardService;
+import com.amalitech.hilfe.services.SlaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -36,6 +37,7 @@ class DashboardServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
+    @Mock SlaService slaService;
     @InjectMocks DashboardService dashboardService;
 
     private Agent buildAgent(String agentId) {
@@ -168,6 +170,7 @@ class DashboardServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(incidentRepository.findAllUnified(isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 "admin-1", RoleCode.ADMIN, null, null, null, null, "cat-it", null, Pageable.unpaged());
@@ -184,6 +187,7 @@ class DashboardServiceTest {
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
         when(incidentRepository.findByDepartmentUnified(anyList(), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 "user-1", RoleCode.AGENT, null, null, null, null, null, null, Pageable.unpaged());
@@ -210,6 +214,7 @@ class DashboardServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getMyIncidents(
                 "user-1", null, null, null, null, null, Pageable.unpaged());

@@ -42,6 +42,7 @@ public class MessageService {
     private final MessageMediaRepository messageMediaRepository;
     private final MediaService mediaService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final SlaService slaService;
 
     public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
@@ -77,6 +78,7 @@ public class MessageService {
         }
 
         messageRepository.flush();
+        slaService.onAgentMessageSent(incident, userId);
         MessageResponse response = MessageResponse.withAttachments(
                 MessageResponse.from(saved, sender),
                 mediaService.toMediaResponsesForMessage(media)
