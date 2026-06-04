@@ -46,7 +46,7 @@ public class MessageService {
     public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
-        enforceAccess(userId, role, incident);
+        enforceSendAccess(userId, role, incident);
         return mediaService.generateMessagePresignedUploadUrl(request);
     }
 
@@ -58,7 +58,7 @@ public class MessageService {
     public MessageResponse sendMessage(String userId, String role, String incidentId, String content, List<AttachmentRef> attachments) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
-        enforceAccess(userId, role, incident);
+        enforceSendAccess(userId, role, incident);
         validateMessagePayload(content, attachments);
 
         User sender = userRepository.findById(userId)
@@ -158,6 +158,13 @@ public class MessageService {
         if (userId.equals(incident.getUserId())) return;
         if ("AGENT".equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
         if ("AGENT".equalsIgnoreCase(role) && isSameDepartment(userId, incident)) return;
+        throw new ArmsAuthException("You do not have access to this incident", 403);
+    }
+
+    private void enforceSendAccess(String userId, String role, Incident incident) {
+        if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
+        if (userId.equals(incident.getUserId())) return;
+        if ("AGENT".equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
         throw new ArmsAuthException("You do not have access to this incident", 403);
     }
 
