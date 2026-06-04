@@ -66,6 +66,23 @@ class MessageControllerTest {
     }
 
     @Test
+    void generateMessagePresignedUrl_unauthorisedAgent_returns403() throws Exception {
+        var agentPrincipal = new JwtTokenService.AuthPrincipal("u-teammate", "teammate@test.com", RoleCode.AGENT);
+        var agentAuth = new UsernamePasswordAuthenticationToken(agentPrincipal, null, List.of(() -> "ROLE_AGENT"));
+
+        when(messageService.generateMessagePresignedUrl(anyString(), anyString(), eq("inc-1"), any(PresignedUrlRequest.class)))
+                .thenThrow(new ArmsAuthException("You do not have access to this incident", 403));
+
+        mvc.perform(post("/incidents/inc-1/messages/presigned-url")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PresignedUrlRequest("file.png", "image/png", 1024L)))
+                        .with(authentication(agentAuth)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You do not have access to this incident"));
+    }
+
+    @Test
     void sendMessage_withAttachments_returns201AndAttachments() throws Exception {
         MessageResponse response = new MessageResponse(
                 "msg-1",
