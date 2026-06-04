@@ -12,7 +12,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_ASSIGNED",
                 "Incident #" + event.incidentNo() + " assigned to you",
-                event.actorName() + " assigned Incident #" + event.incidentNo() + " to you."
+                resolveActor(event.actorName()) + " assigned Incident #" + event.incidentNo() + " to you."
         );
     }
 
@@ -22,7 +22,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_ESCALATED",
                 "Incident #" + event.incidentNo() + " requires attention",
-                "Incident #" + event.incidentNo() + " could not be automatically assigned. Please review and assign it manually."
+                "System was unable to automatically assign Incident #" + event.incidentNo() + ". Please review and assign it manually."
         );
     }
 
@@ -32,12 +32,12 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_STATUS_CHANGED",
                 "Incident #" + event.incidentNo() + " status updated",
-                buildStatusMessage(event.actorName(), event.incidentNo(), event.previousStatus(), event.newStatus(), event.reason())
+                buildStatusMessage(resolveActor(event.actorName()), event.incidentNo(), event.previousStatus(), event.newStatus(), event.reason())
         );
     }
 
     public NotificationDraft from(IncidentPendingEvent event) {
-        String message = event.actorName() + " placed Incident #" + event.incidentNo() + " in Pending status."
+        String message = resolveActor(event.actorName()) + " placed Incident #" + event.incidentNo() + " in Pending status."
                 + (event.reason() != null && !event.reason().isBlank() ? " Reason: " + event.reason() : "");
         return new NotificationDraft(
                 event.recipientUserId(),
@@ -54,7 +54,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_REOPENED",
                 "Incident #" + event.incidentNo() + " has been reopened",
-                event.actorName() + " reopened Incident #" + event.incidentNo() + ". It is now In Progress — please review and take action."
+                resolveActor(event.actorName()) + " reopened Incident #" + event.incidentNo() + ". It is now In Progress — please review and take action."
         );
     }
 
@@ -64,7 +64,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_PRIORITY_CHANGED",
                 "Incident #" + event.incidentNo() + " priority updated",
-                event.actorName() + " changed the priority of Incident #" + event.incidentNo()
+                resolveActor(event.actorName()) + " changed the priority of Incident #" + event.incidentNo()
                         + " from " + event.previousSeverity() + " to " + event.newSeverity() + "."
         );
     }
@@ -75,7 +75,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_UNASSIGNED",
                 "Incident #" + event.incidentNo() + " reassigned",
-                event.actorName() + " reassigned Incident #" + event.incidentNo()
+                resolveActor(event.actorName()) + " reassigned Incident #" + event.incidentNo()
                         + " from you to " + event.newAssigneeName() + "."
         );
     }
@@ -86,7 +86,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_AUTO_CLOSED",
                 "Incident #" + event.incidentNo() + " has been automatically closed",
-                "Incident #" + event.incidentNo() + " was automatically closed by the system after the resolution window elapsed."
+                "System automatically closed Incident #" + event.incidentNo() + " after the resolution window elapsed."
         );
     }
 
@@ -96,7 +96,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_AUTO_CLOSED_CLIENT",
                 "Incident #" + event.incidentNo() + " has been closed",
-                "Your Incident #" + event.incidentNo() + " has been automatically closed after the resolution period elapsed."
+                "System automatically closed Incident #" + event.incidentNo() + " after the resolution period elapsed."
         );
     }
 
@@ -116,7 +116,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_REASSIGNED_CLIENT",
                 "Incident #" + event.incidentNo() + " has a new agent",
-                event.actorName() + " reassigned Incident #" + event.incidentNo() + " to " + event.newAssigneeName() + "."
+                resolveActor(event.actorName()) + " reassigned Incident #" + event.incidentNo() + " to " + event.newAssigneeName() + "."
         );
     }
 
@@ -126,5 +126,9 @@ public class NotificationContentFactory {
             base += " Reason: " + reason;
         }
         return base;
+    }
+
+    private String resolveActor(String actorName) {
+        return (actorName != null && !actorName.isBlank()) ? actorName : "Deactivated User";
     }
 }
