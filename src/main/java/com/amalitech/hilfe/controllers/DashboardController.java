@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
 import com.amalitech.hilfe.dto.dashboard.DashboardStats;
+import com.amalitech.hilfe.dto.dashboard.SlaReportResponse;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.DashboardService;
@@ -113,6 +114,23 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Chart data retrieved successfully",
                 dashboardService.getCharts(principal.userId(), parseRoleCode(principal.roleCode()), period)
+        ));
+    }
+
+    @Operation(
+            summary = "SLA report",
+            description = "Admin-only SLA performance report including breach counts and average response/resolution times."
+    )
+    @GetMapping("/sla-report")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "')")
+    public ResponseEntity<ApiResponse<SlaReportResponse>> slaReport(
+            @Parameter(description = "Start timestamp filter (UTC)") @RequestParam(required = false) java.time.Instant from,
+            @Parameter(description = "End timestamp filter (UTC)") @RequestParam(required = false) java.time.Instant to,
+            @Parameter(description = "Severity filter") @RequestParam(required = false) String severityId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "SLA report retrieved successfully",
+                dashboardService.getSlaReport(from, to, severityId)
         ));
     }
 

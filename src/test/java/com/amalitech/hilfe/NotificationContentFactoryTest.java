@@ -107,4 +107,15 @@ class NotificationContentFactoryTest {
         NotificationDraft draft = factory.from(new IncidentAutoClosedAgentEvent("user-1", "inc-1", 7));
         assertThat(draft.message()).contains("automatically closed by the system");
     }
+
+    @Test
+    void buildsSlaNotifications() {
+        NotificationDraft atRisk = factory.from(new IncidentSlaAtRiskEvent("user-1", "inc-1", 7, "RESPONSE", 5));
+        NotificationDraft breached = factory.from(new IncidentSlaBreachedEvent("user-1", "inc-1", 7, "RESOLUTION", 12));
+
+        assertThat(atRisk.type()).isEqualTo("INCIDENT_SLA_AT_RISK");
+        assertThat(atRisk.title()).contains("response SLA at risk");
+        assertThat(breached.type()).isEqualTo("INCIDENT_SLA_BREACHED");
+        assertThat(breached.message()).contains("12 minute(s)");
+    }
 }

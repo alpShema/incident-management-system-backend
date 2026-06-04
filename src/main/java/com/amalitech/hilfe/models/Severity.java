@@ -26,6 +26,12 @@ public class Severity {
     @Column(nullable = false)
     private Boolean status = true;
 
+    @Column(name = "response_time_minutes")
+    private Integer responseTimeMinutes;
+
+    @Column(name = "resolution_time_minutes")
+    private Integer resolutionTimeMinutes;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

@@ -11,6 +11,7 @@ import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
+import com.amalitech.hilfe.services.SlaService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,6 +43,7 @@ class IncidentServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock IncidentTypeRepository incidentTypeRepository;
     @Mock LocationRepository locationRepository;
+    @Mock AgentGroupRepository agentGroupRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock AgentRepository agentRepository;
     @Mock UserRepository userRepository;
@@ -52,12 +55,25 @@ class IncidentServiceTest {
     @Mock NotificationEventPublisher notificationEventPublisher;
     @Mock MediaService mediaService;
     @Mock MediaRepository mediaRepository;
+    @Mock SlaService slaService;
     @Mock EntityManager entityManager;
     @InjectMocks IncidentService incidentService;
 
     @BeforeEach
     void injectEntityManager() {
         ReflectionTestUtils.setField(incidentService, "entityManager", entityManager);
+        lenient().when(slaService.toIncidentResponse(any(Incident.class)))
+                .thenAnswer(invocation -> IncidentResponse.from(invocation.getArgument(0), null, null));
+        lenient().when(slaService.toIncidentResponse(any(Incident.class), anyList()))
+                .thenAnswer(invocation -> IncidentResponse.from(invocation.getArgument(0), invocation.getArgument(1), null));
+        lenient().when(slaService.toIncidentResponsePage(any()))
+                .thenAnswer(invocation -> {
+                    Page<Incident> page = invocation.getArgument(0);
+                    List<IncidentResponse> content = page.getContent().stream()
+                            .map(incident -> IncidentResponse.from(incident, null, null))
+                            .collect(Collectors.toList());
+                    return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
+                });
     }
 
     private Incident buildIncident() {
@@ -131,6 +147,7 @@ class IncidentServiceTest {
         verify(incidentRepository).save(incidentCaptor.capture());
         assertThat(incidentCaptor.getValue().getSeverityId()).isEqualTo("sev-low");
         verify(entityManager).flush();
+        verify(slaService).onIncidentCreated(incident);
     }
 
     @Test
@@ -171,6 +188,41 @@ class IncidentServiceTest {
                 "Test Incident", "Test description", "type-1", "loc-1", null, null));
 
         verify(activityLogService).logIncidentAutoAssignment(incident.getId(), "agent-1");
+    }
+
+    @Test
+    void createIncident_autoAssigned_setsStatusToInProgress() {
+        Agent agent = Agent.builder().id("agent-1").userId("agent-user-1").status(true).build();
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        AgentGroup agentGroup = AgentGroup.builder().id("group-1").name("Test Group").status(true).build();
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1")
+                .name("Topic")
+                .categoryId("cat-1")
+                .agentGroupId("group-1")
+                .build();
+        Incident savedIncident = buildIncident();
+        savedIncident.setAssignedToId("agent-1");
+        savedIncident.setStatusId("status-in-progress");
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(incidentRepository.findByIdWithDetails(anyString())).thenReturn(Optional.of(savedIncident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(agentGroup));
+        when(agentRepository.findAvailableByAgentGroupIdAndLocation("group-1", "loc-1")).thenReturn(List.of(agent));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+
+        var incidentCaptor = forClass(Incident.class);
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(incidentRepository).save(incidentCaptor.capture());
+        Incident capturedIncident = incidentCaptor.getValue();
+        assertThat(capturedIncident.getStatusId()).isEqualTo("status-in-progress");
+        verify(statusRepository).findByNameIgnoreCase("In Progress");
+        verify(statusRepository, never()).findByNameIgnoreCase("Pending");
     }
 
     @Test

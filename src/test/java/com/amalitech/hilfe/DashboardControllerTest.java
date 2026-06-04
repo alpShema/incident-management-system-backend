@@ -3,6 +3,8 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.controllers.DashboardController;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
 import com.amalitech.hilfe.dto.dashboard.DashboardStats;
+import com.amalitech.hilfe.dto.dashboard.SlaReportResponse;
+import com.amalitech.hilfe.dto.dashboard.SlaSeverityBreakdown;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
@@ -97,5 +99,22 @@ class DashboardControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         "Unsupported period '60d'. Accepted values: 7d, 30d, 90d."));
+    }
+
+    @Test
+    void getSlaReport_adminAuth_returns200() throws Exception {
+        when(dashboardService.getSlaReport(any(), any(), any())).thenReturn(
+                new SlaReportResponse(1, 1, 0, 30.0, 90.0, List.of(
+                        new SlaSeverityBreakdown("sev-low", "Low", 1, 1, 0, 30.0, 90.0)
+                ))
+        );
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "dashboard.admin"));
+
+        mvc.perform(get("/dashboard/sla-report").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("SLA report retrieved successfully"))
+                .andExpect(jsonPath("$.data.trackedIncidents").value(1));
     }
 }
