@@ -31,8 +31,9 @@ public class AgentGroupService {
     private final DepartmentRepository departmentRepository;
     private final ActivityLogService activityLogService;
 
-    public Page<AgentGroupResponse> listAgentGroups(Pageable pageable) {
-        return agentGroupRepository.findByStatus(true, pageable)
+    public Page<AgentGroupResponse> listAgentGroups(String query, String departmentId, Pageable pageable) {
+        String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
+        return agentGroupRepository.searchAgentGroups(queryPattern, departmentId, pageable)
                 .map(this::toResponse);
     }
 
