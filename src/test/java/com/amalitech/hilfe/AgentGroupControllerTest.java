@@ -61,6 +61,7 @@ class AgentGroupControllerTest {
                 LookupResponse.from("dept-1", "Facilities"),
                 status,
                 2,
+                null,
                 null
         );
     }
