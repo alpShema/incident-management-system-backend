@@ -24,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +56,48 @@ class AgentGroupServiceTest {
                 .build();
         agent.setUser(User.builder().id("user-1").fullName("Agent One").build());
         return agent;
+    }
+
+    @Test
+    void createAgentGroup_withDeactivatedAgent_throws400() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+        Agent activeAgent = Agent.builder().id("agent-active").userId("user-active").status(true).build();
+        Agent inactiveAgent = Agent.builder().id("agent-inactive").userId("user-inactive").status(false).build();
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findById("agent-active")).thenReturn(Optional.of(activeAgent));
+        when(agentRepository.findById("agent-inactive")).thenReturn(Optional.of(inactiveAgent));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-active", "agent-inactive"));
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
+                .hasMessage("Agent not found or inactive")
+                .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void createAgentGroup_withOnlyDeactivatedAgent_throws400() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+        Agent inactiveAgent = Agent.builder().id("agent-inactive").userId("user-inactive").status(false).build();
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findById("agent-inactive")).thenReturn(Optional.of(inactiveAgent));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-inactive"));
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
+                .hasMessage("Agent not found or inactive")
+                .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
     }
 
     @Test

@@ -59,6 +59,12 @@ public class AgentGroupService {
         String groupId = UUID.randomUUID().toString();
         Department department = findActiveDepartment(request.departmentId());
 
+        if (request.agentIds() != null) {
+            for (String agentId : request.agentIds()) {
+                findActiveAgent(agentId);
+            }
+        }
+
         AgentGroup group = AgentGroup.builder()
                 .id(groupId)
                 .name(name)
@@ -70,7 +76,6 @@ public class AgentGroupService {
 
         if (request.agentIds() != null) {
             for (String agentId : request.agentIds()) {
-                findAgent(agentId);
                 addMembership(agentId, groupId);
             }
         }
@@ -178,9 +183,10 @@ public class AgentGroupService {
         findActiveAgentGroupOrThrow(id);
     }
 
-    private Agent findAgent(String agentId) {
+    private Agent findActiveAgent(String agentId) {
         return agentRepository.findById(agentId)
-                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+                .filter(a -> Boolean.TRUE.equals(a.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Agent not found or inactive", 400));
     }
 
     private Department findActiveDepartment(String departmentId) {
