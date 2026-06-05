@@ -40,13 +40,16 @@ public class SeverityService {
 
     @Transactional
     public SeverityResponse createSeverity(SeverityRequest request) {
-        if (severityRepository.findByNameIgnoreCase(request.name()).isPresent()) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
+        if (severityRepository.findByNameIgnoreCase(name).isPresent()) {
             throw new ArmsAuthException("A severity with this name already exists", 409);
         }
         Severity severity = Severity.builder()
                 .id(UUID.randomUUID().toString())
-                .name(request.name())
-                .description(request.description())
+                .name(name)
+                .description(description)
                 .status(true)
                 .build();
         return SeverityResponse.from(severityRepository.save(severity));
@@ -54,15 +57,18 @@ public class SeverityService {
 
     @Transactional
     public SeverityResponse updateSeverity(String id, SeverityRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         Severity severity = severityRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Severity not found", 404));
-        severityRepository.findByNameIgnoreCase(request.name())
+        severityRepository.findByNameIgnoreCase(name)
                 .filter(existing -> !existing.getId().equals(id))
                 .ifPresent(existing -> {
                     throw new ArmsAuthException("A severity with this name already exists", 409);
                 });
-        severity.setName(request.name());
-        severity.setDescription(request.description());
+        severity.setName(name);
+        severity.setDescription(description);
         return SeverityResponse.from(severityRepository.save(severity));
     }
 
