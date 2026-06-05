@@ -77,10 +77,13 @@ public class IncidentService {
             throw new ArmsAuthException(String.join(" ", notFound), 404);
         }
 
+        String title = request.title() == null ? null : request.title().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         Incident incident = Incident.builder()
                 .id(UUID.randomUUID().toString())
-                .title(request.title())
-                .description(request.description())
+                .title(title)
+                .description(description)
                 .userId(userId)
                 .locationId(request.locationId())
                 .incidentTypeId(request.incidentTypeId())

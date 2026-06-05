@@ -151,6 +151,25 @@ class IncidentServiceTest {
     }
 
     @Test
+    void createIncident_trimsTitleAndDescription() {
+        Incident incident = buildIncident();
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "  Test Incident  ", "  Test description  ", "type-1", "loc-1", null, null);
+        incidentService.createIncident("user-1", request);
+
+        var incidentCaptor = forClass(Incident.class);
+        verify(incidentRepository).save(incidentCaptor.capture());
+        assertThat(incidentCaptor.getValue().getTitle()).isEqualTo("Test Incident");
+        assertThat(incidentCaptor.getValue().getDescription()).isEqualTo("Test description");
+    }
+
+    @Test
     void createIncident_autoAssigned_notifiesClient() {
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
         Agent agent = Agent.builder().id("agent-1").userId("agent-user-1").status(true).build();

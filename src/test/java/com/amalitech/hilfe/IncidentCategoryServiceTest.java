@@ -3,6 +3,7 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentCategoryRequest;
+import com.amalitech.hilfe.dto.UpdateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.dto.IncidentTopicListResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
@@ -139,6 +140,23 @@ class IncidentCategoryServiceTest {
     }
 
     @Test
+    void createCategory_trimsNameAndDescription() {
+        IncidentCategory saved = buildCategory();
+        when(categoryRepository.existsByNameIgnoreCase("Facility")).thenReturn(false);
+        when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(saved);
+        when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(saved));
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+
+        categoryService.createCategory(
+                new IncidentCategoryRequest("  Facility  ", "  Description  ", "dept-1"));
+
+        var captor = forClass(IncidentCategory.class);
+        verify(categoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Facility");
+        assertThat(captor.getValue().getDescription()).isEqualTo("Description");
+    }
+
+    @Test
     void createCategory_duplicateName_throws409() {
         when(categoryRepository.existsByNameIgnoreCase("Facility")).thenReturn(true);
 
@@ -153,18 +171,39 @@ class IncidentCategoryServiceTest {
     // ── updateCategory ────────────────────────────────────────────────────────
 
     @Test
-    void updateCategory_found_updatesAndReturns() {
-        IncidentCategory cat = buildCategory();
-        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
-        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
-        when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
-        when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
+    void updateTopic_trimsNameAndDescription() {
+        IncidentCategory category = buildCategory();
+        IncidentType topic = buildType();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(topic);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
 
-        IncidentCategoryResponse response = categoryService.updateCategory(
-                "cat-1", new UpdateIncidentCategoryRequest("Updated", "New description", "dept-1"));
+        categoryService.updateTopic(
+                "cat-1", "type-1",
+                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null));
+
+        assertThat(topic.getName()).isEqualTo("New Name");
+        assertThat(topic.getDescription()).isEqualTo("New desc");
+    }
+
+    @Test
+    void updateTopic_happyPath_updatesAndReturns() {
+        IncidentCategory category = buildCategory();
+        IncidentType topic = buildType();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(topic);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
+
+        IncidentTopicResponse response = categoryService.updateTopic(
+                "cat-1", "type-1",
+                new UpdateTopicRequest("New Name", "New desc", "group-1", false));
 
         assertThat(response).isNotNull();
-        verify(categoryRepository).save(any(IncidentCategory.class));
+        verify(typeRepository).save(any(IncidentType.class));
     }
 
     @Test
@@ -191,6 +230,20 @@ class IncidentCategoryServiceTest {
                 .hasMessage("Incident category with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
+    }
+
+    @Test
+    void updateCategory_trimsNameAndDescription() {
+        IncidentCategory cat = buildCategory(); // name = "Facility"
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(categoryRepository.save(any(IncidentCategory.class))).thenReturn(cat);
+        when(categoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(cat));
+
+        categoryService.updateCategory(
+                "cat-1", new UpdateIncidentCategoryRequest("  New Name  ", "  New desc  ", null));
+
+        assertThat(cat.getName()).isEqualTo("New Name");
+        assertThat(cat.getDescription()).isEqualTo("New desc");
     }
 
     @Test
@@ -329,6 +382,26 @@ class IncidentCategoryServiceTest {
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    @Test
+    void createTopic_trimsNameAndDescription() {
+        IncidentType saved = buildType();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
+        when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
+
+        categoryService.createTopic(
+                "cat-1", "admin-1",
+                new CreateTopicRequest("  Projector  ", "  Projector issues  ", "group-1", true));
+
+        var captor = forClass(IncidentType.class);
+        verify(typeRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Projector");
+        assertThat(captor.getValue().getDescription()).isEqualTo("Projector issues");
     }
 
     @Test
