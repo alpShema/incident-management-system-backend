@@ -47,14 +47,17 @@ public class IncidentCategoryService {
 
     @Transactional
     public IncidentCategoryResponse createCategory(IncidentCategoryRequest request) {
-        if (categoryRepository.existsByNameIgnoreCase(request.name())) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
+        if (categoryRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Incident category with this name already exists", 409);
         }
         validateDepartment(request.departmentId());
         IncidentCategory category = IncidentCategory.builder()
                 .id(UUID.randomUUID().toString())
-                .name(request.name())
-                .description(request.description())
+                .name(name)
+                .description(description)
                 .departmentId(request.departmentId())
                 .build();
         IncidentCategory saved = categoryRepository.save(category);
@@ -65,18 +68,21 @@ public class IncidentCategoryService {
 
     @Transactional
     public IncidentCategoryResponse updateCategory(String id, UpdateIncidentCategoryRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         IncidentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
 
-        if (request.name() != null && !request.name().isBlank()) {
-            if (!category.getName().equalsIgnoreCase(request.name())
-                    && categoryRepository.existsByNameIgnoreCase(request.name())) {
+        if (name != null && !name.isBlank()) {
+            if (!category.getName().equalsIgnoreCase(name)
+                    && categoryRepository.existsByNameIgnoreCase(name)) {
                 throw new ArmsAuthException("Incident category with this name already exists", 409);
             }
-            category.setName(request.name());
+            category.setName(name);
         }
-        if (request.description() != null) {
-            category.setDescription(request.description());
+        if (description != null) {
+            category.setDescription(description);
         }
         if (request.departmentId() != null && !request.departmentId().isBlank()) {
             validateDepartment(request.departmentId());
@@ -125,15 +131,18 @@ public class IncidentCategoryService {
 
     @Transactional
     public IncidentTopicResponse createTopic(String categoryId, String creatorUserId, CreateTopicRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         IncidentCategory category = findActiveCategory(categoryId);
-        if (typeRepository.existsByNameIgnoreCase(request.name())) {
+        if (typeRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("A topic with this name already exists", 409);
         }
         AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
         IncidentType topic = IncidentType.builder()
                 .id(UUID.randomUUID().toString())
-                .name(request.name())
-                .description(request.description())
+                .name(name)
+                .description(description)
                 .categoryId(categoryId)
                 .adminId(creatorUserId)
                 .agentGroupId(assignedGroup.getId())
@@ -148,6 +157,9 @@ public class IncidentCategoryService {
 
     @Transactional
     public IncidentTopicResponse updateTopic(String categoryId, String topicId, UpdateTopicRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         IncidentCategory category = findActiveCategory(categoryId);
         IncidentType topic = typeRepository.findById(topicId)
                 .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
@@ -155,15 +167,15 @@ public class IncidentCategoryService {
             throw new ArmsAuthException("Incident topic not found in category", 404);
         }
 
-        if (request.name() != null && !request.name().isBlank()) {
-            if (!topic.getName().equalsIgnoreCase(request.name())
-                    && typeRepository.existsByNameIgnoreCase(request.name())) {
+        if (name != null && !name.isBlank()) {
+            if (!topic.getName().equalsIgnoreCase(name)
+                    && typeRepository.existsByNameIgnoreCase(name)) {
                 throw new ArmsAuthException("A topic with this name already exists", 409);
             }
-            topic.setName(request.name());
+            topic.setName(name);
         }
-        if (request.description() != null && !request.description().isBlank()) {
-            topic.setDescription(request.description());
+        if (description != null && !description.isBlank()) {
+            topic.setDescription(description);
         }
         if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
             AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
