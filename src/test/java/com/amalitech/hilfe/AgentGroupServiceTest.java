@@ -134,20 +134,52 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void removeMember_nonMember_throws404() {
+    void updateAgentGroup_syncsMembership() {
         AgentGroup group = group(true);
-        Agent agent = memberAgent();
+        Agent agentB = Agent.builder().id("agent-B").userId("user-B").status(true).build();
 
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
-        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.existsByAgentIdAndAgentGroupId("agent-1", "group-1"))
-                .thenReturn(false);
+        when(agentGroupRepository.save(group)).thenReturn(group);
+        when(agentRepository.findById("agent-B")).thenReturn(Optional.of(agentB));
 
-        assertThatThrownBy(() -> agentGroupService.removeMember("group-1", "agent-1"))
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, List.of("agent-B"));
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(agentGroupMemberRepository).deleteByAgentGroupId("group-1");
+        verify(agentGroupMemberRepository).existsByAgentIdAndAgentGroupId("agent-B", "group-1");
+    }
+
+    @Test
+    void updateAgentGroup_nullAgentIds_doesNotTouchMembership() {
+        AgentGroup group = group(true);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" New Name ", null, null, null);
+        when(agentGroupRepository.existsByNameIgnoreCase("New Name")).thenReturn(false);
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(agentGroupMemberRepository, never()).deleteByAgentGroupId(any());
+    }
+
+    @Test
+    void updateAgentGroup_withDeactivatedAgentInList_throws400() {
+        AgentGroup group = group(true);
+        Agent inactiveAgent = Agent.builder().id("agent-inactive").userId("user-inactive").status(false).build();
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+        when(agentRepository.findById("agent-inactive")).thenReturn(Optional.of(inactiveAgent));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, List.of("agent-inactive"));
+
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroup("group-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Agent is not a member of this agent group")
+                .hasMessage("Agent not found or inactive")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(404);
+                .isEqualTo(400);
+
+        verify(agentGroupMemberRepository, never()).deleteByAgentGroupId(any());
     }
 
     @Test
@@ -248,14 +280,4 @@ class AgentGroupServiceTest {
                 .isEqualTo(404);
     }
 
-    @Test
-    void removeMember_inactiveGroup_throws404() {
-        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(false)));
-
-        assertThatThrownBy(() -> agentGroupService.removeMember("group-1", "agent-1"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Agent group not found")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(404);
-    }
 }
