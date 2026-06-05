@@ -134,6 +134,71 @@ class AgentGroupControllerTest {
     }
 
     @Test
+    void listAllAgentGroups_noStatus_returnsAll() throws Exception {
+        when(agentGroupService.listAllAgentGroups(null, null, null))
+                .thenReturn(List.of(group(true), group(false)));
+
+        mvc.perform(get("/agent-groups/all")
+                        .with(authentication(adminAuth("agent-group.read"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Agent groups retrieved successfully"))
+                .andExpect(jsonPath("$.data.length()").value(2));
+    }
+
+    @Test
+    void listAllAgentGroups_statusActive_returnsActiveOnly() throws Exception {
+        when(agentGroupService.listAllAgentGroups("active", null, null))
+                .thenReturn(List.of(group(true)));
+
+        mvc.perform(get("/agent-groups/all?status=active")
+                        .with(authentication(adminAuth("agent-group.read"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].status").value(true));
+    }
+
+    @Test
+    void listAllAgentGroups_statusDeactivated_returnsDeactivatedOnly() throws Exception {
+        when(agentGroupService.listAllAgentGroups("deactivated", null, null))
+                .thenReturn(List.of(group(false)));
+
+        mvc.perform(get("/agent-groups/all?status=deactivated")
+                        .with(authentication(adminAuth("agent-group.read"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].status").value(false));
+    }
+
+    @Test
+    void listAllAgentGroups_emptyResult_returns200WithEmptyList() throws Exception {
+        when(agentGroupService.listAllAgentGroups("deactivated", null, null))
+                .thenReturn(List.of());
+
+        mvc.perform(get("/agent-groups/all?status=deactivated")
+                        .with(authentication(adminAuth("agent-group.read"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void listAllAgentGroups_invalidStatus_returns400() throws Exception {
+        when(agentGroupService.listAllAgentGroups("unknown", null, null))
+                .thenThrow(new ArmsAuthException("Invalid status filter. Accepted values: active, deactivated, all", 400));
+
+        mvc.perform(get("/agent-groups/all?status=unknown")
+                        .with(authentication(adminAuth("agent-group.read"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid status filter. Accepted values: active, deactivated, all"));
+    }
+
+    @Test
+    void listAllAgentGroups_missingPermission_returns403() throws Exception {
+        mvc.perform(get("/agent-groups/all")
+                        .with(authentication(adminAuth("agent-group.create"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void getAgentGroup_inactive_returns200() throws Exception {
         when(agentGroupService.getAgentGroup("group-1")).thenReturn(group(false));
 

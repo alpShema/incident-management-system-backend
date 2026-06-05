@@ -257,6 +257,71 @@ class AgentGroupServiceTest {
     }
 
     @Test
+    void listAllAgentGroups_statusAll_returnsAllGroups() {
+        AgentGroup active = group(true);
+        AgentGroup inactive = group(false);
+        inactive.setId("group-2");
+        inactive.setName("Facilities Support");
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+
+        when(agentGroupRepository.listAllAgentGroups(null, null, null)).thenReturn(List.of(active, inactive));
+        when(agentGroupMemberRepository.countByAgentGroupId(any())).thenReturn(0L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+
+        var result = agentGroupService.listAllAgentGroups("all", null, null);
+
+        assertThat(result).hasSize(2);
+    }
+
+    @Test
+    void listAllAgentGroups_statusActive_passesTrueFilter() {
+        AgentGroup active = group(true);
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+
+        when(agentGroupRepository.listAllAgentGroups(true, null, null)).thenReturn(List.of(active));
+        when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+
+        var result = agentGroupService.listAllAgentGroups("active", null, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().status()).isTrue();
+    }
+
+    @Test
+    void listAllAgentGroups_statusDeactivated_passesFalseFilter() {
+        AgentGroup inactive = group(false);
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(false).build();
+
+        when(agentGroupRepository.listAllAgentGroups(false, null, null)).thenReturn(List.of(inactive));
+        when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+
+        var result = agentGroupService.listAllAgentGroups("deactivated", null, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().status()).isFalse();
+    }
+
+    @Test
+    void listAllAgentGroups_nullStatus_returnsAll() {
+        when(agentGroupRepository.listAllAgentGroups(null, null, null)).thenReturn(List.of());
+
+        var result = agentGroupService.listAllAgentGroups(null, null, null);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void listAllAgentGroups_invalidStatus_throws400() {
+        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Invalid status filter. Accepted values: active, deactivated, all")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
     void listMembers_inactiveGroup_returnsMembers() {
         AgentGroup group = group(false);
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));

@@ -37,6 +37,21 @@ public class AgentGroupService {
                 .map(this::toResponse);
     }
 
+    public List<AgentGroupResponse> listAllAgentGroups(String status, String query, String departmentId) {
+        Boolean statusFilter = resolveStatusFilter(status);
+        String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
+        return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private Boolean resolveStatusFilter(String status) {
+        if (status == null || status.isBlank() || status.equalsIgnoreCase("all")) return null;
+        if (status.equalsIgnoreCase("active")) return true;
+        if (status.equalsIgnoreCase("deactivated")) return false;
+        throw new ArmsAuthException("Invalid status filter. Accepted values: active, deactivated, all", 400);
+    }
+
     public AgentGroupResponse getAgentGroup(String id) {
         return toResponse(findAgentGroupByIdOrThrow(id));
     }
