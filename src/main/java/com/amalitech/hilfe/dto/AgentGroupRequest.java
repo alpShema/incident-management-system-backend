@@ -19,5 +19,8 @@ public record AgentGroupRequest(
         String departmentId,
 
         @Schema(description = "Optional list of agent IDs to add as members immediately on creation.", nullable = true)
-        List<String> agentIds
+        List<String> agentIds,
+
+        @Schema(description = "Optional list of topic IDs to assign to this group. Replaces existing assignments when present. Pass an empty list to remove all topics.", nullable = true)
+        List<String> topicIds
 ) {}
