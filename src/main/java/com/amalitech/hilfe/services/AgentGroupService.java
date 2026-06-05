@@ -9,10 +9,12 @@ import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.AgentGroupMember;
 import com.amalitech.hilfe.models.Department;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,6 +31,7 @@ public class AgentGroupService {
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final DepartmentRepository departmentRepository;
+    private final IncidentTypeRepository incidentTypeRepository;
     private final ActivityLogService activityLogService;
 
     public Page<AgentGroupResponse> listAgentGroups(String query, String departmentId, Pageable pageable) {
@@ -87,11 +90,24 @@ public class AgentGroupService {
                 .departmentId(department.getId())
                 .status(true)
                 .build();
+        if (request.topicIds() != null) {
+            validateTopicsForDepartment(request.topicIds(), department.getId());
+        }
+
         agentGroupRepository.save(group);
 
         if (request.agentIds() != null) {
             for (String agentId : request.agentIds()) {
                 addMembership(agentId, groupId);
+            }
+        }
+
+        if (request.topicIds() != null) {
+            for (String topicId : request.topicIds()) {
+                IncidentType topic = incidentTypeRepository.findById(topicId)
+                        .orElseThrow(() -> new ArmsAuthException("Topic not found: " + topicId, 404));
+                topic.setAgentGroupId(groupId);
+                incidentTypeRepository.save(topic);
             }
         }
 
@@ -127,6 +143,17 @@ public class AgentGroupService {
             agentGroupMemberRepository.deleteByAgentGroupId(id);
             for (String agentId : request.agentIds()) {
                 addMembership(agentId, id);
+            }
+        }
+
+        if (request.topicIds() != null) {
+            validateTopicsForDepartment(request.topicIds(), group.getDepartmentId());
+            incidentTypeRepository.clearAgentGroupId(id);
+            for (String topicId : request.topicIds()) {
+                IncidentType topic = incidentTypeRepository.findById(topicId)
+                        .orElseThrow(() -> new ArmsAuthException("Topic not found: " + topicId, 404));
+                topic.setAgentGroupId(id);
+                incidentTypeRepository.save(topic);
             }
         }
 
@@ -174,10 +201,25 @@ public class AgentGroupService {
                     .map(dept -> LookupResponse.from(dept.getId(), dept.getName()))
                     .orElse(null);
         }
+        List<LookupResponse> topics = incidentTypeRepository.findByAgentGroupId(group.getId()).stream()
+                .map(t -> LookupResponse.from(t.getId(), t.getName()))
+                .toList();
         return AgentGroupResponse.from(
                 group,
                 department,
-                agentGroupMemberRepository.countByAgentGroupId(group.getId()));
+                agentGroupMemberRepository.countByAgentGroupId(group.getId()),
+                topics);
+    }
+
+    private void validateTopicsForDepartment(List<String> topicIds, String departmentId) {
+        for (String topicId : topicIds) {
+            IncidentType topic = incidentTypeRepository.findById(topicId)
+                    .orElseThrow(() -> new ArmsAuthException("Topic not found: " + topicId, 404));
+            String topicDeptId = topic.getCategory() != null ? topic.getCategory().getDepartmentId() : null;
+            if (topicDeptId == null || !topicDeptId.equals(departmentId)) {
+                throw new ArmsAuthException("Topic '" + topic.getName() + "' does not belong to the selected department", 400);
+            }
+        }
     }
 
     private AgentGroup findAgentGroupByIdOrThrow(String id) {
@@ -200,9 +242,15 @@ public class AgentGroupService {
     }
 
     private Agent findActiveAgent(String agentId) {
-        return agentRepository.findById(agentId)
-                .filter(a -> Boolean.TRUE.equals(a.getStatus()))
+        Agent agent = agentRepository.findByIdWithUser(agentId)
                 .orElseThrow(() -> new ArmsAuthException("Agent not found or inactive", 400));
+        if (!Boolean.TRUE.equals(agent.getStatus())) {
+            throw new ArmsAuthException("Agent not found or inactive", 400);
+        }
+        if (agent.getUser() == null || !Boolean.TRUE.equals(agent.getUser().getStatus())) {
+            throw new ArmsAuthException("Agent not found or inactive", 400);
+        }
+        return agent;
     }
 
     private Department findActiveDepartment(String departmentId) {
