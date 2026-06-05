@@ -43,13 +43,16 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupResponse createAgentGroup(AgentGroupRequest request) {
-        if (isBlank(request.name())) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
+        if (isBlank(name)) {
             throw new ArmsAuthException("Agent group name is required", 400);
         }
         if (isBlank(request.departmentId())) {
             throw new ArmsAuthException("departmentId is required", 400);
         }
-        if (agentGroupRepository.existsByNameIgnoreCase(request.name())) {
+        if (agentGroupRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Agent group with this name already exists", 409);
         }
 
@@ -58,8 +61,8 @@ public class AgentGroupService {
 
         AgentGroup group = AgentGroup.builder()
                 .id(groupId)
-                .name(request.name())
-                .description(request.description())
+                .name(name)
+                .description(description)
                 .departmentId(department.getId())
                 .status(true)
                 .build();
@@ -77,16 +80,19 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupResponse updateAgentGroup(String id, AgentGroupRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         AgentGroup group = findActiveAgentGroupOrThrow(id);
-        if (!isBlank(request.name())) {
-            if (!group.getName().equalsIgnoreCase(request.name())
-                    && agentGroupRepository.existsByNameIgnoreCase(request.name())) {
+        if (!isBlank(name)) {
+            if (!group.getName().equalsIgnoreCase(name)
+                    && agentGroupRepository.existsByNameIgnoreCase(name)) {
                 throw new ArmsAuthException("Agent group with this name already exists", 409);
             }
-            group.setName(request.name());
+            group.setName(name);
         }
-        if (request.description() != null) {
-            group.setDescription(request.description());
+        if (description != null) {
+            group.setDescription(description);
         }
         if (!isBlank(request.departmentId())) {
             Department department = findActiveDepartment(request.departmentId());
