@@ -46,6 +46,27 @@ public class AgentGroupController {
         return ResponseEntity.ok(ApiResponse.success("Agent groups retrieved successfully", PageResponse.from(page)));
     }
 
+    @Operation(
+            summary = "List all agent groups",
+            description = "Returns a flat (non-paginated) list of agent groups regardless of status. "
+                    + "Accepts an optional `status` filter: `active` returns only active groups, `deactivated` returns only deactivated groups, "
+                    + "`all` (default when omitted) returns both. "
+                    + "Also accepts optional `query` and `departmentId` filters. "
+                    + "Results are ordered by name ascending. "
+                    + "Requires `agent-group.read` permission."
+    )
+    @GetMapping("/all")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
+    public ResponseEntity<ApiResponse<List<AgentGroupResponse>>> listAllAgentGroups(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String departmentId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Agent groups retrieved successfully",
+                agentGroupService.listAllAgentGroups(status, query, departmentId)));
+    }
+
     @Operation(summary = "Get an agent group", description = "Returns an agent group by ID, including its linked department. Inactive groups remain retrievable for admin management. Requires `agent-group.read` permission.")
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
