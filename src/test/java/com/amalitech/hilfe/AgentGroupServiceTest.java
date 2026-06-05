@@ -13,6 +13,7 @@ import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.AgentGroupService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,6 +55,39 @@ class AgentGroupServiceTest {
                 .build();
         agent.setUser(User.builder().id("user-1").fullName("Agent One").build());
         return agent;
+    }
+
+    @Test
+    void createAgentGroup_trimsNameAndDescription() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Support Team")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentGroupRepository.save(any(AgentGroup.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" Support Team ", " Handles tickets ", "dept-1", null);
+        agentGroupService.createAgentGroup(request);
+
+        var captor = ArgumentCaptor.forClass(AgentGroup.class);
+        verify(agentGroupRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Support Team");
+        assertThat(captor.getValue().getDescription()).isEqualTo("Handles tickets");
+    }
+
+    @Test
+    void updateAgentGroup_trimsNameAndDescription() {
+        AgentGroup group = group(true);  // name = "IT Support"
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        // name " New Name " differs from existing "IT Support" — dedup check will fire
+        when(agentGroupRepository.existsByNameIgnoreCase("New Name")).thenReturn(false);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" New Name ", " Updated desc ", null, null);
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        assertThat(group.getName()).isEqualTo("New Name");
+        assertThat(group.getDescription()).isEqualTo("Updated desc");
     }
 
     @Test
