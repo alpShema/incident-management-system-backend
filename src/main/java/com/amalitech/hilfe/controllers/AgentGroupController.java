@@ -130,13 +130,4 @@ public class AgentGroupController {
         return ResponseEntity.ok(ApiResponse.success("Agent group member added successfully", agentGroupService.addMember(id, request.agentId())));
     }
 
-    @Operation(summary = "Remove agent group member", description = "Removes only this agent/group membership. Requires `agent-group.update` permission.")
-    @DeleteMapping("/{id}/members/{agentId}")
-    @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_UPDATE + "')")
-    public ResponseEntity<ApiResponse<AgentGroupMemberResponse>> removeMember(
-            @PathVariable String id,
-            @PathVariable String agentId
-    ) {
-        return ResponseEntity.ok(ApiResponse.success("Agent group member removed successfully", agentGroupService.removeMember(id, agentId)));
-    }
 }

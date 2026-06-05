@@ -103,7 +103,19 @@ public class AgentGroupService {
             Department department = findActiveDepartment(request.departmentId());
             group.setDepartmentId(department.getId());
         }
-        return toResponse(agentGroupRepository.save(group));
+        agentGroupRepository.save(group);
+
+        if (request.agentIds() != null) {
+            for (String agentId : request.agentIds()) {
+                findActiveAgent(agentId);
+            }
+            agentGroupMemberRepository.deleteByAgentGroupId(id);
+            for (String agentId : request.agentIds()) {
+                addMembership(agentId, id);
+            }
+        }
+
+        return toResponse(group);
     }
 
     @Transactional
@@ -137,17 +149,6 @@ public class AgentGroupService {
         ensureActiveAgentGroupExists(agentGroupId);
         Agent agent = findAgentWithUser(agentId);
         addMembership(agentId, agentGroupId);
-        return AgentGroupMemberResponse.from(agent);
-    }
-
-    @Transactional
-    public AgentGroupMemberResponse removeMember(String agentGroupId, String agentId) {
-        ensureActiveAgentGroupExists(agentGroupId);
-        Agent agent = findAgentWithUser(agentId);
-        if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(agentId, agentGroupId)) {
-            throw new ArmsAuthException("Agent is not a member of this agent group", 404);
-        }
-        agentGroupMemberRepository.deleteByAgentIdAndAgentGroupId(agentId, agentGroupId);
         return AgentGroupMemberResponse.from(agent);
     }
 
