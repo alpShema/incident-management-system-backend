@@ -19,6 +19,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -117,7 +118,23 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void updateDepartment_inactiveDepartment_isAllowed() {
+    void createDepartment_trimsNameAndDescription() {
+        when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
+        when(departmentRepository.save(any(Department.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DepartmentResponse response = departmentService.createDepartment(
+                new DepartmentRequest("  Facilities  ",  "  Facilities dept  "));
+
+        assertThat(response.name()).isEqualTo("Facilities");
+        assertThat(response.description()).isEqualTo("Facilities dept");
+        var captor = org.mockito.ArgumentCaptor.forClass(Department.class);
+        verify(departmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Facilities");
+        assertThat(captor.getValue().getDescription()).isEqualTo("Facilities dept");
+    }
+
+    @Test
+    void updateDepartment_trimsNameAndDescription() {
         Department dept = department(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.existsByNameIgnoreCase("Facilities Updated")).thenReturn(false);
@@ -125,7 +142,7 @@ class DepartmentServiceTest {
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.updateDepartment(
-                "dept-1", new DepartmentRequest("Facilities Updated", "Updated description"));
+                "dept-1", new DepartmentRequest("  Facilities Updated  ", "  Updated description  "));
 
         assertThat(response.name()).isEqualTo("Facilities Updated");
         assertThat(response.description()).isEqualTo("Updated description");

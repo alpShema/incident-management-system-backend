@@ -48,14 +48,17 @@ public class DepartmentService {
 
     @Transactional
     public DepartmentResponse createDepartment(DepartmentRequest request) {
-        if (departmentRepository.existsByNameIgnoreCase(request.name())) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
+        if (departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Department with this name already exists", 409);
         }
 
         Department department = Department.builder()
                 .id(UUID.randomUUID().toString())
-                .name(request.name())
-                .description(request.description())
+                .name(name)
+                .description(description)
                 .status(true)
                 .build();
         return toResponse(departmentRepository.save(department));
@@ -63,14 +66,21 @@ public class DepartmentService {
 
     @Transactional
     public DepartmentResponse updateDepartment(String id, DepartmentRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         Department department = findDepartmentByIdOrThrow(id);
-        if (!department.getName().equalsIgnoreCase(request.name())
-                && departmentRepository.existsByNameIgnoreCase(request.name())) {
+        if (name != null && !department.getName().equalsIgnoreCase(name)
+                && departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Department with this name already exists", 409);
         }
 
-        department.setName(request.name());
-        department.setDescription(request.description());
+        if (name != null) {
+            department.setName(name);
+        }
+        if (description != null) {
+            department.setDescription(description);
+        }
         return toResponse(departmentRepository.save(department));
     }
 
