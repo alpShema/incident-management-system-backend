@@ -88,6 +88,114 @@ class UserServiceTest {
         verify(userRepository).findUserRoleSummariesUnified(null, null, "LOC-ACCRA", null, pageable);
     }
 
+    // -------------------------------------------------------------------------
+    // updateUserStatus
+    // -------------------------------------------------------------------------
+
+    @Test
+    void updateUserStatus_deactivateAgentUser_setsAgentStatusFalse() {
+        User user = User.builder().id("u1").email("a@test.com").fullName("Agent One").status(true).build();
+        Agent agent = Agent.builder().id("agent-1").userId("u1").status(true).build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(agent));
+        when(agentRepository.save(agent)).thenReturn(agent);
+
+        userService.updateUserStatus("admin-1", RoleCode.ADMIN, "u1", false);
+
+        assertThat(user.getStatus()).isFalse();
+        assertThat(agent.getStatus()).isFalse();
+        verify(userRepository).save(user);
+        verify(agentRepository).save(agent);
+    }
+
+    @Test
+    void updateUserStatus_reactivateAgentUser_setsAgentStatusTrue() {
+        User user = User.builder().id("u1").email("a@test.com").fullName("Agent One").status(false).build();
+        Agent agent = Agent.builder().id("agent-1").userId("u1").status(false).build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(agent));
+        when(agentRepository.save(agent)).thenReturn(agent);
+
+        userService.updateUserStatus("admin-1", RoleCode.ADMIN, "u1", true);
+
+        assertThat(user.getStatus()).isTrue();
+        assertThat(agent.getStatus()).isTrue();
+        verify(userRepository).save(user);
+        verify(agentRepository).save(agent);
+    }
+
+    @Test
+    void updateUserStatus_deactivateNonAgentUser_noAgentSave() {
+        User user = User.builder().id("u1").email("a@test.com").fullName("Admin One").status(true).build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
+
+        userService.updateUserStatus("admin-1", RoleCode.ADMIN, "u1", false);
+
+        assertThat(user.getStatus()).isFalse();
+        verify(userRepository).save(user);
+        verify(agentRepository, never()).save(any(Agent.class));
+    }
+
+    @Test
+    void updateUserStatus_agentAlreadyUnavailable_deactivationSucceeds() {
+        User user = User.builder().id("u1").email("a@test.com").fullName("Agent One").status(true).build();
+        Agent agent = Agent.builder().id("agent-1").userId("u1").status(false).build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(agent));
+        when(agentRepository.save(agent)).thenReturn(agent);
+
+        userService.updateUserStatus("admin-1", RoleCode.ADMIN, "u1", false);
+
+        assertThat(user.getStatus()).isFalse();
+        assertThat(agent.getStatus()).isFalse();
+        verify(userRepository).save(user);
+        verify(agentRepository).save(agent);
+    }
+
+    @Test
+    void updateUserStatus_selfUpdate_succeeds() {
+        User user = User.builder().id("u1").email("a@test.com").fullName("Agent One").status(true).build();
+
+        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
+
+        userService.updateUserStatus("u1", RoleCode.AGENT, "u1", false);
+
+        assertThat(user.getStatus()).isFalse();
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void updateUserStatus_nonAdminUpdatingOther_throws403() {
+        assertThatThrownBy(() -> userService.updateUserStatus("u2", RoleCode.AGENT, "u1", false))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You can only update your own status")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateUserStatus_userNotFound_throws404() {
+        when(userRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.updateUserStatus("admin-1", RoleCode.ADMIN, "missing", false))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("User not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    // -------------------------------------------------------------------------
+    // assignUserRole
+    // -------------------------------------------------------------------------
+
     @Test
     void assignUserRole_updatesRoleAndReturnsSummary() {
         User user = User.builder()
