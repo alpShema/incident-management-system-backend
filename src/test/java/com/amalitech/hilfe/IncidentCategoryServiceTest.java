@@ -419,6 +419,28 @@ class IncidentCategoryServiceTest {
     }
 
     @Test
+    void createTopic_doesNotSetAgentId_agentIdIsNull() {
+        // Regression: agent_id was NOT NULL in the DB schema but was never populated during
+        // topic creation, causing a constraint violation and a 500 on every createTopic call.
+        // Verified fix: agent_id is now nullable; the saved entity must not have agentId set.
+        IncidentType saved = buildType();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
+        when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
+
+        categoryService.createTopic(
+                "cat-1", "admin-1",
+                new CreateTopicRequest("Projector", "Projector issues", "group-1", true));
+
+        var captor = forClass(IncidentType.class);
+        verify(typeRepository).save(captor.capture());
+        assertThat(captor.getValue().getAgentId()).isNull();
+    }
+
+    @Test
     void createTopic_agentGroupNotFound_throws404() {
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
