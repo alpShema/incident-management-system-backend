@@ -1233,7 +1233,7 @@ class IncidentServiceTest {
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1"));
+        incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentClientReassignedEvent ev
                 && "user-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
@@ -1250,7 +1250,7 @@ class IncidentServiceTest {
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1"));
+        incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1"));
 
         assertThat(incident.getAssignedToId()).isEqualTo("agent-1");
         assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
@@ -1267,7 +1267,7 @@ class IncidentServiceTest {
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1")))
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Default 'In Progress' status not configured")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1279,7 +1279,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "missing", new AssignIncidentRequest("agent-1")))
+                incidentService.assignIncident("actor-1", "ADMIN", "missing", new AssignIncidentRequest("agent-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -1292,7 +1292,7 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-999")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-999")))
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-999")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1307,11 +1307,44 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAgent));
 
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "inc-1", new AssignIncidentRequest("agent-1")))
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Cannot assign incident to an unavailable agent")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
+    }
+
+    @Test
+    void assignIncident_agentNotOwner_throws403() {
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1", agent userId = "actor-1"
+        stubAssignedAgent(); // agent-1 → userId "actor-1"
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("other-agent-user", "AGENT", "inc-1", new AssignIncidentRequest("agent-2")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You can only reassign incidents that are assigned to you")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void assignIncident_agentIsOwner_succeeds() {
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Agent agent1 = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        Agent agent2 = Agent.builder().id("agent-2").userId("other-user").status(true).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent1));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(agent2));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        // actor-1 is the userId of agent-1, who is the assigned agent — should be allowed
+        incidentService.assignIncident("actor-1", "AGENT", "inc-1", new AssignIncidentRequest("agent-2"));
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
     }
 
     // ── notification: sendReopenedNotification ────────────────────────────────
@@ -1483,7 +1516,7 @@ class IncidentServiceTest {
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-2"));
+        incidentService.assignIncident("admin-user", "ADMIN", "inc-1", new AssignIncidentRequest("agent-2"));
 
         // Previous agent must receive unassigned notification
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentUnassignedEvent ev
@@ -1504,7 +1537,7 @@ class IncidentServiceTest {
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-1"));
+        incidentService.assignIncident("admin-user", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher, never()).publish(isA(IncidentUnassignedEvent.class));
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
@@ -1525,7 +1558,7 @@ class IncidentServiceTest {
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-1"));
+        incidentService.assignIncident("admin-user", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher, never()).publish(isA(IncidentUnassignedEvent.class));
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
@@ -1545,7 +1578,7 @@ class IncidentServiceTest {
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
-        incidentService.assignIncident("admin-user", "inc-1", new AssignIncidentRequest("agent-1"));
+        incidentService.assignIncident("admin-user", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
                 && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
