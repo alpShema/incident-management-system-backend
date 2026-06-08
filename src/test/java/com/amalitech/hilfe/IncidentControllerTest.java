@@ -221,7 +221,7 @@ class IncidentControllerTest {
 
     @Test
     void assignIncident_validRequest_returns200() throws Exception {
-        when(incidentService.assignIncident(anyString(), eq("inc-1"), any(AssignIncidentRequest.class))).thenReturn(stubResponse());
+        when(incidentService.assignIncident(anyString(), anyString(), eq("inc-1"), any(AssignIncidentRequest.class))).thenReturn(stubResponse());
 
         mvc.perform(patch("/incidents/inc-1/assign")
                         .contentType(MediaType.APPLICATION_JSON)
