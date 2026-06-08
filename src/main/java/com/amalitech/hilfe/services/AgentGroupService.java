@@ -245,9 +245,6 @@ public class AgentGroupService {
     private Agent findActiveAgent(String agentId) {
         Agent agent = agentRepository.findByIdWithUser(agentId)
                 .orElseThrow(() -> new ArmsAuthException("Agent not found or inactive", 400));
-        if (!Boolean.TRUE.equals(agent.getStatus())) {
-            throw new ArmsAuthException("Agent not found or inactive", 400);
-        }
         if (agent.getUser() == null || !Boolean.TRUE.equals(agent.getUser().getStatus())) {
             throw new ArmsAuthException("Agent not found or inactive", 400);
         }
