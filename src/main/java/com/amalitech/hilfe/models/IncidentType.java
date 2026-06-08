@@ -29,7 +29,7 @@ public class IncidentType {
     @Column(name = "admin_id", nullable = false)
     private String adminId;
 
-    @Column(name = "agent_id", nullable = false)
+    @Column(name = "agent_id")
     private String agentId;
 
     @Column(name = "agent_group_id")
