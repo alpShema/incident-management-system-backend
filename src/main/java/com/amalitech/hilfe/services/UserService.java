@@ -104,6 +104,11 @@ public class UserService {
         user.setStatus(status);
         userRepository.save(user);
 
+        agentRepository.findByUserId(targetUserId).ifPresent(agent -> {
+            agent.setStatus(status);
+            agentRepository.save(agent);
+        });
+
         return new UserRoleSummaryResponse(
                 user.getId(),
                 user.getEmail(),
