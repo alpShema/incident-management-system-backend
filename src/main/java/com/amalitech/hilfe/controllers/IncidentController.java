@@ -328,7 +328,7 @@ public class IncidentController {
             @Valid @RequestBody AssignIncidentRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident assigned successfully",
-                incidentService.assignIncident(principal.userId(), id, request)));
+                incidentService.assignIncident(principal.userId(), principal.roleCode(), id, request)));
     }
 
     @Operation(
