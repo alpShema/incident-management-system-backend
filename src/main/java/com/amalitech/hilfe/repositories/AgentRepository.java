@@ -170,6 +170,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                 WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
             )
             AND u.locationId = :locationId
+            ORDER BY a.lastAssignedAt ASC NULLS FIRST
             """)
     List<Agent> findAvailableByAgentGroupIdAndLocation(
             @Param("agentGroupId") String agentGroupId,
@@ -184,6 +185,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
             )
+            ORDER BY a.lastAssignedAt ASC NULLS FIRST
             """)
     List<Agent> findAvailableByAgentGroupIdViaMembership(@Param("agentGroupId") String agentGroupId);
 }
