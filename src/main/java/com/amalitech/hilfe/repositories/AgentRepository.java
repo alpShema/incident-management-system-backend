@@ -77,6 +77,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.departmentId = :departmentId
                           AND g.status = true
                     )
+                    AND a.status = true
                     AND (:queryPattern IS NULL OR (
                         LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
@@ -92,6 +93,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.departmentId = :departmentId
                           AND g.status = true
                     )
+                    AND a.status = true
                     AND (:queryPattern IS NULL OR EXISTS (
                         SELECT 1 FROM User u
                         LEFT JOIN u.location l
