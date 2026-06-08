@@ -108,6 +108,7 @@ public class AgentGroupService {
                 topic.setAgentGroupId(groupId);
                 incidentTypeRepository.save(topic);
             }
+            incidentTypeRepository.flush();
         }
 
         return toResponse(group);
@@ -154,6 +155,7 @@ public class AgentGroupService {
                 topic.setAgentGroupId(id);
                 incidentTypeRepository.save(topic);
             }
+            incidentTypeRepository.flush();
         }
 
         return toResponse(group);
