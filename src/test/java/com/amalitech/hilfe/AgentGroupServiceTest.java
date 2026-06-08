@@ -63,19 +63,19 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void createAgentGroup_withDeactivatedAgent_throws400() {
+    void createAgentGroup_withDeactivatedUserAccount_throws400() {
         Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
         Agent activeAgent = Agent.builder().id("agent-active").userId("user-active").status(true).build();
         activeAgent.setUser(User.builder().id("user-active").status(true).build());
-        Agent inactiveAgent = Agent.builder().id("agent-inactive").userId("user-inactive").status(false).build();
-        inactiveAgent.setUser(User.builder().id("user-inactive").status(true).build());
+        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(true).build();
+        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build()); // user account deactivated
 
         when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(agentRepository.findByIdWithUser("agent-active")).thenReturn(Optional.of(activeAgent));
-        when(agentRepository.findByIdWithUser("agent-inactive")).thenReturn(Optional.of(inactiveAgent));
+        when(agentRepository.findByIdWithUser("agent-deactivated")).thenReturn(Optional.of(deactivatedAgent));
 
-        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-active", "agent-inactive"), null);
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-active", "agent-deactivated"), null);
 
         assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
                 .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
@@ -117,24 +117,21 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void createAgentGroup_withOnlyDeactivatedAgent_throws400() {
+    void createAgentGroup_withUnavailableAgent_succeeds() {
         Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
-        Agent inactiveAgent = Agent.builder().id("agent-inactive").userId("user-inactive").status(false).build();
-        inactiveAgent.setUser(User.builder().id("user-inactive").status(true).build());
+        Agent unavailableAgent = Agent.builder().id("agent-unavailable").userId("user-1").status(false).build(); // unavailable but active
+        unavailableAgent.setUser(User.builder().id("user-1").status(true).build()); // user account active
 
         when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(agentRepository.findByIdWithUser("agent-inactive")).thenReturn(Optional.of(inactiveAgent));
+        when(agentRepository.findByIdWithUser("agent-unavailable")).thenReturn(Optional.of(unavailableAgent));
+        when(agentGroupRepository.save(any(AgentGroup.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-inactive"), null);
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-unavailable"), null);
+        agentGroupService.createAgentGroup(request);
 
-        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
-                .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
-                .hasMessage("Agent not found or inactive")
-                .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
-
-        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+        verify(agentGroupRepository).save(any(AgentGroup.class));
+        verify(agentGroupMemberRepository).save(any());
     }
 
     @Test
@@ -202,16 +199,16 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void updateAgentGroup_withDeactivatedAgentInList_throws400() {
+    void updateAgentGroup_withDeactivatedUserInList_throws400() {
         AgentGroup group = group(true);
-        Agent inactiveAgent = Agent.builder().id("agent-inactive").userId("user-inactive").status(false).build();
-        inactiveAgent.setUser(User.builder().id("user-inactive").status(true).build());
+        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(true).build();
+        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build()); // user account deactivated
 
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
         when(agentGroupRepository.save(group)).thenReturn(group);
-        when(agentRepository.findByIdWithUser("agent-inactive")).thenReturn(Optional.of(inactiveAgent));
+        when(agentRepository.findByIdWithUser("agent-deactivated")).thenReturn(Optional.of(deactivatedAgent));
 
-        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, List.of("agent-inactive"), null);
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, List.of("agent-deactivated"), null);
 
         assertThatThrownBy(() -> agentGroupService.updateAgentGroup("group-1", request))
                 .isInstanceOf(ArmsAuthException.class)
