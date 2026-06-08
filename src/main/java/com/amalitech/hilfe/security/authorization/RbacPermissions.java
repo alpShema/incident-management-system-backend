@@ -94,6 +94,7 @@ public final class RbacPermissions {
             INCIDENT_TYPE_UPDATE,
             INCIDENT_TYPE_DELETE,
             RBAC_ROLE_READ,
+            RBAC_ROLE_UPDATE,
             RBAC_USER_ROLE_UPDATE,
             RBAC_PERMISSION_READ,
             DASHBOARD_ADMIN,
