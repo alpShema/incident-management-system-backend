@@ -293,8 +293,17 @@ public class IncidentService {
     }
 
     @Transactional
-    public IncidentResponse assignIncident(String actorUserId, String incidentId, AssignIncidentRequest request) {
+    public IncidentResponse assignIncident(String actorUserId, String roleCode, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
+
+        String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
+        boolean isAdmin = "ADMIN".equals(normalizedRole) || "SUPER_ADMIN".equals(normalizedRole);
+        if (!isAdmin) {
+            String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
+            if (!actorUserId.equals(assignedAgentUserId)) {
+                throw new ArmsAuthException("You can only reassign incidents that are assigned to you", 403);
+            }
+        }
 
         Agent agent = agentRepository.findById(request.agentId())
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
