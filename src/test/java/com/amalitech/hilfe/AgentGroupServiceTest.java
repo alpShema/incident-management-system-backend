@@ -58,7 +58,7 @@ class AgentGroupServiceTest {
                 .userId("user-1")
                 .status(true)
                 .build();
-        agent.setUser(User.builder().id("user-1").fullName("Agent One").build());
+        agent.setUser(User.builder().id("user-1").fullName("Agent One").status(true).build());
         return agent;
     }
 
@@ -81,6 +81,36 @@ class AgentGroupServiceTest {
                 .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
                 .hasMessage("Agent not found or inactive")
                 .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void createAgentGroup_withNullAgentIds_throws400() {
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", null, null);
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("At least one agent is required")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void createAgentGroup_withEmptyAgentIds_throws400() {
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of(), null);
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("At least one agent is required")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
 
         verify(agentGroupRepository, never()).save(any(AgentGroup.class));
@@ -113,9 +143,10 @@ class AgentGroupServiceTest {
 
         when(agentGroupRepository.existsByNameIgnoreCase("Support Team")).thenReturn(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(memberAgent()));
         when(agentGroupRepository.save(any(AgentGroup.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" Support Team ", " Handles tickets ", "dept-1", null, null);
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" Support Team ", " Handles tickets ", "dept-1", List.of("agent-1"), null);
         agentGroupService.createAgentGroup(request);
 
         var captor = ArgumentCaptor.forClass(AgentGroup.class);
@@ -221,10 +252,11 @@ class AgentGroupServiceTest {
 
         when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(memberAgent()));
         when(agentGroupRepository.save(any(AgentGroup.class))).thenAnswer(inv -> inv.getArgument(0));
         when(incidentTypeRepository.findById("topic-1")).thenReturn(Optional.of(topic));
 
-        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", null, List.of("topic-1"));
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-1"), List.of("topic-1"));
         agentGroupService.createAgentGroup(request);
 
         assertThat(topic.getAgentGroupId()).isNotNull();
@@ -240,9 +272,10 @@ class AgentGroupServiceTest {
 
         when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(memberAgent()));
         when(incidentTypeRepository.findById("topic-1")).thenReturn(Optional.of(topic));
 
-        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", null, List.of("topic-1"));
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-1"), List.of("topic-1"));
 
         assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
                 .isInstanceOf(ArmsAuthException.class)

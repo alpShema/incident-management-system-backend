@@ -73,14 +73,15 @@ public class AgentGroupService {
         if (agentGroupRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Agent group with this name already exists", 409);
         }
+        if (request.agentIds() == null || request.agentIds().isEmpty()) {
+            throw new ArmsAuthException("At least one agent is required", 400);
+        }
 
         String groupId = UUID.randomUUID().toString();
         Department department = findActiveDepartment(request.departmentId());
 
-        if (request.agentIds() != null) {
-            for (String agentId : request.agentIds()) {
-                findActiveAgent(agentId);
-            }
+        for (String agentId : request.agentIds()) {
+            findActiveAgent(agentId);
         }
 
         AgentGroup group = AgentGroup.builder()
@@ -96,10 +97,8 @@ public class AgentGroupService {
 
         agentGroupRepository.save(group);
 
-        if (request.agentIds() != null) {
-            for (String agentId : request.agentIds()) {
-                addMembership(agentId, groupId);
-            }
+        for (String agentId : request.agentIds()) {
+            addMembership(agentId, groupId);
         }
 
         if (request.topicIds() != null) {
