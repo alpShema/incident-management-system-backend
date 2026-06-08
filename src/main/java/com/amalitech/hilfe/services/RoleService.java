@@ -121,18 +121,32 @@ public class RoleService {
         List<RoleResponse.PermissionItem> incident = all.stream()
                 .filter(p -> p.code() != null && p.code().startsWith("incident."))
                 .toList();
+
         List<RoleResponse.PermissionItem> agentAndGroup = all.stream()
                 .filter(p -> p.code() != null
                         && (p.code().startsWith("agent.") || p.code().startsWith("agent-group.")))
                 .toList();
-        Set<String> picked = new HashSet<>();
-        incident.forEach(p -> picked.add(p.code()));
-        agentAndGroup.forEach(p -> picked.add(p.code()));
-        List<RoleResponse.PermissionItem> other = all.stream()
-                .filter(p -> p.code() == null || !picked.contains(p.code()))
+
+        List<RoleResponse.PermissionItem> settings = all.stream()
+                .filter(p -> p.code() != null && (
+                        p.code().startsWith("department.")
+                                || p.code().startsWith("status.")
+                                || p.code().startsWith("severity.")
+                                || p.code().startsWith("location.")
+                                || p.code().startsWith("incident-type.")
+                                || p.code().startsWith("incident-category.")
+                                || p.code().startsWith("system.")))
                 .toList();
 
-        return new PermissionCatalogResponse(incident, agentAndGroup, other);
+        List<RoleResponse.PermissionItem> user = all.stream()
+                .filter(p -> p.code() != null && p.code().startsWith("rbac."))
+                .toList();
+
+        List<RoleResponse.PermissionItem> report = all.stream()
+                .filter(p -> p.code() != null && p.code().startsWith("dashboard."))
+                .toList();
+
+        return new PermissionCatalogResponse(incident, agentAndGroup, settings, user, report);
     }
 
     private RoleResponse toResponse(Role role) {
