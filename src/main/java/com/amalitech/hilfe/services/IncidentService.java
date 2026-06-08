@@ -311,6 +311,9 @@ public class IncidentService {
             throw new ArmsAuthException("Cannot assign incident to an unavailable agent", 400);
         }
 
+        agent.setLastAssignedAt(Instant.now());
+        agentRepository.save(agent);
+
         // Capture the previous agent's userId BEFORE overwriting assignedToId
         String previousAgentUserId = resolveAgentUserId(incident.getAssignedToId());
 
@@ -397,9 +400,11 @@ public class IncidentService {
             AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
                     .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
 
-            String assignedAgentId = findAvailableAgentInGroup(agentGroup, incident.getLocationId());
-            if (assignedAgentId != null) {
-                incident.setAssignedToId(assignedAgentId);
+            Agent assignedAgent = findAvailableAgentInGroup(agentGroup, incident.getLocationId());
+            if (assignedAgent != null) {
+                assignedAgent.setLastAssignedAt(Instant.now());
+                agentRepository.save(assignedAgent);
+                incident.setAssignedToId(assignedAgent.getId());
                 incident.setStatusId(statusRepository.findByNameIgnoreCase("In Progress")
                         .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
                         .getId());
@@ -411,6 +416,8 @@ public class IncidentService {
         if (incidentType != null && incidentType.getAgentId() != null && !incidentType.getAgentId().isBlank()) {
             Agent agent = agentRepository.findById(incidentType.getAgentId()).orElse(null);
             if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
+                agent.setLastAssignedAt(Instant.now());
+                agentRepository.save(agent);
                 incident.setAssignedToId(incidentType.getAgentId());
                 incident.setStatusId(statusRepository.findByNameIgnoreCase("In Progress")
                         .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
@@ -423,16 +430,16 @@ public class IncidentService {
         incident.setStatusId("status-open");
     }
 
-    private String findAvailableAgentInGroup(AgentGroup agentGroup, String locationId) {
+    private Agent findAvailableAgentInGroup(AgentGroup agentGroup, String locationId) {
         List<Agent> locationMatched = agentRepository
                 .findAvailableByAgentGroupIdAndLocation(agentGroup.getId(), locationId);
         if (!locationMatched.isEmpty()) {
-            return locationMatched.get(0).getId();
+            return locationMatched.get(0);
         }
         List<Agent> anyAvailable = agentRepository
                 .findAvailableByAgentGroupIdViaMembership(agentGroup.getId());
         if (!anyAvailable.isEmpty()) {
-            return anyAvailable.get(0).getId();
+            return anyAvailable.get(0);
         }
         return null;
     }

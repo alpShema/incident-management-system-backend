@@ -1,7 +1,9 @@
 package com.amalitech.hilfe.repositories;
 
 import com.amalitech.hilfe.models.Agent;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -161,6 +163,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             """)
     List<Agent> findAvailableByAgentGroupId(@Param("agentGroupId") String agentGroupId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
@@ -170,12 +173,14 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                 WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
             )
             AND u.locationId = :locationId
+            ORDER BY a.lastAssignedAt ASC NULLS FIRST
             """)
     List<Agent> findAvailableByAgentGroupIdAndLocation(
             @Param("agentGroupId") String agentGroupId,
             @Param("locationId") String locationId
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
@@ -184,6 +189,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
             )
+            ORDER BY a.lastAssignedAt ASC NULLS FIRST
             """)
     List<Agent> findAvailableByAgentGroupIdViaMembership(@Param("agentGroupId") String agentGroupId);
 }
