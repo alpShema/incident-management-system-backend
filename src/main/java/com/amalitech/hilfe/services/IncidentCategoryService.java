@@ -96,8 +96,12 @@ public class IncidentCategoryService {
     }
 
     @Transactional
-    public void deleteCategory(String id) {
-        deactivateCategory(id);
+    public IncidentCategoryResponse updateCategoryStatus(String id, Boolean status) {
+        IncidentCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+        category.setStatus(Boolean.TRUE.equals(status) ? "active" : "inactive");
+        categoryRepository.save(category);
+        return IncidentCategoryResponse.from(category);
     }
 
     public List<IncidentTopicResponse> listTopicsByCategory(String categoryId) {
@@ -206,15 +210,6 @@ public class IncidentCategoryService {
             throw new ArmsAuthException("Incident topic is referenced by incidents", 409);
         }
         typeRepository.delete(topic);
-    }
-
-    @Transactional
-    public IncidentCategoryResponse deactivateCategory(String id) {
-        IncidentCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
-        category.setStatus("inactive");
-        categoryRepository.save(category);
-        return IncidentCategoryResponse.from(category);
     }
 
     private void validateDepartment(String departmentId) {

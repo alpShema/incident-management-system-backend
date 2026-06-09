@@ -163,16 +163,38 @@ class IncidentCategoryControllerTest {
                 .andExpect(jsonPath("$.message").value("A record with this value already exists"));
     }
 
-    // ── DELETE /incident-categories/{id} ─────────────────────────────────────
+    // ── PATCH /incident-categories/{id}/status ─────────────────────────────
 
     @Test
-    void deleteCategory_validRequest_returns204() throws Exception {
+    void updateCategoryStatus_deactivate_returns200() throws Exception {
+        when(categoryService.updateCategoryStatus("cat-1", false)).thenReturn(stubCategory());
+
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "incident-category.delete"));
 
-        mvc.perform(delete("/incident-categories/cat-1")
+        mvc.perform(patch("/incident-categories/cat-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new UpdateIncidentCategoryStatusRequest(false)))
                         .with(authentication(auth)))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident category status updated successfully"));
+    }
+
+    @Test
+    void updateCategoryStatus_activate_returns200() throws Exception {
+        when(categoryService.updateCategoryStatus("cat-1", true)).thenReturn(stubCategory());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-category.delete"));
+
+        mvc.perform(patch("/incident-categories/cat-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new UpdateIncidentCategoryStatusRequest(true)))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident category status updated successfully"));
     }
 
     // ── GET /incident-categories/{id}/topics ─────────────────────────────────
