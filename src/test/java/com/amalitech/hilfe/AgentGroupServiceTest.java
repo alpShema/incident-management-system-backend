@@ -21,12 +21,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -396,13 +401,13 @@ class AgentGroupServiceTest {
         inactive.setName("Facilities Support");
         Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
 
-        when(agentGroupRepository.listAllAgentGroups(null, null, null)).thenReturn(List.of(active, inactive));
+        when(agentGroupRepository.listAllAgentGroups(isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(active, inactive)));
         when(agentGroupMemberRepository.countByAgentGroupId(any())).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("all", null, null);
+        var result = agentGroupService.listAllAgentGroups("all", null, null, Pageable.unpaged());
 
-        assertThat(result).hasSize(2);
+        assertThat(result.getContent()).hasSize(2);
     }
 
     @Test
@@ -410,14 +415,14 @@ class AgentGroupServiceTest {
         AgentGroup active = group(true);
         Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
 
-        when(agentGroupRepository.listAllAgentGroups(true, null, null)).thenReturn(List.of(active));
+        when(agentGroupRepository.listAllAgentGroups(eq(true), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(active)));
         when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("active", null, null);
+        var result = agentGroupService.listAllAgentGroups("active", null, null, Pageable.unpaged());
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().status()).isTrue();
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().status()).isTrue();
     }
 
     @Test
@@ -425,28 +430,28 @@ class AgentGroupServiceTest {
         AgentGroup inactive = group(false);
         Department dept = Department.builder().id("dept-1").name("Facilities").status(false).build();
 
-        when(agentGroupRepository.listAllAgentGroups(false, null, null)).thenReturn(List.of(inactive));
+        when(agentGroupRepository.listAllAgentGroups(eq(false), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(inactive)));
         when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("deactivated", null, null);
+        var result = agentGroupService.listAllAgentGroups("deactivated", null, null, Pageable.unpaged());
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().status()).isFalse();
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().status()).isFalse();
     }
 
     @Test
     void listAllAgentGroups_nullStatus_returnsAll() {
-        when(agentGroupRepository.listAllAgentGroups(null, null, null)).thenReturn(List.of());
+        when(agentGroupRepository.listAllAgentGroups(isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
 
-        var result = agentGroupService.listAllAgentGroups(null, null, null);
+        var result = agentGroupService.listAllAgentGroups(null, null, null, Pageable.unpaged());
 
-        assertThat(result).isEmpty();
+        assertThat(result.getContent()).isEmpty();
     }
 
     @Test
     void listAllAgentGroups_invalidStatus_throws400() {
-        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null))
+        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null, Pageable.unpaged()))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Invalid status filter. Accepted values: active, deactivated, all")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
