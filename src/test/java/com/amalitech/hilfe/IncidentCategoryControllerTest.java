@@ -79,6 +79,38 @@ class IncidentCategoryControllerTest {
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
+    // ── GET /incident-categories/all ─────────────────────────────────────────
+
+    @Test
+    void listAllCategories_adminWithNoFilter_returns200WithAllCategories() throws Exception {
+        IncidentCategoryResponse inactive = new IncidentCategoryResponse("cat-2", "Old", "desc", null, "inactive", null);
+        when(categoryService.listAllCategories(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory(), inactive), PageRequest.of(0, 20), 2));
+
+        mvc.perform(get("/incident-categories/all")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident categories retrieved successfully"))
+                .andExpect(jsonPath("$.data.totalElements").value(2))
+                .andExpect(jsonPath("$.data.items[0].status").value("active"))
+                .andExpect(jsonPath("$.data.items[1].status").value("inactive"));
+    }
+
+    @Test
+    void listAllCategories_withStateFilter_passesStateToService() throws Exception {
+        when(categoryService.listAllCategories(eq("inactive"), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/incident-categories/all?state=inactive")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        verify(categoryService).listAllCategories(eq("inactive"), any(), any());
+    }
+
     // ── POST /incident-categories ─────────────────────────────────────────────
 
     @Test
