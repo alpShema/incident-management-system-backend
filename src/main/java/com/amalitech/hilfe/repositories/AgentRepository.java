@@ -148,6 +148,19 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
     Optional<String> findAgentGroupIdByAgentId(@Param("agentId") String agentId);
 
     @Query("""
+            SELECT CASE WHEN COUNT(ag) > 0 THEN true ELSE false END
+            FROM AgentGroup ag
+            WHERE ag.status = true
+            AND (
+                ag.id = :agentGroupId
+                OR ag.id IN (
+                    SELECT m.agentGroupId FROM AgentGroupMember m WHERE m.agentId = :agentId
+                )
+            )
+            """)
+    boolean hasActiveGroup(@Param("agentGroupId") String agentGroupId, @Param("agentId") String agentId);
+
+    @Query("""
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user
             WHERE a.agentGroupId = (
@@ -170,7 +183,9 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             WHERE a.status = true
             AND EXISTS (
                 SELECT 1 FROM AgentGroupMember m
+                JOIN m.agentGroup g
                 WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
+                AND g.status = true
             )
             AND u.locationId = :locationId
             ORDER BY a.lastAssignedAt ASC NULLS FIRST
@@ -187,7 +202,9 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             WHERE a.status = true
             AND EXISTS (
                 SELECT 1 FROM AgentGroupMember m
+                JOIN m.agentGroup g
                 WHERE m.agentId = a.id AND m.agentGroupId = :agentGroupId
+                AND g.status = true
             )
             ORDER BY a.lastAssignedAt ASC NULLS FIRST
             """)
