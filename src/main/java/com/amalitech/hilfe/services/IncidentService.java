@@ -310,6 +310,9 @@ public class IncidentService {
         if (!Boolean.TRUE.equals(agent.getStatus())) {
             throw new ArmsAuthException("Cannot assign incident to an unavailable agent", 400);
         }
+        if (!agentRepository.hasActiveGroup(agent.getAgentGroupId(), agent.getId())) {
+            throw new ArmsAuthException("Cannot assign incident to an agent in a deactivated group", 400);
+        }
 
         agent.setLastAssignedAt(Instant.now());
         agentRepository.save(agent);
@@ -399,6 +402,11 @@ public class IncidentService {
                 && !incidentType.getAgentGroupId().isBlank()) {
             AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
                     .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
+
+            if (!Boolean.TRUE.equals(agentGroup.getStatus())) {
+                incident.setStatusId("status-open");
+                return;
+            }
 
             Agent assignedAgent = findAvailableAgentInGroup(agentGroup, incident.getLocationId());
             if (assignedAgent != null) {
