@@ -40,12 +40,11 @@ public class AgentGroupService {
                 .map(this::toResponse);
     }
 
-    public List<AgentGroupResponse> listAllAgentGroups(String status, String query, String departmentId) {
+    public Page<AgentGroupResponse> listAllAgentGroups(String status, String query, String departmentId, Pageable pageable) {
         Boolean statusFilter = resolveStatusFilter(status);
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
-        return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId).stream()
-                .map(this::toResponse)
-                .toList();
+        return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId, pageable)
+                .map(this::toResponse);
     }
 
     private Boolean resolveStatusFilter(String status) {
