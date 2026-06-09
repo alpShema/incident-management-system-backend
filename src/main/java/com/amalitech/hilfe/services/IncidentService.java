@@ -116,9 +116,9 @@ public class IncidentService {
         if (request.attachments() != null && !request.attachments().isEmpty()) {
             List<Media> mediaList = mediaService.createMediaForIncident(saved.getId(), request.attachments());
             mediaResponses = mediaService.toMediaResponses(mediaList);
-            entityManager.flush();
         }
 
+        entityManager.flush();
         entityManager.clear();
         return slaService.toIncidentResponse(
                 incidentRepository.findByIdWithDetails(saved.getId()).orElseThrow(),
