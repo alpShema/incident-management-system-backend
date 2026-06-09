@@ -120,6 +120,74 @@ class IncidentCategoryServiceTest {
         assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
     }
 
+    // ── listAllCategories ─────────────────────────────────────────────────────
+
+    @Test
+    void listAllCategories_noStateFilter_passesNullStatusToRepository() {
+        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq(null), any()))
+                .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listAllCategories(null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, null, PageRequest.of(0, 20));
+    }
+
+    @Test
+    void listAllCategories_stateAll_passesNullStatusToRepository() {
+        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq(null), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listAllCategories("all", null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, null, PageRequest.of(0, 20));
+    }
+
+    @Test
+    void listAllCategories_stateActive_filtersToActiveOnly() {
+        IncidentCategory active = buildCategory();
+        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq("active"), eq(null), any()))
+                .thenReturn(new PageImpl<>(List.of(active), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listAllCategories("active", null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).status()).isEqualTo("active");
+    }
+
+    @Test
+    void listAllCategories_stateInactive_filtersToInactiveOnly() {
+        IncidentCategory inactive = IncidentCategory.builder()
+                .id("cat-2").name("Old Category").status("inactive").build();
+        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq("inactive"), eq(null), any()))
+                .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listAllCategories("inactive", null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).status()).isEqualTo("inactive");
+    }
+
+    @Test
+    void listAllCategories_invalidState_throws400() {
+        assertThatThrownBy(() -> categoryService.listAllCategories("unknown", null, PageRequest.of(0, 20)))
+                .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
+                .hasMessageContaining("Invalid state filter")
+                .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void listAllCategories_withQuery_buildsQueryPattern() {
+        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq("%facility%"), any()))
+                .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listAllCategories(null, "facility", PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, "%facility%", PageRequest.of(0, 20));
+    }
+
     // ── createCategory ────────────────────────────────────────────────────────
 
     @Test
