@@ -81,6 +81,29 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
             """)
     Page<IncidentCategory> searchCategories(@Param("queryPattern") String queryPattern, Pageable pageable);
 
+    @Query(value = """
+            SELECT c FROM IncidentCategory c
+            LEFT JOIN FETCH c.department d
+            WHERE (:status IS NULL OR c.status = :status)
+              AND (:queryPattern IS NULL
+                   OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
+            """,
+            countQuery = """
+            SELECT COUNT(c) FROM IncidentCategory c
+            LEFT JOIN c.department d
+            WHERE (:status IS NULL OR c.status = :status)
+              AND (:queryPattern IS NULL
+                   OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
+                   OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
+            """)
+    Page<IncidentCategory> findAllWithDepartmentAndQueryPaged(
+            @Param("status") String status,
+            @Param("queryPattern") String queryPattern,
+            Pageable pageable);
+
     @Query("""
             SELECT c FROM IncidentCategory c
             LEFT JOIN FETCH c.department
