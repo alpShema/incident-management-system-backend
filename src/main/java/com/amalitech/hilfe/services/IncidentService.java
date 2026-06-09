@@ -89,7 +89,8 @@ public class IncidentService {
                 .incidentTypeId(request.incidentTypeId())
                 .severityId(resolvePriorityId(request.severityId()))
                 .build();
-        applyTopicAssignment(incident, incidentType);
+        String creatorAgentId = agentRepository.findByUserId(userId).map(Agent::getId).orElse(null);
+        applyTopicAssignment(incident, incidentType, creatorAgentId);
 
         Incident saved = incidentRepository.save(incident);
         entityManager.flush();
@@ -393,14 +394,19 @@ public class IncidentService {
         throw new ArmsAuthException("You do not have access to this incident", 403);
     }
 
-    private void applyTopicAssignment(Incident incident, IncidentType incidentType) {
+    private void applyTopicAssignment(Incident incident, IncidentType incidentType, String creatorAgentId) {
         if (incidentType != null
                 && incidentType.getAgentGroupId() != null
                 && !incidentType.getAgentGroupId().isBlank()) {
             AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
                     .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
 
-            Agent assignedAgent = findAvailableAgentInGroup(agentGroup, incident.getLocationId());
+            if (!Boolean.TRUE.equals(agentGroup.getStatus())) {
+                incident.setStatusId("status-open");
+                return;
+            }
+
+            Agent assignedAgent = findAvailableAgentInGroup(agentGroup, incident.getLocationId(), creatorAgentId);
             if (assignedAgent != null) {
                 assignedAgent.setLastAssignedAt(Instant.now());
                 agentRepository.save(assignedAgent);
@@ -408,13 +414,20 @@ public class IncidentService {
                 incident.setStatusId(statusRepository.findByNameIgnoreCase("In Progress")
                         .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
                         .getId());
+                if (creatorAgentId != null) {
+                    activityLogService.logSelfAssignmentPrevented(incident.getId(), creatorAgentId, assignedAgent.getId());
+                }
             } else {
                 incident.setStatusId("status-open");
+                if (creatorAgentId != null) {
+                    activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
+                }
             }
             return;
         }
         if (incidentType != null && incidentType.getAgentId() != null && !incidentType.getAgentId().isBlank()) {
-            Agent agent = agentRepository.findById(incidentType.getAgentId()).orElse(null);
+            boolean isSelf = incidentType.getAgentId().equals(creatorAgentId);
+            Agent agent = isSelf ? null : agentRepository.findById(incidentType.getAgentId()).orElse(null);
             if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
                 agent.setLastAssignedAt(Instant.now());
                 agentRepository.save(agent);
@@ -424,24 +437,29 @@ public class IncidentService {
                         .getId());
             } else {
                 incident.setStatusId("status-open");
+                if (isSelf) {
+                    activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
+                }
             }
             return;
         }
         incident.setStatusId("status-open");
     }
 
-    private Agent findAvailableAgentInGroup(AgentGroup agentGroup, String locationId) {
+    private Agent findAvailableAgentInGroup(AgentGroup agentGroup, String locationId, String excludeAgentId) {
         List<Agent> locationMatched = agentRepository
                 .findAvailableByAgentGroupIdAndLocation(agentGroup.getId(), locationId);
-        if (!locationMatched.isEmpty()) {
-            return locationMatched.get(0);
+        Agent fromLocation = locationMatched.stream()
+                .filter(a -> !a.getId().equals(excludeAgentId))
+                .findFirst().orElse(null);
+        if (fromLocation != null) {
+            return fromLocation;
         }
         List<Agent> anyAvailable = agentRepository
                 .findAvailableByAgentGroupIdViaMembership(agentGroup.getId());
-        if (!anyAvailable.isEmpty()) {
-            return anyAvailable.get(0);
-        }
-        return null;
+        return anyAvailable.stream()
+                .filter(a -> !a.getId().equals(excludeAgentId))
+                .findFirst().orElse(null);
     }
 
     private Optional<List<String>> findAgentGroupIds(String userId) {
