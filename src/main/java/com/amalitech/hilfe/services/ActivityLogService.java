@@ -259,6 +259,41 @@ public class ActivityLogService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logSelfAssignmentPrevented(String incidentId, String creatorAgentId, String assignedAgentId) {
+        try {
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            String assignedName = resolveAgentName(assignedAgentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .action("SELF_ASSIGNMENT_PREVENTED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description(incidentLabel + " self-assignment prevented; routed to " + assignedName + " instead")
+                    .metadata("{\"creatorAgentId\":\"" + creatorAgentId + "\",\"assignedAgentId\":\"" + assignedAgentId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log self-assignment prevention for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logSelfAssignmentEscalated(String incidentId, String creatorAgentId) {
+        try {
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .action("SELF_ASSIGNMENT_ESCALATED")
+                    .subjectType("INCIDENT")
+                    .subjectId(incidentId)
+                    .description(incidentLabel + " escalated to admin — no available agent other than the creator")
+                    .metadata("{\"creatorAgentId\":\"" + creatorAgentId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log self-assignment escalation for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logAgentGroupStatusChange(String actorUserId, String agentGroupId, Boolean previousStatus, Boolean newStatus) {
         try {
             String actorName = resolveUserName(actorUserId);
