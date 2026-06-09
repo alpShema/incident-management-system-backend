@@ -126,6 +126,23 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_deactivatedUser_throws403() {
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null, null);
+        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").status(false).build();
+
+        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
+        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("arms-token")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("deactivated")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(tokenService, never()).generateAccessToken(any());
+    }
+
+    @Test
     void login_armsClientThrows_propagatesArmsAuthException() {
         when(armsClient.getUserByToken(any())).thenThrow(new ArmsAuthException("Invalid token", 401));
 
@@ -208,6 +225,27 @@ class AuthServiceTest {
         authService.refresh("rt", "arms-token");
 
         verify(tokenRevocationService).revoke(TEST_JTI, "u1", TEST_EXPIRY);
+    }
+
+    @Test
+    void refresh_deactivatedUser_throws403() {
+        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null, null);
+        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").status(false).build();
+
+        when(tokenService.authenticateRefreshToken("rt"))
+                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
+        when(tokenRevocationService.isRevoked(TEST_JTI)).thenReturn(false);
+        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
+        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(1800L);
+        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("deactivated")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(tokenService, never()).generateAccessToken(any());
     }
 
     @Test
