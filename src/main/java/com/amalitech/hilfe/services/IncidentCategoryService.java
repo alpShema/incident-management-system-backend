@@ -197,6 +197,59 @@ public class IncidentCategoryService {
     }
 
     @Transactional
+    public IncidentTopicResponse updateTopicById(String topicId, UpdateTopicRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
+        IncidentType topic = typeRepository.findById(topicId)
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
+        IncidentCategory category = categoryRepository.findById(topic.getCategoryId())
+                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+
+        if (name != null && !name.isBlank()) {
+            if (!topic.getName().equalsIgnoreCase(name)
+                    && typeRepository.existsByNameIgnoreCase(name)) {
+                throw new ArmsAuthException("A topic with this name already exists", 409);
+            }
+            topic.setName(name);
+        }
+        if (description != null && !description.isBlank()) {
+            topic.setDescription(description);
+        }
+        if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
+            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
+            topic.setAgentGroupId(assignedGroup.getId());
+        }
+        if (request.visibleToGroup() != null) {
+            topic.setVisibleToGroup(request.visibleToGroup());
+        }
+
+        IncidentType saved = typeRepository.save(topic);
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found after update", 500)));
+    }
+
+    @Transactional
+    public IncidentTopicResponse updateTopicStatus(String topicId, Boolean status) {
+        IncidentType topic = typeRepository.findById(topicId)
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
+        String target = Boolean.TRUE.equals(status) ? "active" : "inactive";
+        if (target.equalsIgnoreCase(topic.getStatus())) {
+            throw new ArmsAuthException(
+                    Boolean.TRUE.equals(status) ? "Incident topic is already active"
+                                                : "Incident topic is already inactive", 409);
+        }
+        topic.setStatus(target);
+        typeRepository.save(topic);
+        entityManager.flush();
+        entityManager.clear();
+        return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(topicId)
+                .orElseThrow(() -> new ArmsAuthException("Incident topic not found after update", 500)));
+    }
+
+    @Transactional
     public void deleteTopic(String categoryId, String topicId) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException("Incident category not found", 404);
