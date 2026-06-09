@@ -291,24 +291,36 @@ class IncidentCategoryServiceTest {
         assertThat(cat.getDepartmentId()).isEqualTo("dept-1");
     }
 
-    // ── deleteCategory ────────────────────────────────────────────────────────
+    // ── updateCategoryStatus ──────────────────────────────────────────────────
 
     @Test
-    void deleteCategory_exists_deactivatesCategory() {
+    void updateCategoryStatus_deactivate_setsInactive() {
         IncidentCategory cat = buildCategory();
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
 
-        categoryService.deleteCategory("cat-1");
+        categoryService.updateCategoryStatus("cat-1", false);
 
         assertThat(cat.getStatus()).isEqualTo("inactive");
         verify(categoryRepository).save(cat);
     }
 
     @Test
-    void deleteCategory_notFound_throws404() {
+    void updateCategoryStatus_activate_setsActive() {
+        IncidentCategory cat = buildCategory();
+        cat.setStatus("inactive");
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+
+        categoryService.updateCategoryStatus("cat-1", true);
+
+        assertThat(cat.getStatus()).isEqualTo("active");
+        verify(categoryRepository).save(cat);
+    }
+
+    @Test
+    void updateCategoryStatus_notFound_throws404() {
         when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> categoryService.deleteCategory("missing"))
+        assertThatThrownBy(() -> categoryService.updateCategoryStatus("missing", false))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
