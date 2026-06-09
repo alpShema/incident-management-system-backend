@@ -43,6 +43,29 @@ public class IncidentCategoryController {
                 PageResponse.from(categoryService.listCategories(status, query, pageable))));
     }
 
+    @Operation(
+            summary = "List all incident categories regardless of state",
+            description = "Returns all incident categories — both active and inactive — visible to admin users. "
+                    + "Supports an optional `state` filter: `active` returns only active categories, `inactive` returns only inactive categories, "
+                    + "`all` (default when omitted) returns both. "
+                    + "Supports an optional `query` parameter to search by category name, description, or department name. "
+                    + "Results are paginated. Requires `ADMIN` or `SUPER_ADMIN` role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid state filter value"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listAllCategories(
+            @Parameter(description = "Filter by state: active, inactive, or all (default)") @RequestParam(required = false) String state,
+            @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
+                PageResponse.from(categoryService.listAllCategories(state, query, pageable))));
+    }
+
     @Operation(summary = "Create an incident category", description = "Creates a new category under an internal department. `departmentId` is required. Requires `incident-category.create` permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Category created"),

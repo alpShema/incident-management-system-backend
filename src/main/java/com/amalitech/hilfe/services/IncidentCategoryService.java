@@ -38,6 +38,13 @@ public class IncidentCategoryService {
                 .map(IncidentCategoryResponse::from);
     }
 
+    public Page<IncidentCategoryResponse> listAllCategories(String state, String query, Pageable pageable) {
+        String resolvedStatus = resolveStateFilter(state);
+        String queryPattern = buildQueryPattern(query);
+        return categoryRepository.findAllWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
+                .map(IncidentCategoryResponse::from);
+    }
+
     public Page<IncidentCategoryResponse> searchCategories(String query, Pageable pageable) {
         String queryPattern = (query == null || query.isBlank()) ? null
                 : "%" + query.toLowerCase().replace("%", "\\%").replace("_", "\\_") + "%";
@@ -296,6 +303,15 @@ public class IncidentCategoryService {
             throw new ArmsAuthException("Invalid status. Allowed values are active or inactive", 400);
         }
         return value;
+    }
+
+    private String resolveStateFilter(String state) {
+        if (state == null || state.isBlank() || "all".equalsIgnoreCase(state)) return null;
+        String lower = state.toLowerCase();
+        if (!"active".equals(lower) && !"inactive".equals(lower)) {
+            throw new ArmsAuthException("Invalid state filter. Allowed values are active, inactive, or all", 400);
+        }
+        return lower;
     }
 
     private String buildQueryPattern(String query) {
