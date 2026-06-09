@@ -75,17 +75,20 @@ public class IncidentCategoryController {
         return ResponseEntity.ok(ApiResponse.success("Incident category updated successfully", categoryService.updateCategory(id, request)));
     }
 
-    @Operation(summary = "Deactivate an incident category", description = "Soft-deactivates a category. Requires `incident-category.delete` permission.")
+    @Operation(summary = "Update incident category status", description = "Activates or deactivates an incident category. `status=true` activates and `status=false` deactivates. Requires `incident-category.delete` permission.")
     @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Category deactivated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Category status updated"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found")
     })
-    @DeleteMapping("/{id}")
+    @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_CATEGORY_DELETE + "')")
-    public ResponseEntity<Void> deleteCategory(@Parameter(description = "Stable category ID", example = "cat-facilities") @PathVariable String id) {
-        categoryService.deleteCategory(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<ApiResponse<IncidentCategoryResponse>> updateCategoryStatus(
+            @Parameter(description = "Stable category ID", example = "cat-facilities") @PathVariable String id,
+            @Valid @RequestBody UpdateIncidentCategoryStatusRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident category status updated successfully", categoryService.updateCategoryStatus(id, request.status())));
     }
 
     @Operation(summary = "List topics for a category", description = "Returns all incident topics (types) belonging to the given stable category ID. Requires authentication, but no role-specific permission.")
