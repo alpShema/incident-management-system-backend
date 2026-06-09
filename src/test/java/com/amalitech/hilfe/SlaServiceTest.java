@@ -210,7 +210,7 @@ class SlaServiceTest {
                 .resolutionElapsedMs(Duration.ofHours(2).toMillis())
                 .responseBreachedAt(Instant.now())
                 .build();
-        when(incidentSlaRepository.findForReport(null, null, null)).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findForReport(null, false, null, false, null, false)).thenReturn(List.of(sla));
 
         SlaReportResponse report = slaService.getReport(null, null, null);
 

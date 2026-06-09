@@ -40,13 +40,16 @@ public interface IncidentSlaRepository extends JpaRepository<IncidentSla, String
             FROM IncidentSla sla
             JOIN FETCH sla.incident incident
             LEFT JOIN FETCH incident.severity severity
-            WHERE (:from IS NULL OR incident.createdAt >= :from)
-              AND (:to IS NULL OR incident.createdAt <= :to)
-              AND (:severityId IS NULL OR incident.severityId = :severityId)
+            WHERE (:filterFrom = false OR incident.createdAt >= :from)
+              AND (:filterTo = false OR incident.createdAt <= :to)
+              AND (:filterSeverity = false OR incident.severityId = :severityId)
             """)
     List<IncidentSla> findForReport(
             @Param("from") Instant from,
+            @Param("filterFrom") boolean filterFrom,
             @Param("to") Instant to,
-            @Param("severityId") String severityId
+            @Param("filterTo") boolean filterTo,
+            @Param("severityId") String severityId,
+            @Param("filterSeverity") boolean filterSeverity
     );
 }

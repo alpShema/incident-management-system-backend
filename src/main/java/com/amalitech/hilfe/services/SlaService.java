@@ -226,7 +226,11 @@ public class SlaService {
     }
 
     public SlaReportResponse getReport(Instant from, Instant to, String severityId) {
-        List<IncidentSla> rows = incidentSlaRepository.findForReport(from, to, severityId);
+        List<IncidentSla> rows = incidentSlaRepository.findForReport(
+                from, from != null,
+                to, to != null,
+                severityId, severityId != null && !severityId.isBlank()
+        );
         if (rows.isEmpty()) {
             return new SlaReportResponse(0, 0, 0, null, null, List.of());
         }
