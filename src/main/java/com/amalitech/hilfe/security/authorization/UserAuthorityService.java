@@ -57,7 +57,9 @@ public class UserAuthorityService {
     }
 
     public Optional<ResolvedAuthorities> resolveByUserId(String userId) {
-        return userRepository.findAuthUserById(userId).map(this::resolve);
+        return userRepository.findAuthUserById(userId)
+                .filter(u -> !Boolean.FALSE.equals(u.getStatus()))
+                .map(this::resolve);
     }
 
     public ResolvedAuthorities resolve(User user) {
