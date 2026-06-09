@@ -311,6 +311,9 @@ public class IncidentService {
         if (!Boolean.TRUE.equals(agent.getStatus())) {
             throw new ArmsAuthException("Cannot assign incident to an unavailable agent", 400);
         }
+        if (agent.getAgentGroupId() != null && !agentRepository.hasActiveGroup(agent.getAgentGroupId(), agent.getId())) {
+            throw new ArmsAuthException("Cannot assign incident to an agent in a deactivated group", 400);
+        }
 
         agent.setLastAssignedAt(Instant.now());
         agentRepository.save(agent);
