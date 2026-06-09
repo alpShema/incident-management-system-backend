@@ -57,6 +57,7 @@ class IncidentCategoryControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
+                "active",
                 null,
                 null);
     }
