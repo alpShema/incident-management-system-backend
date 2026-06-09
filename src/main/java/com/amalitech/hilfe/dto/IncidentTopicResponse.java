@@ -11,6 +11,7 @@ public record IncidentTopicResponse(
         @Schema(description = "Topic display name", example = "Account Issues") String name,
         @Schema(description = "Topic description", example = "Login problems, password resets, account access") String description,
         @Schema(description = "Whether incidents under this topic are visible to the assigned agent group", example = "true") boolean visibleToGroup,
+        @Schema(description = "Topic status: active or inactive", example = "active") String status,
         @Schema(description = "Parent category (id + name)", nullable = true) LookupResponse category,
         @Schema(description = "Timestamp when the topic was last updated (UTC)") Instant updatedAt
 ) {
@@ -23,6 +24,7 @@ public record IncidentTopicResponse(
                 type.getName(),
                 type.getDescription(),
                 type.isVisibleToGroup(),
+                type.getStatus(),
                 category,
                 type.getUpdatedAt());
     }

@@ -53,6 +53,7 @@ class IncidentTopicControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
+                "active",
                 LookupResponse.from("cat-1", "Facilities"),
                 new IncidentTopicListResponse.AgentGroupSummary(
                         "group-1",
