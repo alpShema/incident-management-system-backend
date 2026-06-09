@@ -74,6 +74,7 @@ class IncidentServiceTest {
                             .collect(Collectors.toList());
                     return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
                 });
+        lenient().when(agentRepository.hasActiveGroup(any(), any())).thenReturn(true);
     }
 
     private Incident buildIncident() {
@@ -242,6 +243,39 @@ class IncidentServiceTest {
         assertThat(capturedIncident.getStatusId()).isEqualTo("status-in-progress");
         verify(statusRepository).findByNameIgnoreCase("In Progress");
         verify(statusRepository, never()).findByNameIgnoreCase("Pending");
+    }
+
+    @Test
+    void createIncident_deactivatedAgentGroup_setsStatusOpenAndNotifiesAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1")
+                .name("Topic")
+                .categoryId("cat-1")
+                .agentGroupId("group-1")
+                .build();
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1"));
+
+        var incidentCaptor = forClass(Incident.class);
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(incidentRepository).save(incidentCaptor.capture());
+        Incident capturedIncident = incidentCaptor.getValue();
+        assertThat(capturedIncident.getAssignedToId()).isNull();
+        assertThat(capturedIncident.getStatusId()).isEqualTo("status-open");
+        verify(agentRepository, never()).findAvailableByAgentGroupIdAndLocation(any(), any());
+        verify(agentRepository, never()).findAvailableByAgentGroupIdViaMembership(any());
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
+        verify(notificationEventPublisher, never()).publish(isA(IncidentAutoAssignedClientEvent.class));
     }
 
     @Test
@@ -1310,6 +1344,22 @@ class IncidentServiceTest {
                 incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1")))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Cannot assign incident to an unavailable agent")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void assignIncident_agentInDeactivatedGroup_throws400() {
+        Incident incident = buildIncident();
+        Agent agent = Agent.builder().id("agent-1").userId("actor-1").status(true).agentGroupId("group-1").build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
+        when(agentRepository.hasActiveGroup("group-1", "agent-1")).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1")))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Cannot assign incident to an agent in a deactivated group")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
