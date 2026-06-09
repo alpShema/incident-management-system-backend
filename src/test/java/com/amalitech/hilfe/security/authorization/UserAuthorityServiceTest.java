@@ -90,6 +90,35 @@ class UserAuthorityServiceTest {
     }
 
     @Test
+    void resolveByUserId_deactivatedUser_returnsEmpty() {
+        User user = User.builder()
+                .id("u-deactivated")
+                .email("inactive@test.com")
+                .roleCode(RoleCode.CLIENT)
+                .status(false)
+                .build();
+
+        when(userRepository.findAuthUserById("u-deactivated")).thenReturn(java.util.Optional.of(user));
+
+        assertThat(userAuthorityService.resolveByUserId("u-deactivated")).isEmpty();
+    }
+
+    @Test
+    void resolveByUserId_activeUser_returnsAuthorities() {
+        User user = User.builder()
+                .id("u-active")
+                .email("active@test.com")
+                .roleCode(RoleCode.CLIENT)
+                .status(true)
+                .build();
+
+        when(userRepository.findAuthUserById("u-active")).thenReturn(java.util.Optional.of(user));
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("CLIENT")).thenReturn(List.of());
+
+        assertThat(userAuthorityService.resolveByUserId("u-active")).isPresent();
+    }
+
+    @Test
     void resolve_bootstrapSuperAdminOverridesRoleCode() {
         User user = User.builder()
             .id("super-admin-id")

@@ -46,6 +46,10 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalStateException(
                         "User not found after upsert for id=" + armsUser.userId()));
 
+        if (Boolean.FALSE.equals(user.getStatus())) {
+            throw new ArmsAuthException("Your account has been deactivated. Please contact your administrator.", 403);
+        }
+
         long refreshTokenTtlSeconds = armsTokenExpiryService.getRemainingLifetimeSeconds(request.armsToken());
         String accessToken = tokenService.generateAccessToken(user);
         String refreshToken = tokenService.generateRefreshToken(user, refreshTokenTtlSeconds);
@@ -88,6 +92,10 @@ public class AuthService {
         User user = userRepository.findAuthUserById(armsUser.userId())
                 .orElseThrow(() -> new IllegalStateException(
                         "User not found after upsert for id=" + armsUser.userId()));
+
+        if (Boolean.FALSE.equals(user.getStatus())) {
+            throw new ArmsAuthException("Your account has been deactivated. Please contact your administrator.", 403);
+        }
 
         tokenRevocationService.revoke(
                 refreshPrincipal.jti(), refreshPrincipal.userId(), refreshPrincipal.expiresAt());
