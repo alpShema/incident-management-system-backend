@@ -146,7 +146,7 @@ class IncidentServiceTest {
         var incidentCaptor = forClass(Incident.class);
         verify(incidentRepository).save(incidentCaptor.capture());
         assertThat(incidentCaptor.getValue().getSeverityId()).isEqualTo("sev-low");
-        verify(entityManager).flush();
+        verify(entityManager, times(2)).flush();
         verify(slaService).onIncidentCreated(incident);
     }
 
