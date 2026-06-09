@@ -36,7 +36,9 @@ public class MediaService {
             "image/gif", Set.of("gif"),
             "image/webp", Set.of("webp"),
             "application/pdf", Set.of("pdf"),
-            "image/svg+xml", Set.of("svg")
+            "image/svg+xml", Set.of("svg"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Set.of("docx"),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Set.of("xlsx")
     );
 
     private final S3Presigner s3Presigner;
