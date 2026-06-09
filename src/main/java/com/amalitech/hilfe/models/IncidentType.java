@@ -39,6 +39,10 @@ public class IncidentType {
     @Builder.Default
     private boolean visibleToGroup = true;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private String status = "active";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
