@@ -69,4 +69,11 @@ public class LocationController {
     public ResponseEntity<ApiResponse<LocationResponse>> deactivateLocation(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Location deactivated successfully", locationService.deactivateLocation(id)));
     }
+
+    @Operation(summary = "Reactivate location", description = "Marks a previously deactivated location as active.")
+    @PatchMapping("/{id}/reactivate")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_UPDATE + "')")
+    public ResponseEntity<ApiResponse<LocationResponse>> reactivateLocation(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success("Location reactivated successfully", locationService.reactivateLocation(id)));
+    }
 }
