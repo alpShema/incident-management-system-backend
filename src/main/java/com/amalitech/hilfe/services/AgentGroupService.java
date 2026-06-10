@@ -41,14 +41,15 @@ public class AgentGroupService {
     }
 
     public Page<AgentGroupResponse> listAllAgentGroups(String status, String query, String departmentId, Pageable pageable) {
-        Boolean statusFilter = resolveStatusFilter(status);
+        Boolean statusFilter = (status == null || status.isBlank() || status.equalsIgnoreCase("all"))
+                ? null
+                : resolveStatusFilter(status);
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
         return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId, pageable)
                 .map(this::toResponse);
     }
 
-    private Boolean resolveStatusFilter(String status) {
-        if (status == null || status.isBlank() || status.equalsIgnoreCase("all")) return null;
+    private boolean resolveStatusFilter(String status) {
         if (status.equalsIgnoreCase("active")) return true;
         if (status.equalsIgnoreCase("deactivated")) return false;
         throw new ArmsAuthException("Invalid status filter. Accepted values: active, deactivated, all", 400);

@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -35,27 +34,25 @@ public class DashboardController {
             summary = "Dashboard stats",
             description = "Admin: total/open/pending/closed/resolved across all incidents. Agent: same counts scoped to assigned incidents."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "200",
-            description = "Stats retrieved",
-            content = @Content(
-                mediaType = "application/json",
-                examples = @ExampleObject(value = """
-                    {
-                      "message": "Stats retrieved successfully",
-                      "data": {
-                        "totalIncidents": 120,
-                        "openCount": 45,
-                        "pending": 5,
-                        "closedCount": 60,
-                        "resolvedCount": 15
-                      }
-                    }""")
-            )
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "Stats retrieved",
+        content = @Content(
+            mediaType = "application/json",
+            examples = @ExampleObject(value = """
+                {
+                  "message": "Stats retrieved successfully",
+                  "data": {
+                    "totalIncidents": 120,
+                    "openCount": 45,
+                    "pending": 5,
+                    "closedCount": 60,
+                    "resolvedCount": 15
+                  }
+                }""")
+        )
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     @GetMapping("/stats")
     @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
     public ResponseEntity<ApiResponse<DashboardStats>> stats(
@@ -71,39 +68,37 @@ public class DashboardController {
             summary = "Dashboard charts",
             description = "Admin: status donut + single 'All Incidents' trend series. Agent: status donut + two trend series (My Incidents, Assigned Incidents). period: 7d | 30d | 90d (omit for all time)."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "200",
-            description = "Chart data retrieved",
-            content = @Content(
-                mediaType = "application/json",
-                examples = @ExampleObject(value = """
-                    {
-                      "message": "Chart data retrieved successfully",
-                      "data": {
-                        "byStatus": [
-                          { "label": "Open",     "count": 45 },
-                          { "label": "Closed",   "count": 60 },
-                          { "label": "Pending",   "count": 5 },
-                          { "label": "Resolved", "count": 15 }
-                        ],
-                        "trends": [
-                          {
-                            "label": "All Incidents",
-                            "data": [
-                              { "month": "2025-12", "count": 18 },
-                              { "month": "2026-01", "count": 24 },
-                              { "month": "2026-02", "count": 20 }
-                            ]
-                          }
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "Chart data retrieved",
+        content = @Content(
+            mediaType = "application/json",
+            examples = @ExampleObject(value = """
+                {
+                  "message": "Chart data retrieved successfully",
+                  "data": {
+                    "byStatus": [
+                      { "label": "Open",     "count": 45 },
+                      { "label": "Closed",   "count": 60 },
+                      { "label": "Pending",   "count": 5 },
+                      { "label": "Resolved", "count": 15 }
+                    ],
+                    "trends": [
+                      {
+                        "label": "All Incidents",
+                        "data": [
+                          { "month": "2025-12", "count": 18 },
+                          { "month": "2026-01", "count": 24 },
+                          { "month": "2026-02", "count": 20 }
                         ]
                       }
-                    }""")
-            )
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Unsupported period value", content = @Content),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
-    })
+                    ]
+                  }
+                }""")
+        )
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Unsupported period value", content = @Content)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     @GetMapping("/charts")
     @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
     public ResponseEntity<ApiResponse<DashboardCharts>> charts(
