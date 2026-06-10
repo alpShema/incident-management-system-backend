@@ -395,32 +395,6 @@ class IncidentCategoryServiceTest {
                 .isEqualTo(404);
     }
 
-    // ── listTopicsByCategory ──────────────────────────────────────────────────
-
-    @Test
-    void listTopicsByCategory_categoryExists_returnsTopicList() {
-        IncidentType type = buildType();
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
-        when(typeRepository.findByCategoryIdWithAgent("cat-1")).thenReturn(List.of(type));
-
-        List<IncidentTopicResponse> result = categoryService.listTopicsByCategory("cat-1");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("type-1");
-        assertThat(result.get(0).name()).isEqualTo("Projector");
-    }
-
-    @Test
-    void listTopicsByCategory_categoryNotFound_throws404() {
-        when(categoryRepository.existsById("missing")).thenReturn(false);
-
-        assertThatThrownBy(() -> categoryService.listTopicsByCategory("missing"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Incident category not found")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(404);
-    }
-
     // ── createTopic ───────────────────────────────────────────────────────────
 
     @Test
@@ -574,10 +548,10 @@ class IncidentCategoryServiceTest {
 
 
     @Test
-    void listTopics_defaultsStatusToActive() {
+    void listTopics_noStatusFilter_returnsAllTopics() {
         var pageable = PageRequest.of(0, 20);
         when(typeRepository.findAllTopicsFiltered(
-                eq(null), eq(null), eq(null), eq("active"), eq(null), eq(pageable)))
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
 
         var result = categoryService.listTopics(null, null, null, null, null, pageable);
@@ -586,6 +560,31 @@ class IncidentCategoryServiceTest {
         IncidentTopicListResponse row = result.getContent().get(0);
         assertThat(row.category()).isNotNull();
         assertThat(row.agentGroup()).isNotNull();
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, pageable);
+    }
+
+    @Test
+    void listTopics_statusAll_passesNullToRepository() {
+        var pageable = PageRequest.of(0, 20);
+        when(typeRepository.findAllTopicsFiltered(
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        categoryService.listTopics(null, null, null, "all", null, pageable);
+
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, pageable);
+    }
+
+    @Test
+    void listTopics_statusActive_filtersActiveTopics() {
+        var pageable = PageRequest.of(0, 20);
+        when(typeRepository.findAllTopicsFiltered(
+                eq(null), eq(null), eq(null), eq("active"), eq(null), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+
+        var result = categoryService.listTopics(null, null, null, "active", null, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
         verify(typeRepository).findAllTopicsFiltered(null, null, null, "active", null, pageable);
     }
 
@@ -595,8 +594,66 @@ class IncidentCategoryServiceTest {
 
         assertThatThrownBy(() -> categoryService.listTopics(null, null, null, "archived", null, pageable))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Invalid status. Allowed values are active or inactive")
+                .hasMessage("Invalid status. Allowed values are active, inactive, or all")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
+    }
+
+    // ── listTopicsByCategory ──────────────────────────────────────────────────
+
+    @Test
+    void listTopicsByCategory_noStatusFilter_returnsAllTopics() {
+        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(typeRepository.findByCategoryIdWithAgentAndStatus("cat-1", null))
+                .thenReturn(List.of(buildHydratedType()));
+
+        var result = categoryService.listTopicsByCategory("cat-1", null);
+
+        assertThat(result).hasSize(1);
+        verify(typeRepository).findByCategoryIdWithAgentAndStatus("cat-1", null);
+    }
+
+    @Test
+    void listTopicsByCategory_statusActive_passesActiveToRepository() {
+        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(typeRepository.findByCategoryIdWithAgentAndStatus("cat-1", "active"))
+                .thenReturn(List.of(buildHydratedType()));
+
+        var result = categoryService.listTopicsByCategory("cat-1", "active");
+
+        assertThat(result).hasSize(1);
+        verify(typeRepository).findByCategoryIdWithAgentAndStatus("cat-1", "active");
+    }
+
+    @Test
+    void listTopicsByCategory_statusInactive_passesInactiveToRepository() {
+        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(typeRepository.findByCategoryIdWithAgentAndStatus("cat-1", "inactive"))
+                .thenReturn(List.of());
+
+        var result = categoryService.listTopicsByCategory("cat-1", "inactive");
+
+        assertThat(result).isEmpty();
+        verify(typeRepository).findByCategoryIdWithAgentAndStatus("cat-1", "inactive");
+    }
+
+    @Test
+    void listTopicsByCategory_invalidStatus_throws400() {
+        assertThatThrownBy(() -> categoryService.listTopicsByCategory("cat-1", "unknown"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("Invalid status")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void listTopicsByCategory_categoryNotFound_throws404() {
+        when(categoryRepository.existsById("missing")).thenReturn(false);
+
+        assertThatThrownBy(() -> categoryService.listTopicsByCategory("missing", null))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Incident category not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
     }
 }
