@@ -9,9 +9,17 @@ import java.time.Instant;
 public record LocationResponse(
         @Schema(description = "Stable location ID", example = "loc-accra") String id,
         @Schema(description = "Location display name", example = "Accra") String name,
+        @Schema(description = "Optional description") String description,
+        @Schema(description = "Whether the location is active") Boolean status,
         @Schema(description = "Timestamp when the location was last updated (UTC)") Instant updatedAt
 ) {
     public static LocationResponse from(Location location) {
-        return new LocationResponse(location.getId(), location.getName(), location.getUpdatedAt());
+        return new LocationResponse(
+                location.getId(),
+                location.getName(),
+                location.getDescription(),
+                location.getStatus(),
+                location.getUpdatedAt()
+        );
     }
 }
