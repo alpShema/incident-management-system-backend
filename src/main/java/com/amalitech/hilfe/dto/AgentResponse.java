@@ -17,18 +17,17 @@ public record AgentResponse(
         @Schema(description = "Timestamp when the agent record was last updated (UTC)") Instant updatedAt
 ) {
     public static AgentResponse from(Agent agent) {
+        var user = agent.getUser();
         String officeLocation = null;
-        if (agent.getUser() != null) {
-            if (agent.getUser().getLocation() != null) {
-                officeLocation = agent.getUser().getLocation().getName();
-            }
+        if (user != null && user.getLocation() != null) {
+            officeLocation = user.getLocation().getName();
         }
         return new AgentResponse(
                 agent.getId(),
                 agent.getUserId(),
-                agent.getUser() != null ? agent.getUser().getFullName() : null,
-                agent.getUser() != null ? agent.getUser().getEmail() : null,
-                agent.getUser() != null ? agent.getUser().getProfileImg() : null,
+                user != null ? user.getFullName() : null,
+                user != null ? user.getEmail() : null,
+                user != null ? user.getProfileImg() : null,
                 officeLocation,
                 agent.getStatus(),
                 agent.getUpdatedAt()
