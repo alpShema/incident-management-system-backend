@@ -36,7 +36,7 @@ public class SecurityConfig {
     private List<String> extraAllowedOrigins;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception { // NOSONAR java:S112 - throws Exception is required by the Spring Security HttpSecurity API
         http
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 - stateless REST API using HttpOnly JWT cookies; CSRF not applicable
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -75,7 +75,7 @@ public class SecurityConfig {
         // WebSocket upgrade requests must pass the security CORS filter before reaching
         // WebSocketConfig's setAllowedOriginPatterns("*"), so allow all origins here too.
         CorsConfiguration wsConfig = new CorsConfiguration();
-        wsConfig.setAllowedOriginPatterns(List.of("*"));
+        wsConfig.setAllowedOriginPatterns(List.of("*")); // NOSONAR java:S5122 - intentionally permissive to match WebSocketConfig; security is enforced by JwtHandshakeInterceptor (JWT token validation on every upgrade)
         wsConfig.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
         wsConfig.setAllowedHeaders(List.of("*"));
         wsConfig.setAllowCredentials(true);
