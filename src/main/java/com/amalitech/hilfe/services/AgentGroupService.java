@@ -34,6 +34,8 @@ public class AgentGroupService {
     private final IncidentTypeRepository incidentTypeRepository;
     private final ActivityLogService activityLogService;
 
+    private static final String TOPIC_NOT_FOUND_PREFIX = "Topic not found: ";
+
     public Page<AgentGroupResponse> listAgentGroups(String query, String departmentId, Pageable pageable) {
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
         return agentGroupRepository.searchAgentGroups(queryPattern, departmentId, pageable)
@@ -41,14 +43,15 @@ public class AgentGroupService {
     }
 
     public Page<AgentGroupResponse> listAllAgentGroups(String status, String query, String departmentId, Pageable pageable) {
-        Boolean statusFilter = resolveStatusFilter(status);
+        Boolean statusFilter = (status == null || status.isBlank() || status.equalsIgnoreCase("all"))
+                ? null
+                : resolveStatusFilter(status);
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
         return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId, pageable)
                 .map(this::toResponse);
     }
 
-    private Boolean resolveStatusFilter(String status) {
-        if (status == null || status.isBlank() || status.equalsIgnoreCase("all")) return null;
+    private boolean resolveStatusFilter(String status) {
         if (status.equalsIgnoreCase("active")) return true;
         if (status.equalsIgnoreCase("deactivated")) return false;
         throw new ArmsAuthException("Invalid status filter. Accepted values: active, deactivated, all", 400);
@@ -60,8 +63,8 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupResponse createAgentGroup(AgentGroupRequest request) {
-        String name = request.name() == null ? null : request.name().trim();
-        String description = request.description() == null ? null : request.description().trim();
+        String name = trimOrNull(request.name());
+        String description = trimOrNull(request.description());
 
         if (isBlank(name)) {
             throw new ArmsAuthException("Agent group name is required", 400);
@@ -103,7 +106,7 @@ public class AgentGroupService {
         if (request.topicIds() != null) {
             for (String topicId : request.topicIds()) {
                 IncidentType topic = incidentTypeRepository.findById(topicId)
-                        .orElseThrow(() -> new ArmsAuthException("Topic not found: " + topicId, 404));
+                        .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
                 topic.setAgentGroupId(groupId);
                 incidentTypeRepository.save(topic);
             }
@@ -115,8 +118,8 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupResponse updateAgentGroup(String id, AgentGroupRequest request) {
-        String name = request.name() == null ? null : request.name().trim();
-        String description = request.description() == null ? null : request.description().trim();
+        String name = trimOrNull(request.name());
+        String description = trimOrNull(request.description());
 
         AgentGroup group = findActiveAgentGroupOrThrow(id);
         if (!isBlank(name)) {
@@ -150,7 +153,7 @@ public class AgentGroupService {
             incidentTypeRepository.clearAgentGroupId(id);
             for (String topicId : request.topicIds()) {
                 IncidentType topic = incidentTypeRepository.findById(topicId)
-                        .orElseThrow(() -> new ArmsAuthException("Topic not found: " + topicId, 404));
+                        .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
                 topic.setAgentGroupId(id);
                 incidentTypeRepository.save(topic);
             }
@@ -164,7 +167,7 @@ public class AgentGroupService {
     public AgentGroupResponse updateAgentGroupStatus(String actorUserId, String id, Boolean status) {
         AgentGroup group = findAgentGroupByIdOrThrow(id);
 
-        if (Boolean.valueOf(status).equals(group.getStatus())) {
+        if (status.equals(group.getStatus())) {
             throw new ArmsAuthException(
                     Boolean.TRUE.equals(status)
                             ? "Agent group is already active"
@@ -214,7 +217,7 @@ public class AgentGroupService {
     private void validateTopicsForDepartment(List<String> topicIds, String departmentId) {
         for (String topicId : topicIds) {
             IncidentType topic = incidentTypeRepository.findById(topicId)
-                    .orElseThrow(() -> new ArmsAuthException("Topic not found: " + topicId, 404));
+                    .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
             String topicDeptId = topic.getCategory() != null ? topic.getCategory().getDepartmentId() : null;
             if (topicDeptId == null || !topicDeptId.equals(departmentId)) {
                 throw new ArmsAuthException("Topic '" + topic.getName() + "' does not belong to the selected department", 400);
@@ -273,5 +276,9 @@ public class AgentGroupService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String trimOrNull(String value) {
+        return value == null ? null : value.trim();
     }
 }

@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -39,12 +38,10 @@ public class IncidentController {
                     + "For attachments, first request a presigned upload URL from `POST /media/presigned-url`, upload the file to S3, then include the returned fileKey here. "
                     + "Requires `incident.create` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Incident created"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident type or location not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Incident created")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident type or location not found")
     @PostMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_CREATE + "')")
     public ResponseEntity<ApiResponse<IncidentResponse>> createIncident(
@@ -94,11 +91,9 @@ public class IncidentController {
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
                     + "Requires `dashboard.admin` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAllIncidents(
@@ -127,10 +122,8 @@ public class IncidentController {
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`)."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     @GetMapping("/my-incidents")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listMyIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
@@ -163,11 +156,9 @@ public class IncidentController {
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
                     + "Requires `dashboard.admin` or `dashboard.agent` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @GetMapping("/dept-incidents")
     @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listDeptIncidents(
@@ -201,11 +192,9 @@ public class IncidentController {
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
                     + "Requires `dashboard.admin` or `dashboard.agent` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @GetMapping("/assigned-incidents")
     @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAssignedIncidents(
@@ -234,11 +223,9 @@ public class IncidentController {
                     + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Supports pagination and sorting via Pageable (e.g. sort=createdAt,desc)."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Search results returned"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Missing or blank search query"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Search results returned")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Missing or blank search query")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> searchIncidents(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
@@ -253,10 +240,8 @@ public class IncidentController {
     }
 
     @Operation(summary = "Get a single incident", description = "Returns full detail of an incident by its ID.")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<IncidentResponse>> getIncident(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
@@ -274,12 +259,10 @@ public class IncidentController {
                     + "Admins: any → Closed (override). "
                     + "Invalid transitions are rejected with HTTP 422. Requires `incident.status.change` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Your role is not permitted to move an incident to the requested status"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Transition path does not exist for the incident's current status"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident or status not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Your role is not permitted to move an incident to the requested status")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Transition path does not exist for the incident's current status")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident or status not found")
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_STATUS_CHANGE + "')")
     public ResponseEntity<ApiResponse<IncidentResponse>> updateStatus(
@@ -295,11 +278,9 @@ public class IncidentController {
         summary = "Update incident severity",
         description = "Sets the priority/severity level of an incident. Requires `incident.severity.change` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Severity updated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident or severity not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Severity updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident or severity not found")
     @PatchMapping("/{id}/severity")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_SEVERITY_CHANGE + "')")
     public ResponseEntity<ApiResponse<IncidentResponse>> updateSeverity(
@@ -315,11 +296,9 @@ public class IncidentController {
         summary = "Assign incident to an agent",
         description = "Assigns the incident to a specific agent by their agent ID. Requires `incident.assign` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident assigned"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident assigned")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
     @PatchMapping("/{id}/assign")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_ASSIGN + "')")
     public ResponseEntity<ApiResponse<IncidentResponse>> assignIncident(
@@ -336,11 +315,9 @@ public class IncidentController {
         description = "Returns a paginated, reverse-chronological audit log for a specific incident. "
                     + "Accessible to the incident reporter, assigned agent, or any admin."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident history retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident history retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
     @GetMapping("/{id}/history")
     public ResponseEntity<ApiResponse<PageResponse<ActivityLogResponse>>> getIncidentHistory(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
