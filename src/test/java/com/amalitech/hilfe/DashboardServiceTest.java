@@ -1,5 +1,6 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.dto.IncidentDateFilter;
 import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
@@ -169,7 +170,7 @@ class DashboardServiceTest {
     @Test
     void getIncidents_adminRole_callsFindAllUnified() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllUnified(isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
+        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
@@ -177,7 +178,7 @@ class DashboardServiceTest {
                 "admin-1", RoleCode.ADMIN, null, new IncidentFilterParams(null, null, null, "cat-it", null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findAllUnified(isNull(), any(), any(), any(), eq("cat-it"), any(), isNull(), isNull(), any(Pageable.class));
+        verify(incidentRepository).findAllUnified(isNull(), eq(new IncidentFilterParams(null, null, null, "cat-it", null)), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     @Test
@@ -186,7 +187,7 @@ class DashboardServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.findByDepartmentUnified(anyList(), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
+        when(incidentRepository.findByDepartmentUnified(anyList(), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
@@ -194,7 +195,7 @@ class DashboardServiceTest {
                 "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class));
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     @Test

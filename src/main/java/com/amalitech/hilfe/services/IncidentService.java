@@ -146,9 +146,7 @@ public class IncidentService {
             Pageable pageable
     ) {
         return slaService.toIncidentResponsePage(incidentRepository
-                .findByUserIdUnified(userId, buildQueryPattern(query), filters.statusId(), filters.severityId(),
-                        filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
-                        dateFilter.fromDate(), dateFilter.toDate(), ensureSorted(pageable)));
+                .findByUserIdUnified(userId, buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable)));
     }
 
     public Page<IncidentResponse> queryAllIncidents(
@@ -158,9 +156,7 @@ public class IncidentService {
             Pageable pageable
     ) {
         return slaService.toIncidentResponsePage(incidentRepository
-                .findAllUnified(buildQueryPattern(query), filters.statusId(), filters.severityId(),
-                        filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
-                        dateFilter.fromDate(), dateFilter.toDate(), ensureSorted(pageable)));
+                .findAllUnified(buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable)));
     }
 
     public Page<IncidentResponse> queryDeptIncidents(
@@ -187,9 +183,7 @@ public class IncidentService {
         }
 
         return slaService.toIncidentResponsePage(incidentRepository
-                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters.statusId(), filters.severityId(),
-                        filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
-                        dateFilter.fromDate(), dateFilter.toDate(), sorted));
+                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters, dateFilter, sorted));
     }
 
     public Page<IncidentResponse> queryAssignedIncidents(
@@ -203,9 +197,7 @@ public class IncidentService {
         String queryPattern = buildQueryPattern(query);
         return agentRepository.findByUserId(userId)
                 .map(agent -> incidentRepository
-                        .findByAssignedToIdUnified(agent.getId(), queryPattern, filters.statusId(), filters.severityId(),
-                                filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
-                                dateFilter.fromDate(), dateFilter.toDate(), sorted))
+                        .findByAssignedToIdUnified(agent.getId(), queryPattern, filters, dateFilter, sorted))
                 .map(slaService::toIncidentResponsePage)
                 .orElse(new PageImpl<>(List.of(), sorted, 0));
     }

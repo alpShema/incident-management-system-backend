@@ -110,13 +110,17 @@ public class NotificationEventListener {
                 return;
             }
             Notification saved = persistenceService.save(draft);
-            try {
-                broadcaster.broadcast(saved);
-            } catch (Exception ex) {
-                log.error("Failed to broadcast notification for event {} user {} incident {}", eventType, recipientUserId, incidentId, ex);
-            }
+            broadcastSafely(saved, eventType, recipientUserId, incidentId);
         } catch (Exception ex) {
             log.error("Failed to persist notification for event {} user {} incident {}", eventType, recipientUserId, incidentId, ex);
+        }
+    }
+
+    private void broadcastSafely(Notification notification, String eventType, String recipientUserId, String incidentId) {
+        try {
+            broadcaster.broadcast(notification);
+        } catch (Exception ex) {
+            log.error("Failed to broadcast notification for event {} user {} incident {}", eventType, recipientUserId, incidentId, ex);
         }
     }
 }

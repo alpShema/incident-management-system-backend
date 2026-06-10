@@ -38,7 +38,8 @@ public class MediaService {
             "application/pdf", Set.of("pdf"),
             "image/svg+xml", Set.of("svg"),
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Set.of("docx"),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Set.of("xlsx")
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Set.of("xlsx"),
+            "text/plain", Set.of("txt")
     );
 
     private final S3Presigner s3Presigner;

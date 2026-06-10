@@ -29,6 +29,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/incidents")
 @RequiredArgsConstructor
 public class IncidentController {
+    private static final String MSG_INCIDENTS_RETRIEVED = "Incidents retrieved successfully";
+
     private final IncidentService incidentService;
     private final ActivityLogService activityLogService;
 
@@ -112,7 +114,7 @@ public class IncidentController {
                 new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
-        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+        return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
     }
 
     @Operation(
@@ -145,7 +147,7 @@ public class IncidentController {
                 new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
-        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+        return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
     }
 
     @Operation(
@@ -242,7 +244,7 @@ public class IncidentController {
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.searchIncidents(principal.userId(), query, fromDate, toDate, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
+        return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
     }
 
     @Operation(summary = "Get a single incident", description = "Returns full detail of an incident by its ID.")

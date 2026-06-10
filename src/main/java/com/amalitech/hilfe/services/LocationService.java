@@ -22,7 +22,7 @@ public class LocationService {
 
     public PageResponse<LocationResponse> listLocations(String name, Boolean status, Pageable pageable) {
         return PageResponse.from(
-                locationRepository.findFiltered(name, status, pageable)
+                locationRepository.findFiltered(name != null ? "%" + name.toLowerCase() + "%" : null, status, pageable)
                         .map(LocationResponse::from)
         );
     }

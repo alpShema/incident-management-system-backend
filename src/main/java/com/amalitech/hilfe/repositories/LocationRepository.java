@@ -17,7 +17,7 @@ public interface LocationRepository extends JpaRepository<Location, String> {
 
     @Query("""
             SELECT l FROM Location l
-            WHERE (:name IS NULL OR LOWER(l.name) LIKE LOWER(CONCAT('%', :name, '%')))
+            WHERE (:name IS NULL OR LOWER(l.name) LIKE :name)
               AND (:status IS NULL OR l.status = :status)
             """)
     Page<Location> findFiltered(
