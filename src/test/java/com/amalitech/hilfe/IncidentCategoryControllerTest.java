@@ -233,8 +233,11 @@ class IncidentCategoryControllerTest {
     // ── GET /incident-categories/{id}/topics ─────────────────────────────────
 
     @Test
-    void listTopics_returns200() throws Exception {
-        when(categoryService.listTopicsByCategory("cat-1")).thenReturn(List.of(stubTopic()));
+    void listTopics_returns200WithAllTopics() throws Exception {
+        IncidentCategoryResponse inactive = new IncidentCategoryResponse("cat-2", "Old", null, null, "inactive", null);
+        IncidentTopicResponse inactiveTopic = new IncidentTopicResponse("type-2", "Old Topic", "Deprecated", true, "inactive", null, null);
+        when(categoryService.listTopicsByCategory(eq("cat-1"), eq(null)))
+                .thenReturn(List.of(stubTopic(), inactiveTopic));
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN"));
@@ -243,7 +246,25 @@ class IncidentCategoryControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident topics retrieved successfully"))
-                .andExpect(jsonPath("$.data[0].id").value("type-1"));
+                .andExpect(jsonPath("$.data[0].id").value("type-1"))
+                .andExpect(jsonPath("$.data[0].status").value("active"))
+                .andExpect(jsonPath("$.data[1].status").value("inactive"));
+    }
+
+    @Test
+    void listTopics_withStatusFilter_passesStatusToService() throws Exception {
+        when(categoryService.listTopicsByCategory(eq("cat-1"), eq("inactive")))
+                .thenReturn(List.of());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN"));
+
+        mvc.perform(get("/incident-categories/cat-1/topics")
+                        .param("status", "inactive")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk());
+
+        verify(categoryService).listTopicsByCategory("cat-1", "inactive");
     }
 
     // ── POST /incident-categories/{id}/topics ─────────────────────────────────
