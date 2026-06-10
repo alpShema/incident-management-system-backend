@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -56,33 +57,53 @@ class LocationControllerTest {
     }
 
     @Test
-    void reactivateLocation_returns200WhenInactive() throws Exception {
-        LocationResponse reactivated = new LocationResponse("loc-1", "Accra", null, true, null);
-        when(locationService.reactivateLocation(eq("loc-1"))).thenReturn(reactivated);
+    void updateStatus_deactivate_returns200() throws Exception {
+        LocationResponse updated = new LocationResponse("loc-1", "Accra", null, false, null);
+        when(locationService.updateStatus(eq("loc-1"), eq(false))).thenReturn(updated);
 
-        mvc.perform(patch("/locations/loc-1/reactivate")
+        mvc.perform(patch("/locations/loc-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\": false}")
                         .with(authentication(ADMIN_AUTH)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Location reactivated successfully"))
+                .andExpect(jsonPath("$.message").value("Location deactivated successfully"))
+                .andExpect(jsonPath("$.data.status").value(false));
+    }
+
+    @Test
+    void updateStatus_activate_returns200() throws Exception {
+        LocationResponse updated = new LocationResponse("loc-1", "Accra", null, true, null);
+        when(locationService.updateStatus(eq("loc-1"), eq(true))).thenReturn(updated);
+
+        mvc.perform(patch("/locations/loc-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\": true}")
+                        .with(authentication(ADMIN_AUTH)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Location activated successfully"))
                 .andExpect(jsonPath("$.data.status").value(true));
     }
 
     @Test
-    void reactivateLocation_returns409WhenAlreadyActive() throws Exception {
-        when(locationService.reactivateLocation(eq("loc-1")))
+    void updateStatus_returns409WhenAlreadySameStatus() throws Exception {
+        when(locationService.updateStatus(eq("loc-1"), eq(true)))
                 .thenThrow(new ArmsAuthException("Location is already active", 409));
 
-        mvc.perform(patch("/locations/loc-1/reactivate")
+        mvc.perform(patch("/locations/loc-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\": true}")
                         .with(authentication(ADMIN_AUTH)))
                 .andExpect(status().isConflict());
     }
 
     @Test
-    void reactivateLocation_returns404WhenNotFound() throws Exception {
-        when(locationService.reactivateLocation(eq("loc-999")))
+    void updateStatus_returns404WhenNotFound() throws Exception {
+        when(locationService.updateStatus(eq("loc-999"), eq(false)))
                 .thenThrow(new ArmsAuthException("Location not found", 404));
 
-        mvc.perform(patch("/locations/loc-999/reactivate")
+        mvc.perform(patch("/locations/loc-999/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\": false}")
                         .with(authentication(ADMIN_AUTH)))
                 .andExpect(status().isNotFound());
     }
