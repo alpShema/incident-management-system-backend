@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.dto.IncidentDateFilter;
 import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.*;
@@ -99,14 +100,14 @@ public class DashboardService {
 
         if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
             return slaService.toIncidentResponsePage(
-                    incidentRepository.findAllUnified(finalQueryPattern, filters.statusId(), filters.severityId(), filters.incidentTypeId(), filters.categoryId(), filters.locationId(), null, null, pageable)
+                    incidentRepository.findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)
             );
         }
         if (role == RoleCode.AGENT) {
             return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
                     .map(agentGroupIds -> slaService.toIncidentResponsePage(incidentRepository
-                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters.statusId(), filters.severityId(), filters.incidentTypeId(), filters.categoryId(), filters.locationId(), null, null, pageable)))
+                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
         throw new ArmsAuthException("Dashboard not available for this role", 403);

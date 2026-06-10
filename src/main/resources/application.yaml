@@ -168,4 +168,4 @@ auto-close:
 media:
   max-file-size: ${MEDIA_MAX_FILE_SIZE:10485760}
   max-attachments: ${MEDIA_MAX_ATTACHMENTS:5}
-  allowed-content-types: image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml
+  allowed-content-types: image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,text/plain
