@@ -5,7 +5,6 @@ import com.amalitech.hilfe.services.AuthService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.utils.CookieUtils;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -34,10 +33,8 @@ public class AuthController {
         summary = "Login with ARMS token",
         description = "Authenticates the user using an ARMS SSO token. On success, sets HttpOnly `access_token`, `refresh_token`, and `arms_token` cookies and returns session info."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid or expired ARMS token")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid or expired ARMS token")
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthSessionResponse>> login(
             @Valid @RequestBody LoginRequest request,
@@ -54,10 +51,8 @@ public class AuthController {
         summary = "Refresh access token",
         description = "Issues a new access token using the `refresh_token` cookie. Also re-sets the `arms_token` cookie. No request body required."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Token refreshed"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing or expired refresh token")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Token refreshed")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing or expired refresh token")
     @PostMapping("/refresh-token")
     public ResponseEntity<ApiResponse<AuthSessionResponse>> refresh(
             HttpServletRequest servletRequest,
@@ -75,9 +70,7 @@ public class AuthController {
         summary = "Logout",
         description = "Invalidates the current session and clears all auth cookies (`access_token`, `refresh_token`, `arms_token`)."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Logged out successfully")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Logged out successfully")
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
             HttpServletRequest request,
@@ -93,10 +86,8 @@ public class AuthController {
         summary = "Get current user permissions",
         description = "Returns the authenticated user's role and the full list of granted permissions derived from that role."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Permissions retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Permissions retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     @GetMapping("/permissions")
     public ResponseEntity<ApiResponse<UserPermissionsResponse>> permissions(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal

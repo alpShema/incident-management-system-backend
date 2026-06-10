@@ -25,13 +25,13 @@ public class TokenRevocationService {
     @Transactional
     public void revoke(String jti, String userId, Instant expiresAt) {
         try {
-            Session record = Session.builder()
+            Session session = Session.builder()
                     .id(jti)
                     .sid(jti)
                     .data(userId)
                     .expiresAt(expiresAt)
                     .build();
-            sessionRepository.save(record);
+            sessionRepository.save(session);
             log.debug("Revoked refresh token jti={} for userId={}", jti, userId);
         } catch (DataIntegrityViolationException e) {
             log.debug("Refresh token jti={} already revoked, ignoring duplicate", jti);
