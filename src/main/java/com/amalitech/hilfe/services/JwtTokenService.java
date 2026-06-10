@@ -26,6 +26,8 @@ public class JwtTokenService implements TokenService {
     private static final String CLAIM_ROLE = "role";
     private static final String CLAIM_TYPE = "type";
     private static final String CLAIM_TOKEN_VERSION = "ver";
+    private static final String TOKEN_TYPE_ACCESS = "access";
+    private static final String TOKEN_TYPE_REFRESH = "refresh";
 
     private final SecretKey signingKey;
     private final String jwtIssuer;
@@ -52,17 +54,17 @@ public class JwtTokenService implements TokenService {
 
     @Override
     public String generateAccessToken(User user) {
-        return buildToken(user, "access", accessTokenTtlSeconds, true);
+        return buildToken(user, TOKEN_TYPE_ACCESS, accessTokenTtlSeconds, true);
     }
 
     @Override
     public String generateRefreshToken(User user) {
-        return buildToken(user, "refresh", refreshTokenTtlSeconds, false);
+        return buildToken(user, TOKEN_TYPE_REFRESH, refreshTokenTtlSeconds, false);
     }
 
     @Override
     public String generateRefreshToken(User user, long ttlSeconds) {
-        return buildToken(user, "refresh", ttlSeconds, false);
+        return buildToken(user, TOKEN_TYPE_REFRESH, ttlSeconds, false);
     }
 
     @Override
@@ -75,7 +77,7 @@ public class JwtTokenService implements TokenService {
 
             Claims claims = parsed.getPayload();
 
-            if (!"access".equals(claims.get(CLAIM_TYPE, String.class))) {
+            if (!TOKEN_TYPE_ACCESS.equals(claims.get(CLAIM_TYPE, String.class))) {
                 return Optional.empty();
             }
 
@@ -114,7 +116,7 @@ public class JwtTokenService implements TokenService {
                     .parseSignedClaims(token)
                     .getPayload();
 
-            if (!"refresh".equals(claims.get(CLAIM_TYPE, String.class))) {
+            if (!TOKEN_TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class))) {
                 return Optional.empty();
             }
 
@@ -156,7 +158,7 @@ public class JwtTokenService implements TokenService {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry));
 
-        if ("refresh".equals(type)) {
+        if (TOKEN_TYPE_REFRESH.equals(type)) {
             builder.id(UUID.randomUUID().toString());
         }
 
@@ -165,7 +167,7 @@ public class JwtTokenService implements TokenService {
             builder.claim(CLAIM_ROLE, resolvedRoleCode);
         }
 
-        if ("access".equals(type)) {
+        if (TOKEN_TYPE_ACCESS.equals(type)) {
             builder.claim(CLAIM_TOKEN_VERSION, user.getTokenVersion());
         }
 
