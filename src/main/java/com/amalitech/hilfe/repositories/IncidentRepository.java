@@ -1,5 +1,7 @@
 package com.amalitech.hilfe.repositories;
 
+import com.amalitech.hilfe.dto.IncidentDateFilter;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.models.Incident;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -71,30 +73,26 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH assignedAgent.user assignedUser
             LEFT JOIN FETCH assignedUser.location
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
             """)
     Page<Incident> findByAgentScope(
             @Param("userId") String userId,
             @Param("agentId") String agentId,
-            @Param("statusId") String statusId,
-            @Param("severityId") String severityId,
-            @Param("incidentTypeId") String incidentTypeId,
-            @Param("categoryId") String categoryId,
-            @Param("locationId") String locationId,
+            @Param("filters") IncidentFilterParams filters,
             Pageable pageable
     );
 
@@ -355,13 +353,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -373,24 +371,19 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """)
     Page<Incident> findByUserIdUnified(
             @Param("userId") String userId,
             @Param("queryPattern") String queryPattern,
-            @Param("statusId") String statusId,
-            @Param("severityId") String severityId,
-            @Param("incidentTypeId") String incidentTypeId,
-            @Param("categoryId") String categoryId,
-            @Param("locationId") String locationId,
-            @Param("fromDate") Instant fromDate,
-            @Param("toDate") Instant toDate,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable
     );
 
@@ -418,13 +411,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """,
             countQuery = """
             SELECT COUNT(DISTINCT i) FROM Incident i
@@ -440,24 +433,19 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """)
     Page<Incident> findByDepartmentUnified(
             @Param("agentGroupIds") List<String> agentGroupIds,
             @Param("queryPattern") String queryPattern,
-            @Param("statusId") String statusId,
-            @Param("severityId") String severityId,
-            @Param("incidentTypeId") String incidentTypeId,
-            @Param("categoryId") String categoryId,
-            @Param("locationId") String locationId,
-            @Param("fromDate") Instant fromDate,
-            @Param("toDate") Instant toDate,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable
     );
 
@@ -480,13 +468,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -497,23 +485,18 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """)
     Page<Incident> findAllUnified(
             @Param("queryPattern") String queryPattern,
-            @Param("statusId") String statusId,
-            @Param("severityId") String severityId,
-            @Param("incidentTypeId") String incidentTypeId,
-            @Param("categoryId") String categoryId,
-            @Param("locationId") String locationId,
-            @Param("fromDate") Instant fromDate,
-            @Param("toDate") Instant toDate,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable
     );
 
@@ -537,13 +520,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -555,24 +538,19 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
-            AND (:statusId IS NULL OR i.statusId = :statusId)
-            AND (:severityId IS NULL OR i.severityId = :severityId)
-            AND (:incidentTypeId IS NULL OR i.incidentTypeId = :incidentTypeId)
-            AND (:categoryId IS NULL OR it.categoryId = :categoryId)
-            AND (:locationId IS NULL OR i.locationId = :locationId)
-            AND (CAST(:fromDate AS timestamp) IS NULL OR i.createdAt >= :fromDate)
-            AND (CAST(:toDate AS timestamp) IS NULL OR i.createdAt < :toDate)
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (CAST(:#{#dateFilter.fromDate} AS timestamp) IS NULL OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (CAST(:#{#dateFilter.toDate} AS timestamp) IS NULL OR i.createdAt < :#{#dateFilter.toDate})
             """)
     Page<Incident> findByAssignedToIdUnified(
             @Param("agentId") String agentId,
             @Param("queryPattern") String queryPattern,
-            @Param("statusId") String statusId,
-            @Param("severityId") String severityId,
-            @Param("incidentTypeId") String incidentTypeId,
-            @Param("categoryId") String categoryId,
-            @Param("locationId") String locationId,
-            @Param("fromDate") Instant fromDate,
-            @Param("toDate") Instant toDate,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable
     );
 
