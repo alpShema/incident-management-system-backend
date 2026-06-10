@@ -27,7 +27,6 @@ class Http401AuthenticationEntryPointTest {
 
         @SuppressWarnings("unchecked")
         Map<String, String> body = mapper.readValue(response.getContentAsString(), Map.class);
-        assertThat(body.get("error"))
-                .isEqualTo("Authentication required. Please log in to access this resource.");
+        assertThat(body).containsEntry("error", "Authentication required. Please log in to access this resource.");
     }
 }

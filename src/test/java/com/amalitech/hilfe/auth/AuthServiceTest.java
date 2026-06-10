@@ -133,7 +133,8 @@ class AuthServiceTest {
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
         when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest("arms-token")))
+        LoginRequest loginRequest = new LoginRequest("arms-token");
+        assertThatThrownBy(() -> authService.login(loginRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("deactivated")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -146,7 +147,8 @@ class AuthServiceTest {
     void login_armsClientThrows_propagatesArmsAuthException() {
         when(armsClient.getUserByToken(any())).thenThrow(new ArmsAuthException("Invalid token", 401));
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest("bad-token")))
+        LoginRequest badLoginRequest = new LoginRequest("bad-token");
+        assertThatThrownBy(() -> authService.login(badLoginRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Invalid token");
     }
@@ -158,7 +160,8 @@ class AuthServiceTest {
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
         when(userRepository.findAuthUserById("u1")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest("token")))
+        LoginRequest tokenRequest = new LoginRequest("token");
+        assertThatThrownBy(() -> authService.login(tokenRequest))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("u1");
     }

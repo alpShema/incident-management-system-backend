@@ -29,7 +29,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -71,7 +70,7 @@ class IncidentServiceTest {
                     Page<Incident> page = invocation.getArgument(0);
                     List<IncidentResponse> content = page.getContent().stream()
                             .map(incident -> IncidentResponse.from(incident, null, null))
-                            .collect(Collectors.toList());
+                            .toList();
                     return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
                 });
         lenient().when(agentRepository.hasActiveGroup(any(), any())).thenReturn(true);
@@ -493,8 +492,7 @@ class IncidentServiceTest {
         Page<IncidentResponse> result = incidentService.queryIncidents(
                 "user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), PageRequest.of(0, 20));
 
-        assertThat(result).isNotNull();
-        assertThat(result).hasSize(1);
+        assertThat(result).isNotNull().hasSize(1);
         verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
@@ -541,7 +539,8 @@ class IncidentServiceTest {
 
     @Test
     void searchIncidents_blankQuery_throws400() {
-        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", "  ", null, null, Pageable.unpaged()))
+        Pageable pageable = Pageable.unpaged();
+        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", "  ", null, null, pageable))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Search query must not be blank")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -550,7 +549,8 @@ class IncidentServiceTest {
 
     @Test
     void searchIncidents_nullQuery_throws400() {
-        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", null, null, null, Pageable.unpaged()))
+        Pageable pageable = Pageable.unpaged();
+        assertThatThrownBy(() -> incidentService.searchIncidents("user-1", null, null, null, pageable))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Search query must not be blank")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -823,8 +823,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-open")).thenReturn(Optional.of(openStatus));
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-open", null);
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open", null)))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(422);
@@ -842,8 +843,9 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-open")).thenReturn(Optional.of(openStatus));
 
         // closed → open is not a defined path at all
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-open", null);
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-open", null)))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(422);
@@ -861,8 +863,9 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
 
         // in-progress → resolved is a valid path but only for AGENT, not CLIENT
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-resolved", null);
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null)))
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
@@ -879,8 +882,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-pending", "Waiting for parts");
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "Waiting for parts")))
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -888,9 +892,6 @@ class IncidentServiceTest {
     }
 
     // ── creator contextual role ───────────────────────────────────────────────
-    // When the actor is the incident creator they are treated as CLIENT
-    // regardless of their base role. Agent-only transitions are blocked;
-    // client-only transitions are allowed.
 
     @Test
     void updateStatus_creatorAgent_toPending_throws403() {
@@ -904,8 +905,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-pending", "reason");
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "reason")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -924,8 +926,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-resolved")).thenReturn(Optional.of(resolvedStatus));
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-resolved", null);
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null)))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("You do not have permission to move an incident to 'Resolved'")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1008,6 +1011,7 @@ class IncidentServiceTest {
 
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-resolved", null));
 
+        assertThat(incident.getResolvedAt()).isNotNull();
         verify(incidentRepository).save(any(Incident.class));
     }
 
@@ -1025,8 +1029,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-pending", "reason");
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "reason")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("You are not the assigned agent for this incident")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1046,8 +1051,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-pending", "reason");
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", "reason")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class);
 
         assertThat(incident.getStatusId()).isEqualTo("status-open"); // unchanged
@@ -1062,8 +1068,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("bad-status")).thenReturn(Optional.empty());
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("bad-status", null);
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("bad-status", null)))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Status not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1074,8 +1081,9 @@ class IncidentServiceTest {
     void updateStatus_incidentNotFound_throws404() {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-pending", "Waiting for parts");
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "missing", new UpdateIncidentStatusRequest("status-pending", "Waiting for parts")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "missing", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -1113,8 +1121,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-pending")).thenReturn(Optional.of(pendingStatus));
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-pending", null);
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-pending", null)))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("A reason is required when setting status to Pending")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1134,8 +1143,9 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(autoCloseService.readDurationHours()).thenReturn(72);
 
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-reopened", "");
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "")))
+                incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("A reason is required when setting status to Reopened")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1247,8 +1257,9 @@ class IncidentServiceTest {
     void updateSeverity_incidentNotFound_throws404() {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
+        UpdateIncidentSeverityRequest request = new UpdateIncidentSeverityRequest("sev-high");
         assertThatThrownBy(() ->
-                incidentService.updateSeverity("actor-1", "missing", new UpdateIncidentSeverityRequest("sev-high")))
+                incidentService.updateSeverity("actor-1", "missing", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -1300,8 +1311,9 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.empty());
 
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-1");
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1")))
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Default 'In Progress' status not configured")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1312,8 +1324,9 @@ class IncidentServiceTest {
     void assignIncident_incidentNotFound_throws404() {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-1");
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "ADMIN", "missing", new AssignIncidentRequest("agent-1")))
+                incidentService.assignIncident("actor-1", "ADMIN", "missing", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -1325,8 +1338,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-999")).thenReturn(Optional.empty());
 
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-999");
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-999")))
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1340,8 +1354,9 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAgent));
 
+        AssignIncidentRequest unavailableRequest = new AssignIncidentRequest("agent-1");
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1")))
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", unavailableRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Cannot assign incident to an unavailable agent")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1356,8 +1371,9 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent));
         when(agentRepository.hasActiveGroup("group-1", "agent-1")).thenReturn(false);
 
+        AssignIncidentRequest deactivatedGroupRequest = new AssignIncidentRequest("agent-1");
         assertThatThrownBy(() ->
-                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", new AssignIncidentRequest("agent-1")))
+                incidentService.assignIncident("actor-1", "ADMIN", "inc-1", deactivatedGroupRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Cannot assign incident to an agent in a deactivated group")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1370,8 +1386,9 @@ class IncidentServiceTest {
         stubAssignedAgent(); // agent-1 → userId "actor-1"
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
 
+        AssignIncidentRequest reassignRequest = new AssignIncidentRequest("agent-2");
         assertThatThrownBy(() ->
-                incidentService.assignIncident("other-agent-user", "AGENT", "inc-1", new AssignIncidentRequest("agent-2")))
+                incidentService.assignIncident("other-agent-user", "AGENT", "inc-1", reassignRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("You can only reassign incidents that are assigned to you")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -1539,9 +1556,9 @@ class IncidentServiceTest {
 
         // This transition (creator-as-agent → Pending) is blocked by the business rule,
         // so we only verify notification is NOT sent when actor equals clientUserId
+        UpdateIncidentStatusRequest pendingRequest = new UpdateIncidentStatusRequest("status-pending", "reason");
         assertThatThrownBy(() ->
-                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1",
-                        new UpdateIncidentStatusRequest("status-pending", "reason")))
+                incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", pendingRequest))
                 .isInstanceOf(ArmsAuthException.class);
 
         verify(notificationEventPublisher, never()).publish(isA(IncidentPendingEvent.class));
@@ -1721,7 +1738,7 @@ class IncidentServiceTest {
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
-        assertThat(result.getTotalElements()).isEqualTo(0);
+        assertThat(result.getTotalElements()).isZero();
         verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any());
     }
 
@@ -1733,7 +1750,7 @@ class IncidentServiceTest {
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
-        assertThat(result.getTotalElements()).isEqualTo(0);
+        assertThat(result.getTotalElements()).isZero();
         verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any());
     }
 
@@ -1759,7 +1776,7 @@ class IncidentServiceTest {
 
         Page<IncidentResponse> result = incidentService.queryAssignedIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
-        assertThat(result.getTotalElements()).isEqualTo(0);
+        assertThat(result.getTotalElements()).isZero();
         verify(incidentRepository, never()).findByAssignedToIdUnified(any(), any(), any(), any(), any());
     }
 
