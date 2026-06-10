@@ -165,7 +165,7 @@ public class AuthService {
     }
 
     private String normalizeOfficeName(String officeName) {
-        return officeName.replaceFirst("(?i)\\s+office$", "").trim();
+        return officeName.replaceFirst("(?i)\\s++office$", "").trim();
     }
 
     private AuthSessionResponse toSessionResponse(User user) {
