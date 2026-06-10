@@ -2,19 +2,23 @@ package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.IncidentTopicController;
 import com.amalitech.hilfe.dto.IncidentTopicListResponse;
+import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.dto.LookupResponse;
+import com.amalitech.hilfe.dto.UpdateIncidentTypeStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.IncidentCategoryService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -27,6 +31,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,12 +40,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class IncidentTopicControllerTest {
 
-    @Autowired
-    MockMvc mvc;
-    @MockitoBean
-    IncidentCategoryService incidentCategoryService;
-    @MockitoBean
-    TokenService tokenService;
+    @Autowired MockMvc mvc;
+    final ObjectMapper objectMapper = new ObjectMapper();
+    @MockitoBean IncidentCategoryService incidentCategoryService;
+    @MockitoBean TokenService tokenService;
 
     private JwtTokenService.AuthPrincipal adminPrincipal() {
         return new JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
@@ -73,9 +76,82 @@ class IncidentTopicControllerTest {
     }
 
     @Test
+    void listTopics_statusAll_returns200WithAllTopics() throws Exception {
+        IncidentTopicListResponse active = new IncidentTopicListResponse(
+                "type-1", "Projector", "Projector issues", true, "active",
+                LookupResponse.from("cat-1", "Facilities"), null);
+        IncidentTopicListResponse inactive = new IncidentTopicListResponse(
+                "type-2", "Old Topic", "Deprecated", true, "inactive",
+                LookupResponse.from("cat-1", "Facilities"), null);
+        when(incidentCategoryService.listTopics(any(), any(), any(), eq("all"), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(active, inactive), PageRequest.of(0, 20), 2));
+
+        mvc.perform(get("/incident-topics")
+                        .param("status", "all")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(2))
+                .andExpect(jsonPath("$.data.items[0].status").value("active"))
+                .andExpect(jsonPath("$.data.items[1].status").value("inactive"));
+    }
+
+    @Test
+    void listTopics_statusInactive_returns200WithInactiveTopics() throws Exception {
+        IncidentTopicListResponse inactive = new IncidentTopicListResponse(
+                "type-2", "Old Topic", "Deprecated", true, "inactive",
+                LookupResponse.from("cat-1", "Facilities"), null);
+        when(incidentCategoryService.listTopics(any(), any(), any(), eq("inactive"), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-topics")
+                        .param("status", "inactive")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].status").value("inactive"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void updateTopicStatus_deactivate_returns200() throws Exception {
+        IncidentTopicResponse response = new IncidentTopicResponse(
+                "type-1", "Projector", "Projector issues", true, "inactive", null, null);
+        when(incidentCategoryService.updateTopicStatus(eq("type-1"), eq(false))).thenReturn(response);
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-type.delete"));
+
+        mvc.perform(patch("/incident-topics/type-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentTypeStatusRequest(false)))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident topic status updated successfully"))
+                .andExpect(jsonPath("$.data.status").value("inactive"));
+    }
+
+    @Test
+    void updateTopicStatus_activate_returns200() throws Exception {
+        IncidentTopicResponse response = new IncidentTopicResponse(
+                "type-1", "Projector", "Projector issues", true, "active", null, null);
+        when(incidentCategoryService.updateTopicStatus(eq("type-1"), eq(true))).thenReturn(response);
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-type.delete"));
+
+        mvc.perform(patch("/incident-topics/type-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentTypeStatusRequest(true)))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("active"));
+    }
+
+    @Test
     void listTopics_invalidStatus_returns400() throws Exception {
         when(incidentCategoryService.listTopics(any(), any(), any(), eq("archived"), any(), any()))
-                .thenThrow(new ArmsAuthException("Invalid status. Allowed values are active or inactive", 400));
+                .thenThrow(new ArmsAuthException("Invalid status. Allowed values are active, inactive, or all", 400));
 
         mvc.perform(get("/incident-topics")
                         .param("status", "archived")
