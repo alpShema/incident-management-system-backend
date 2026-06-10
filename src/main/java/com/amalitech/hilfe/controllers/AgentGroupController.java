@@ -27,6 +27,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AgentGroupController {
     private final AgentGroupService agentGroupService;
+    private static final String MSG_AGENT_GROUPS_RETRIEVED = "Agent groups retrieved successfully";
 
     @Operation(
             summary = "List agent groups by category",
@@ -39,7 +40,7 @@ public class AgentGroupController {
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
     public ResponseEntity<ApiResponse<List<LookupResponse>>> listAgentGroupsByCategory(@PathVariable String categoryId) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Agent groups retrieved successfully",
+                MSG_AGENT_GROUPS_RETRIEVED,
                 agentGroupService.listAgentGroupsByCategory(categoryId)));
     }
 
@@ -58,7 +59,7 @@ public class AgentGroupController {
             Pageable pageable
     ) {
         Page<AgentGroupResponse> page = agentGroupService.listAgentGroups(query, departmentId, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Agent groups retrieved successfully", PageResponse.from(page)));
+        return ResponseEntity.ok(ApiResponse.success(MSG_AGENT_GROUPS_RETRIEVED, PageResponse.from(page)));
     }
 
     @Operation(
@@ -78,7 +79,7 @@ public class AgentGroupController {
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Agent groups retrieved successfully",
+                MSG_AGENT_GROUPS_RETRIEVED,
                 PageResponse.from(agentGroupService.listAllAgentGroups(status, query, departmentId, pageable))));
     }
 
