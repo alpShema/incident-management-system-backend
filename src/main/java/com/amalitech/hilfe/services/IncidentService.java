@@ -141,31 +141,33 @@ public class IncidentService {
     public Page<IncidentResponse> queryIncidents(
             String userId,
             String query,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
-            Instant fromDate, Instant toDate,
+            IncidentFilterParams filters,
+            IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
         return slaService.toIncidentResponsePage(incidentRepository
-                .findByUserIdUnified(userId, buildQueryPattern(query), statusId, severityId,
-                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable)));
+                .findByUserIdUnified(userId, buildQueryPattern(query), filters.statusId(), filters.severityId(),
+                        filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
+                        dateFilter.fromDate(), dateFilter.toDate(), ensureSorted(pageable)));
     }
 
     public Page<IncidentResponse> queryAllIncidents(
             String query,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
-            Instant fromDate, Instant toDate,
+            IncidentFilterParams filters,
+            IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
         return slaService.toIncidentResponsePage(incidentRepository
-                .findAllUnified(buildQueryPattern(query), statusId, severityId,
-                        incidentTypeId, categoryId, locationId, fromDate, toDate, ensureSorted(pageable)));
+                .findAllUnified(buildQueryPattern(query), filters.statusId(), filters.severityId(),
+                        filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
+                        dateFilter.fromDate(), dateFilter.toDate(), ensureSorted(pageable)));
     }
 
     public Page<IncidentResponse> queryDeptIncidents(
             String userId,
             String query,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
-            Instant fromDate, Instant toDate,
+            IncidentFilterParams filters,
+            IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
         Pageable sorted = ensureSorted(pageable);
@@ -185,23 +187,25 @@ public class IncidentService {
         }
 
         return slaService.toIncidentResponsePage(incidentRepository
-                .findByDepartmentUnified(groupIdsToQuery, queryPattern, statusId, severityId,
-                        incidentTypeId, categoryId, locationId, fromDate, toDate, sorted));
+                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters.statusId(), filters.severityId(),
+                        filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
+                        dateFilter.fromDate(), dateFilter.toDate(), sorted));
     }
 
     public Page<IncidentResponse> queryAssignedIncidents(
             String userId,
             String query,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
-            Instant fromDate, Instant toDate,
+            IncidentFilterParams filters,
+            IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
         Pageable sorted = ensureSorted(pageable);
         String queryPattern = buildQueryPattern(query);
         return agentRepository.findByUserId(userId)
                 .map(agent -> incidentRepository
-                        .findByAssignedToIdUnified(agent.getId(), queryPattern, statusId, severityId,
-                                incidentTypeId, categoryId, locationId, fromDate, toDate, sorted))
+                        .findByAssignedToIdUnified(agent.getId(), queryPattern, filters.statusId(), filters.severityId(),
+                                filters.incidentTypeId(), filters.categoryId(), filters.locationId(),
+                                dateFilter.fromDate(), dateFilter.toDate(), sorted))
                 .map(slaService::toIncidentResponsePage)
                 .orElse(new PageImpl<>(List.of(), sorted, 0));
     }
@@ -237,6 +241,15 @@ public class IncidentService {
 
     @Transactional
     public IncidentResponse updateStatus(String actorUserId, String roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+        return doUpdateStatus(actorUserId, roleCode, incidentId, request);
+    }
+
+    @Transactional
+    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+        return doUpdateStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, request);
+    }
+
+    private IncidentResponse doUpdateStatus(String actorUserId, String roleCode, String incidentId, UpdateIncidentStatusRequest request) {
         Incident incident = findIncident(incidentId);
 
         Status newStatus = statusRepository.findById(request.statusId())
@@ -265,11 +278,6 @@ public class IncidentService {
         entityManager.flush();
         entityManager.clear();
         return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
-    }
-
-    @Transactional
-    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
-        return updateStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, request);
     }
 
     @Transactional
@@ -313,7 +321,7 @@ public class IncidentService {
         boolean isAdmin = ROLE_ADMIN.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole);
         if (!isAdmin) {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
-            if (!actorUserId.equals(assignedAgentUserId)) {
+            if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
                 throw new ArmsAuthException("You can only reassign incidents that are assigned to you", 403);
             }
         }
@@ -662,7 +670,7 @@ public class IncidentService {
         // Role permission alone is not enough — only the assigned agent may act.
         if (ROLE_AGENT.equals(effectiveRole)) {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
-            if (!actorUserId.equals(assignedAgentUserId)) {
+            if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
                 throw new ArmsAuthException(
                         "You are not the assigned agent for this incident",
                         403
