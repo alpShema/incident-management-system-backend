@@ -114,14 +114,20 @@ public class IncidentCategoryController {
         return ResponseEntity.ok(ApiResponse.success("Incident category status updated successfully", categoryService.updateCategoryStatus(id, request.status())));
     }
 
-    @Operation(summary = "List topics for a category", description = "Returns all incident topics (types) belonging to the given stable category ID. Requires authentication, but no role-specific permission.")
+    @Operation(summary = "List topics for a category", description = "Returns incident topics belonging to the given stable category ID. "
+            + "Supports an optional `status` filter: `active` returns only active topics, `inactive` returns only inactive topics, "
+            + "`all` (default when omitted) returns both. Requires authentication, but no role-specific permission.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topics retrieved"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid status filter"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found")
     })
     @GetMapping("/{id}/topics")
-    public ResponseEntity<ApiResponse<List<IncidentTopicResponse>>> listTopics(@Parameter(description = "Stable category ID", example = "cat-it") @PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success("Incident topics retrieved successfully", categoryService.listTopicsByCategory(id)));
+    public ResponseEntity<ApiResponse<List<IncidentTopicResponse>>> listTopics(
+            @Parameter(description = "Stable category ID", example = "cat-it") @PathVariable String id,
+            @Parameter(description = "Filter by topic status: active, inactive, or all (default)") @RequestParam(required = false) String status
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident topics retrieved successfully", categoryService.listTopicsByCategory(id, status)));
     }
 
     @Operation(
