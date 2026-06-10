@@ -17,6 +17,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class SeverityService {
+    private static final String MSG_SEVERITY_NOT_FOUND = "Severity not found";
+
     private final SeverityRepository severityRepository;
     private final IncidentRepository incidentRepository;
 
@@ -34,7 +36,7 @@ public class SeverityService {
 
     public SeverityResponse getSeverity(String id) {
         Severity severity = severityRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Severity not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_SEVERITY_NOT_FOUND, 404));
         return SeverityResponse.from(severity);
     }
 
@@ -61,7 +63,7 @@ public class SeverityService {
         String description = request.description() == null ? null : request.description().trim();
 
         Severity severity = severityRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Severity not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_SEVERITY_NOT_FOUND, 404));
         severityRepository.findByNameIgnoreCase(name)
                 .filter(existing -> !existing.getId().equals(id))
                 .ifPresent(existing -> {
@@ -75,7 +77,7 @@ public class SeverityService {
     @Transactional
     public SeverityResponse updateSeveritySla(String id, UpdateSeveritySlaRequest request) {
         Severity severity = severityRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Severity not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_SEVERITY_NOT_FOUND, 404));
         severity.setResponseTimeMinutes(request.responseTimeMinutes());
         severity.setResolutionTimeMinutes(request.resolutionTimeMinutes());
         return SeverityResponse.from(severityRepository.save(severity));
@@ -84,7 +86,7 @@ public class SeverityService {
     @Transactional
     public SeverityResponse deactivateSeverity(String id) {
         Severity severity = severityRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Severity not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_SEVERITY_NOT_FOUND, 404));
         severity.setStatus(false);
         return SeverityResponse.from(severityRepository.save(severity));
     }
@@ -92,7 +94,7 @@ public class SeverityService {
     @Transactional
     public void deleteSeverity(String id) {
         Severity severity = severityRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Severity not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_SEVERITY_NOT_FOUND, 404));
         if (incidentRepository.existsBySeverityId(id)) {
             throw new ArmsAuthException("Cannot delete severity that is in use by incidents", 409);
         }

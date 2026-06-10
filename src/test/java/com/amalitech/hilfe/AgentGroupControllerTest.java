@@ -96,7 +96,7 @@ class AgentGroupControllerTest {
 
     @Test
     void updateAgentGroupStatus_alreadyInactive_returns409() throws Exception {
-        when(agentGroupService.updateAgentGroupStatus(eq("admin-1"), eq("group-1"), eq(false)))
+        when(agentGroupService.updateAgentGroupStatus("admin-1", "group-1", false))
                 .thenThrow(new ArmsAuthException("Agent group is already inactive", 409));
 
         mvc.perform(patch("/agent-groups/group-1/status")
