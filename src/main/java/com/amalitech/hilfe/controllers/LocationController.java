@@ -5,6 +5,7 @@ import com.amalitech.hilfe.dto.CreateLocationRequest;
 import com.amalitech.hilfe.dto.LocationResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateLocationRequest;
+import com.amalitech.hilfe.dto.UpdateLocationStatusRequest;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,10 +64,14 @@ public class LocationController {
         return ResponseEntity.ok(ApiResponse.success("Location updated successfully", locationService.updateLocation(id, request)));
     }
 
-    @Operation(summary = "Deactivate location", description = "Marks a location as inactive without deleting it.")
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_DELETE + "')")
-    public ResponseEntity<ApiResponse<LocationResponse>> deactivateLocation(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success("Location deactivated successfully", locationService.deactivateLocation(id)));
+    @Operation(summary = "Update location status", description = "Set status to true to activate or false to deactivate.")
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_UPDATE + "')")
+    public ResponseEntity<ApiResponse<LocationResponse>> updateLocationStatus(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateLocationStatusRequest request
+    ) {
+        String message = Boolean.TRUE.equals(request.status()) ? "Location activated successfully" : "Location deactivated successfully";
+        return ResponseEntity.ok(ApiResponse.success(message, locationService.updateStatus(id, request.status())));
     }
 }
