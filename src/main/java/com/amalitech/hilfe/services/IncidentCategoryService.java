@@ -111,11 +111,12 @@ public class IncidentCategoryService {
         return IncidentCategoryResponse.from(category);
     }
 
-    public List<IncidentTopicResponse> listTopicsByCategory(String categoryId) {
+    public List<IncidentTopicResponse> listTopicsByCategory(String categoryId, String status) {
+        String resolvedStatus = normalizeTopicStatus(status);
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException("Incident category not found", 404);
         }
-        return typeRepository.findByCategoryIdWithAgent(categoryId).stream()
+        return typeRepository.findByCategoryIdWithAgentAndStatus(categoryId, resolvedStatus).stream()
                 .map(IncidentTopicResponse::from)
                 .toList();
     }
@@ -295,12 +296,12 @@ public class IncidentCategoryService {
     }
 
     private String normalizeTopicStatus(String status) {
-        if (status == null || status.isBlank()) {
-            return "active";
+        if (status == null || status.isBlank() || "all".equalsIgnoreCase(status)) {
+            return null;
         }
         String value = status.trim().toLowerCase();
         if (!"active".equals(value) && !"inactive".equals(value)) {
-            throw new ArmsAuthException("Invalid status. Allowed values are active or inactive", 400);
+            throw new ArmsAuthException("Invalid status. Allowed values are active, inactive, or all", 400);
         }
         return value;
     }
