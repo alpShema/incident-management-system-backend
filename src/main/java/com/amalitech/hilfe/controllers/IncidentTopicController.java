@@ -10,7 +10,6 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.IncidentCategoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -40,10 +39,8 @@ public class IncidentTopicController {
                     + "and text query across topic/category/agent-group names. "
                     + "Defaults to returning all topics regardless of status when no status filter is provided."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topics retrieved"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid status filter")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topics retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid status filter")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<IncidentTopicListResponse>>> listTopics(
             @Parameter(description = "Filter by category ID") @RequestParam(required = false) String categoryId,
@@ -67,12 +64,10 @@ public class IncidentTopicController {
                     + "If `agentGroupId` is changed, the new group must have a primary agent and must "
                     + "belong to the same department as the topic's category. Requires `incident-type.update` permission."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topic updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Topic not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topic updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Topic not found")
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_UPDATE + "')")
     public ResponseEntity<ApiResponse<IncidentTopicResponse>> updateTopic(
@@ -88,13 +83,11 @@ public class IncidentTopicController {
             description = "Activates or deactivates an incident topic. `status=true` activates and "
                     + "`status=false` deactivates. Requires `incident-type.delete` permission."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topic status updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Topic not found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Topic already in target status")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topic status updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Topic not found")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Topic already in target status")
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_DELETE + "')")
     public ResponseEntity<ApiResponse<IncidentTopicResponse>> updateTopicStatus(

@@ -7,7 +7,6 @@ import com.amalitech.hilfe.dto.SlaConfigResponse;
 import com.amalitech.hilfe.dto.UpdateSlaConfigRequest;
 import com.amalitech.hilfe.dto.dashboard.SlaReportResponse;
 import com.amalitech.hilfe.dto.dashboard.SlaSeverityBreakdown;
-import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.IncidentSla;
@@ -36,6 +35,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 @Slf4j
@@ -45,6 +45,12 @@ public class SlaService {
 
     public static final String SLA_AT_RISK_PCT_KEY = "sla_at_risk_pct";
     public static final int DEFAULT_AT_RISK_PCT = 20;
+
+    private static final String STATUS_PENDING = "status-pending";
+    private static final String STATUS_RESOLVED = "status-resolved";
+    private static final String SLA_TYPE_RESPONSE = "RESPONSE";
+    private static final String SLA_TYPE_RESOLUTION = "RESOLUTION";
+    private static final String STATUS_BREACHED = "BREACHED";
 
     private final IncidentSlaRepository incidentSlaRepository;
     private final SeverityRepository severityRepository;
@@ -109,64 +115,70 @@ public class SlaService {
         if (incident == null || incident.getId() == null) {
             return;
         }
-
         Optional<IncidentSla> optionalSla = incidentSlaRepository.findById(incident.getId());
         if (optionalSla.isEmpty()) {
             return;
         }
-
         IncidentSla sla = optionalSla.get();
         Instant now = Instant.now();
         boolean changed = false;
 
-        boolean enteringPending = !"status-pending".equals(previousStatusId) && "status-pending".equals(newStatusId);
-        boolean leavingPending = "status-pending".equals(previousStatusId) && !"status-pending".equals(newStatusId);
-        boolean resolving = !"status-resolved".equals(previousStatusId) && "status-resolved".equals(newStatusId);
-        boolean reopening = "status-resolved".equals(previousStatusId) && "status-reopened".equals(newStatusId);
+        boolean enteringPending = !STATUS_PENDING.equals(previousStatusId) && STATUS_PENDING.equals(newStatusId);
+        boolean leavingPending = STATUS_PENDING.equals(previousStatusId) && !STATUS_PENDING.equals(newStatusId);
+        boolean resolving = !STATUS_RESOLVED.equals(previousStatusId) && STATUS_RESOLVED.equals(newStatusId);
+        boolean reopening = STATUS_RESOLVED.equals(previousStatusId) && "status-reopened".equals(newStatusId);
 
         if (enteringPending && sla.getPauseStartedAt() == null) {
             sla.setPauseStartedAt(now);
             changed = true;
         }
-
         if (leavingPending && sla.getPauseStartedAt() != null) {
-            long delta = Math.max(0L, Duration.between(sla.getPauseStartedAt(), now).toMillis());
-            sla.setAccumulatedPauseMs(sla.getAccumulatedPauseMs() + delta);
-            if (sla.getResponseDueAt() != null && sla.getFirstResponseAt() == null && sla.getResponseBreachedAt() == null) {
-                sla.setResponseDueAt(sla.getResponseDueAt().plusMillis(delta));
-            }
-            if (sla.getResolutionDueAt() != null && sla.getResolvedAtSnapshot() == null) {
-                sla.setResolutionDueAt(sla.getResolutionDueAt().plusMillis(delta));
-            }
-            sla.setPauseStartedAt(null);
+            applyPauseDelta(sla, now);
             changed = true;
         }
-
         if (resolving) {
-            sla.setResolvedAtSnapshot(now);
-            sla.setResolutionElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
-            if (sla.getResolutionDueAt() != null) {
-                long remainingMs = Math.max(0L, Duration.between(now, sla.getResolutionDueAt()).toMillis());
-                sla.setResolutionRemainingMsOnResolve(remainingMs);
-                if (now.isAfter(sla.getResolutionDueAt()) && sla.getResolutionBreachedAt() == null) {
-                    sla.setResolutionBreachedAt(sla.getResolutionDueAt());
-                }
-            }
+            applyResolution(sla, incident, now);
             changed = true;
         }
-
         if (reopening) {
-            if (sla.getResolutionRemainingMsOnResolve() != null && sla.getResolutionDueAt() != null) {
-                sla.setResolutionDueAt(now.plusMillis(sla.getResolutionRemainingMsOnResolve()));
-            }
-            sla.setResolvedAtSnapshot(null);
-            sla.setPauseStartedAt(null);
+            applyReopening(sla, now);
             changed = true;
         }
-
         if (changed) {
             incidentSlaRepository.save(sla);
         }
+    }
+
+    private void applyPauseDelta(IncidentSla sla, Instant now) {
+        long delta = Math.max(0L, Duration.between(sla.getPauseStartedAt(), now).toMillis());
+        sla.setAccumulatedPauseMs(sla.getAccumulatedPauseMs() + delta);
+        if (sla.getResponseDueAt() != null && sla.getFirstResponseAt() == null && sla.getResponseBreachedAt() == null) {
+            sla.setResponseDueAt(sla.getResponseDueAt().plusMillis(delta));
+        }
+        if (sla.getResolutionDueAt() != null && sla.getResolvedAtSnapshot() == null) {
+            sla.setResolutionDueAt(sla.getResolutionDueAt().plusMillis(delta));
+        }
+        sla.setPauseStartedAt(null);
+    }
+
+    private void applyResolution(IncidentSla sla, Incident incident, Instant now) {
+        sla.setResolvedAtSnapshot(now);
+        sla.setResolutionElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
+        if (sla.getResolutionDueAt() != null) {
+            long remainingMs = Math.max(0L, Duration.between(now, sla.getResolutionDueAt()).toMillis());
+            sla.setResolutionRemainingMsOnResolve(remainingMs);
+            if (now.isAfter(sla.getResolutionDueAt()) && sla.getResolutionBreachedAt() == null) {
+                sla.setResolutionBreachedAt(sla.getResolutionDueAt());
+            }
+        }
+    }
+
+    private void applyReopening(IncidentSla sla, Instant now) {
+        if (sla.getResolutionRemainingMsOnResolve() != null && sla.getResolutionDueAt() != null) {
+            sla.setResolutionDueAt(now.plusMillis(sla.getResolutionRemainingMsOnResolve()));
+        }
+        sla.setResolvedAtSnapshot(null);
+        sla.setPauseStartedAt(null);
     }
 
     @Transactional
@@ -239,11 +251,11 @@ public class SlaService {
         long resolutionBreaches = rows.stream().filter(sla -> sla.getResolutionBreachedAt() != null).count();
         Double avgResponse = averageMinutes(rows.stream()
                 .map(IncidentSla::getResponseElapsedMs)
-                .filter(value -> value != null)
+                .filter(Objects::nonNull)
                 .toList());
         Double avgResolution = averageMinutes(rows.stream()
                 .map(IncidentSla::getResolutionElapsedMs)
-                .filter(value -> value != null)
+                .filter(Objects::nonNull)
                 .toList());
 
         Map<String, List<IncidentSla>> grouped = new LinkedHashMap<>();
@@ -264,8 +276,8 @@ public class SlaService {
                             group.size(),
                             group.stream().filter(sla -> sla.getResponseBreachedAt() != null).count(),
                             group.stream().filter(sla -> sla.getResolutionBreachedAt() != null).count(),
-                            averageMinutes(group.stream().map(IncidentSla::getResponseElapsedMs).filter(value -> value != null).toList()),
-                            averageMinutes(group.stream().map(IncidentSla::getResolutionElapsedMs).filter(value -> value != null).toList())
+                            averageMinutes(group.stream().map(IncidentSla::getResponseElapsedMs).filter(Objects::nonNull).toList()),
+                            averageMinutes(group.stream().map(IncidentSla::getResolutionElapsedMs).filter(Objects::nonNull).toList())
                     );
                 })
                 .toList();
@@ -280,25 +292,10 @@ public class SlaService {
                 continue;
             }
             if (isBreached(now, sla.getResponseDueAt())) {
-                boolean changed = false;
-                if (sla.getResponseBreachedAt() == null) {
-                    sla.setResponseBreachedAt(sla.getResponseDueAt());
-                    changed = true;
-                    logBreach(sla.getIncidentId(), "RESPONSE", overdueMinutes(now, sla.getResponseDueAt()));
-                }
-                if (sla.getResponseBreachNotifiedAt() == null) {
-                    publishBreachNotifications(sla.getIncident(), "RESPONSE", overdueMinutes(now, sla.getResponseDueAt()));
-                    sla.setResponseBreachNotifiedAt(now);
-                    changed = true;
-                }
-                if (changed) {
-                    incidentSlaRepository.save(sla);
-                }
-                continue;
-            }
-
-            if (sla.getResponseAtRiskNotifiedAt() == null && isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
-                publishAtRiskNotifications(sla.getIncident(), "RESPONSE", remainingMinutes(now, sla.getResponseDueAt()));
+                handleResponseBreach(sla, now);
+            } else if (sla.getResponseAtRiskNotifiedAt() == null
+                    && isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
+                publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESPONSE, remainingMinutes(now, sla.getResponseDueAt()));
                 sla.setResponseAtRiskNotifiedAt(now);
                 incidentSlaRepository.save(sla);
             }
@@ -312,28 +309,47 @@ public class SlaService {
                 continue;
             }
             if (isBreached(now, sla.getResolutionDueAt())) {
-                boolean changed = false;
-                if (sla.getResolutionBreachedAt() == null) {
-                    sla.setResolutionBreachedAt(sla.getResolutionDueAt());
-                    changed = true;
-                    logBreach(sla.getIncidentId(), "RESOLUTION", overdueMinutes(now, sla.getResolutionDueAt()));
-                }
-                if (sla.getResolutionBreachNotifiedAt() == null) {
-                    publishBreachNotifications(sla.getIncident(), "RESOLUTION", overdueMinutes(now, sla.getResolutionDueAt()));
-                    sla.setResolutionBreachNotifiedAt(now);
-                    changed = true;
-                }
-                if (changed) {
-                    incidentSlaRepository.save(sla);
-                }
-                continue;
-            }
-
-            if (sla.getResolutionAtRiskNotifiedAt() == null && isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
-                publishAtRiskNotifications(sla.getIncident(), "RESOLUTION", remainingMinutes(now, sla.getResolutionDueAt()));
+                handleResolutionBreach(sla, now);
+            } else if (sla.getResolutionAtRiskNotifiedAt() == null
+                    && isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
+                publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESOLUTION, remainingMinutes(now, sla.getResolutionDueAt()));
                 sla.setResolutionAtRiskNotifiedAt(now);
                 incidentSlaRepository.save(sla);
             }
+        }
+    }
+
+    private void handleResponseBreach(IncidentSla sla, Instant now) {
+        boolean changed = false;
+        if (sla.getResponseBreachedAt() == null) {
+            sla.setResponseBreachedAt(sla.getResponseDueAt());
+            changed = true;
+            logBreach(sla.getIncidentId(), SLA_TYPE_RESPONSE, overdueMinutes(now, sla.getResponseDueAt()));
+        }
+        if (sla.getResponseBreachNotifiedAt() == null) {
+            publishBreachNotifications(sla.getIncident(), SLA_TYPE_RESPONSE, overdueMinutes(now, sla.getResponseDueAt()));
+            sla.setResponseBreachNotifiedAt(now);
+            changed = true;
+        }
+        if (changed) {
+            incidentSlaRepository.save(sla);
+        }
+    }
+
+    private void handleResolutionBreach(IncidentSla sla, Instant now) {
+        boolean changed = false;
+        if (sla.getResolutionBreachedAt() == null) {
+            sla.setResolutionBreachedAt(sla.getResolutionDueAt());
+            changed = true;
+            logBreach(sla.getIncidentId(), SLA_TYPE_RESOLUTION, overdueMinutes(now, sla.getResolutionDueAt()));
+        }
+        if (sla.getResolutionBreachNotifiedAt() == null) {
+            publishBreachNotifications(sla.getIncident(), SLA_TYPE_RESOLUTION, overdueMinutes(now, sla.getResolutionDueAt()));
+            sla.setResolutionBreachNotifiedAt(now);
+            changed = true;
+        }
+        if (changed) {
+            incidentSlaRepository.save(sla);
         }
     }
 
@@ -402,10 +418,10 @@ public class SlaService {
             return "NOT_TRACKED";
         }
         if (sla.getFirstResponseAt() != null) {
-            return sla.getResponseBreachedAt() == null ? "MET" : "BREACHED";
+            return sla.getResponseBreachedAt() == null ? "MET" : STATUS_BREACHED;
         }
         if (sla.getResponseBreachedAt() != null || !now.isBefore(sla.getResponseDueAt())) {
-            return "BREACHED";
+            return STATUS_BREACHED;
         }
         if (isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), readAtRiskPercentage())) {
             return "AT_RISK";
@@ -418,10 +434,10 @@ public class SlaService {
             return "NOT_TRACKED";
         }
         if (sla.getResolvedAtSnapshot() != null) {
-            return sla.getResolutionBreachedAt() == null ? "MET" : "BREACHED";
+            return sla.getResolutionBreachedAt() == null ? "MET" : STATUS_BREACHED;
         }
         if (sla.getResolutionBreachedAt() != null || !now.isBefore(sla.getResolutionDueAt())) {
-            return "BREACHED";
+            return STATUS_BREACHED;
         }
         if (isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), readAtRiskPercentage())) {
             return "AT_RISK";
