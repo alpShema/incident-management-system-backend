@@ -249,7 +249,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null));
+                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null));
 
         assertThat(topic.getName()).isEqualTo("New Name");
         assertThat(topic.getDescription()).isEqualTo("New desc");
@@ -268,7 +268,7 @@ class IncidentCategoryServiceTest {
 
         IncidentTopicResponse response = categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("New Name", "New desc", "group-1", false));
+                new UpdateTopicRequest("New Name", "New desc", null, "group-1", false));
 
         assertThat(response).isNotNull();
         verify(typeRepository).save(any(IncidentType.class));
