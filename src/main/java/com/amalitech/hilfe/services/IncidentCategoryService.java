@@ -127,6 +127,7 @@ public class IncidentCategoryService {
                 .toList();
     }
 
+    @Transactional
     public Page<IncidentTopicListResponse> listTopics(
             String categoryId,
             String departmentId,
