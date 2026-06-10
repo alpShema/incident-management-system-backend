@@ -108,7 +108,10 @@ public class IncidentController {
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAllIncidents(
-                query, statusId, severityId, incidentTypeId, categoryId, locationId, fromDate, toDate, pageable);
+                query,
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentDateFilter(fromDate, toDate),
+                pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -138,9 +141,10 @@ public class IncidentController {
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryIncidents(
-                principal.userId(),
-                query, statusId, severityId, incidentTypeId, categoryId, locationId,
-                fromDate, toDate, pageable);
+                principal.userId(), query,
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentDateFilter(fromDate, toDate),
+                pageable);
         return ResponseEntity.ok(ApiResponse.success("Incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -174,9 +178,10 @@ public class IncidentController {
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryDeptIncidents(
-                principal.userId(),
-                query, statusId, severityId, incidentTypeId, categoryId, locationId,
-                fromDate, toDate, pageable);
+                principal.userId(), query,
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentDateFilter(fromDate, toDate),
+                pageable);
         return ResponseEntity.ok(ApiResponse.success("Department incidents retrieved successfully", PageResponse.from(page)));
     }
 
@@ -210,9 +215,10 @@ public class IncidentController {
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAssignedIncidents(
-                principal.userId(),
-                query, statusId, severityId, incidentTypeId, categoryId, locationId,
-                fromDate, toDate, pageable);
+                principal.userId(), query,
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentDateFilter(fromDate, toDate),
+                pageable);
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(page)));
     }
 

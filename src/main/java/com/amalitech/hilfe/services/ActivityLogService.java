@@ -28,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ActivityLogService {
+    private static final String SUBJECT_INCIDENT = "INCIDENT";
+
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
     private final IncidentRepository incidentRepository;
@@ -153,7 +155,7 @@ public class ActivityLogService {
             activityLogRepository.save(ActivityLog.builder()
                     .actorUserId(actorUserId)
                     .action("INCIDENT_STATUS_CHANGED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " status changed from " + previousStatus + " to " + newStatus + " by " + actorName + reasonPart)
                     .metadata(metadata)
@@ -172,7 +174,7 @@ public class ActivityLogService {
             activityLogRepository.save(ActivityLog.builder()
                     .actorUserId(actorUserId)
                     .action("INCIDENT_SEVERITY_CHANGED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " severity changed from " + previousSeverity + " to " + newSeverity + " by " + actorName)
                     .metadata("{\"previousSeverity\":\"" + previousSeverity + "\",\"newSeverity\":\"" + newSeverity + "\"}")
@@ -192,7 +194,7 @@ public class ActivityLogService {
             activityLogRepository.save(ActivityLog.builder()
                     .actorUserId(actorUserId)
                     .action("INCIDENT_ASSIGNED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " assigned to " + agentName + " by " + actorName)
                     .metadata("{\"agentId\":\"" + agentId + "\"}")
@@ -210,7 +212,7 @@ public class ActivityLogService {
             String agentName = resolveAgentName(agentId);
             activityLogRepository.save(ActivityLog.builder()
                     .action("INCIDENT_ASSIGNED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " auto-assigned to " + agentName + " by System")
                     .metadata("{\"agentId\":\"" + agentId + "\"}")
@@ -230,7 +232,7 @@ public class ActivityLogService {
             activityLogRepository.save(ActivityLog.builder()
                     .actorUserId(actorUserId)
                     .action("INCIDENT_UNASSIGNED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " unassigned from " + agentName + " (agent inactive) by " + actorName)
                     .metadata("{\"previousAgentId\":\"" + previousAgentId + "\"}")
@@ -247,7 +249,7 @@ public class ActivityLogService {
             String incidentLabel = resolveIncidentLabel(incidentId);
             activityLogRepository.save(ActivityLog.builder()
                     .action("INCIDENT_SLA_BREACHED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " " + slaType.toLowerCase() + " SLA breached by " + minutesOverdue + " minute(s)")
                     .metadata("{\"slaType\":\"" + slaType + "\",\"minutesOverdue\":" + minutesOverdue + "}")
@@ -265,7 +267,7 @@ public class ActivityLogService {
             String assignedName = resolveAgentName(assignedAgentId);
             activityLogRepository.save(ActivityLog.builder()
                     .action("SELF_ASSIGNMENT_PREVENTED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " self-assignment prevented; routed to " + assignedName + " instead")
                     .metadata("{\"creatorAgentId\":\"" + creatorAgentId + "\",\"assignedAgentId\":\"" + assignedAgentId + "\"}")
@@ -282,7 +284,7 @@ public class ActivityLogService {
             String incidentLabel = resolveIncidentLabel(incidentId);
             activityLogRepository.save(ActivityLog.builder()
                     .action("SELF_ASSIGNMENT_ESCALATED")
-                    .subjectType("INCIDENT")
+                    .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(incidentLabel + " escalated to admin — no available agent other than the creator")
                     .metadata("{\"creatorAgentId\":\"" + creatorAgentId + "\"}")
