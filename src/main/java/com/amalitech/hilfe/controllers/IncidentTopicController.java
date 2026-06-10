@@ -35,8 +35,9 @@ public class IncidentTopicController {
     @Operation(
             summary = "List incident topics",
             description = "Returns a paginated list of incident topics globally. "
-                    + "Supports filtering by category, department, agent group, status (active/inactive by category status), "
-                    + "and text query across topic/category/agent-group names."
+                    + "Supports filtering by category, department, agent group, topic status (active/inactive/all), "
+                    + "and text query across topic/category/agent-group names. "
+                    + "Defaults to returning all topics regardless of status when no status filter is provided."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Topics retrieved")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid status filter")
@@ -45,8 +46,8 @@ public class IncidentTopicController {
             @Parameter(description = "Filter by category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by department ID (from topic's category)") @RequestParam(required = false) String departmentId,
             @Parameter(description = "Filter by assigned agent group ID") @RequestParam(required = false) String agentGroupId,
-            @Parameter(description = "Filter by category status: active (default) or inactive")
-            @RequestParam(required = false, defaultValue = "active") String status,
+            @Parameter(description = "Filter by topic status: active, inactive, or all (default — returns both)")
+            @RequestParam(required = false) String status,
             @Parameter(description = "Search text over topic name/description, category name, and agent-group name")
             @RequestParam(required = false) String query,
             Pageable pageable
