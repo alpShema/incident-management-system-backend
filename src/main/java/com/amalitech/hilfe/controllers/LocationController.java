@@ -9,7 +9,6 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,9 +27,6 @@ public class LocationController {
     private final LocationService locationService;
 
     @Operation(summary = "List locations", description = "Returns a paginated list of locations. Optionally filter by name or status.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Locations retrieved")
-    })
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<LocationResponse>>> listLocations(
             @Parameter(description = "Filter by name (partial match)") @RequestParam(required = false) String name,
@@ -44,21 +40,12 @@ public class LocationController {
     }
 
     @Operation(summary = "Get location by ID")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Location found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found")
-    })
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<LocationResponse>> getLocation(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Location retrieved successfully", locationService.getLocation(id)));
     }
 
     @Operation(summary = "Create location")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Location created"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Name already exists")
-    })
     @PostMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_CREATE + "')")
     public ResponseEntity<ApiResponse<LocationResponse>> createLocation(@Valid @RequestBody CreateLocationRequest request) {
@@ -67,12 +54,6 @@ public class LocationController {
     }
 
     @Operation(summary = "Update location")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Location updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Name already exists")
-    })
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_UPDATE + "')")
     public ResponseEntity<ApiResponse<LocationResponse>> updateLocation(
@@ -83,11 +64,6 @@ public class LocationController {
     }
 
     @Operation(summary = "Deactivate location", description = "Marks a location as inactive without deleting it.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Location deactivated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already inactive")
-    })
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_DELETE + "')")
     public ResponseEntity<ApiResponse<LocationResponse>> deactivateLocation(@PathVariable String id) {
