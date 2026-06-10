@@ -63,22 +63,12 @@ public class LocationService {
     }
 
     @Transactional
-    public LocationResponse deactivateLocation(String id) {
+    public LocationResponse updateStatus(String id, boolean newStatus) {
         Location location = findById(id);
-        if (!Boolean.TRUE.equals(location.getStatus())) {
-            throw new ArmsAuthException("Location is already inactive", 409);
+        if (Boolean.valueOf(newStatus).equals(location.getStatus())) {
+            throw new ArmsAuthException("Location is already " + (newStatus ? "active" : "inactive"), 409);
         }
-        location.setStatus(false);
-        return LocationResponse.from(locationRepository.save(location));
-    }
-
-    @Transactional
-    public LocationResponse reactivateLocation(String id) {
-        Location location = findById(id);
-        if (Boolean.TRUE.equals(location.getStatus())) {
-            throw new ArmsAuthException("Location is already active", 409);
-        }
-        location.setStatus(true);
+        location.setStatus(newStatus);
         return LocationResponse.from(locationRepository.save(location));
     }
 
