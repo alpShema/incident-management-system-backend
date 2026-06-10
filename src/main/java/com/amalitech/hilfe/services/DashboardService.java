@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -54,29 +55,27 @@ public class DashboardService {
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        switch (role) {
+            case ADMIN, SUPER_ADMIN -> {
                 byStatus = toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
                         : incidentRepository.countByStatusGlobal());
-
                 List<MonthlyCount> allTrend = toMonthlyCount(
                         incidentRepository.countByMonthSince(trendSince));
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
-        } else if (role == RoleCode.AGENT) {
-            var agentOpt = agentRepository.findByUserId(userId);
-            byStatus = agentOpt.map(agent -> toLabel(since != null
-                    ? incidentRepository.countByStatusForAgentSince(agent.getId(), since)
-                    : incidentRepository.countByStatusForAgent(agent.getId())))
-                    .orElse(List.of());
-
-            List<MonthlyCount> myTrend = agentOpt
-                    .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
-                    .orElse(List.of());
-            trends = List.of(
-                    new TrendSeries("My Assigned Incidents", myTrend)
-            );
-        } else {
-            throw new ArmsAuthException("Dashboard not available for this role", 403);
+            }
+            case AGENT -> {
+                var agentOpt = agentRepository.findByUserId(userId);
+                byStatus = agentOpt.map(agent -> toLabel(since != null
+                        ? incidentRepository.countByStatusForAgentSince(agent.getId(), since)
+                        : incidentRepository.countByStatusForAgent(agent.getId())))
+                        .orElse(List.of());
+                List<MonthlyCount> myTrend = agentOpt
+                        .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
+                        .orElse(List.of());
+                trends = List.of(new TrendSeries("My Assigned Incidents", myTrend));
+            }
+            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
         }
 
         return new DashboardCharts(byStatus, trends);
@@ -85,7 +84,7 @@ public class DashboardService {
     public Page<IncidentResponse> getIncidents(
             String userId, RoleCode role,
             String query,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            IncidentFilterParams filters,
             Pageable pageable
     ) {
         String queryPattern = null;
@@ -100,14 +99,14 @@ public class DashboardService {
 
         if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
             return slaService.toIncidentResponsePage(
-                    incidentRepository.findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
+                    incidentRepository.findAllUnified(finalQueryPattern, filters.statusId(), filters.severityId(), filters.incidentTypeId(), filters.categoryId(), filters.locationId(), null, null, pageable)
             );
         }
         if (role == RoleCode.AGENT) {
             return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
                     .map(agentGroupIds -> slaService.toIncidentResponsePage(incidentRepository
-                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)))
+                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters.statusId(), filters.severityId(), filters.incidentTypeId(), filters.categoryId(), filters.locationId(), null, null, pageable)))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
         throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -116,11 +115,11 @@ public class DashboardService {
 
     public Page<IncidentResponse> getMyIncidents(
             String userId,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            IncidentFilterParams filters,
             Pageable pageable
     ) {
         return slaService.toIncidentResponsePage(
-                incidentRepository.findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
+                incidentRepository.findByUserIdFiltered(userId, filters.statusId(), filters.severityId(), filters.incidentTypeId(), filters.categoryId(), filters.locationId(), pageable)
         );
     }
 
