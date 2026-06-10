@@ -218,7 +218,15 @@ public class IncidentCategoryService {
 
         IncidentType topic = typeRepository.findById(topicId)
                 .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND, 404));
-        IncidentCategory category = categoryRepository.findById(topic.getCategoryId())
+
+        // Resolve the effective category: use the incoming categoryId if provided,
+        // otherwise fall back to the topic's existing category. This ensures that when
+        // both categoryId and agentGroupId are updated together, the department check
+        // runs against the new category rather than the stale one.
+        String effectiveCategoryId = (request.categoryId() != null && !request.categoryId().isBlank())
+                ? request.categoryId()
+                : topic.getCategoryId();
+        IncidentCategory category = categoryRepository.findById(effectiveCategoryId)
                 .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
 
         if (name != null && !name.isBlank()) {
@@ -230,6 +238,10 @@ public class IncidentCategoryService {
         }
         if (description != null && !description.isBlank()) {
             topic.setDescription(description);
+        }
+        if (request.categoryId() != null && !request.categoryId().isBlank()) {
+            findActiveCategory(request.categoryId());
+            topic.setCategoryId(request.categoryId());
         }
         if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
             AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
