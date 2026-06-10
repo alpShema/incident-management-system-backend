@@ -2,6 +2,7 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.AutoCloseConfigResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.SystemConfig;
 import com.amalitech.hilfe.notifications.NotificationEventPublisher;
@@ -73,7 +74,7 @@ public class AutoCloseService {
             // Notify the assigned agent that their incident was auto-closed
             if (incident.getAssignedToId() != null) {
                 String agentUserId = agentRepository.findById(incident.getAssignedToId())
-                        .map(a -> a.getUserId())
+                        .map(Agent::getUserId)
                         .orElse(null);
                 notificationEventPublisher.publish(new IncidentAutoClosedAgentEvent(agentUserId, incident.getId(), incidentNo));
             }

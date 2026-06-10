@@ -1,5 +1,6 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
 import com.amalitech.hilfe.dto.dashboard.DashboardStats;
@@ -173,7 +174,7 @@ class DashboardServiceTest {
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "admin-1", RoleCode.ADMIN, null, null, null, null, "cat-it", null, Pageable.unpaged());
+                "admin-1", RoleCode.ADMIN, null, new IncidentFilterParams(null, null, null, "cat-it", null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
         verify(incidentRepository).findAllUnified(isNull(), any(), any(), any(), eq("cat-it"), any(), isNull(), isNull(), any(Pageable.class));
@@ -190,7 +191,7 @@ class DashboardServiceTest {
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
         verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class));
@@ -201,7 +202,7 @@ class DashboardServiceTest {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
         assertThat(result.getTotalElements()).isEqualTo(0);
@@ -217,7 +218,7 @@ class DashboardServiceTest {
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getMyIncidents(
-                "user-1", null, null, null, null, null, Pageable.unpaged());
+                "user-1", new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
         verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class));

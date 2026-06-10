@@ -3,6 +3,7 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.mappers.ArmsUserMapper;
+import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
@@ -159,7 +160,7 @@ public class AuthService {
         }
         return locationRepository.findByNameIgnoreCase(armsUser.officeName())
                 .or(() -> locationRepository.findByNameIgnoreCase(normalizeOfficeName(armsUser.officeName())))
-                .map(location -> location.getId())
+                .map(Location::getId)
                 .orElse(null);
     }
 
