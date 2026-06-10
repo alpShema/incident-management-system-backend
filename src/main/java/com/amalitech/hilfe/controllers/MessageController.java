@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,12 +36,10 @@ public class MessageController {
                     + "Access to the incident is validated before the URL is issued. "
                     + "Use the returned fileKey in `POST /incidents/{incidentId}/messages` attachments[]."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Presigned URL generated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid file type or size"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Presigned URL generated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid file type or size")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
     @PostMapping("/presigned-url")
     public ResponseEntity<ApiResponse<PresignedUrlResponse>> generateMessagePresignedUrl(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
@@ -65,11 +62,9 @@ public class MessageController {
                     + "`/topic/incidents/{incidentId}/messages` over WebSocket. "
                     + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Message sent"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Message sent")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
     @PostMapping
     public ResponseEntity<ApiResponse<MessageResponse>> sendMessage(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
@@ -122,11 +117,9 @@ public class MessageController {
                     + "Use this endpoint for initial chat load and re-sync after WebSocket reconnect. "
                     + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Messages retrieved"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Messages retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "No access to this incident")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<MessageResponse>>> listMessages(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
@@ -152,11 +145,9 @@ public class MessageController {
             description = "Only the message author can delete their own message. "
                     + "See docs/REALTIME_MESSAGING_CONTRACT.md for the full HTTP + WebSocket contract."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Message deleted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Cannot delete another user's message"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Message not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Message deleted")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Cannot delete another user's message")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Message not found")
     @DeleteMapping("/{messageId}")
     public ResponseEntity<Void> deleteMessage(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,

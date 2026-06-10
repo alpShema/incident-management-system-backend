@@ -42,16 +42,15 @@ public class UserService {
             queryPattern = "%" + escaped + "%";
         }
         Pageable resolvedPageable = remapSort(pageable);
-        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, parseStatus(status), resolvedPageable);
-    }
-
-    private Boolean parseStatus(String status) {
-        if (status == null || status.isBlank()) return null;
-        return switch (status.trim().toLowerCase()) {
-            case "active" -> true;
-            case "inactive" -> false;
-            default -> null;
-        };
+        Boolean statusFilter = null;
+        if (status != null && !status.isBlank()) {
+            statusFilter = switch (status.trim().toLowerCase()) {
+                case "active" -> true;
+                case "inactive" -> false;
+                default -> null;
+            };
+        }
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, statusFilter, resolvedPageable);
     }
 
     @Transactional
