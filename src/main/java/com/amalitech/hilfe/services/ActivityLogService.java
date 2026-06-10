@@ -22,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
+import com.amalitech.hilfe.models.User;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ActivityLogService {
     private static final String SUBJECT_INCIDENT = "INCIDENT";
+    private static final String UNKNOWN = "Unknown";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -95,6 +97,24 @@ public class ActivityLogService {
             String previousRoleCode,
             String newRoleCode
     ) {
+        doLogUserRoleChange(actorUserId, targetUserId, previousRoleCode, newRoleCode);
+    }
+
+    public void logUserRoleChange(
+            String actorUserId,
+            String targetUserId,
+            RoleCode previousRoleCode,
+            RoleCode newRoleCode
+    ) {
+        doLogUserRoleChange(
+                actorUserId,
+                targetUserId,
+                previousRoleCode == null ? null : previousRoleCode.name(),
+                newRoleCode == null ? null : newRoleCode.name()
+        );
+    }
+
+    private void doLogUserRoleChange(String actorUserId, String targetUserId, String previousRoleCode, String newRoleCode) {
         try {
             String actorName = resolveUserName(actorUserId);
             String targetName = resolveUserName(targetUserId);
@@ -112,20 +132,6 @@ public class ActivityLogService {
         }
     }
 
-    public void logUserRoleChange(
-            String actorUserId,
-            String targetUserId,
-            RoleCode previousRoleCode,
-            RoleCode newRoleCode
-    ) {
-        logUserRoleChange(
-                actorUserId,
-                targetUserId,
-                previousRoleCode == null ? null : previousRoleCode.name(),
-                newRoleCode == null ? null : newRoleCode.name()
-        );
-    }
-
     private String buildRoleChangeDescription(String actorName, String targetName, String previousRoleCode, String newRoleCode) {
         return actorName + " changed role for " + targetName + " from " + formatRole(previousRoleCode)
                 + " to " + formatRole(newRoleCode);
@@ -139,12 +145,16 @@ public class ActivityLogService {
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logIncidentStatusChange(String actorUserId, String incidentId, String previousStatus, String newStatus) {
-        logIncidentStatusChange(actorUserId, incidentId, previousStatus, newStatus, null);
+        doLogIncidentStatusChange(actorUserId, incidentId, previousStatus, newStatus, null);
     }
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logIncidentStatusChange(String actorUserId, String incidentId, String previousStatus, String newStatus, String reason) {
+        doLogIncidentStatusChange(actorUserId, incidentId, previousStatus, newStatus, reason);
+    }
+
+    private void doLogIncidentStatusChange(String actorUserId, String incidentId, String previousStatus, String newStatus, String reason) {
         try {
             String actorName = resolveUserName(actorUserId);
             String incidentLabel = resolveIncidentLabel(incidentId);
@@ -316,17 +326,17 @@ public class ActivityLogService {
     }
 
     private String resolveAgentGroupName(String agentGroupId) {
-        if (agentGroupId == null) return "Unknown";
+        if (agentGroupId == null) return UNKNOWN;
         return agentGroupRepository.findById(agentGroupId)
                 .map(g -> g.getName())
-                .orElse("Unknown");
+                .orElse(UNKNOWN);
     }
 
     private String resolveUserName(String userId) {
-        if (userId == null) return "Unknown";
+        if (userId == null) return UNKNOWN;
         return userRepository.findById(userId)
-                .map(u -> u.getFullName())
-                .orElse("Unknown");
+                .map(User::getFullName)
+                .orElse(UNKNOWN);
     }
 
     private String resolveIncidentLabel(String incidentId) {
@@ -337,10 +347,10 @@ public class ActivityLogService {
     }
 
     private String resolveAgentName(String agentId) {
-        if (agentId == null) return "Unknown";
+        if (agentId == null) return UNKNOWN;
         return agentRepository.findByIdWithUser(agentId)
-                .map(a -> a.getUser() != null ? a.getUser().getFullName() : "Unknown")
-                .orElse("Unknown");
+                .map(a -> a.getUser() != null ? a.getUser().getFullName() : UNKNOWN)
+                .orElse(UNKNOWN);
     }
 
     private String formatRole(String roleCode) {
