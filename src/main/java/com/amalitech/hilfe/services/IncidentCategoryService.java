@@ -24,6 +24,12 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class IncidentCategoryService {
+    private static final String STATUS_ACTIVE = "active";
+    private static final String STATUS_INACTIVE = "inactive";
+    private static final String CATEGORY_NOT_FOUND = "Incident category not found";
+    private static final String TOPIC_NOT_FOUND = "Incident topic not found";
+    private static final String TOPIC_NOT_FOUND_AFTER_UPDATE = "Incident topic not found after update";
+
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
     private final AgentGroupRepository agentGroupRepository;
@@ -32,7 +38,7 @@ public class IncidentCategoryService {
     private final EntityManager entityManager;
 
     public Page<IncidentCategoryResponse> listCategories(String status, String query, Pageable pageable) {
-        String resolvedStatus = (status == null || status.isBlank()) ? "active" : status.toLowerCase();
+        String resolvedStatus = (status == null || status.isBlank()) ? STATUS_ACTIVE : status.toLowerCase();
         String queryPattern = buildQueryPattern(query);
         return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
                 .map(IncidentCategoryResponse::from);
@@ -79,7 +85,7 @@ public class IncidentCategoryService {
         String description = request.description() == null ? null : request.description().trim();
 
         IncidentCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
 
         if (name != null && !name.isBlank()) {
             if (!category.getName().equalsIgnoreCase(name)
@@ -105,8 +111,8 @@ public class IncidentCategoryService {
     @Transactional
     public IncidentCategoryResponse updateCategoryStatus(String id, Boolean status) {
         IncidentCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
-        category.setStatus(Boolean.TRUE.equals(status) ? "active" : "inactive");
+                .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
+        category.setStatus(Boolean.TRUE.equals(status) ? STATUS_ACTIVE : STATUS_INACTIVE);
         categoryRepository.save(category);
         return IncidentCategoryResponse.from(category);
     }
@@ -114,7 +120,7 @@ public class IncidentCategoryService {
     public List<IncidentTopicResponse> listTopicsByCategory(String categoryId, String status) {
         String resolvedStatus = normalizeTopicStatus(status);
         if (!categoryRepository.existsById(categoryId)) {
-            throw new ArmsAuthException("Incident category not found", 404);
+            throw new ArmsAuthException(CATEGORY_NOT_FOUND, 404);
         }
         return typeRepository.findByCategoryIdWithAgentAndStatus(categoryId, resolvedStatus).stream()
                 .map(IncidentTopicResponse::from)
@@ -174,7 +180,7 @@ public class IncidentCategoryService {
 
         IncidentCategory category = findActiveCategory(categoryId);
         IncidentType topic = typeRepository.findById(topicId)
-                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND, 404));
         if (!categoryId.equals(topic.getCategoryId())) {
             throw new ArmsAuthException("Incident topic not found in category", 404);
         }
@@ -201,7 +207,7 @@ public class IncidentCategoryService {
         entityManager.flush();
         entityManager.clear();
         return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
-                .orElseThrow(() -> new ArmsAuthException("Incident topic not found after update", 500)));
+                .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_AFTER_UPDATE, 500)));
     }
 
     @Transactional
@@ -210,9 +216,9 @@ public class IncidentCategoryService {
         String description = request.description() == null ? null : request.description().trim();
 
         IncidentType topic = typeRepository.findById(topicId)
-                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND, 404));
         IncidentCategory category = categoryRepository.findById(topic.getCategoryId())
-                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
 
         if (name != null && !name.isBlank()) {
             if (!topic.getName().equalsIgnoreCase(name)
@@ -236,14 +242,14 @@ public class IncidentCategoryService {
         entityManager.flush();
         entityManager.clear();
         return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
-                .orElseThrow(() -> new ArmsAuthException("Incident topic not found after update", 500)));
+                .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_AFTER_UPDATE, 500)));
     }
 
     @Transactional
     public IncidentTopicResponse updateTopicStatus(String topicId, Boolean status) {
         IncidentType topic = typeRepository.findById(topicId)
-                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
-        String target = Boolean.TRUE.equals(status) ? "active" : "inactive";
+                .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND, 404));
+        String target = Boolean.TRUE.equals(status) ? STATUS_ACTIVE : STATUS_INACTIVE;
         if (target.equalsIgnoreCase(topic.getStatus())) {
             throw new ArmsAuthException(
                     Boolean.TRUE.equals(status) ? "Incident topic is already active"
@@ -254,16 +260,16 @@ public class IncidentCategoryService {
         entityManager.flush();
         entityManager.clear();
         return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(topicId)
-                .orElseThrow(() -> new ArmsAuthException("Incident topic not found after update", 500)));
+                .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_AFTER_UPDATE, 500)));
     }
 
     @Transactional
     public void deleteTopic(String categoryId, String topicId) {
         if (!categoryRepository.existsById(categoryId)) {
-            throw new ArmsAuthException("Incident category not found", 404);
+            throw new ArmsAuthException(CATEGORY_NOT_FOUND, 404);
         }
         IncidentType topic = typeRepository.findById(topicId)
-                .orElseThrow(() -> new ArmsAuthException("Incident topic not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND, 404));
         if (!categoryId.equals(topic.getCategoryId())) {
             throw new ArmsAuthException("Incident topic not found in category", 404);
         }
@@ -291,8 +297,8 @@ public class IncidentCategoryService {
 
     private IncidentCategory findActiveCategory(String categoryId) {
         return categoryRepository.findById(categoryId)
-                .filter(category -> "active".equalsIgnoreCase(category.getStatus()))
-                .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
+                .filter(category -> STATUS_ACTIVE.equalsIgnoreCase(category.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
     }
 
     private String normalizeTopicStatus(String status) {
@@ -300,7 +306,7 @@ public class IncidentCategoryService {
             return null;
         }
         String value = status.trim().toLowerCase();
-        if (!"active".equals(value) && !"inactive".equals(value)) {
+        if (!STATUS_ACTIVE.equals(value) && !STATUS_INACTIVE.equals(value)) {
             throw new ArmsAuthException("Invalid status. Allowed values are active, inactive, or all", 400);
         }
         return value;
@@ -309,7 +315,7 @@ public class IncidentCategoryService {
     private String resolveStateFilter(String state) {
         if (state == null || state.isBlank() || "all".equalsIgnoreCase(state)) return null;
         String lower = state.toLowerCase();
-        if (!"active".equals(lower) && !"inactive".equals(lower)) {
+        if (!STATUS_ACTIVE.equals(lower) && !STATUS_INACTIVE.equals(lower)) {
             throw new ArmsAuthException("Invalid state filter. Allowed values are active, inactive, or all", 400);
         }
         return lower;

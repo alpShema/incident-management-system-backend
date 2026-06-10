@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.models.RoleCode;
@@ -60,7 +61,7 @@ public class AssignedIncidentsController {
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 principal.userId(), parseRoleCode(principal.roleCode()),
                 query,
-                statusId, severityId, incidentTypeId, categoryId, locationId,
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         );
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(result)));

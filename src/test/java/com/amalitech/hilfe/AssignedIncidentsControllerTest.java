@@ -19,6 +19,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -54,7 +55,7 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_adminAuth_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -67,7 +68,7 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_agentAuth_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -96,7 +97,7 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_keywordOnly_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -109,7 +110,7 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_filterOnly_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -122,7 +123,7 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_combinedKeywordAndFilter_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -138,7 +139,7 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_emptyResult_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(IncidentFilterParams.class), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -152,7 +153,7 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_noParamsAuthenticated_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), any(IncidentFilterParams.class), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         var auth = new UsernamePasswordAuthenticationToken(

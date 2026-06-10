@@ -23,6 +23,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class DepartmentService {
+    private static final String STATUS_ACTIVE = "active";
+
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
@@ -88,7 +90,7 @@ public class DepartmentService {
     public DepartmentResponse updateDepartmentStatus(String id, Boolean status) {
         Department department = findDepartmentByIdOrThrow(id);
 
-        if (Boolean.valueOf(status).equals(department.getStatus())) {
+        if (status.equals(department.getStatus())) {
             throw new ArmsAuthException(
                     Boolean.TRUE.equals(status)
                             ? "Department is already active"
@@ -102,7 +104,7 @@ public class DepartmentService {
 
     public List<IncidentCategoryResponse> listCategories(String departmentId) {
         findDepartmentByIdOrThrow(departmentId);
-        return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, "active").stream()
+        return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, STATUS_ACTIVE).stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
     }
@@ -130,7 +132,7 @@ public class DepartmentService {
     }
 
     private DepartmentResponse toResponse(Department department) {
-        long categoryCount = categoryRepository.findByDepartmentIdAndStatus(department.getId(), "active").size();
+        long categoryCount = categoryRepository.findByDepartmentIdAndStatus(department.getId(), STATUS_ACTIVE).size();
         return DepartmentResponse.from(department, categoryCount);
     }
 
@@ -147,7 +149,7 @@ public class DepartmentService {
 
     private IncidentCategory findCategory(String categoryId) {
         return categoryRepository.findById(categoryId)
-                .filter(category -> "active".equalsIgnoreCase(category.getStatus()))
+                .filter(category -> STATUS_ACTIVE.equalsIgnoreCase(category.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
     }
 }

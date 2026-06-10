@@ -21,6 +21,18 @@ import java.util.*;
 public class IncidentService {
 
     private static final String DEFAULT_PRIORITY_NAME = "Low";
+    private static final String STATUS_OPEN = "status-open";
+    private static final String STATUS_PENDING = "status-pending";
+    private static final String STATUS_RESOLVED = "status-resolved";
+    private static final String STATUS_CLOSED = "status-closed";
+    private static final String STATUS_REOPENED = "status-reopened";
+    private static final String ROLE_AGENT = "AGENT";
+    private static final String ROLE_CLIENT = "CLIENT";
+    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
+    private static final String SORT_CREATED_AT = "createdAt";
+    private static final String STATUS_NAME_IN_PROGRESS = "In Progress";
+    private static final String IN_PROGRESS_NOT_CONFIGURED = "Default 'In Progress' status not configured";
 
     // Frontend sort alias → JPA field path
     private static final Map<String, String> SORT_FIELD_ALIASES = Map.of(
@@ -31,15 +43,15 @@ public class IncidentService {
     // from-status-id → to-status-id → roles permitted to make that transition
     private static final Map<String, Map<String, Set<String>>> VALID_TRANSITIONS = Map.of(
             "status-in-progress", Map.of(
-                    "status-pending",  Set.of("AGENT"),
-                    "status-resolved", Set.of("AGENT")
+                    STATUS_PENDING,  Set.of(ROLE_AGENT),
+                    STATUS_RESOLVED, Set.of(ROLE_AGENT)
             ),
-            "status-pending", Map.of(
-                    "status-in-progress", Set.of("AGENT")
+            STATUS_PENDING, Map.of(
+                    "status-in-progress", Set.of(ROLE_AGENT)
             ),
-            "status-resolved", Map.of(
-                    "status-closed",   Set.of("CLIENT"),
-                    "status-reopened", Set.of("CLIENT")
+            STATUS_RESOLVED, Map.of(
+                    STATUS_CLOSED,   Set.of(ROLE_CLIENT),
+                    STATUS_REOPENED, Set.of(ROLE_CLIENT)
             )
     );
 
@@ -200,7 +212,7 @@ public class IncidentService {
         }
 
         Pageable sortedPageable = pageable.isUnpaged()
-                ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"))
+                ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, SORT_CREATED_AT))
                 : ensureSorted(pageable);
 
         return slaService.toIncidentResponsePage(incidentRepository
@@ -238,8 +250,8 @@ public class IncidentService {
         String previousStatusName = incident.getStatus() != null ? incident.getStatus().getName() : "none";
         incident.setStatusId(request.statusId());
         incident.setStatusReason(requiresReason(newStatus) ? request.reason() : null);
-        incident.setResolvedAt("status-resolved".equals(newStatus.getId()) ? Instant.now() : null);
-        incident.setClosedAt("status-closed".equals(newStatus.getId()) ? Instant.now() : null);
+        incident.setResolvedAt(STATUS_RESOLVED.equals(newStatus.getId()) ? Instant.now() : null);
+        incident.setClosedAt(STATUS_CLOSED.equals(newStatus.getId()) ? Instant.now() : null);
 
         incidentRepository.save(incident);
         slaService.onStatusChanged(incident, previousStatusId, request.statusId());
@@ -298,7 +310,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
 
         String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
-        boolean isAdmin = "ADMIN".equals(normalizedRole) || "SUPER_ADMIN".equals(normalizedRole);
+        boolean isAdmin = ROLE_ADMIN.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole);
         if (!isAdmin) {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
             if (!actorUserId.equals(assignedAgentUserId)) {
@@ -323,8 +335,8 @@ public class IncidentService {
 
         incident.setAssignedToId(request.agentId());
 
-        String inProgressStatusId = statusRepository.findByNameIgnoreCase("In Progress")
-                .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
+        String inProgressStatusId = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
                 .getId();
         incident.setStatusId(inProgressStatusId);
 
@@ -370,9 +382,9 @@ public class IncidentService {
                     ? Pageable.unpaged(translated)
                     : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), translated);
         }
-        if (pageable.isUnpaged()) return Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (pageable.isUnpaged()) return Pageable.unpaged(Sort.by(Sort.Direction.DESC, SORT_CREATED_AT));
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+                Sort.by(Sort.Direction.DESC, SORT_CREATED_AT));
     }
 
     private Sort translateSort(Sort sort) {
@@ -385,13 +397,13 @@ public class IncidentService {
     }
 
     private void enforceAccess(String userId, String roleCode, Incident incident) {
-        if ("ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) {
+        if (ROLE_ADMIN.equalsIgnoreCase(roleCode) || ROLE_SUPER_ADMIN.equalsIgnoreCase(roleCode)) {
             return;
         }
         if (userId.equals(incident.getUserId())) {
             return;
         }
-        if ("AGENT".equalsIgnoreCase(roleCode) && isSameDepartmentAsAssignedAgent(userId, incident)) {
+        if (ROLE_AGENT.equalsIgnoreCase(roleCode) && isSameDepartmentAsAssignedAgent(userId, incident)) {
             return;
         }
         throw new ArmsAuthException("You do not have access to this incident", 403);
@@ -401,52 +413,60 @@ public class IncidentService {
         if (incidentType != null
                 && incidentType.getAgentGroupId() != null
                 && !incidentType.getAgentGroupId().isBlank()) {
-            AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
-                    .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
-
-            if (!Boolean.TRUE.equals(agentGroup.getStatus())) {
-                incident.setStatusId("status-open");
-                return;
-            }
-
-            Agent assignedAgent = findAvailableAgentInGroup(agentGroup, incident.getLocationId(), creatorAgentId);
-            if (assignedAgent != null) {
-                assignedAgent.setLastAssignedAt(Instant.now());
-                agentRepository.save(assignedAgent);
-                incident.setAssignedToId(assignedAgent.getId());
-                incident.setStatusId(statusRepository.findByNameIgnoreCase("In Progress")
-                        .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
-                        .getId());
-                if (creatorAgentId != null) {
-                    activityLogService.logSelfAssignmentPrevented(incident.getId(), creatorAgentId, assignedAgent.getId());
-                }
-            } else {
-                incident.setStatusId("status-open");
-                if (creatorAgentId != null) {
-                    activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
-                }
-            }
+            assignViaAgentGroup(incident, incidentType, creatorAgentId);
             return;
         }
         if (incidentType != null && incidentType.getAgentId() != null && !incidentType.getAgentId().isBlank()) {
-            boolean isSelf = incidentType.getAgentId().equals(creatorAgentId);
-            Agent agent = isSelf ? null : agentRepository.findById(incidentType.getAgentId()).orElse(null);
-            if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
-                agent.setLastAssignedAt(Instant.now());
-                agentRepository.save(agent);
-                incident.setAssignedToId(incidentType.getAgentId());
-                incident.setStatusId(statusRepository.findByNameIgnoreCase("In Progress")
-                        .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500))
-                        .getId());
-            } else {
-                incident.setStatusId("status-open");
-                if (isSelf) {
-                    activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
-                }
-            }
+            assignViaSingleAgent(incident, incidentType, creatorAgentId);
             return;
         }
-        incident.setStatusId("status-open");
+        incident.setStatusId(STATUS_OPEN);
+    }
+
+    private void assignViaAgentGroup(Incident incident, IncidentType incidentType, String creatorAgentId) {
+        AgentGroup agentGroup = agentGroupRepository.findById(incidentType.getAgentGroupId())
+                .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
+
+        if (!Boolean.TRUE.equals(agentGroup.getStatus())) {
+            incident.setStatusId(STATUS_OPEN);
+            return;
+        }
+
+        Agent assignedAgent = findAvailableAgentInGroup(agentGroup, incident.getLocationId(), creatorAgentId);
+        if (assignedAgent != null) {
+            assignedAgent.setLastAssignedAt(Instant.now());
+            agentRepository.save(assignedAgent);
+            incident.setAssignedToId(assignedAgent.getId());
+            incident.setStatusId(statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
+                    .getId());
+            if (creatorAgentId != null) {
+                activityLogService.logSelfAssignmentPrevented(incident.getId(), creatorAgentId, assignedAgent.getId());
+            }
+        } else {
+            incident.setStatusId(STATUS_OPEN);
+            if (creatorAgentId != null) {
+                activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
+            }
+        }
+    }
+
+    private void assignViaSingleAgent(Incident incident, IncidentType incidentType, String creatorAgentId) {
+        boolean isSelf = incidentType.getAgentId().equals(creatorAgentId);
+        Agent agent = isSelf ? null : agentRepository.findById(incidentType.getAgentId()).orElse(null);
+        if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
+            agent.setLastAssignedAt(Instant.now());
+            agentRepository.save(agent);
+            incident.setAssignedToId(incidentType.getAgentId());
+            incident.setStatusId(statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
+                    .getId());
+        } else {
+            incident.setStatusId(STATUS_OPEN);
+            if (isSelf) {
+                activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
+            }
+        }
     }
 
     private Agent findAvailableAgentInGroup(AgentGroup agentGroup, String locationId, String excludeAgentId) {
@@ -501,8 +521,8 @@ public class IncidentService {
     }
 
     private void applyReopenTransition(String actorUserId, Incident incident, String incidentId) {
-        Status inProgressStatus = statusRepository.findByNameIgnoreCase("In Progress")
-                .orElseThrow(() -> new ArmsAuthException("Default 'In Progress' status not configured", 500));
+        Status inProgressStatus = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500));
 
         String previousAgentId = incident.getAssignedToId();
         if (previousAgentId != null) {
@@ -517,7 +537,7 @@ public class IncidentService {
         incident.setStatusId(inProgressStatus.getId());
         incident.setResolvedAt(null);
         incidentRepository.save(incident);
-        activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", "In Progress");
+        activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", STATUS_NAME_IN_PROGRESS);
         if (incident.getAssignedToId() == null && previousAgentId != null) {
             activityLogService.logIncidentUnassignment(actorUserId, incidentId, previousAgentId);
         }
@@ -529,7 +549,7 @@ public class IncidentService {
     }
 
     private boolean requiresReason(Status newStatus) {
-        return "status-pending".equals(newStatus.getId()) || "status-reopened".equals(newStatus.getId());
+        return STATUS_PENDING.equals(newStatus.getId()) || STATUS_REOPENED.equals(newStatus.getId());
     }
 
     private void enforceReasonRequired(Status newStatus, String reason) {
@@ -566,14 +586,14 @@ public class IncidentService {
     private String resolveAgentUserId(String assignedToId) {
         if (assignedToId == null) return null;
         return agentRepository.findById(assignedToId)
-                .map(a -> a.getUserId())
+                .map(Agent::getUserId)
                 .orElse(null);
     }
 
     private String resolveActorName(String userId) {
         if (userId == null) return "System";
         return userRepository.findById(userId)
-                .map(u -> u.getFullName())
+                .map(User::getFullName)
                 .orElse("Deactivated User");
     }
 
@@ -589,7 +609,7 @@ public class IncidentService {
     }
 
     private void enforceReopenWindow(Incident incident, Status newStatus) {
-        if (!"status-reopened".equals(newStatus.getId())) return;
+        if (!STATUS_REOPENED.equals(newStatus.getId())) return;
         if (incident.getResolvedAt() == null) return;
 
         int windowHours = autoCloseService.readDurationHours();
@@ -611,7 +631,7 @@ public class IncidentService {
         }
 
         // Admins and super-admins may force-close any incident regardless of current status
-        if (("ADMIN".equals(normalizedRole) || "SUPER_ADMIN".equals(normalizedRole)) && "status-closed".equals(toId)) {
+        if ((ROLE_ADMIN.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole)) && STATUS_CLOSED.equals(toId)) {
             return;
         }
 
@@ -619,7 +639,7 @@ public class IncidentService {
         // regardless of their base role. A creator agent loses agent-only transitions
         // (e.g. Pending, Resolved) and gains client-only transitions (e.g. Closed, Reopened).
         boolean isCreator = actorUserId != null && actorUserId.equals(incident.getUserId());
-        String effectiveRole = isCreator ? "CLIENT" : normalizedRole;
+        String effectiveRole = isCreator ? ROLE_CLIENT : normalizedRole;
 
         Map<String, Set<String>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
 
@@ -640,7 +660,7 @@ public class IncidentService {
 
         // For agent-level transitions, verify the actor is the assigned agent on this incident.
         // Role permission alone is not enough — only the assigned agent may act.
-        if ("AGENT".equals(effectiveRole)) {
+        if (ROLE_AGENT.equals(effectiveRole)) {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
             if (!actorUserId.equals(assignedAgentUserId)) {
                 throw new ArmsAuthException(
