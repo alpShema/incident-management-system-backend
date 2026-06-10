@@ -29,6 +29,21 @@ public class AgentGroupController {
     private final AgentGroupService agentGroupService;
 
     @Operation(
+            summary = "List agent groups by category",
+            description = "Returns active agent groups that belong to the same department as the given category. "
+                    + "Intended for populating the agent group dropdown during topic creation or editing. "
+                    + "Returns an empty list if the category's department has no active agent groups. "
+                    + "Requires `agent-group.read` permission."
+    )
+    @GetMapping("/by-category/{categoryId}")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
+    public ResponseEntity<ApiResponse<List<LookupResponse>>> listAgentGroupsByCategory(@PathVariable String categoryId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Agent groups retrieved successfully",
+                agentGroupService.listAgentGroupsByCategory(categoryId)));
+    }
+
+    @Operation(
             summary = "List agent groups",
             description = "Returns active agent groups as a paginated response. Each agent group belongs to one internal department. "
                     + "Accepts an optional `query` keyword that searches across name, description, and department name. "

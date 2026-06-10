@@ -14,6 +14,7 @@ import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class AgentGroupService {
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final DepartmentRepository departmentRepository;
+    private final IncidentCategoryRepository incidentCategoryRepository;
     private final IncidentTypeRepository incidentTypeRepository;
     private final ActivityLogService activityLogService;
 
@@ -49,6 +51,15 @@ public class AgentGroupService {
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
         return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId, pageable)
                 .map(this::toResponse);
+    }
+
+    public List<LookupResponse> listAgentGroupsByCategory(String categoryId) {
+        String departmentId = incidentCategoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ArmsAuthException("Category not found", 404))
+                .getDepartmentId();
+        return agentGroupRepository.findByDepartmentIdAndStatus(departmentId, true).stream()
+                .map(ag -> LookupResponse.from(ag.getId(), ag.getName()))
+                .toList();
     }
 
     private boolean resolveStatusFilter(String status) {
