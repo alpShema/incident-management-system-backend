@@ -72,6 +72,16 @@ public class LocationService {
         return LocationResponse.from(locationRepository.save(location));
     }
 
+    @Transactional
+    public LocationResponse reactivateLocation(String id) {
+        Location location = findById(id);
+        if (Boolean.TRUE.equals(location.getStatus())) {
+            throw new ArmsAuthException("Location is already active", 409);
+        }
+        location.setStatus(true);
+        return LocationResponse.from(locationRepository.save(location));
+    }
+
     private Location findById(String id) {
         return locationRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("Location not found", 404));
