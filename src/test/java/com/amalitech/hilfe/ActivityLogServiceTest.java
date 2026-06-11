@@ -5,10 +5,12 @@ import com.amalitech.hilfe.models.ActivityLog;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import org.junit.jupiter.api.AfterEach;
@@ -42,6 +44,7 @@ class ActivityLogServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
     @Mock AgentGroupRepository agentGroupRepository;
+    @Mock RoleRepository roleRepository;
     @InjectMocks ActivityLogService activityLogService;
 
     @AfterEach
@@ -159,6 +162,8 @@ class ActivityLogServiceTest {
     void logUserRoleChange_savesActivityLogWithCorrectAction() {
         when(userRepository.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").fullName("Alice").build()));
         when(userRepository.findById("target")).thenReturn(Optional.of(User.builder().id("target").fullName("Bob").build()));
+        when(roleRepository.findByCode("CLIENT")).thenReturn(Optional.of(Role.builder().id("r1").code("CLIENT").name("Client").build()));
+        when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(Role.builder().id("r2").code("AGENT").name("Agent").build()));
         when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(inv -> inv.getArgument(0));
 
         activityLogService.logUserRoleChange("actor", "target", "CLIENT", "AGENT");
@@ -166,7 +171,8 @@ class ActivityLogServiceTest {
         ArgumentCaptor<ActivityLog> captor = ArgumentCaptor.forClass(ActivityLog.class);
         verify(activityLogRepository).save(captor.capture());
         assertThat(captor.getValue().getAction()).isEqualTo("ROLE_CHANGED");
-        assertThat(captor.getValue().getDescription()).contains("Alice").contains("Bob").contains("CLIENT").contains("AGENT");
+        assertThat(captor.getValue().getDescription()).contains("Alice").contains("Bob").contains("Client").contains("Agent");
+        assertThat(captor.getValue().getMetadata()).contains("CLIENT").contains("AGENT");
     }
 
     // ── logIncidentStatusChange ──────────────────────────────────────────────
