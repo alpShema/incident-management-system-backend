@@ -5,10 +5,12 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.ActivityLog;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import org.springframework.security.core.Authentication;
@@ -37,6 +39,7 @@ public class ActivityLogService {
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupRepository agentGroupRepository;
+    private final RoleRepository roleRepository;
 
     public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
         Pageable sortedPageable = pageable.getSort().isSorted()
@@ -118,13 +121,15 @@ public class ActivityLogService {
         try {
             String actorName = resolveUserName(actorUserId);
             String targetName = resolveUserName(targetUserId);
+            String previousRoleName = resolveRoleName(previousRoleCode);
+            String newRoleName = resolveRoleName(newRoleCode);
             activityLogRepository.save(ActivityLog.builder()
                     .actorUserId(actorUserId)
                     .targetUserId(targetUserId)
                     .action("ROLE_CHANGED")
                     .subjectType("USER")
                     .subjectId(targetUserId)
-                    .description(buildRoleChangeDescription(actorName, targetName, previousRoleCode, newRoleCode))
+                    .description(buildRoleChangeDescription(actorName, targetName, previousRoleName, newRoleName))
                     .metadata(buildRoleChangeMetadata(previousRoleCode, newRoleCode))
                     .build());
         } catch (RuntimeException exception) {
@@ -132,14 +137,14 @@ public class ActivityLogService {
         }
     }
 
-    private String buildRoleChangeDescription(String actorName, String targetName, String previousRoleCode, String newRoleCode) {
-        return actorName + " changed role for " + targetName + " from " + formatRole(previousRoleCode)
-                + " to " + formatRole(newRoleCode);
+    private String buildRoleChangeDescription(String actorName, String targetName, String previousRoleName, String newRoleName) {
+        return actorName + " changed role for " + targetName + " from " + previousRoleName
+                + " to " + newRoleName;
     }
 
     private String buildRoleChangeMetadata(String previousRoleCode, String newRoleCode) {
-        return "{\"previousRoleCode\":\"" + formatRole(previousRoleCode)
-                + "\",\"newRoleCode\":\"" + formatRole(newRoleCode) + "\"}";
+        return "{\"previousRoleCode\":\"" + (previousRoleCode == null ? "null" : previousRoleCode)
+                + "\",\"newRoleCode\":\"" + (newRoleCode == null ? "null" : newRoleCode) + "\"}";
     }
 
     @Async("applicationTaskExecutor")
@@ -353,7 +358,10 @@ public class ActivityLogService {
                 .orElse(UNKNOWN);
     }
 
-    private String formatRole(String roleCode) {
-        return roleCode == null ? "null" : roleCode;
+    private String resolveRoleName(String roleCode) {
+        if (roleCode == null) return "null";
+        return roleRepository.findByCode(roleCode)
+                .map(Role::getName)
+                .orElse(roleCode);
     }
 }
