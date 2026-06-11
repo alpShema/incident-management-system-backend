@@ -20,9 +20,9 @@ public class LocationService {
 
     private final LocationRepository locationRepository;
 
-    public PageResponse<LocationResponse> listLocations(String name, Boolean status, Pageable pageable) {
+    public PageResponse<LocationResponse> listLocations(String query, Boolean status, Pageable pageable) {
         return PageResponse.from(
-                locationRepository.findFiltered(name != null ? "%" + name.toLowerCase() + "%" : null, status, pageable)
+                locationRepository.findFiltered(query != null ? "%" + query.toLowerCase() + "%" : null, status, pageable)
                         .map(LocationResponse::from)
         );
     }
