@@ -80,7 +80,12 @@ public class DashboardService {
                 List<MonthlyCount> myTrend = agentOpt
                         .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgentCombined(agent.getId(), userId, trendSince)))
                         .orElse(List.of());
-                trends = List.of(new TrendSeries("My Incidents", myTrend));
+                List<MonthlyCount> assignedTrend = agentOpt
+                        .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
+                        .orElse(List.of());
+                trends = List.of(
+                        new TrendSeries("My Incidents", myTrend),
+                        new TrendSeries("My Assigned Incidents", assignedTrend));
             }
             default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
         }

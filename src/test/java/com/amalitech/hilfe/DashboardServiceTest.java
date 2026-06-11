@@ -144,11 +144,13 @@ class DashboardServiceTest {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(incidentRepository.countByStatusForAgentCombined("agent-1", "user-1")).thenReturn(List.of());
         when(incidentRepository.countByMonthForAgentCombined(eq("agent-1"), eq("user-1"), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
-        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends()).hasSize(2);
         assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
+        assertThat(charts.trends().get(1).label()).isEqualTo("My Assigned Incidents");
     }
 
     @Test
@@ -158,8 +160,11 @@ class DashboardServiceTest {
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
         assertThat(charts.byStatus()).isEmpty();
-        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends()).hasSize(2);
+        assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
         assertThat(charts.trends().get(0).data()).isEmpty();
+        assertThat(charts.trends().get(1).label()).isEqualTo("My Assigned Incidents");
+        assertThat(charts.trends().get(1).data()).isEmpty();
     }
 
     @Test
