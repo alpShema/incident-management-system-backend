@@ -75,6 +75,25 @@ public class AgentController {
     }
 
     @Operation(
+            summary = "Get agent availability status",
+            description = "Returns the current availability status of the logged-in agent."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Agent not found")
+    @GetMapping("/status")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_AVAILABILITY_UPDATE + "')")
+    public ResponseEntity<ApiResponse<AgentResponse>> getStatus(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Status retrieved",
+                agentService.getStatus(principal.userId())
+        ));
+    }
+
+    @Operation(
             summary = "Update agent availability",
             description = "Allows an agent to toggle their availability status on or off."
     )

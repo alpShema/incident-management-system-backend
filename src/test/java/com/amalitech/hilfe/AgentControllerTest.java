@@ -175,6 +175,46 @@ class AgentControllerTest {
         verify(agentService).listAgents(eq("dept-1"), eq("takoradi"), any());
     }
 
+    // ── GET /agents/status ────────────────────────────────────────────────────
+
+    @Test
+    void getStatus_agentAuth_returns200() throws Exception {
+        when(agentService.getStatus(anyString())).thenReturn(stubAgentResponse(true));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.availability.update"));
+
+        mvc.perform(get("/agents/status")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Status retrieved"))
+                .andExpect(jsonPath("$.data.status").value(true));
+    }
+
+    @Test
+    void getStatus_agentNotFound_returns404() throws Exception {
+        when(agentService.getStatus(anyString()))
+                .thenThrow(new ArmsAuthException("Agent not found", 404));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.availability.update"));
+
+        mvc.perform(get("/agents/status")
+                        .with(authentication(auth)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Agent not found"));
+    }
+
+    @Test
+    void getStatus_clientRole_returns403() throws Exception {
+        var auth = new UsernamePasswordAuthenticationToken(
+                clientPrincipal(), null, List.of(() -> "incident.create"));
+
+        mvc.perform(get("/agents/status")
+                        .with(authentication(auth)))
+                .andExpect(status().isForbidden());
+    }
+
     // ── PATCH /agents/status ──────────────────────────────────────────────────
 
     @Test

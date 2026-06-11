@@ -5,6 +5,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.PageImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -16,6 +17,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class AgentService {
+    private static final String AGENT_NOT_FOUND = "AGENT_NOT_FOUND";
+
     private final AgentRepository agentRepository;
     private final DepartmentRepository departmentRepository;
 
@@ -25,6 +28,11 @@ public class AgentService {
             return agentRepository.findAllActiveWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
         }
 
+        return getAgentResponses(departmentId, pageable, queryPattern);
+    }
+
+    @NonNull
+    private Page<AgentResponse> getAgentResponses(String departmentId, Pageable pageable, String queryPattern) {
         boolean activeDepartment = departmentRepository.findById(departmentId)
                 .map(department -> Boolean.TRUE.equals(department.getStatus()))
                 .orElse(false);
@@ -41,19 +49,17 @@ public class AgentService {
             return agentRepository.findAllWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
         }
 
-        boolean activeDepartment = departmentRepository.findById(departmentId)
-                .map(department -> Boolean.TRUE.equals(department.getStatus()))
-                .orElse(false);
-        if (!activeDepartment) {
-            return new PageImpl<>(List.of(), pageable, 0);
-        }
+        return getAgentResponses(departmentId, pageable, queryPattern);
+    }
 
-        return agentRepository.findByDepartmentIdWithUserAndQuery(departmentId, queryPattern, pageable).map(AgentResponse::from);
+    public AgentResponse getStatus(String userId) {
+        return AgentResponse.from(agentRepository.findByUserIdWithUser(userId)
+                .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404)));
     }
 
     public AgentResponse updateAvailability(String userId, boolean available) {
         Agent agent = agentRepository.findByUserIdWithUser(userId)
-                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404));
         agent.setStatus(available);
         agentRepository.save(agent);
         return AgentResponse.from(agent);
@@ -61,7 +67,7 @@ public class AgentService {
 
     public AgentResponse updateAvailabilityById(String agentId, boolean available) {
         Agent agent = agentRepository.findByIdWithUser(agentId)
-                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404));
         agent.setStatus(available);
         agentRepository.save(agent);
         return AgentResponse.from(agent);
