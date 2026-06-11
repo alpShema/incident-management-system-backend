@@ -52,14 +52,16 @@ class DashboardServiceTest {
     void getStats_adminRole_callsCountByStatusGlobal() {
         when(incidentRepository.countByStatusGlobal()).thenReturn(List.of(
                 new Object[]{"Open", 10L},
+                new Object[]{"In Progress", 3L},
                 new Object[]{"Closed", 5L},
                 new Object[]{"Resolved", 3L}
         ));
 
         DashboardStats stats = dashboardService.getStats("admin-1", RoleCode.ADMIN);
 
-        assertThat(stats.totalIncidents()).isEqualTo(18L);
+        assertThat(stats.totalIncidents()).isEqualTo(21L);
         assertThat(stats.openCount()).isEqualTo(10L);
+        assertThat(stats.inProgressCount()).isEqualTo(3L);
         assertThat(stats.closedCount()).isEqualTo(5L);
         assertThat(stats.resolvedCount()).isEqualTo(3L);
         verify(incidentRepository).countByStatusGlobal();
@@ -76,24 +78,26 @@ class DashboardServiceTest {
         DashboardStats stats = dashboardService.getStats("super-1", RoleCode.SUPER_ADMIN);
 
         assertThat(stats.totalIncidents()).isEqualTo(18L);
+        assertThat(stats.inProgressCount()).isZero();
         verify(incidentRepository).countByStatusGlobal();
     }
 
     @Test
-    void getStats_agentRole_agentFound_returnsAgentStats() {
+    void getStats_agentRole_agentFound_returnsCombinedStats() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of(
+        when(incidentRepository.countByStatusForAgentCombined("agent-1", "user-1")).thenReturn(List.of(
                 new Object[]{"Open", 4L},
+                new Object[]{"In Progress", 2L},
                 new Object[]{"Closed", 2L},
                 new Object[]{"Resolved", 1L}
         ));
-        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(7L);
 
         DashboardStats stats = dashboardService.getStats("user-1", RoleCode.AGENT);
 
-        assertThat(stats.totalIncidents()).isEqualTo(7L);
+        assertThat(stats.totalIncidents()).isEqualTo(9L);
         assertThat(stats.openCount()).isEqualTo(4L);
+        assertThat(stats.inProgressCount()).isEqualTo(2L);
         assertThat(stats.closedCount()).isEqualTo(2L);
         assertThat(stats.resolvedCount()).isEqualTo(1L);
     }
@@ -106,6 +110,7 @@ class DashboardServiceTest {
 
         assertThat(stats.totalIncidents()).isZero();
         assertThat(stats.openCount()).isZero();
+        assertThat(stats.inProgressCount()).isZero();
         assertThat(stats.closedCount()).isZero();
         assertThat(stats.resolvedCount()).isZero();
     }
@@ -134,16 +139,16 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
+    void getCharts_agentRole_agentFound_returnsCombinedTrendSeries() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of());
-        when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByStatusForAgentCombined("agent-1", "user-1")).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgentCombined(eq("agent-1"), eq("user-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
         assertThat(charts.trends()).hasSize(1);
-        assertThat(charts.trends().get(0).label()).isEqualTo("My Assigned Incidents");
+        assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
     }
 
     @Test

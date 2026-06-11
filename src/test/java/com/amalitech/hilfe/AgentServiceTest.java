@@ -17,7 +17,11 @@ import org.springframework.data.domain.PageRequest;
 import java.util.List;
 import java.util.Optional;
 
+import com.amalitech.hilfe.dto.AgentResponse;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -167,6 +171,29 @@ class AgentServiceTest {
 
         assertThat(result.getTotalElements()).isEqualTo(2);
         verify(agentRepository).findAllWithUserAndQuery("%farida%", pageable);
+    }
+
+    // ── getStatus ─────────────────────────────────────────────────────────────
+
+    @Test
+    void getStatus_returnsAgentResponse() {
+        when(agentRepository.findByUserIdWithUser("user-1"))
+                .thenReturn(Optional.of(agent("a1", true)));
+
+        AgentResponse result = agentService.getStatus("user-1");
+
+        assertThat(result.status()).isTrue();
+        assertThat(result.userId()).isEqualTo("user-a1");
+    }
+
+    @Test
+    void getStatus_agentNotFound_throws404() {
+        when(agentRepository.findByUserIdWithUser("user-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> agentService.getStatus("user-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
     }
 
     @Test
