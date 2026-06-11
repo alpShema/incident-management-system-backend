@@ -93,7 +93,9 @@ public class AgentGroupController {
     @Operation(
             summary = "Create an agent group",
             description = "Creates an agent group under an internal department. `departmentId` is required on create. "
-                    + "Optionally pass `agentIds` to bulk-add members immediately. Requires `agent-group.create` permission.",
+                    + "Optionally pass `agentIds` to bulk-add members immediately. "
+                    + "Optionally pass `topicIds` to assign incident topics to this group immediately. "
+                    + "Requires `agent-group.create` permission.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
                     content = @Content(
@@ -105,7 +107,8 @@ public class AgentGroupController {
                                               "name": "Facilities Support",
                                               "description": "Handles facilities-related incident routing",
                                               "departmentId": "dept-facilities",
-                                              "agentIds": ["agent-seed-001", "agent-seed-002"]
+                                              "agentIds": ["agent-seed-001", "agent-seed-002"],
+                                              "topicIds": ["topic-id-001"]
                                             }
                                             """
                             )
