@@ -29,6 +29,7 @@ public interface UserRepository extends JpaRepository<User, String> {
                         user.fullName,
                         user.profileImg,
                         user.roleCode,
+                        role.name,
                         user.status,
                         loc.name,
                         (SELECT COUNT(i) FROM Incident i WHERE i.userId = user.id),
@@ -37,6 +38,7 @@ public interface UserRepository extends JpaRepository<User, String> {
                     FROM User user
                     LEFT JOIN user.location loc
                     LEFT JOIN user.agent agent
+                    LEFT JOIN user.role role
                     """,
             countQuery = """
                     SELECT COUNT(user)
@@ -53,6 +55,7 @@ public interface UserRepository extends JpaRepository<User, String> {
                         user.fullName,
                         user.profileImg,
                         user.roleCode,
+                        role.name,
                         user.status,
                         loc.name,
                         (SELECT COUNT(i) FROM Incident i WHERE i.userId = user.id),
@@ -61,6 +64,7 @@ public interface UserRepository extends JpaRepository<User, String> {
                     FROM User user
                     LEFT JOIN user.location loc
                     LEFT JOIN user.agent agent
+                    LEFT JOIN user.role role
                     WHERE (:queryPattern IS NULL OR (
                         LOWER(user.fullName) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(user.email) LIKE :queryPattern ESCAPE '!'))
