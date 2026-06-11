@@ -21,7 +21,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -59,7 +58,7 @@ class LocationControllerTest {
     @Test
     void updateStatus_deactivate_returns200() throws Exception {
         LocationResponse updated = new LocationResponse("loc-1", "Accra", null, false, null);
-        when(locationService.updateStatus(eq("loc-1"), eq(false))).thenReturn(updated);
+        when(locationService.updateStatus("loc-1", false)).thenReturn(updated);
 
         mvc.perform(patch("/locations/loc-1/status")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -73,7 +72,7 @@ class LocationControllerTest {
     @Test
     void updateStatus_activate_returns200() throws Exception {
         LocationResponse updated = new LocationResponse("loc-1", "Accra", null, true, null);
-        when(locationService.updateStatus(eq("loc-1"), eq(true))).thenReturn(updated);
+        when(locationService.updateStatus("loc-1", true)).thenReturn(updated);
 
         mvc.perform(patch("/locations/loc-1/status")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -86,7 +85,7 @@ class LocationControllerTest {
 
     @Test
     void updateStatus_returns409WhenAlreadySameStatus() throws Exception {
-        when(locationService.updateStatus(eq("loc-1"), eq(true)))
+        when(locationService.updateStatus("loc-1", true))
                 .thenThrow(new ArmsAuthException("Location is already active", 409));
 
         mvc.perform(patch("/locations/loc-1/status")
@@ -98,7 +97,7 @@ class LocationControllerTest {
 
     @Test
     void updateStatus_returns404WhenNotFound() throws Exception {
-        when(locationService.updateStatus(eq("loc-999"), eq(false)))
+        when(locationService.updateStatus("loc-999", false))
                 .thenThrow(new ArmsAuthException("Location not found", 404));
 
         mvc.perform(patch("/locations/loc-999/status")

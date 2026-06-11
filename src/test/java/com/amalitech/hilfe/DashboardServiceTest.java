@@ -104,10 +104,10 @@ class DashboardServiceTest {
 
         DashboardStats stats = dashboardService.getStats("user-1", RoleCode.AGENT);
 
-        assertThat(stats.totalIncidents()).isEqualTo(0L);
-        assertThat(stats.openCount()).isEqualTo(0L);
-        assertThat(stats.closedCount()).isEqualTo(0L);
-        assertThat(stats.resolvedCount()).isEqualTo(0L);
+        assertThat(stats.totalIncidents()).isZero();
+        assertThat(stats.openCount()).isZero();
+        assertThat(stats.closedCount()).isZero();
+        assertThat(stats.resolvedCount()).isZero();
     }
 
     @Test
@@ -206,7 +206,7 @@ class DashboardServiceTest {
                 "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        assertThat(result.getTotalElements()).isEqualTo(0);
+        assertThat(result.getTotalElements()).isZero();
     }
 
     // ── getMyIncidents ────────────────────────────────────────────────────────

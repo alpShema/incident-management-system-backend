@@ -119,18 +119,17 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    void authenticateAccessToken_expiredToken_returnsEmpty() throws InterruptedException {
+    void authenticateAccessToken_expiredToken_returnsEmpty() {
         JwtTokenService shortLived = new JwtTokenService(
                 SECRET,
                 "hilfe",
                 "hilfe-web",
-                1L,
+                -1L,
                 REFRESH_TTL_SECONDS,
                 userAuthorityService
         );
         mockResolvedRole(testUser, RoleCode.CLIENT);
         String token = shortLived.generateAccessToken(testUser);
-        Thread.sleep(1100);
 
         Optional<Authentication> auth = shortLived.authenticateAccessToken(token);
 

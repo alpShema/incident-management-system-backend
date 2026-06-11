@@ -15,7 +15,6 @@ import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
-import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
@@ -170,7 +169,8 @@ class IncidentCategoryServiceTest {
 
     @Test
     void listAllCategories_invalidState_throws400() {
-        assertThatThrownBy(() -> categoryService.listAllCategories("unknown", null, PageRequest.of(0, 20)))
+        var pageable = PageRequest.of(0, 20);
+        assertThatThrownBy(() -> categoryService.listAllCategories("unknown", null, pageable))
                 .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
                 .hasMessageContaining("Invalid state filter")
                 .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
@@ -228,8 +228,8 @@ class IncidentCategoryServiceTest {
     void createCategory_duplicateName_throws409() {
         when(categoryRepository.existsByNameIgnoreCase("Facility")).thenReturn(true);
 
-        assertThatThrownBy(() -> categoryService.createCategory(
-                new IncidentCategoryRequest("Facility", "Description", "dept-1")))
+        IncidentCategoryRequest createRequest = new IncidentCategoryRequest("Facility", "Description", "dept-1");
+        assertThatThrownBy(() -> categoryService.createCategory(createRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -249,7 +249,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null));
+                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null));
 
         assertThat(topic.getName()).isEqualTo("New Name");
         assertThat(topic.getDescription()).isEqualTo("New desc");
@@ -268,7 +268,7 @@ class IncidentCategoryServiceTest {
 
         IncidentTopicResponse response = categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("New Name", "New desc", "group-1", false));
+                new UpdateTopicRequest("New Name", "New desc", null, "group-1", false));
 
         assertThat(response).isNotNull();
         verify(typeRepository).save(any(IncidentType.class));
@@ -278,8 +278,8 @@ class IncidentCategoryServiceTest {
     void updateCategory_notFound_throws404() {
         when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> categoryService.updateCategory(
-                "missing", new UpdateIncidentCategoryRequest("Updated", "Desc", "dept-1")))
+        UpdateIncidentCategoryRequest updateRequest = new UpdateIncidentCategoryRequest("Updated", "Desc", "dept-1");
+        assertThatThrownBy(() -> categoryService.updateCategory("missing", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -292,8 +292,8 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
         when(categoryRepository.existsByNameIgnoreCase("Other Name")).thenReturn(true);
 
-        assertThatThrownBy(() -> categoryService.updateCategory(
-                "cat-1", new UpdateIncidentCategoryRequest("Other Name", "Desc", "dept-1")))
+        UpdateIncidentCategoryRequest updateRequest = new UpdateIncidentCategoryRequest("Other Name", "Desc", "dept-1");
+        assertThatThrownBy(() -> categoryService.updateCategory("cat-1", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -429,9 +429,8 @@ class IncidentCategoryServiceTest {
     void createTopic_categoryNotFound_throws404() {
         when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> categoryService.createTopic(
-                "missing", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", null, true)))
+        CreateTopicRequest topicRequest = new CreateTopicRequest("Projector", "Projector issues", null, true);
+        assertThatThrownBy(() -> categoryService.createTopic("missing", "admin-1", topicRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -463,9 +462,8 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(true);
 
-        assertThatThrownBy(() -> categoryService.createTopic(
-                "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "group-1", true)))
+        CreateTopicRequest dupTopicRequest = new CreateTopicRequest("Projector", "Projector issues", "group-1", true);
+        assertThatThrownBy(() -> categoryService.createTopic("cat-1", "admin-1", dupTopicRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("A topic with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -500,9 +498,8 @@ class IncidentCategoryServiceTest {
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("missing-group")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> categoryService.createTopic(
-                "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "missing-group", true)))
+        CreateTopicRequest missingGroupRequest = new CreateTopicRequest("Projector", "Projector issues", "missing-group", true);
+        assertThatThrownBy(() -> categoryService.createTopic("cat-1", "admin-1", missingGroupRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent group not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -527,7 +524,7 @@ class IncidentCategoryServiceTest {
     @Test
     void searchCategories_blankQuery_passesNullPatternToRepository() {
         var pageable = PageRequest.of(0, 10);
-        when(categoryRepository.searchCategories(eq(null), eq(pageable)))
+        when(categoryRepository.searchCategories(null, pageable))
                 .thenReturn(new PageImpl<>(List.of()));
 
         categoryService.searchCategories("  ", pageable);
@@ -538,7 +535,7 @@ class IncidentCategoryServiceTest {
     @Test
     void searchCategories_nullQuery_passesNullPatternToRepository() {
         var pageable = PageRequest.of(0, 10);
-        when(categoryRepository.searchCategories(eq(null), eq(pageable)))
+        when(categoryRepository.searchCategories(null, pageable))
                 .thenReturn(new PageImpl<>(List.of()));
 
         categoryService.searchCategories(null, pageable);
@@ -550,8 +547,7 @@ class IncidentCategoryServiceTest {
     @Test
     void listTopics_noStatusFilter_returnsAllTopics() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(
-                eq(null), eq(null), eq(null), eq(null), eq(null), eq(pageable)))
+        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
 
         var result = categoryService.listTopics(null, null, null, null, null, pageable);
@@ -566,8 +562,7 @@ class IncidentCategoryServiceTest {
     @Test
     void listTopics_statusAll_passesNullToRepository() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(
-                eq(null), eq(null), eq(null), eq(null), eq(null), eq(pageable)))
+        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
         categoryService.listTopics(null, null, null, "all", null, pageable);
@@ -578,8 +573,7 @@ class IncidentCategoryServiceTest {
     @Test
     void listTopics_statusActive_filtersActiveTopics() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(
-                eq(null), eq(null), eq(null), eq("active"), eq(null), eq(pageable)))
+        when(typeRepository.findAllTopicsFiltered(null, null, null, "active", null, pageable))
                 .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
 
         var result = categoryService.listTopics(null, null, null, "active", null, pageable);

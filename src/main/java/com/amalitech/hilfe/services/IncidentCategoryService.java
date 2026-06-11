@@ -14,6 +14,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -229,9 +230,10 @@ public class IncidentCategoryService {
         IncidentCategory category = categoryRepository.findById(effectiveCategoryId)
                 .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
 
-        if (name != null && !name.isBlank()) {
-            if (!topic.getName().equalsIgnoreCase(name)
-                    && typeRepository.existsByNameIgnoreCase(name)) {
+        if (StringUtils.hasText(name)) {
+            boolean isDuplicate = !topic.getName().equalsIgnoreCase(name)
+                    && typeRepository.existsByNameIgnoreCase(name);
+            if (isDuplicate) {
                 throw new ArmsAuthException("A topic with this name already exists", 409);
             }
             topic.setName(name);

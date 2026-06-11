@@ -42,7 +42,7 @@ class CookieUtilsTest {
         CookieUtils.addAuthCookies(response, tokens, true, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("Secure"));
+        assertThat(cookies).isNotEmpty().allSatisfy(c -> assertThat(c).contains("Secure"));
     }
 
     @Test
@@ -64,8 +64,9 @@ class CookieUtilsTest {
         CookieUtils.clearAuthCookies(response, false, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(3);
-        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
+        assertThat(cookies)
+                .hasSize(3)
+                .allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
         assertThat(cookies.get(0)).contains("access_token=");
         assertThat(cookies.get(1)).contains("refresh_token=");
         assertThat(cookies.get(2)).contains("arms_token=");

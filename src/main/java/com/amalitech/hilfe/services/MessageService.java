@@ -34,6 +34,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MessageService {
 
+    private static final String MSG_INCIDENT_NOT_FOUND = "Incident not found";
+    private static final String ROLE_AGENT = "AGENT";
+
     private final MessageRepository messageRepository;
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
@@ -46,7 +49,7 @@ public class MessageService {
 
     public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
-                .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_INCIDENT_NOT_FOUND, 404));
         enforceSendAccess(userId, role, incident);
         return mediaService.generateMessagePresignedUploadUrl(request);
     }
@@ -58,7 +61,7 @@ public class MessageService {
     @Transactional
     public MessageResponse sendMessage(String userId, String role, String incidentId, String content, List<AttachmentRef> attachments) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
-                .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_INCIDENT_NOT_FOUND, 404));
         enforceSendAccess(userId, role, incident);
         validateMessagePayload(content, attachments);
 
@@ -94,7 +97,7 @@ public class MessageService {
 
     public Page<MessageResponse> listMessages(String userId, String role, String incidentId, Pageable pageable) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
-                .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(MSG_INCIDENT_NOT_FOUND, 404));
         enforceAccess(userId, role, incident);
 
         Page<Message> messagePage = messageRepository.findByIncidentId(incidentId, pageable);
@@ -158,15 +161,15 @@ public class MessageService {
     private void enforceAccess(String userId, String role, Incident incident) {
         if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
         if (userId.equals(incident.getUserId())) return;
-        if ("AGENT".equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
-        if ("AGENT".equalsIgnoreCase(role) && isSameDepartment(userId, incident)) return;
+        if (ROLE_AGENT.equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
+        if (ROLE_AGENT.equalsIgnoreCase(role) && isSameDepartment(userId, incident)) return;
         throw new ArmsAuthException("You do not have access to this incident", 403);
     }
 
     private void enforceSendAccess(String userId, String role, Incident incident) {
         if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
         if (userId.equals(incident.getUserId())) return;
-        if ("AGENT".equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
+        if (ROLE_AGENT.equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
         throw new ArmsAuthException("You do not have access to this incident", 403);
     }
 

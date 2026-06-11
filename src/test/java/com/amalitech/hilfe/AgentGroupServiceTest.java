@@ -451,7 +451,8 @@ class AgentGroupServiceTest {
 
     @Test
     void listAllAgentGroups_invalidStatus_throws400() {
-        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null, Pageable.unpaged()))
+        Pageable pageable = Pageable.unpaged();
+        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null, pageable))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Invalid status filter. Accepted values: active, deactivated, all")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())

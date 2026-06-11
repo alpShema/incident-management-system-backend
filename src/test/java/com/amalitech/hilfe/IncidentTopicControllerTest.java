@@ -117,7 +117,7 @@ class IncidentTopicControllerTest {
     void updateTopicStatus_deactivate_returns200() throws Exception {
         IncidentTopicResponse response = new IncidentTopicResponse(
                 "type-1", "Projector", "Projector issues", true, "inactive", null, null);
-        when(incidentCategoryService.updateTopicStatus(eq("type-1"), eq(false))).thenReturn(response);
+        when(incidentCategoryService.updateTopicStatus("type-1", false)).thenReturn(response);
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "incident-type.delete"));
@@ -135,7 +135,7 @@ class IncidentTopicControllerTest {
     void updateTopicStatus_activate_returns200() throws Exception {
         IncidentTopicResponse response = new IncidentTopicResponse(
                 "type-1", "Projector", "Projector issues", true, "active", null, null);
-        when(incidentCategoryService.updateTopicStatus(eq("type-1"), eq(true))).thenReturn(response);
+        when(incidentCategoryService.updateTopicStatus("type-1", true)).thenReturn(response);
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "incident-type.delete"));
