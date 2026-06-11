@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Admin;
 import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AdminRepository;
@@ -56,9 +57,8 @@ public class UserService {
     @Transactional
     public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, String roleCode) {
         String normalizedRoleCode = normalizeRoleCode(roleCode);
-        if (!roleRepository.existsByCode(normalizedRoleCode)) {
-            throw new ArmsAuthException("Role not found", 404);
-        }
+        Role role = roleRepository.findByCode(normalizedRoleCode)
+                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ArmsAuthException("User not found", 404));
@@ -78,6 +78,7 @@ public class UserService {
                 user.getFullName(),
                 user.getProfileImg(),
                 user.getRoleCode(),
+                role.getName(),
                 user.getStatus(),
                 user.getLocation() != null ? user.getLocation().getName() : null,
                 incidentRepository.countByUserId(user.getId()),
@@ -114,6 +115,7 @@ public class UserService {
                 user.getFullName(),
                 user.getProfileImg(),
                 user.getRoleCode(),
+                user.getRole() != null ? user.getRole().getName() : null,
                 user.getStatus(),
                 user.getLocation() != null ? user.getLocation().getName() : null,
                 incidentRepository.countByUserId(user.getId()),
@@ -134,6 +136,11 @@ public class UserService {
                         return order.isAscending()
                                 ? Sort.Order.asc("location.name")
                                 : Sort.Order.desc("location.name");
+                    }
+                    if ("roleName".equals(order.getProperty())) {
+                        return order.isAscending()
+                                ? Sort.Order.asc("role.name")
+                                : Sort.Order.desc("role.name");
                     }
                     return order;
                 })

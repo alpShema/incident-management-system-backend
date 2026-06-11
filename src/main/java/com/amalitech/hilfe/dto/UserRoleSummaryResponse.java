@@ -10,6 +10,7 @@ public record UserRoleSummaryResponse(
         @Schema(description = "User's full name") String fullName,
         @Schema(description = "URL to the user's profile image", nullable = true) String profileImg,
         @Schema(description = "User's current role code") String roleCode,
+        @Schema(description = "User's current role display name", nullable = true) String roleName,
         @Schema(description = "User's active/inactive status", nullable = true) Boolean status,
         @Schema(description = "User's office location name", nullable = true) String officeLocation,
         @Schema(description = "Total incidents submitted by this user (lifetime)") Long submittedIncidentsCount,
@@ -21,12 +22,13 @@ public record UserRoleSummaryResponse(
             String fullName,
             String profileImg,
             RoleCode roleCode,
+            String roleName,
             Boolean status,
             String officeLocation,
             Long submittedIncidentsCount,
             Long assignedIncidentsCount
     ) {
-        this(userId, email, fullName, profileImg, roleCode == null ? null : roleCode.name(),
+        this(userId, email, fullName, profileImg, roleCode == null ? null : roleCode.name(), roleName,
                 status, officeLocation, submittedIncidentsCount, assignedIncidentsCount);
     }
 }
