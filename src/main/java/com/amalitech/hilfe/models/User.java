@@ -71,6 +71,10 @@ public class User {
     @JoinColumn(name = "location_id", insertable = false, updatable = false)
     private Location location;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_code", referencedColumnName = "code", insertable = false, updatable = false)
+    private Role role;
+
     // ── Lifecycle ──
 
     @PrePersist

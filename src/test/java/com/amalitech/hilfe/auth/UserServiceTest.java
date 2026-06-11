@@ -3,6 +3,7 @@ package com.amalitech.hilfe.auth;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AdminRepository;
@@ -41,11 +42,15 @@ class UserServiceTest {
     @Mock ActivityLogService activityLogService;
     @InjectMocks UserService userService;
 
+    private Role role(String code, String name) {
+        return Role.builder().id("role-" + code).code(code).name(name).systemDefined(true).build();
+    }
+
     @Test
     void getUsers_returnsPaginatedProjection() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of(
-                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra", 2L, 1L)
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, "Admin", true, "Accra", 2L, 1L)
         ));
         when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), isNull(), eq(pageable))).thenReturn(page);
 
@@ -207,7 +212,7 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
+        when(roleRepository.findByCode("ADMIN")).thenReturn(Optional.of(role("ADMIN", "Admin")));
         when(incidentRepository.countByUserId("u1")).thenReturn(3L);
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
@@ -215,6 +220,7 @@ class UserServiceTest {
 
         assertThat(result.userId()).isEqualTo("u1");
         assertThat(result.roleCode()).isEqualTo("ADMIN");
+        assertThat(result.roleName()).isEqualTo("Admin");
         verify(agentRepository, never()).save(any(Agent.class));
         verify(activityLogService).logUserRoleChange("admin-1", "u1", "CLIENT", "ADMIN");
     }
@@ -230,7 +236,7 @@ class UserServiceTest {
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
-        when(roleRepository.existsByCode("AGENT")).thenReturn(true);
+        when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(role("AGENT", "Agent")));
         when(incidentRepository.countByUserId("u1")).thenReturn(2L);
 
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
@@ -254,7 +260,7 @@ class UserServiceTest {
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(
                 Agent.builder().id("agent-1").userId("u1").status(true).build()));
-        when(roleRepository.existsByCode("AGENT")).thenReturn(true);
+        when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(role("AGENT", "Agent")));
         when(incidentRepository.countByUserId("u1")).thenReturn(4L);
         when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(5L);
 
@@ -267,7 +273,7 @@ class UserServiceTest {
     @Test
     void assignUserRole_userNotFound_throwsNotFound() {
         when(userRepository.findById("missing")).thenReturn(Optional.empty());
-        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
+        when(roleRepository.findByCode("ADMIN")).thenReturn(Optional.of(role("ADMIN", "Admin")));
 
         assertThatThrownBy(() -> userService.assignUserRole("admin-1", "missing", RoleCode.ADMIN))
                 .isInstanceOf(ArmsAuthException.class)
@@ -284,7 +290,7 @@ class UserServiceTest {
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(roleRepository.existsByCode("ADMIN")).thenReturn(true);
+        when(roleRepository.findByCode("ADMIN")).thenReturn(Optional.of(role("ADMIN", "Admin")));
         when(incidentRepository.countByUserId("u1")).thenReturn(1L);
         when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
 
