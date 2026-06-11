@@ -17,11 +17,11 @@ public interface LocationRepository extends JpaRepository<Location, String> {
 
     @Query("""
             SELECT l FROM Location l
-            WHERE (:name IS NULL OR LOWER(l.name) LIKE :name)
+            WHERE (:query IS NULL OR LOWER(l.name) LIKE :query OR LOWER(l.description) LIKE :query)
               AND (:status IS NULL OR l.status = :status)
             """)
     Page<Location> findFiltered(
-            @Param("name") String name,
+            @Param("query") String query,
             @Param("status") Boolean status,
             Pageable pageable
     );

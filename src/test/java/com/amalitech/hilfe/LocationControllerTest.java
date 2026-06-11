@@ -47,6 +47,7 @@ class LocationControllerTest {
         PageResponse<LocationResponse> page = new PageResponse<>(List.of(loc), 0, 10, 1L, 1, false, false);
         when(locationService.listLocations(isNull(), isNull(), any(Pageable.class))).thenReturn(page);
 
+
         mvc.perform(get("/locations")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 "user", null, List.of(() -> "ROLE_CLIENT")))))
