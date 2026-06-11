@@ -72,8 +72,8 @@ class AgentGroupServiceTest {
         Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
         Agent activeAgent = Agent.builder().id("agent-active").userId("user-active").status(true).build();
         activeAgent.setUser(User.builder().id("user-active").status(true).build());
-        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(true).build();
-        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build()); // user account deactivated
+        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(false).build();
+        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build());
 
         when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
@@ -84,7 +84,7 @@ class AgentGroupServiceTest {
 
         assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
                 .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
-                .hasMessage("Agent not found or inactive")
+                .hasMessage("Agent's account is deactivated")
                 .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
 
@@ -206,8 +206,8 @@ class AgentGroupServiceTest {
     @Test
     void updateAgentGroup_withDeactivatedUserInList_throws400() {
         AgentGroup group = group(true);
-        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(true).build();
-        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build()); // user account deactivated
+        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(false).build();
+        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build());
 
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
         when(agentGroupRepository.save(group)).thenReturn(group);
@@ -217,7 +217,7 @@ class AgentGroupServiceTest {
 
         assertThatThrownBy(() -> agentGroupService.updateAgentGroup("group-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Agent not found or inactive")
+                .hasMessage("Agent's account is deactivated")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
 
@@ -225,22 +225,20 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void createAgentGroup_withInactiveUserAccount_throws400() {
+    void createAgentGroup_withNonExistentAgent_throws404() {
         Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
-        Agent agent = Agent.builder().id("agent-1").userId("user-1").status(true).build();
-        agent.setUser(User.builder().id("user-1").status(false).build()); // agent active, user inactive
 
         when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
+        when(agentRepository.findByIdWithUser("missing-agent")).thenReturn(Optional.empty());
 
-        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-1"), null);
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("missing-agent"), null);
 
         assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
-                .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
-                .hasMessage("Agent not found or inactive")
-                .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
 
         verify(agentGroupRepository, never()).save(any(AgentGroup.class));
     }
