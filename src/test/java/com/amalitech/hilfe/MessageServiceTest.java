@@ -160,7 +160,8 @@ class MessageServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findByUserId("u-teammate")).thenReturn(Optional.of(teammateAgent));
 
-        assertThatThrownBy(() -> messageService.sendMessage("u-teammate", "AGENT", "inc-1", "hi", List.of()))
+        List<AttachmentRef> noAttachments = List.of();
+        assertThatThrownBy(() -> messageService.sendMessage("u-teammate", "AGENT", "inc-1", "hi", noAttachments))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("You do not have access to this incident")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -200,7 +201,8 @@ class MessageServiceTest {
         Incident incident = Incident.builder().id("inc-1").userId("u1").build();
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
 
-        assertThatThrownBy(() -> messageService.sendMessage("u1", "CLIENT", "inc-1", "   ", List.of()))
+        List<AttachmentRef> noAttachments = List.of();
+        assertThatThrownBy(() -> messageService.sendMessage("u1", "CLIENT", "inc-1", "   ", noAttachments))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("Either content or attachments must be provided")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())

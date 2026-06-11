@@ -20,7 +20,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.amalitech.hilfe.dto.IncidentFilterParams;
-import com.amalitech.hilfe.dto.IncidentResponse;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -62,8 +61,9 @@ class AssignedIncidentsControllerTest {
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
@@ -75,8 +75,9 @@ class AssignedIncidentsControllerTest {
                 agentPrincipal(), null, List.of(() -> "dashboard.agent"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
@@ -104,8 +105,9 @@ class AssignedIncidentsControllerTest {
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").param("query", "fire").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
@@ -117,8 +119,9 @@ class AssignedIncidentsControllerTest {
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").param("statusId", "status-open").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
@@ -133,8 +136,9 @@ class AssignedIncidentsControllerTest {
                         .param("query", "fire")
                         .param("statusId", "status-open")
                         .with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
@@ -146,9 +150,10 @@ class AssignedIncidentsControllerTest {
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items").isEmpty())
-                .andExpect(jsonPath("$.data.totalElements").value(0));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.data.items").isEmpty(),
+                        jsonPath("$.data.totalElements").value(0));
     }
 
     @Test
@@ -160,8 +165,9 @@ class AssignedIncidentsControllerTest {
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.page").value(0))
-                .andExpect(jsonPath("$.data.size").value(10));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.data.page").value(0),
+                        jsonPath("$.data.size").value(10));
     }
 }

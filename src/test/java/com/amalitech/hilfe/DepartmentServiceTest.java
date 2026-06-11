@@ -20,8 +20,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,11 +74,13 @@ class DepartmentServiceTest {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active"))
+                .thenReturn(java.util.List.of(mock(com.amalitech.hilfe.models.IncidentCategory.class)));
 
         DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
         assertThat(response.status()).isFalse();
+        assertThat(response.categoryCount()).isEqualTo(1L);
         verify(departmentRepository).save(dept);
     }
 
@@ -92,6 +95,7 @@ class DepartmentServiceTest {
 
         assertThat(response.status()).isFalse();
         verify(departmentRepository).save(dept);
+        verifyNoInteractions(agentGroupRepository);
     }
 
     @Test

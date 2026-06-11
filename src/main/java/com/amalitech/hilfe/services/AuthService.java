@@ -165,7 +165,14 @@ public class AuthService {
     }
 
     private String normalizeOfficeName(String officeName) {
-        return officeName.replaceFirst("(?i)\\s+office$", "").trim();
+        String suffix = "office";
+        int cut = officeName.length() - suffix.length();
+        if (cut > 0
+                && officeName.regionMatches(true, cut, suffix, 0, suffix.length())
+                && Character.isWhitespace(officeName.charAt(cut - 1))) {
+            return officeName.substring(0, cut).trim();
+        }
+        return officeName.trim();
     }
 
     private AuthSessionResponse toSessionResponse(User user) {

@@ -234,9 +234,8 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listTopics_returns200WithAllTopics() throws Exception {
-        IncidentCategoryResponse inactive = new IncidentCategoryResponse("cat-2", "Old", null, null, "inactive", null);
         IncidentTopicResponse inactiveTopic = new IncidentTopicResponse("type-2", "Old Topic", "Deprecated", true, "inactive", null, null);
-        when(categoryService.listTopicsByCategory(eq("cat-1"), eq(null)))
+        when(categoryService.listTopicsByCategory("cat-1", null))
                 .thenReturn(List.of(stubTopic(), inactiveTopic));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -253,7 +252,7 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listTopics_withStatusFilter_passesStatusToService() throws Exception {
-        when(categoryService.listTopicsByCategory(eq("cat-1"), eq("inactive")))
+        when(categoryService.listTopicsByCategory("cat-1", "inactive"))
                 .thenReturn(List.of());
 
         var auth = new UsernamePasswordAuthenticationToken(

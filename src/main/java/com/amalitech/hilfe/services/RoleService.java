@@ -62,7 +62,7 @@ public class RoleService {
 
         List<RolePermission> links = permissions.stream()
                 .map(permission -> RolePermission.builder()
-                        .roleCode((String) role.getCode())
+                        .roleCode(role.getCode())
                         .permission(permission)
                         .build())
                 .toList();
@@ -176,7 +176,8 @@ public class RoleService {
                 .toUpperCase()
                 .replaceAll("[^A-Z0-9]+", "_")
                 .replaceAll("_+", "_")
-                .replaceAll("^_|_$", "");
+                .replaceAll("^_", "")
+                .replaceAll("_$", "");
     }
 
     private String normalizeRoleCode(String roleCode) {

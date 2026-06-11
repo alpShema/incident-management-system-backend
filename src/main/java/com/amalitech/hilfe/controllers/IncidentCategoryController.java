@@ -125,7 +125,7 @@ public class IncidentCategoryController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Category not found")
     @PostMapping("/{id}/topics")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN') and hasAuthority('" + RbacPermissions.INCIDENT_TYPE_CREATE + "')")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_TYPE_CREATE + "')")
     public ResponseEntity<ApiResponse<IncidentTopicResponse>> createTopic(
             @Parameter(description = "Stable category ID", example = "cat-it") @PathVariable String id,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
