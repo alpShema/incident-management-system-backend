@@ -27,16 +27,16 @@ public class LocationController {
 
     private final LocationService locationService;
 
-    @Operation(summary = "List locations", description = "Returns a paginated list of locations. Optionally filter by name or status.")
+    @Operation(summary = "List locations", description = "Returns a paginated list of locations. Optionally filter by query (searches name and description) or status.")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<LocationResponse>>> listLocations(
-            @Parameter(description = "Filter by name (partial match)") @RequestParam(required = false) String name,
+            @Parameter(description = "Keyword search across name and description") @RequestParam(required = false) String query,
             @Parameter(description = "Filter by active status (true = active, false = inactive)") @RequestParam(required = false) Boolean status,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Locations retrieved successfully",
-                locationService.listLocations(name, status, pageable)
+                locationService.listLocations(query, status, pageable)
         ));
     }
 
