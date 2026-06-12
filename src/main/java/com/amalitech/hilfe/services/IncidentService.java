@@ -40,6 +40,11 @@ public class IncidentService {
             "priority", "severity.name"
     );
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            SORT_CREATED_AT, "updatedAt", "title", "incidentNo",
+            "incidentType.category.name", "severity.name"
+    );
+
     // from-status-id → to-status-id → roles permitted to make that transition
     private static final Map<String, Map<String, Set<String>>> VALID_TRANSITIONS = Map.of(
             "status-in-progress", Map.of(
@@ -212,7 +217,7 @@ public class IncidentService {
                 : ensureSorted(pageable);
 
         return slaService.toIncidentResponsePage(incidentRepository
-                .searchByUserId(userId, buildQueryPattern(query), fromDate, toDate, sortedPageable)
+                .searchByUserId(userId, buildQueryPattern(query), fromDate, fromDate != null, toDate, toDate != null, sortedPageable)
         );
     }
 
@@ -392,7 +397,11 @@ public class IncidentService {
                 .map(o -> SORT_FIELD_ALIASES.containsKey(o.getProperty())
                         ? o.withProperty(SORT_FIELD_ALIASES.get(o.getProperty()))
                         : o)
+                .filter(o -> ALLOWED_SORT_FIELDS.contains(o.getProperty()))
                 .toList();
+        if (orders.isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, SORT_CREATED_AT);
+        }
         return Sort.by(orders);
     }
 
