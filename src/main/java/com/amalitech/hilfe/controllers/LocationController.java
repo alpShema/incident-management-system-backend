@@ -25,6 +25,12 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class LocationController {
 
+    private static final String RETRIEVED_MSG = "Location retrieved successfully";
+    private static final String CREATED_MSG = "Location created successfully";
+    private static final String UPDATED_MSG = "Location updated successfully";
+    private static final String ACTIVATED_MSG = "Location activated successfully";
+    private static final String DEACTIVATED_MSG = "Location deactivated successfully";
+
     private final LocationService locationService;
 
     @Operation(summary = "List locations", description = "Returns a paginated list of locations. Optionally filter by query (searches name and description) or status.")
@@ -36,14 +42,13 @@ public class LocationController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Locations retrieved successfully",
-                locationService.listLocations(query, status, pageable)
-        ));
+                locationService.listLocations(query, status, pageable)));
     }
 
     @Operation(summary = "Get location by ID")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<LocationResponse>> getLocation(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success("Location retrieved successfully", locationService.getLocation(id)));
+        return ResponseEntity.ok(ApiResponse.success(RETRIEVED_MSG, locationService.getLocation(id)));
     }
 
     @Operation(summary = "Create location")
@@ -51,7 +56,7 @@ public class LocationController {
     @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_CREATE + "')")
     public ResponseEntity<ApiResponse<LocationResponse>> createLocation(@Valid @RequestBody CreateLocationRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Location created successfully", locationService.createLocation(request)));
+                .body(ApiResponse.success(CREATED_MSG, locationService.createLocation(request)));
     }
 
     @Operation(summary = "Update location")
@@ -61,7 +66,7 @@ public class LocationController {
             @PathVariable String id,
             @Valid @RequestBody UpdateLocationRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Location updated successfully", locationService.updateLocation(id, request)));
+        return ResponseEntity.ok(ApiResponse.success(UPDATED_MSG, locationService.updateLocation(id, request)));
     }
 
     @Operation(summary = "Update location status", description = "Set status to true to activate or false to deactivate.")
@@ -71,7 +76,7 @@ public class LocationController {
             @PathVariable String id,
             @Valid @RequestBody UpdateLocationStatusRequest request
     ) {
-        String message = Boolean.TRUE.equals(request.status()) ? "Location activated successfully" : "Location deactivated successfully";
+        String message = Boolean.TRUE.equals(request.status()) ? ACTIVATED_MSG : DEACTIVATED_MSG;
         return ResponseEntity.ok(ApiResponse.success(message, locationService.updateStatus(id, request.status())));
     }
 }
