@@ -41,7 +41,7 @@ public class IncidentService {
     );
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "createdAt", "updatedAt", "title", "incidentNo",
+            SORT_CREATED_AT, "updatedAt", "title", "incidentNo",
             "incidentType.category.name", "severity.name"
     );
 
