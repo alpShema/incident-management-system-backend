@@ -48,7 +48,7 @@ class UserControllerTest {
     @Test
     void listUsers_adminRequest_returnsPaginatedUsers() throws Exception {
         when(userService.getUsers(isNull(), isNull(), isNull(), isNull(), any())).thenReturn(new PageImpl<>(
-                List.of(new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra", 3L, 1L)),
+                List.of(new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, "Admin", true, "Accra", 3L, 1L)),
                 PageRequest.of(0, 10),
                 1
         ));
@@ -61,6 +61,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.message").value("Users retrieved successfully"))
                 .andExpect(jsonPath("$.data.items[0].userId").value("u1"))
                 .andExpect(jsonPath("$.data.items[0].roleCode").value("ADMIN"))
+                .andExpect(jsonPath("$.data.items[0].roleName").value("Admin"))
                 .andExpect(jsonPath("$.data.items[0].submittedIncidentsCount").value(3))
                 .andExpect(jsonPath("$.data.items[0].assignedIncidentsCount").value(1))
                 .andExpect(jsonPath("$.data.page").value(0))
@@ -70,7 +71,7 @@ class UserControllerTest {
     @Test
     void assignUserRole_adminRequest_returnsUpdatedUserRole() throws Exception {
         when(userService.assignUserRole(anyString(), eq("u1"), eq("ADMIN"))).thenReturn(
-                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, true, "Accra", 3L, 0L)
+                new UserRoleSummaryResponse("u1", "john@test.com", "John Doe", "http://img.png", RoleCode.ADMIN, "Admin", true, "Accra", 3L, 0L)
         );
 
         mvc.perform(patch("/users/u1/role")
@@ -89,7 +90,7 @@ class UserControllerTest {
     void listUsers_filterByRole_returnsCountsFields() throws Exception {
         when(userService.getUsers(isNull(), eq(RoleCode.AGENT), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(
-                        List.of(new UserRoleSummaryResponse("u2", "agent@test.com", "Agent One", null, RoleCode.AGENT, true, "Accra", 1L, 7L)),
+                        List.of(new UserRoleSummaryResponse("u2", "agent@test.com", "Agent One", null, RoleCode.AGENT, "Agent", true, "Accra", 1L, 7L)),
                         PageRequest.of(0, 20), 1));
 
         mvc.perform(get("/users").param("roleCode", "AGENT").with(authentication(adminAuth())))

@@ -47,6 +47,26 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
             LEFT JOIN al.actorUser actor
             LEFT JOIN al.targetUser target
             LEFT JOIN Incident incident ON incident.id = al.subjectId
+            WHERE al.subjectType = 'INCIDENT' AND al.subjectId = :incidentId
+            """)
+    Page<ActivityLogResponse> findActivityLogResponsesByIncidentId(@org.springframework.data.repository.query.Param("incidentId") String incidentId, Pageable pageable);
+
+    @Query("""
+            SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
+                al.id,
+                actor.fullName,
+                target.fullName,
+                al.action,
+                al.subjectType,
+                incident.incidentNo,
+                al.description,
+                al.metadata,
+                al.createdAt
+            )
+            FROM ActivityLog al
+            LEFT JOIN al.actorUser actor
+            LEFT JOIN al.targetUser target
+            LEFT JOIN Incident incident ON incident.id = al.subjectId
             ORDER BY al.createdAt DESC
             """)
     List<ActivityLogResponse> findRecent(Pageable pageable);

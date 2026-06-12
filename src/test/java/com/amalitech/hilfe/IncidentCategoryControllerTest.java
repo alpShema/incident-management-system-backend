@@ -48,7 +48,7 @@ class IncidentCategoryControllerTest {
     }
 
     private IncidentCategoryResponse stubCategory() {
-        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", null, "active");
+        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", null, "active", null);
     }
 
     private IncidentTopicResponse stubTopic() {
@@ -57,6 +57,8 @@ class IncidentCategoryControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
+                "active",
+                null,
                 null);
     }
 
@@ -75,6 +77,38 @@ class IncidentCategoryControllerTest {
                 .andExpect(jsonPath("$.data.items[0].id").value("cat-1"))
                 .andExpect(jsonPath("$.data.items[0].name").value("Facility"))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    // ── GET /incident-categories/all ─────────────────────────────────────────
+
+    @Test
+    void listAllCategories_adminWithNoFilter_returns200WithAllCategories() throws Exception {
+        IncidentCategoryResponse inactive = new IncidentCategoryResponse("cat-2", "Old", "desc", null, "inactive", null);
+        when(categoryService.listAllCategories(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory(), inactive), PageRequest.of(0, 20), 2));
+
+        mvc.perform(get("/incident-categories/all")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident categories retrieved successfully"))
+                .andExpect(jsonPath("$.data.totalElements").value(2))
+                .andExpect(jsonPath("$.data.items[0].status").value("active"))
+                .andExpect(jsonPath("$.data.items[1].status").value("inactive"));
+    }
+
+    @Test
+    void listAllCategories_withStateFilter_passesStateToService() throws Exception {
+        when(categoryService.listAllCategories(eq("inactive"), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/incident-categories/all?state=inactive")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        verify(categoryService).listAllCategories(eq("inactive"), any(), any());
     }
 
     // ── POST /incident-categories ─────────────────────────────────────────────
@@ -124,7 +158,22 @@ class IncidentCategoryControllerTest {
         mvc.perform(patch("/incident-categories/cat-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Updated", "Updated description", "dept-1")))
+                                new UpdateIncidentCategoryRequest("Updated", "Updated description", "dept-1")))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
+    }
+
+    @Test
+    void updateCategory_nameOnly_returns200() throws Exception {
+        when(categoryService.updateCategory(eq("cat-1"), any())).thenReturn(stubCategory());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-category.update"));
+
+        mvc.perform(patch("/incident-categories/cat-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Updated Category Name\"}")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident category updated successfully"));
@@ -141,29 +190,53 @@ class IncidentCategoryControllerTest {
         mvc.perform(patch("/incident-categories/cat-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new IncidentCategoryRequest("Facility", "Updated description", "dept-1")))
+                                new UpdateIncidentCategoryRequest("Facility", "Updated description", "dept-1")))
                         .with(authentication(auth)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("A record with this value already exists"));
     }
 
-    // ── DELETE /incident-categories/{id} ─────────────────────────────────────
+    // ── PATCH /incident-categories/{id}/status ─────────────────────────────
 
     @Test
-    void deleteCategory_validRequest_returns204() throws Exception {
+    void updateCategoryStatus_deactivate_returns200() throws Exception {
+        when(categoryService.updateCategoryStatus("cat-1", false)).thenReturn(stubCategory());
+
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "incident-category.delete"));
 
-        mvc.perform(delete("/incident-categories/cat-1")
+        mvc.perform(patch("/incident-categories/cat-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new UpdateIncidentCategoryStatusRequest(false)))
                         .with(authentication(auth)))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident category status updated successfully"));
+    }
+
+    @Test
+    void updateCategoryStatus_activate_returns200() throws Exception {
+        when(categoryService.updateCategoryStatus("cat-1", true)).thenReturn(stubCategory());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "incident-category.delete"));
+
+        mvc.perform(patch("/incident-categories/cat-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new UpdateIncidentCategoryStatusRequest(true)))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident category status updated successfully"));
     }
 
     // ── GET /incident-categories/{id}/topics ─────────────────────────────────
 
     @Test
-    void listTopics_returns200() throws Exception {
-        when(categoryService.listTopicsByCategory("cat-1")).thenReturn(List.of(stubTopic()));
+    void listTopics_returns200WithAllTopics() throws Exception {
+        IncidentTopicResponse inactiveTopic = new IncidentTopicResponse("type-2", "Old Topic", "Deprecated", true, "inactive", null, null);
+        when(categoryService.listTopicsByCategory("cat-1", null))
+                .thenReturn(List.of(stubTopic(), inactiveTopic));
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN"));
@@ -172,7 +245,25 @@ class IncidentCategoryControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident topics retrieved successfully"))
-                .andExpect(jsonPath("$.data[0].id").value("type-1"));
+                .andExpect(jsonPath("$.data[0].id").value("type-1"))
+                .andExpect(jsonPath("$.data[0].status").value("active"))
+                .andExpect(jsonPath("$.data[1].status").value("inactive"));
+    }
+
+    @Test
+    void listTopics_withStatusFilter_passesStatusToService() throws Exception {
+        when(categoryService.listTopicsByCategory("cat-1", "inactive"))
+                .thenReturn(List.of());
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN"));
+
+        mvc.perform(get("/incident-categories/cat-1/topics")
+                        .param("status", "inactive")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk());
+
+        verify(categoryService).listTopicsByCategory("cat-1", "inactive");
     }
 
     // ── POST /incident-categories/{id}/topics ─────────────────────────────────

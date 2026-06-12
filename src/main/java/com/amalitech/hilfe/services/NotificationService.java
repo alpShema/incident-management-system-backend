@@ -5,55 +5,16 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Notification;
 import com.amalitech.hilfe.repositories.NotificationRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final SimpMessagingTemplate messagingTemplate;
-
-    @Async("applicationTaskExecutor")
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void sendStatusChangeNotification(
-            String recipientUserId,
-            String incidentId,
-            int incidentNo,
-            String previousStatus,
-            String newStatus,
-            String reason
-    ) {
-        if (recipientUserId == null) return;
-        try {
-            String title = "Incident #" + incidentNo + " status updated";
-            String message = buildMessage(incidentNo, previousStatus, newStatus, reason);
-
-            Notification notification = Notification.builder()
-                    .userId(recipientUserId)
-                    .incidentId(incidentId)
-                    .type("INCIDENT_STATUS_CHANGED")
-                    .title(title)
-                    .message(message)
-                    .build();
-
-            Notification saved = notificationRepository.save(notification);
-            messagingTemplate.convertAndSend(
-                    "/topic/users/" + recipientUserId + "/notifications",
-                    NotificationResponse.from(saved)
-            );
-        } catch (Exception ex) {
-            log.error("Failed to send status change notification to user {} for incident {}", recipientUserId, incidentId, ex);
-        }
-    }
 
     public List<NotificationResponse> getNotifications(String userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
@@ -80,13 +41,5 @@ public class NotificationService {
     @Transactional
     public void markAllAsRead(String userId) {
         notificationRepository.markAllReadByUserId(userId);
-    }
-
-    private String buildMessage(int incidentNo, String previousStatus, String newStatus, String reason) {
-        String base = "Incident #" + incidentNo + " has moved from " + previousStatus + " to " + newStatus + ".";
-        if (reason != null && !reason.isBlank()) {
-            base += " Reason: " + reason;
-        }
-        return base;
     }
 }

@@ -23,6 +23,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class DepartmentService {
+    private static final String STATUS_ACTIVE = "active";
+
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
@@ -43,19 +45,22 @@ public class DepartmentService {
     }
 
     public DepartmentResponse getDepartment(String id) {
-        return toResponse(findActiveDepartment(id));
+        return toResponse(findDepartmentByIdOrThrow(id));
     }
 
     @Transactional
     public DepartmentResponse createDepartment(DepartmentRequest request) {
-        if (departmentRepository.existsByNameIgnoreCase(request.name())) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
+        if (departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Department with this name already exists", 409);
         }
 
         Department department = Department.builder()
                 .id(UUID.randomUUID().toString())
-                .name(request.name())
-                .description(request.description())
+                .name(name)
+                .description(description)
                 .status(true)
                 .build();
         return toResponse(departmentRepository.save(department));
@@ -63,14 +68,21 @@ public class DepartmentService {
 
     @Transactional
     public DepartmentResponse updateDepartment(String id, DepartmentRequest request) {
+        String name = request.name() == null ? null : request.name().trim();
+        String description = request.description() == null ? null : request.description().trim();
+
         Department department = findDepartmentByIdOrThrow(id);
-        if (!department.getName().equalsIgnoreCase(request.name())
-                && departmentRepository.existsByNameIgnoreCase(request.name())) {
+        if (name != null && !department.getName().equalsIgnoreCase(name)
+                && departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Department with this name already exists", 409);
         }
 
-        department.setName(request.name());
-        department.setDescription(request.description());
+        if (name != null) {
+            department.setName(name);
+        }
+        if (description != null) {
+            department.setDescription(description);
+        }
         return toResponse(departmentRepository.save(department));
     }
 
@@ -78,7 +90,7 @@ public class DepartmentService {
     public DepartmentResponse updateDepartmentStatus(String id, Boolean status) {
         Department department = findDepartmentByIdOrThrow(id);
 
-        if (Boolean.valueOf(status).equals(department.getStatus())) {
+        if (status.equals(department.getStatus())) {
             throw new ArmsAuthException(
                     Boolean.TRUE.equals(status)
                             ? "Department is already active"
@@ -86,22 +98,13 @@ public class DepartmentService {
                     409);
         }
 
-        if (Boolean.FALSE.equals(status)) {
-            if (categoryRepository.existsByDepartmentId(id)) {
-                throw new ArmsAuthException("Department has assigned incident categories", 409);
-            }
-            if (agentGroupRepository.existsByDepartmentIdAndStatus(id, true)) {
-                throw new ArmsAuthException("Department has assigned agent groups", 409);
-            }
-        }
-
         department.setStatus(status);
         return toResponse(departmentRepository.save(department));
     }
 
     public List<IncidentCategoryResponse> listCategories(String departmentId) {
-        findActiveDepartment(departmentId);
-        return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, "active").stream()
+        findDepartmentByIdOrThrow(departmentId);
+        return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, STATUS_ACTIVE).stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
     }
@@ -129,7 +132,7 @@ public class DepartmentService {
     }
 
     private DepartmentResponse toResponse(Department department) {
-        long categoryCount = categoryRepository.findByDepartmentIdAndStatus(department.getId(), "active").size();
+        long categoryCount = categoryRepository.findByDepartmentIdAndStatus(department.getId(), STATUS_ACTIVE).size();
         return DepartmentResponse.from(department, categoryCount);
     }
 
@@ -146,7 +149,7 @@ public class DepartmentService {
 
     private IncidentCategory findCategory(String categoryId) {
         return categoryRepository.findById(categoryId)
-                .filter(category -> "active".equalsIgnoreCase(category.getStatus()))
+                .filter(category -> STATUS_ACTIVE.equalsIgnoreCase(category.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
     }
 }

@@ -29,7 +29,9 @@ import org.springframework.data.domain.PageRequest;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -56,14 +58,14 @@ class AgentControllerTest {
     }
 
     private AgentResponse stubAgentResponse(boolean status) {
-        return new AgentResponse("agent-1", "user-1", "Test Agent", "agent@test.com", null, status);
+        return new AgentResponse("agent-1", "user-1", "Test Agent", "agent@test.com", null, "Takoradi", status, null);
     }
 
     // ── GET /agents ───────────────────────────────────────────────────────────
 
     @Test
     void listAgents_withoutDepartment_returns200() throws Exception {
-        when(agentService.listAgents(isNull(), any())).thenReturn(
+        when(agentService.listAgents(isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -74,12 +76,13 @@ class AgentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Agents retrieved successfully"))
                 .andExpect(jsonPath("$.data.items[0].agentId").value("agent-1"))
+                .andExpect(jsonPath("$.data.items[0].officeLocation").value("Takoradi"))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
     @Test
     void listAgents_withDepartment_returns200() throws Exception {
-        when(agentService.listAgents(anyString(), any())).thenReturn(
+        when(agentService.listAgents(anyString(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(false)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -90,6 +93,126 @@ class AgentControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].status").value(false));
+    }
+
+    @Test
+    void listAllAgents_returns200() throws Exception {
+        when(agentService.listAllAgents(isNull(), isNull(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true), stubAgentResponse(false)), PageRequest.of(0, 20), 2));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Agents retrieved successfully"))
+                .andExpect(jsonPath("$.data.totalElements").value(2));
+    }
+
+    @Test
+    void listAllAgents_withDepartment_returns200() throws Exception {
+        when(agentService.listAllAgents(anyString(), isNull(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(false)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .param("departmentId", "dept-1")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].status").value(false));
+    }
+
+    @Test
+    void listAgents_withQuery_returns200AndForwardsQuery() throws Exception {
+        when(agentService.listAgents(isNull(), eq("farida"), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents")
+                        .param("query", "farida")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].officeLocation").value("Takoradi"));
+
+        verify(agentService).listAgents(isNull(), eq("farida"), any());
+    }
+
+    @Test
+    void listAllAgents_withQuery_returns200AndForwardsQuery() throws Exception {
+        when(agentService.listAllAgents(isNull(), eq("farida"), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .param("query", "farida")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk());
+
+        verify(agentService).listAllAgents(isNull(), eq("farida"), any());
+    }
+
+    @Test
+    void listAgents_withDepartmentAndQuery_returns200AndForwardsBoth() throws Exception {
+        when(agentService.listAgents(eq("dept-1"), eq("takoradi"), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents")
+                        .param("departmentId", "dept-1")
+                        .param("query", "takoradi")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk());
+
+        verify(agentService).listAgents(eq("dept-1"), eq("takoradi"), any());
+    }
+
+    // ── GET /agents/status ────────────────────────────────────────────────────
+
+    @Test
+    void getStatus_agentAuth_returns200() throws Exception {
+        when(agentService.getStatus(anyString())).thenReturn(stubAgentResponse(true));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.availability.update"));
+
+        mvc.perform(get("/agents/status")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Status retrieved"))
+                .andExpect(jsonPath("$.data.status").value(true));
+    }
+
+    @Test
+    void getStatus_agentNotFound_returns404() throws Exception {
+        when(agentService.getStatus(anyString()))
+                .thenThrow(new ArmsAuthException("Agent not found", 404));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.availability.update"));
+
+        mvc.perform(get("/agents/status")
+                        .with(authentication(auth)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Agent not found"));
+    }
+
+    @Test
+    void getStatus_clientRole_returns403() throws Exception {
+        var auth = new UsernamePasswordAuthenticationToken(
+                clientPrincipal(), null, List.of(() -> "incident.create"));
+
+        mvc.perform(get("/agents/status")
+                        .with(authentication(auth)))
+                .andExpect(status().isForbidden());
     }
 
     // ── PATCH /agents/status ──────────────────────────────────────────────────

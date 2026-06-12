@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.models.RoleCode;
@@ -9,7 +10,6 @@ import com.amalitech.hilfe.services.DashboardService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -42,11 +42,9 @@ public class AssignedIncidentsController {
                     + "Results are always sorted by creation date descending (newest first); sort order is not configurable. "
                     + "Requires `dashboard.admin` or `dashboard.agent` permission."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incidents retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @GetMapping
     @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAssignedIncidents(
@@ -63,7 +61,7 @@ public class AssignedIncidentsController {
         Page<IncidentResponse> result = dashboardService.getIncidents(
                 principal.userId(), parseRoleCode(principal.roleCode()),
                 query,
-                statusId, severityId, incidentTypeId, categoryId, locationId,
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         );
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(result)));

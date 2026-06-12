@@ -36,7 +36,10 @@ public class MediaService {
             "image/gif", Set.of("gif"),
             "image/webp", Set.of("webp"),
             "application/pdf", Set.of("pdf"),
-            "image/svg+xml", Set.of("svg")
+            "image/svg+xml", Set.of("svg"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Set.of("docx"),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Set.of("xlsx"),
+            "text/plain", Set.of("txt")
     );
 
     private final S3Presigner s3Presigner;
@@ -104,16 +107,13 @@ public class MediaService {
     }
 
     private PresignedUrlResponse presignUploadUrl(String fileKey, String contentType, long fileSize) {
-        PutObjectRequest putRequest = PutObjectRequest.builder()
-                .bucket(s3Properties.bucketName())
-                .key(fileKey)
-                .contentType(contentType)
-                .contentLength(fileSize)
-                .build();
-
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
                 .signatureDuration(s3Properties.presignExpiry())
-                .putObjectRequest(putRequest)
+                .putObjectRequest(req -> req
+                        .bucket(s3Properties.bucketName())
+                        .key(fileKey)
+                        .contentType(contentType)
+                        .contentLength(fileSize))
                 .build();
 
         String uploadUrl = s3Presigner.presignPutObject(presignRequest).url().toString();
@@ -153,14 +153,11 @@ public class MediaService {
     }
 
     public String generatePresignedGetUrl(String fileKey) {
-        GetObjectRequest getRequest = GetObjectRequest.builder()
-                .bucket(s3Properties.bucketName())
-                .key(fileKey)
-                .build();
-
         GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
                 .signatureDuration(s3Properties.presignExpiry())
-                .getObjectRequest(getRequest)
+                .getObjectRequest(req -> req
+                        .bucket(s3Properties.bucketName())
+                        .key(fileKey))
                 .build();
 
         return s3Presigner.presignGetObject(presignRequest).url().toString();

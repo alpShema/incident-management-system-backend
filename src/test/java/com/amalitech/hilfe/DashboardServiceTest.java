@@ -1,5 +1,7 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.dto.IncidentDateFilter;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.DashboardCharts;
 import com.amalitech.hilfe.dto.dashboard.DashboardStats;
@@ -11,6 +13,7 @@ import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.services.DashboardService;
+import com.amalitech.hilfe.services.SlaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -36,6 +39,7 @@ class DashboardServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
+    @Mock SlaService slaService;
     @InjectMocks DashboardService dashboardService;
 
     private Agent buildAgent(String agentId) {
@@ -48,14 +52,16 @@ class DashboardServiceTest {
     void getStats_adminRole_callsCountByStatusGlobal() {
         when(incidentRepository.countByStatusGlobal()).thenReturn(List.of(
                 new Object[]{"Open", 10L},
+                new Object[]{"In Progress", 3L},
                 new Object[]{"Closed", 5L},
                 new Object[]{"Resolved", 3L}
         ));
 
         DashboardStats stats = dashboardService.getStats("admin-1", RoleCode.ADMIN);
 
-        assertThat(stats.totalIncidents()).isEqualTo(18L);
+        assertThat(stats.totalIncidents()).isEqualTo(21L);
         assertThat(stats.openCount()).isEqualTo(10L);
+        assertThat(stats.inProgressCount()).isEqualTo(3L);
         assertThat(stats.closedCount()).isEqualTo(5L);
         assertThat(stats.resolvedCount()).isEqualTo(3L);
         verify(incidentRepository).countByStatusGlobal();
@@ -72,24 +78,26 @@ class DashboardServiceTest {
         DashboardStats stats = dashboardService.getStats("super-1", RoleCode.SUPER_ADMIN);
 
         assertThat(stats.totalIncidents()).isEqualTo(18L);
+        assertThat(stats.inProgressCount()).isZero();
         verify(incidentRepository).countByStatusGlobal();
     }
 
     @Test
-    void getStats_agentRole_agentFound_returnsAgentStats() {
+    void getStats_agentRole_agentFound_returnsAssignedStats() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of(
                 new Object[]{"Open", 4L},
+                new Object[]{"In Progress", 2L},
                 new Object[]{"Closed", 2L},
                 new Object[]{"Resolved", 1L}
         ));
-        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(7L);
 
         DashboardStats stats = dashboardService.getStats("user-1", RoleCode.AGENT);
 
-        assertThat(stats.totalIncidents()).isEqualTo(7L);
+        assertThat(stats.totalIncidents()).isEqualTo(9L);
         assertThat(stats.openCount()).isEqualTo(4L);
+        assertThat(stats.inProgressCount()).isEqualTo(2L);
         assertThat(stats.closedCount()).isEqualTo(2L);
         assertThat(stats.resolvedCount()).isEqualTo(1L);
     }
@@ -100,10 +108,11 @@ class DashboardServiceTest {
 
         DashboardStats stats = dashboardService.getStats("user-1", RoleCode.AGENT);
 
-        assertThat(stats.totalIncidents()).isEqualTo(0L);
-        assertThat(stats.openCount()).isEqualTo(0L);
-        assertThat(stats.closedCount()).isEqualTo(0L);
-        assertThat(stats.resolvedCount()).isEqualTo(0L);
+        assertThat(stats.totalIncidents()).isZero();
+        assertThat(stats.openCount()).isZero();
+        assertThat(stats.inProgressCount()).isZero();
+        assertThat(stats.closedCount()).isZero();
+        assertThat(stats.resolvedCount()).isZero();
     }
 
     @Test
@@ -133,24 +142,32 @@ class DashboardServiceTest {
     void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of());
+        when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
         when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
-        assertThat(charts.trends()).hasSize(1);
-        assertThat(charts.trends().get(0).label()).isEqualTo("My Assigned Incidents");
+        assertThat(charts.trends()).hasSize(2);
+        assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
+        assertThat(charts.trends().get(1).label()).isEqualTo("My Assigned Incidents");
     }
 
     @Test
     void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndSeries() {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+        when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
         assertThat(charts.byStatus()).isEmpty();
-        assertThat(charts.trends()).hasSize(1);
-        assertThat(charts.trends().get(0).data()).isEmpty();
+        assertThat(charts.trends()).hasSize(2);
+        assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
+        assertThat(charts.trends().get(0).data()).isNotEmpty();
+        charts.trends().get(0).data().forEach(mc -> assertThat(mc.count()).isZero());
+        assertThat(charts.trends().get(1).label()).isEqualTo("My Assigned Incidents");
+        assertThat(charts.trends().get(1).data()).isNotEmpty();
+        charts.trends().get(1).data().forEach(mc -> assertThat(mc.count()).isZero());
     }
 
     @Test
@@ -166,14 +183,15 @@ class DashboardServiceTest {
     @Test
     void getIncidents_adminRole_callsFindAllUnified() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllUnified(isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
+        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "admin-1", RoleCode.ADMIN, null, null, null, null, "cat-it", null, Pageable.unpaged());
+                "admin-1", RoleCode.ADMIN, null, new IncidentFilterParams(null, null, null, "cat-it", null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findAllUnified(isNull(), any(), any(), any(), eq("cat-it"), any(), isNull(), isNull(), any(Pageable.class));
+        verify(incidentRepository).findAllUnified(isNull(), eq(new IncidentFilterParams(null, null, null, "cat-it", null)), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     @Test
@@ -182,14 +200,15 @@ class DashboardServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.findByDepartmentUnified(anyList(), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class)))
+        when(incidentRepository.findByDepartmentUnified(anyList(), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), isNull(), any(), any(), any(), any(), any(), isNull(), isNull(), any(Pageable.class));
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     @Test
@@ -197,10 +216,10 @@ class DashboardServiceTest {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
 
         Page<IncidentResponse> result = dashboardService.getIncidents(
-                "user-1", RoleCode.AGENT, null, null, null, null, null, null, Pageable.unpaged());
+                "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        assertThat(result.getTotalElements()).isEqualTo(0);
+        assertThat(result.getTotalElements()).isZero();
     }
 
     // ── getMyIncidents ────────────────────────────────────────────────────────
@@ -210,9 +229,10 @@ class DashboardServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(incidentRepository.findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
         Page<IncidentResponse> result = dashboardService.getMyIncidents(
-                "user-1", null, null, null, null, null, Pageable.unpaged());
+                "user-1", new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
         verify(incidentRepository).findByUserIdFiltered(anyString(), any(), any(), any(), any(), any(), any(Pageable.class));

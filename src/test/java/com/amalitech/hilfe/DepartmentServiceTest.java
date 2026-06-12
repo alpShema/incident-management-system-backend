@@ -19,8 +19,10 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,8 +60,6 @@ class DepartmentServiceTest {
     void updateDepartmentStatus_deactivate_noLinks_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(categoryRepository.existsByDepartmentId("dept-1")).thenReturn(false);
-        when(agentGroupRepository.existsByDepartmentIdAndStatus("dept-1", true)).thenReturn(false);
         when(departmentRepository.save(dept)).thenReturn(dept);
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
 
@@ -70,34 +70,32 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void updateDepartmentStatus_deactivate_withCategories_throws409() {
+    void updateDepartmentStatus_deactivate_withCategories_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(categoryRepository.existsByDepartmentId("dept-1")).thenReturn(true);
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active"))
+                .thenReturn(java.util.List.of(mock(com.amalitech.hilfe.models.IncidentCategory.class)));
 
-        assertThatThrownBy(() -> departmentService.updateDepartmentStatus("dept-1", false))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Department has assigned incident categories")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(409);
+        DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
-        verify(departmentRepository, never()).save(dept);
+        assertThat(response.status()).isFalse();
+        assertThat(response.categoryCount()).isEqualTo(1L);
+        verify(departmentRepository).save(dept);
     }
 
     @Test
-    void updateDepartmentStatus_deactivate_withActiveAgentGroups_throws409() {
+    void updateDepartmentStatus_deactivate_withActiveAgentGroups_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(categoryRepository.existsByDepartmentId("dept-1")).thenReturn(false);
-        when(agentGroupRepository.existsByDepartmentIdAndStatus("dept-1", true)).thenReturn(true);
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
 
-        assertThatThrownBy(() -> departmentService.updateDepartmentStatus("dept-1", false))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Department has assigned agent groups")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(409);
+        DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
-        verify(departmentRepository, never()).save(dept);
+        assertThat(response.status()).isFalse();
+        verify(departmentRepository).save(dept);
+        verifyNoInteractions(agentGroupRepository);
     }
 
     @Test
@@ -124,7 +122,23 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void updateDepartment_inactiveDepartment_isAllowed() {
+    void createDepartment_trimsNameAndDescription() {
+        when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
+        when(departmentRepository.save(any(Department.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DepartmentResponse response = departmentService.createDepartment(
+                new DepartmentRequest("  Facilities  ",  "  Facilities dept  "));
+
+        assertThat(response.name()).isEqualTo("Facilities");
+        assertThat(response.description()).isEqualTo("Facilities dept");
+        var captor = org.mockito.ArgumentCaptor.forClass(Department.class);
+        verify(departmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Facilities");
+        assertThat(captor.getValue().getDescription()).isEqualTo("Facilities dept");
+    }
+
+    @Test
+    void updateDepartment_trimsNameAndDescription() {
         Department dept = department(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.existsByNameIgnoreCase("Facilities Updated")).thenReturn(false);
@@ -132,10 +146,22 @@ class DepartmentServiceTest {
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.updateDepartment(
-                "dept-1", new DepartmentRequest("Facilities Updated", "Updated description"));
+                "dept-1", new DepartmentRequest("  Facilities Updated  ", "  Updated description  "));
 
         assertThat(response.name()).isEqualTo("Facilities Updated");
         assertThat(response.description()).isEqualTo("Updated description");
         verify(departmentRepository).save(dept);
+    }
+
+    @Test
+    void getDepartment_inactiveDepartment_isReturned() {
+        Department dept = department(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+
+        DepartmentResponse response = departmentService.getDepartment("dept-1");
+
+        assertThat(response.status()).isFalse();
+        assertThat(response.id()).isEqualTo("dept-1");
     }
 }

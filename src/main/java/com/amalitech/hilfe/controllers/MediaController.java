@@ -6,7 +6,6 @@ import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.MediaService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,11 +29,9 @@ public class MediaController {
                     + "Client uploads the file directly to S3 using this URL, "
                     + "then includes the returned fileKey in the incident creation request."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Presigned URL generated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid file type or size"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Presigned URL generated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid file type or size")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @PostMapping("/presigned-url")
     @PreAuthorize("hasAuthority('" + RbacPermissions.INCIDENT_CREATE + "')")
     public ResponseEntity<ApiResponse<PresignedUrlResponse>> generatePresignedUrl(

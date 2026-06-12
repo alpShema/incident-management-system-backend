@@ -14,6 +14,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -31,8 +32,11 @@ public class SecurityConfig {
     @Value("${cors.allowed-origins}")
     private List<String> allowedOrigins;
 
+    @Value("${cors.extra-allowed-origins:}")
+    private List<String> extraAllowedOrigins;
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception { // NOSONAR java:S112 - throws Exception is required by the Spring Security HttpSecurity API
         http
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 - stateless REST API using HttpOnly JWT cookies; CSRF not applicable
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -53,8 +57,15 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        List<String> mergedOrigins = new ArrayList<>(allowedOrigins);
+        if (extraAllowedOrigins != null) {
+            extraAllowedOrigins.stream()
+                    .filter(o -> !o.isBlank())
+                    .forEach(mergedOrigins::add);
+        }
+
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(allowedOrigins);
+        config.setAllowedOriginPatterns(mergedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         // Required for the browser to send cookies (credentials: include) cross-origin
@@ -64,7 +75,7 @@ public class SecurityConfig {
         // WebSocket upgrade requests must pass the security CORS filter before reaching
         // WebSocketConfig's setAllowedOriginPatterns("*"), so allow all origins here too.
         CorsConfiguration wsConfig = new CorsConfiguration();
-        wsConfig.setAllowedOriginPatterns(List.of("*"));
+        wsConfig.setAllowedOriginPatterns(List.of("*")); // NOSONAR java:S5122 - intentionally permissive to match WebSocketConfig; security is enforced by JwtHandshakeInterceptor (JWT token validation on every upgrade)
         wsConfig.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
         wsConfig.setAllowedHeaders(List.of("*"));
         wsConfig.setAllowCredentials(true);
