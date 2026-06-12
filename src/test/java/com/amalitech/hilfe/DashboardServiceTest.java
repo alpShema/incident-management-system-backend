@@ -83,10 +83,10 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getStats_agentRole_agentFound_returnsCombinedStats() {
+    void getStats_agentRole_agentFound_returnsAssignedStats() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.countByStatusForAgentCombined("agent-1", "user-1")).thenReturn(List.of(
+        when(incidentRepository.countByStatusForAgent("agent-1")).thenReturn(List.of(
                 new Object[]{"Open", 4L},
                 new Object[]{"In Progress", 2L},
                 new Object[]{"Closed", 2L},
@@ -142,7 +142,7 @@ class DashboardServiceTest {
     void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.countByStatusForAgentCombined("agent-1", "user-1")).thenReturn(List.of());
+        when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
         when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
         when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
 
@@ -156,15 +156,18 @@ class DashboardServiceTest {
     @Test
     void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndSeries() {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+        when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
         assertThat(charts.byStatus()).isEmpty();
         assertThat(charts.trends()).hasSize(2);
         assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
-        assertThat(charts.trends().get(0).data()).isEmpty();
+        assertThat(charts.trends().get(0).data()).isNotEmpty();
+        charts.trends().get(0).data().forEach(mc -> assertThat(mc.count()).isZero());
         assertThat(charts.trends().get(1).label()).isEqualTo("My Assigned Incidents");
-        assertThat(charts.trends().get(1).data()).isEmpty();
+        assertThat(charts.trends().get(1).data()).isNotEmpty();
+        charts.trends().get(1).data().forEach(mc -> assertThat(mc.count()).isZero());
     }
 
     @Test
