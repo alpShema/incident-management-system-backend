@@ -77,9 +77,7 @@ public class DashboardService {
                         ? incidentRepository.countByStatusForAgentCombinedSince(agent.getId(), userId, since)
                         : incidentRepository.countByStatusForAgentCombined(agent.getId(), userId)))
                         .orElse(List.of());
-                List<MonthlyCount> myTrend = agentOpt
-                        .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgentCombined(agent.getId(), userId, trendSince)))
-                        .orElse(List.of());
+                List<MonthlyCount> myTrend = toMonthlyCount(incidentRepository.countByMonthForUser(userId, trendSince));
                 List<MonthlyCount> assignedTrend = agentOpt
                         .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
                         .orElse(List.of());

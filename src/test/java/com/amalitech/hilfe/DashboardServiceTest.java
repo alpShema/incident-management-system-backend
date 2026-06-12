@@ -139,11 +139,11 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getCharts_agentRole_agentFound_returnsCombinedTrendSeries() {
+    void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(incidentRepository.countByStatusForAgentCombined("agent-1", "user-1")).thenReturn(List.of());
-        when(incidentRepository.countByMonthForAgentCombined(eq("agent-1"), eq("user-1"), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
         when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
