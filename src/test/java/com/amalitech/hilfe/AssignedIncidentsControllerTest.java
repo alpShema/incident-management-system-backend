@@ -19,7 +19,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.amalitech.hilfe.dto.IncidentResponse;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -54,28 +54,30 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_adminAuth_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
     void listAssignedIncidents_agentAuth_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
                 agentPrincipal(), null, List.of(() -> "dashboard.agent"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
@@ -96,33 +98,35 @@ class AssignedIncidentsControllerTest {
 
     @Test
     void listAssignedIncidents_keywordOnly_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").param("query", "fire").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
     void listAssignedIncidents_filterOnly_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").param("statusId", "status-open").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
     void listAssignedIncidents_combinedKeywordAndFilter_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), eq("status-open"), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), eq("fire"), any(IncidentFilterParams.class), any()))
                 .thenReturn(Page.empty());
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -132,35 +136,38 @@ class AssignedIncidentsControllerTest {
                         .param("query", "fire")
                         .param("statusId", "status-open")
                         .with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Assigned incidents retrieved successfully"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Assigned incidents retrieved successfully"));
     }
 
     @Test
     void listAssignedIncidents_emptyResult_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(), any(), any(), any(), any(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), any(), any(IncidentFilterParams.class), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items").isEmpty())
-                .andExpect(jsonPath("$.data.totalElements").value(0));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.data.items").isEmpty(),
+                        jsonPath("$.data.totalElements").value(0));
     }
 
     @Test
     void listAssignedIncidents_noParamsAuthenticated_returns200() throws Exception {
-        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+        when(dashboardService.getIncidents(anyString(), any(RoleCode.class), isNull(), any(IncidentFilterParams.class), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "dashboard.admin"));
 
         mvc.perform(get("/assigned-incidents").with(authentication(auth)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.page").value(0))
-                .andExpect(jsonPath("$.data.size").value(10));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.data.page").value(0),
+                        jsonPath("$.data.size").value(10));
     }
 }

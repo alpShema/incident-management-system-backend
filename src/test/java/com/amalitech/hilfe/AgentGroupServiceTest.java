@@ -3,21 +3,37 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
+import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.models.IncidentCategory;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.AgentGroupService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,33 +43,442 @@ class AgentGroupServiceTest {
     @Mock AgentRepository agentRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock DepartmentRepository departmentRepository;
+    @Mock IncidentTypeRepository incidentTypeRepository;
+    @Mock ActivityLogService activityLogService;
 
     @InjectMocks AgentGroupService agentGroupService;
 
-    @Test
-    void removeMember_nonMember_throws404() {
-        AgentGroup group = AgentGroup.builder()
+    private AgentGroup group(boolean status) {
+        return AgentGroup.builder()
                 .id("group-1")
                 .name("IT Support")
-                .status(true)
+                .departmentId("dept-1")
+                .status(status)
                 .build();
+    }
 
+    private Agent memberAgent() {
         Agent agent = Agent.builder()
                 .id("agent-1")
                 .userId("user-1")
                 .status(true)
                 .build();
-        agent.setUser(User.builder().id("user-1").fullName("Agent One").build());
+        agent.setUser(User.builder().id("user-1").fullName("Agent One").status(true).build());
+        return agent;
+    }
+
+    @Test
+    void createAgentGroup_withDeactivatedUserAccount_throws400() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+        Agent activeAgent = Agent.builder().id("agent-active").userId("user-active").status(true).build();
+        activeAgent.setUser(User.builder().id("user-active").status(true).build());
+        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(false).build();
+        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build());
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-active")).thenReturn(Optional.of(activeAgent));
+        when(agentRepository.findByIdWithUser("agent-deactivated")).thenReturn(Optional.of(deactivatedAgent));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-active", "agent-deactivated"), null);
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
+                .hasMessage("Agent's account is deactivated")
+                .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void createAgentGroup_withNullAgentIds_throws400() {
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", null, null);
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("At least one agent is required")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void createAgentGroup_withEmptyAgentIds_throws400() {
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of(), null);
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("At least one agent is required")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void createAgentGroup_withUnavailableAgent_succeeds() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+        Agent unavailableAgent = Agent.builder().id("agent-unavailable").userId("user-1").status(false).build(); // unavailable but active
+        unavailableAgent.setUser(User.builder().id("user-1").status(true).build()); // user account active
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-unavailable")).thenReturn(Optional.of(unavailableAgent));
+        when(agentGroupRepository.save(any(AgentGroup.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-unavailable"), null);
+        agentGroupService.createAgentGroup(request);
+
+        verify(agentGroupRepository).save(any(AgentGroup.class));
+        verify(agentGroupMemberRepository).save(any());
+    }
+
+    @Test
+    void createAgentGroup_trimsNameAndDescription() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Support Team")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(memberAgent()));
+        when(agentGroupRepository.save(any(AgentGroup.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" Support Team ", " Handles tickets ", "dept-1", List.of("agent-1"), null);
+        agentGroupService.createAgentGroup(request);
+
+        var captor = ArgumentCaptor.forClass(AgentGroup.class);
+        verify(agentGroupRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Support Team");
+        assertThat(captor.getValue().getDescription()).isEqualTo("Handles tickets");
+    }
+
+    @Test
+    void updateAgentGroup_trimsNameAndDescription() {
+        AgentGroup group = group(true);  // name = "IT Support"
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        // name " New Name " differs from existing "IT Support" — dedup check will fire
+        when(agentGroupRepository.existsByNameIgnoreCase("New Name")).thenReturn(false);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" New Name ", " Updated desc ", null, null, null);
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        assertThat(group.getName()).isEqualTo("New Name");
+        assertThat(group.getDescription()).isEqualTo("Updated desc");
+    }
+
+    @Test
+    void updateAgentGroup_syncsMembership() {
+        AgentGroup group = group(true);
+        Agent agentB = Agent.builder().id("agent-B").userId("user-B").status(true).build();
+        agentB.setUser(User.builder().id("user-B").status(true).build());
 
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
-        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.existsByAgentIdAndAgentGroupId("agent-1", "group-1"))
-                .thenReturn(false);
+        when(agentGroupRepository.save(group)).thenReturn(group);
+        when(agentRepository.findByIdWithUser("agent-B")).thenReturn(Optional.of(agentB));
 
-        assertThatThrownBy(() -> agentGroupService.removeMember("group-1", "agent-1"))
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, List.of("agent-B"), null);
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(agentGroupMemberRepository).deleteByAgentGroupId("group-1");
+        verify(agentGroupMemberRepository).existsByAgentIdAndAgentGroupId("agent-B", "group-1");
+    }
+
+    @Test
+    void updateAgentGroup_nullAgentIds_doesNotTouchMembership() {
+        AgentGroup group = group(true);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(" New Name ", null, null, null, null);
+        when(agentGroupRepository.existsByNameIgnoreCase("New Name")).thenReturn(false);
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(agentGroupMemberRepository, never()).deleteByAgentGroupId(any());
+    }
+
+    @Test
+    void updateAgentGroup_withDeactivatedUserInList_throws400() {
+        AgentGroup group = group(true);
+        Agent deactivatedAgent = Agent.builder().id("agent-deactivated").userId("user-deactivated").status(false).build();
+        deactivatedAgent.setUser(User.builder().id("user-deactivated").status(false).build());
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+        when(agentRepository.findByIdWithUser("agent-deactivated")).thenReturn(Optional.of(deactivatedAgent));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, List.of("agent-deactivated"), null);
+
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroup("group-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Agent is not a member of this agent group")
+                .hasMessage("Agent's account is deactivated")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupMemberRepository, never()).deleteByAgentGroupId(any());
+    }
+
+    @Test
+    void createAgentGroup_withNonExistentAgent_throws404() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("missing-agent")).thenReturn(Optional.empty());
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("missing-agent"), null);
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void createAgentGroup_withTopics_assignsTopics() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+        IncidentCategory category = IncidentCategory.builder().id("cat-1").departmentId("dept-1").build();
+        IncidentType topic = IncidentType.builder().id("topic-1").name("Network Issues").agentGroupId(null).build();
+        topic.setCategory(category);
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(memberAgent()));
+        when(agentGroupRepository.save(any(AgentGroup.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(incidentTypeRepository.findById("topic-1")).thenReturn(Optional.of(topic));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-1"), List.of("topic-1"));
+        agentGroupService.createAgentGroup(request);
+
+        assertThat(topic.getAgentGroupId()).isNotNull();
+        verify(incidentTypeRepository).save(topic);
+    }
+
+    @Test
+    void createAgentGroup_withTopicFromWrongDept_throws400() {
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+        IncidentCategory category = IncidentCategory.builder().id("cat-1").departmentId("dept-OTHER").build();
+        IncidentType topic = IncidentType.builder().id("topic-1").name("HR Topic").build();
+        topic.setCategory(category);
+
+        when(agentGroupRepository.existsByNameIgnoreCase("Test Group")).thenReturn(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(memberAgent()));
+        when(incidentTypeRepository.findById("topic-1")).thenReturn(Optional.of(topic));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("Test Group", null, "dept-1", List.of("agent-1"), List.of("topic-1"));
+
+        assertThatThrownBy(() -> agentGroupService.createAgentGroup(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("does not belong to the selected department")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupRepository, never()).save(any(AgentGroup.class));
+    }
+
+    @Test
+    void updateAgentGroup_syncTopics_clearsOldAndAssignsNew() {
+        AgentGroup group = group(true);
+        IncidentCategory category = IncidentCategory.builder().id("cat-1").departmentId("dept-1").build();
+        IncidentType topic = IncidentType.builder().id("topic-new").name("New Topic").build();
+        topic.setCategory(category);
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+        when(incidentTypeRepository.findById("topic-new")).thenReturn(Optional.of(topic));
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, null, List.of("topic-new"));
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(incidentTypeRepository).clearAgentGroupId("group-1");
+        verify(incidentTypeRepository).save(topic);
+        assertThat(topic.getAgentGroupId()).isEqualTo("group-1");
+    }
+
+    @Test
+    void updateAgentGroup_nullTopicIds_doesNotTouchTopics() {
+        AgentGroup group = group(true);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, null, null);
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(incidentTypeRepository, never()).clearAgentGroupId(any());
+    }
+
+    @Test
+    void updateAgentGroupStatus_deactivate_succeedsAndPreservesMembers() {
+        AgentGroup group = group(true);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        agentGroupService.updateAgentGroupStatus("admin-1", "group-1", false);
+
+        assertThat(group.getStatus()).isFalse();
+        verify(agentGroupRepository).save(group);
+        verify(activityLogService).logAgentGroupStatusChange("admin-1", "group-1", true, false);
+    }
+
+    @Test
+    void updateAgentGroupStatus_activate_succeeds() {
+        AgentGroup group = group(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        agentGroupService.updateAgentGroupStatus("admin-1", "group-1", true);
+
+        assertThat(group.getStatus()).isTrue();
+        verify(agentGroupRepository).save(group);
+        verify(activityLogService).logAgentGroupStatusChange("admin-1", "group-1", false, true);
+    }
+
+    @Test
+    void updateAgentGroupStatus_alreadyInactive_throws409() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(false)));
+
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroupStatus("admin-1", "group-1", false))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group is already inactive")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
+    void updateAgentGroupStatus_alreadyActive_throws409() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(true)));
+
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroupStatus("admin-1", "group-1", true))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group is already active")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
+    void updateAgentGroupStatus_notFound_throws404() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> agentGroupService.updateAgentGroupStatus("admin-1", "group-1", true))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }
+
+    @Test
+    void getAgentGroup_inactive_returnsResponse() {
+        AgentGroup group = group(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(1L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(
+                Department.builder().id("dept-1").name("Facilities").status(false).build()));
+
+        var response = agentGroupService.getAgentGroup("group-1");
+
+        assertThat(response.id()).isEqualTo("group-1");
+        assertThat(response.status()).isFalse();
+        assertThat(response.memberCount()).isEqualTo(1L);
+    }
+
+    @Test
+    void listAllAgentGroups_statusAll_returnsAllGroups() {
+        AgentGroup active = group(true);
+        AgentGroup inactive = group(false);
+        inactive.setId("group-2");
+        inactive.setName("Facilities Support");
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+
+        when(agentGroupRepository.listAllAgentGroups(isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(active, inactive)));
+        when(agentGroupMemberRepository.countByAgentGroupId(any())).thenReturn(0L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+
+        var result = agentGroupService.listAllAgentGroups("all", null, null, Pageable.unpaged());
+
+        assertThat(result.getContent()).hasSize(2);
+    }
+
+    @Test
+    void listAllAgentGroups_statusActive_passesTrueFilter() {
+        AgentGroup active = group(true);
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+
+        when(agentGroupRepository.listAllAgentGroups(eq(true), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(active)));
+        when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+
+        var result = agentGroupService.listAllAgentGroups("active", null, null, Pageable.unpaged());
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().status()).isTrue();
+    }
+
+    @Test
+    void listAllAgentGroups_statusDeactivated_passesFalseFilter() {
+        AgentGroup inactive = group(false);
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(false).build();
+
+        when(agentGroupRepository.listAllAgentGroups(eq(false), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(inactive)));
+        when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+
+        var result = agentGroupService.listAllAgentGroups("deactivated", null, null, Pageable.unpaged());
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().status()).isFalse();
+    }
+
+    @Test
+    void listAllAgentGroups_nullStatus_returnsAll() {
+        when(agentGroupRepository.listAllAgentGroups(isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        var result = agentGroupService.listAllAgentGroups(null, null, null, Pageable.unpaged());
+
+        assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
+    void listAllAgentGroups_invalidStatus_throws400() {
+        Pageable pageable = Pageable.unpaged();
+        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Invalid status filter. Accepted values: active, deactivated, all")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void listMembers_inactiveGroup_returnsMembers() {
+        AgentGroup group = group(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupMemberRepository.findAgentsByAgentGroupIdWithUser("group-1"))
+                .thenReturn(List.of(memberAgent()));
+
+        var members = agentGroupService.listMembers("group-1");
+
+        assertThat(members).hasSize(1);
+        assertThat(members.getFirst().agentId()).isEqualTo("agent-1");
+    }
+
+    @Test
+    void addMember_inactiveGroup_throws404() {
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(false)));
+
+        assertThatThrownBy(() -> agentGroupService.addMember("group-1", "agent-2"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Agent group not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
 }

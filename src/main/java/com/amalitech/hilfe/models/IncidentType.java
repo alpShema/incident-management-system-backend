@@ -29,7 +29,7 @@ public class IncidentType {
     @Column(name = "admin_id", nullable = false)
     private String adminId;
 
-    @Column(name = "agent_id", nullable = false)
+    @Column(name = "agent_id")
     private String agentId;
 
     @Column(name = "agent_group_id")
@@ -38,6 +38,10 @@ public class IncidentType {
     @Column(name = "visible_to_group", nullable = false)
     @Builder.Default
     private boolean visibleToGroup = true;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private String status = "active";
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

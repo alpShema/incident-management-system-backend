@@ -47,7 +47,9 @@ class MediaServiceTest {
     @InjectMocks MediaService mediaService;
 
     private static final List<String> ALLOWED_TYPES = List.of(
-            "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf");
+            "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
     // ── generatePresignedUploadUrl ───────────────────────────────────────────
 
@@ -69,6 +71,44 @@ class MediaServiceTest {
         assertThat(response.fileKey()).startsWith("media/");
         assertThat(response.fileKey()).endsWith("/photo.png");
         assertThat(response.expiresInSeconds()).isEqualTo(900);
+    }
+
+    @Test
+    void generatePresignedUploadUrl_docxFile_returnsPresignedUrl() throws Exception {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(s3Properties.presignExpiry()).thenReturn(Duration.ofMinutes(15));
+
+        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
+        when(presigned.url()).thenReturn(URI.create("https://s3.example.com/presigned-put").toURL());
+        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("report.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 1024L);
+        PresignedUrlResponse response = mediaService.generatePresignedUploadUrl(request);
+
+        assertThat(response.uploadUrl()).contains("presigned-put");
+        assertThat(response.fileKey()).endsWith("/report.docx");
+    }
+
+    @Test
+    void generatePresignedUploadUrl_xlsxFile_returnsPresignedUrl() throws Exception {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(s3Properties.presignExpiry()).thenReturn(Duration.ofMinutes(15));
+
+        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
+        when(presigned.url()).thenReturn(URI.create("https://s3.example.com/presigned-put").toURL());
+        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("data.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 1024L);
+        PresignedUrlResponse response = mediaService.generatePresignedUploadUrl(request);
+
+        assertThat(response.uploadUrl()).contains("presigned-put");
+        assertThat(response.fileKey()).endsWith("/data.xlsx");
     }
 
     @Test

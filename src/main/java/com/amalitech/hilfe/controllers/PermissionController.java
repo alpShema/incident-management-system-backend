@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PermissionController {
     private final RoleService roleService;
 
-    @Operation(summary = "Get grouped permission catalog", description = "Returns permissions grouped into incident, agent-and-group, and other categories.")
+    @Operation(summary = "Get grouped permission catalog", description = "Returns permissions grouped into five categories: incident, agent-and-group, settings, user, and report.")
     @GetMapping("/catalog")
     @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_PERMISSION_READ + "')")
     public ResponseEntity<ApiResponse<PermissionCatalogResponse>> catalog() {

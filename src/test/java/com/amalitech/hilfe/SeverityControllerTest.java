@@ -35,8 +35,8 @@ class SeverityControllerTest {
     @Test
     void listSeverities_returns200WithData() throws Exception {
         when(severityService.listSeverities()).thenReturn(List.of(
-                new SeverityResponse("sev-1", "Low", "Low priority", true, Instant.now(), Instant.now()),
-                new SeverityResponse("sev-2", "High", "High priority", true, Instant.now(), Instant.now())
+                new SeverityResponse("sev-1", "Low", "Low priority", true, 480, 4320, Instant.now(), Instant.now()),
+                new SeverityResponse("sev-2", "High", "High priority", true, 60, 480, Instant.now(), Instant.now())
         ));
 
         mvc.perform(get("/severities")
@@ -47,6 +47,7 @@ class SeverityControllerTest {
                 .andExpect(jsonPath("$.data[0].name").value("Low"))
                 .andExpect(jsonPath("$.data[0].description").value("Low priority"))
                 .andExpect(jsonPath("$.data[0].status").value(true))
+                .andExpect(jsonPath("$.data[0].responseTimeMinutes").value(480))
                 .andExpect(jsonPath("$.data[1].name").value("High"));
     }
 }

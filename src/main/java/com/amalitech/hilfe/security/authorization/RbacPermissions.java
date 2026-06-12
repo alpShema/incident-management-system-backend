@@ -14,7 +14,6 @@ public final class RbacPermissions {
     public static final String AGENT_UPDATE = "agent.update";
     public static final String AGENT_AVAILABILITY_UPDATE = "agent.availability.update";
     public static final String AGENT_AVAILABILITY_UPDATE_ANY = "agent.availability.update.any";
-    public static final String ADMIN_AVAILABILITY_UPDATE = "admin.availability.update";
     public static final String AGENT_DELETE = "agent.delete";
     public static final String AGENT_GROUP_READ = "agent-group.read";
     public static final String AGENT_GROUP_CREATE = "agent-group.create";
@@ -74,7 +73,6 @@ public final class RbacPermissions {
             AGENT_UPDATE,
             AGENT_DELETE,
             AGENT_AVAILABILITY_UPDATE_ANY,
-            ADMIN_AVAILABILITY_UPDATE,
             AGENT_GROUP_READ,
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,
@@ -96,6 +94,7 @@ public final class RbacPermissions {
             INCIDENT_TYPE_UPDATE,
             INCIDENT_TYPE_DELETE,
             RBAC_ROLE_READ,
+            RBAC_ROLE_UPDATE,
             RBAC_USER_ROLE_UPDATE,
             RBAC_PERMISSION_READ,
             DASHBOARD_ADMIN,
@@ -113,7 +112,6 @@ public final class RbacPermissions {
             AGENT_UPDATE,
             AGENT_DELETE,
             AGENT_AVAILABILITY_UPDATE_ANY,
-            ADMIN_AVAILABILITY_UPDATE,
             AGENT_GROUP_READ,
             AGENT_GROUP_CREATE,
             AGENT_GROUP_UPDATE,

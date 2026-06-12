@@ -9,10 +9,13 @@ import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.AgentGroupMember;
 import com.amalitech.hilfe.models.Department;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
+import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,45 +32,96 @@ public class AgentGroupService {
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final DepartmentRepository departmentRepository;
+    private final IncidentCategoryRepository incidentCategoryRepository;
+    private final IncidentTypeRepository incidentTypeRepository;
+    private final ActivityLogService activityLogService;
 
-    public Page<AgentGroupResponse> listAgentGroups(Pageable pageable) {
-        return agentGroupRepository.findByStatus(true, pageable)
+    private static final String TOPIC_NOT_FOUND_PREFIX = "Topic not found: ";
+
+    public Page<AgentGroupResponse> listAgentGroups(String query, String departmentId, Pageable pageable) {
+        String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
+        return agentGroupRepository.searchAgentGroups(queryPattern, departmentId, pageable)
                 .map(this::toResponse);
     }
 
+    public Page<AgentGroupResponse> listAllAgentGroups(String status, String query, String departmentId, Pageable pageable) {
+        Boolean statusFilter = (status == null || status.isBlank() || status.equalsIgnoreCase("all"))
+                ? null
+                : resolveStatusFilter(status);
+        String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
+        return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId, pageable)
+                .map(this::toResponse);
+    }
+
+    public List<LookupResponse> listAgentGroupsByCategory(String categoryId) {
+        String departmentId = incidentCategoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ArmsAuthException("Category not found", 404))
+                .getDepartmentId();
+        return agentGroupRepository.findByDepartmentIdAndStatus(departmentId, true).stream()
+                .map(ag -> LookupResponse.from(ag.getId(), ag.getName()))
+                .toList();
+    }
+
+    private boolean resolveStatusFilter(String status) {
+        if (status.equalsIgnoreCase("active")) return true;
+        if (status.equalsIgnoreCase("deactivated")) return false;
+        throw new ArmsAuthException("Invalid status filter. Accepted values: active, deactivated, all", 400);
+    }
+
     public AgentGroupResponse getAgentGroup(String id) {
-        return toResponse(findAgentGroup(id));
+        return toResponse(findAgentGroupByIdOrThrow(id));
     }
 
     @Transactional
     public AgentGroupResponse createAgentGroup(AgentGroupRequest request) {
-        if (isBlank(request.name())) {
+        String name = trimOrNull(request.name());
+        String description = trimOrNull(request.description());
+
+        if (isBlank(name)) {
             throw new ArmsAuthException("Agent group name is required", 400);
         }
         if (isBlank(request.departmentId())) {
             throw new ArmsAuthException("departmentId is required", 400);
         }
-        if (agentGroupRepository.existsByNameIgnoreCase(request.name())) {
+        if (agentGroupRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException("Agent group with this name already exists", 409);
+        }
+        if (request.agentIds() == null || request.agentIds().isEmpty()) {
+            throw new ArmsAuthException("At least one agent is required", 400);
         }
 
         String groupId = UUID.randomUUID().toString();
         Department department = findActiveDepartment(request.departmentId());
 
+        for (String agentId : request.agentIds()) {
+            findActiveAgent(agentId);
+        }
+
         AgentGroup group = AgentGroup.builder()
                 .id(groupId)
-                .name(request.name())
-                .description(request.description())
+                .name(name)
+                .description(description)
                 .departmentId(department.getId())
                 .status(true)
                 .build();
+        if (request.topicIds() != null) {
+            validateTopicsForDepartment(request.topicIds(), department.getId());
+        }
+
         agentGroupRepository.save(group);
 
-        if (request.agentIds() != null) {
-            for (String agentId : request.agentIds()) {
-                findAgent(agentId);
-                addMembership(agentId, groupId);
+        for (String agentId : request.agentIds()) {
+            addMembership(agentId, groupId);
+        }
+
+        if (request.topicIds() != null) {
+            for (String topicId : request.topicIds()) {
+                IncidentType topic = incidentTypeRepository.findById(topicId)
+                        .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
+                topic.setAgentGroupId(groupId);
+                incidentTypeRepository.save(topic);
             }
+            incidentTypeRepository.flush();
         }
 
         return toResponse(group);
@@ -75,32 +129,68 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupResponse updateAgentGroup(String id, AgentGroupRequest request) {
-        AgentGroup group = findAgentGroup(id);
-        if (!isBlank(request.name())) {
-            if (!group.getName().equalsIgnoreCase(request.name())
-                    && agentGroupRepository.existsByNameIgnoreCase(request.name())) {
+        String name = trimOrNull(request.name());
+        String description = trimOrNull(request.description());
+
+        AgentGroup group = findActiveAgentGroupOrThrow(id);
+        if (!isBlank(name)) {
+            if (!group.getName().equalsIgnoreCase(name)
+                    && agentGroupRepository.existsByNameIgnoreCase(name)) {
                 throw new ArmsAuthException("Agent group with this name already exists", 409);
             }
-            group.setName(request.name());
+            group.setName(name);
         }
-        if (request.description() != null) {
-            group.setDescription(request.description());
+        if (description != null) {
+            group.setDescription(description);
         }
         if (!isBlank(request.departmentId())) {
             Department department = findActiveDepartment(request.departmentId());
             group.setDepartmentId(department.getId());
         }
-        return toResponse(agentGroupRepository.save(group));
+        agentGroupRepository.save(group);
+
+        if (request.agentIds() != null) {
+            for (String agentId : request.agentIds()) {
+                findActiveAgent(agentId);
+            }
+            agentGroupMemberRepository.deleteByAgentGroupId(id);
+            for (String agentId : request.agentIds()) {
+                addMembership(agentId, id);
+            }
+        }
+
+        if (request.topicIds() != null) {
+            validateTopicsForDepartment(request.topicIds(), group.getDepartmentId());
+            incidentTypeRepository.clearAgentGroupId(id);
+            for (String topicId : request.topicIds()) {
+                IncidentType topic = incidentTypeRepository.findById(topicId)
+                        .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
+                topic.setAgentGroupId(id);
+                incidentTypeRepository.save(topic);
+            }
+            incidentTypeRepository.flush();
+        }
+
+        return toResponse(group);
     }
 
     @Transactional
-    public void deleteAgentGroup(String id) {
-        AgentGroup group = findAgentGroup(id);
-        if (agentGroupMemberRepository.countByAgentGroupId(id) > 0) {
-            throw new ArmsAuthException("Agent group has assigned agents", 409);
+    public AgentGroupResponse updateAgentGroupStatus(String actorUserId, String id, Boolean status) {
+        AgentGroup group = findAgentGroupByIdOrThrow(id);
+
+        if (status.equals(group.getStatus())) {
+            throw new ArmsAuthException(
+                    Boolean.TRUE.equals(status)
+                            ? "Agent group is already active"
+                            : "Agent group is already inactive",
+                    409);
         }
-        group.setStatus(false);
-        agentGroupRepository.save(group);
+
+        Boolean previousStatus = group.getStatus();
+        group.setStatus(status);
+        AgentGroup saved = agentGroupRepository.save(group);
+        activityLogService.logAgentGroupStatusChange(actorUserId, id, previousStatus, status);
+        return toResponse(saved);
     }
 
     public List<AgentGroupMemberResponse> listMembers(String agentGroupId) {
@@ -112,20 +202,9 @@ public class AgentGroupService {
 
     @Transactional
     public AgentGroupMemberResponse addMember(String agentGroupId, String agentId) {
-        ensureAgentGroupExists(agentGroupId);
+        ensureActiveAgentGroupExists(agentGroupId);
         Agent agent = findAgentWithUser(agentId);
         addMembership(agentId, agentGroupId);
-        return AgentGroupMemberResponse.from(agent);
-    }
-
-    @Transactional
-    public AgentGroupMemberResponse removeMember(String agentGroupId, String agentId) {
-        ensureAgentGroupExists(agentGroupId);
-        Agent agent = findAgentWithUser(agentId);
-        if (!agentGroupMemberRepository.existsByAgentIdAndAgentGroupId(agentId, agentGroupId)) {
-            throw new ArmsAuthException("Agent is not a member of this agent group", 404);
-        }
-        agentGroupMemberRepository.deleteByAgentIdAndAgentGroupId(agentId, agentGroupId);
         return AgentGroupMemberResponse.from(agent);
     }
 
@@ -136,25 +215,53 @@ public class AgentGroupService {
                     .map(dept -> LookupResponse.from(dept.getId(), dept.getName()))
                     .orElse(null);
         }
+        List<LookupResponse> topics = incidentTypeRepository.findByAgentGroupId(group.getId()).stream()
+                .map(t -> LookupResponse.from(t.getId(), t.getName()))
+                .toList();
         return AgentGroupResponse.from(
                 group,
                 department,
-                agentGroupMemberRepository.countByAgentGroupId(group.getId()));
+                agentGroupMemberRepository.countByAgentGroupId(group.getId()),
+                topics);
     }
 
-    private AgentGroup findAgentGroup(String id) {
+    private void validateTopicsForDepartment(List<String> topicIds, String departmentId) {
+        for (String topicId : topicIds) {
+            IncidentType topic = incidentTypeRepository.findById(topicId)
+                    .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
+            String topicDeptId = topic.getCategory() != null ? topic.getCategory().getDepartmentId() : null;
+            if (topicDeptId == null || !topicDeptId.equals(departmentId)) {
+                throw new ArmsAuthException("Topic '" + topic.getName() + "' does not belong to the selected department", 400);
+            }
+        }
+    }
+
+    private AgentGroup findAgentGroupByIdOrThrow(String id) {
+        return agentGroupRepository.findById(id)
+                .orElseThrow(() -> new ArmsAuthException("Agent group not found", 404));
+    }
+
+    private AgentGroup findActiveAgentGroupOrThrow(String id) {
         return agentGroupRepository.findById(id)
                 .filter(group -> Boolean.TRUE.equals(group.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("Agent group not found", 404));
     }
 
     private void ensureAgentGroupExists(String id) {
-        findAgentGroup(id);
+        findAgentGroupByIdOrThrow(id);
     }
 
-    private Agent findAgent(String agentId) {
-        return agentRepository.findById(agentId)
+    private void ensureActiveAgentGroupExists(String id) {
+        findActiveAgentGroupOrThrow(id);
+    }
+
+    private Agent findActiveAgent(String agentId) {
+        Agent agent = agentRepository.findByIdWithUser(agentId)
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+        if (agent.getUser() == null || !Boolean.TRUE.equals(agent.getUser().getStatus())) {
+            throw new ArmsAuthException("Agent's account is deactivated", 400);
+        }
+        return agent;
     }
 
     private Department findActiveDepartment(String departmentId) {
@@ -180,5 +287,9 @@ public class AgentGroupService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String trimOrNull(String value) {
+        return value == null ? null : value.trim();
     }
 }

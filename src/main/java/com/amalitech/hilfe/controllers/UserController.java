@@ -11,7 +11,6 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,11 +36,9 @@ public class UserController {
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=fullName,asc`). "
                     + "Requires `rbac.role.read` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Users retrieved"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Users retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_ROLE_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<UserRoleSummaryResponse>>> listUsers(
@@ -59,12 +56,10 @@ public class UserController {
         summary = "Update a user's role",
         description = "Assigns a new role to the specified user. Valid roles: CLIENT, AGENT, ADMIN, SUPER_ADMIN. Requires `rbac.user.role.update` permission."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Role updated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid role value"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Role updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid role value")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
     @PatchMapping("/{userId}/role")
     @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_USER_ROLE_UPDATE + "')")
     public ResponseEntity<ApiResponse<UserRoleSummaryResponse>> assignUserRole(
@@ -79,11 +74,9 @@ public class UserController {
         summary = "Update user status",
         description = "Updates a user's account status (active/inactive). Users can update their own status. Admins can update any user's status."
     )
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Cannot update another user's status"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
-    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Cannot update another user's status")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
     @PatchMapping("/{userId}/status")
     public ResponseEntity<ApiResponse<UserRoleSummaryResponse>> updateUserStatus(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,

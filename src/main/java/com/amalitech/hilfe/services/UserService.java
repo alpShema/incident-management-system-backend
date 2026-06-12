@@ -2,9 +2,12 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Admin;
 import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.AdminRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -22,6 +25,7 @@ import org.springframework.stereotype.Service;
 public class UserService {
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
+    private final AdminRepository adminRepository;
     private final IncidentRepository incidentRepository;
     private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
@@ -39,24 +43,22 @@ public class UserService {
             queryPattern = "%" + escaped + "%";
         }
         Pageable resolvedPageable = remapSort(pageable);
-        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, parseStatus(status), resolvedPageable);
-    }
-
-    private Boolean parseStatus(String status) {
-        if (status == null || status.isBlank()) return null;
-        return switch (status.trim().toLowerCase()) {
-            case "active" -> true;
-            case "inactive" -> false;
-            default -> null;
-        };
+        Boolean statusFilter = null;
+        if (status != null && !status.isBlank()) {
+            statusFilter = switch (status.trim().toLowerCase()) {
+                case "active" -> true;
+                case "inactive" -> false;
+                default -> null;
+            };
+        }
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, statusFilter, resolvedPageable);
     }
 
     @Transactional
     public UserRoleSummaryResponse assignUserRole(String actorUserId, String userId, String roleCode) {
         String normalizedRoleCode = normalizeRoleCode(roleCode);
-        if (!roleRepository.existsByCode(normalizedRoleCode)) {
-            throw new ArmsAuthException("Role not found", 404);
-        }
+        Role role = roleRepository.findByCode(normalizedRoleCode)
+                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ArmsAuthException("User not found", 404));
@@ -64,6 +66,7 @@ public class UserService {
         String previousRoleCode = user.getRoleCode();
         user.setRoleCode(normalizedRoleCode);
         ensureAgentRecord(user, normalizedRoleCode);
+        ensureAdminRecord(user, normalizedRoleCode);
 
         if (previousRoleCode == null || !previousRoleCode.equals(normalizedRoleCode)) {
             activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, normalizedRoleCode);
@@ -75,6 +78,7 @@ public class UserService {
                 user.getFullName(),
                 user.getProfileImg(),
                 user.getRoleCode(),
+                role.getName(),
                 user.getStatus(),
                 user.getLocation() != null ? user.getLocation().getName() : null,
                 incidentRepository.countByUserId(user.getId()),
@@ -100,12 +104,18 @@ public class UserService {
         user.setStatus(status);
         userRepository.save(user);
 
+        agentRepository.findByUserId(targetUserId).ifPresent(agent -> {
+            agent.setStatus(status);
+            agentRepository.save(agent);
+        });
+
         return new UserRoleSummaryResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getFullName(),
                 user.getProfileImg(),
                 user.getRoleCode(),
+                user.getRole() != null ? user.getRole().getName() : null,
                 user.getStatus(),
                 user.getLocation() != null ? user.getLocation().getName() : null,
                 incidentRepository.countByUserId(user.getId()),
@@ -127,10 +137,27 @@ public class UserService {
                                 ? Sort.Order.asc("location.name")
                                 : Sort.Order.desc("location.name");
                     }
+                    if ("roleName".equals(order.getProperty())) {
+                        return order.isAscending()
+                                ? Sort.Order.asc("role.name")
+                                : Sort.Order.desc("role.name");
+                    }
                     return order;
                 })
                 .toList());
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), remapped);
+    }
+
+    private void ensureAdminRecord(User user, String roleCode) {
+        boolean isAdminRole = "ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
+        if (!isAdminRole || adminRepository.findByUserIdWithUser(user.getId()).isPresent()) {
+            return;
+        }
+        adminRepository.save(Admin.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .userId(user.getId())
+                .status(true)
+                .build());
     }
 
     private void ensureAgentRecord(User user, String roleCode) {

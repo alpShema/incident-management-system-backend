@@ -5,6 +5,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.PageImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -16,14 +17,22 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class AgentService {
+    private static final String AGENT_NOT_FOUND = "AGENT_NOT_FOUND";
+
     private final AgentRepository agentRepository;
     private final DepartmentRepository departmentRepository;
 
-    public Page<AgentResponse> listAgents(String departmentId, Pageable pageable) {
+    public Page<AgentResponse> listAgents(String departmentId, String query, Pageable pageable) {
+        String queryPattern = buildQueryPattern(query);
         if (departmentId == null || departmentId.isBlank()) {
-            return agentRepository.findAllActiveWithUser(pageable).map(AgentResponse::from);
+            return agentRepository.findAllActiveWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
         }
 
+        return getAgentResponses(departmentId, pageable, queryPattern);
+    }
+
+    @NonNull
+    private Page<AgentResponse> getAgentResponses(String departmentId, Pageable pageable, String queryPattern) {
         boolean activeDepartment = departmentRepository.findById(departmentId)
                 .map(department -> Boolean.TRUE.equals(department.getStatus()))
                 .orElse(false);
@@ -31,22 +40,47 @@ public class AgentService {
             return new PageImpl<>(List.of(), pageable, 0);
         }
 
-        return agentRepository.findByDepartmentIdWithUser(departmentId, pageable).map(AgentResponse::from);
+        return agentRepository.findByDepartmentIdWithUserAndQuery(departmentId, queryPattern, pageable).map(AgentResponse::from);
+    }
+
+    public Page<AgentResponse> listAllAgents(String departmentId, String query, Pageable pageable) {
+        String queryPattern = buildQueryPattern(query);
+        if (departmentId == null || departmentId.isBlank()) {
+            return agentRepository.findAllWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
+        }
+
+        return getAgentResponses(departmentId, pageable, queryPattern);
+    }
+
+    public AgentResponse getStatus(String userId) {
+        return AgentResponse.from(agentRepository.findByUserIdWithUser(userId)
+                .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404)));
     }
 
     public AgentResponse updateAvailability(String userId, boolean available) {
-        Agent agent = agentRepository.findByUserId(userId)
-                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+        Agent agent = agentRepository.findByUserIdWithUser(userId)
+                .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404));
         agent.setStatus(available);
-        Agent saved = agentRepository.save(agent);
-        return AgentResponse.from(saved);
+        agentRepository.save(agent);
+        return AgentResponse.from(agent);
     }
 
     public AgentResponse updateAvailabilityById(String agentId, boolean available) {
         Agent agent = agentRepository.findByIdWithUser(agentId)
-                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404));
         agent.setStatus(available);
-        Agent saved = agentRepository.save(agent);
-        return AgentResponse.from(saved);
+        agentRepository.save(agent);
+        return AgentResponse.from(agent);
+    }
+
+    private String buildQueryPattern(String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+
+        return "%" + query.toLowerCase()
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_") + "%";
     }
 }

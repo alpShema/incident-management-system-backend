@@ -3,6 +3,7 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.mappers.ArmsUserMapper;
+import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
@@ -46,6 +47,10 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalStateException(
                         "User not found after upsert for id=" + armsUser.userId()));
 
+        if (Boolean.FALSE.equals(user.getStatus())) {
+            throw new ArmsAuthException("Your account has been deactivated. Please contact your administrator.", 403);
+        }
+
         long refreshTokenTtlSeconds = armsTokenExpiryService.getRemainingLifetimeSeconds(request.armsToken());
         String accessToken = tokenService.generateAccessToken(user);
         String refreshToken = tokenService.generateRefreshToken(user, refreshTokenTtlSeconds);
@@ -88,6 +93,10 @@ public class AuthService {
         User user = userRepository.findAuthUserById(armsUser.userId())
                 .orElseThrow(() -> new IllegalStateException(
                         "User not found after upsert for id=" + armsUser.userId()));
+
+        if (Boolean.FALSE.equals(user.getStatus())) {
+            throw new ArmsAuthException("Your account has been deactivated. Please contact your administrator.", 403);
+        }
 
         tokenRevocationService.revoke(
                 refreshPrincipal.jti(), refreshPrincipal.userId(), refreshPrincipal.expiresAt());
@@ -151,12 +160,19 @@ public class AuthService {
         }
         return locationRepository.findByNameIgnoreCase(armsUser.officeName())
                 .or(() -> locationRepository.findByNameIgnoreCase(normalizeOfficeName(armsUser.officeName())))
-                .map(location -> location.getId())
+                .map(Location::getId)
                 .orElse(null);
     }
 
     private String normalizeOfficeName(String officeName) {
-        return officeName.replaceFirst("(?i)\\s+office$", "").trim();
+        String suffix = "office";
+        int cut = officeName.length() - suffix.length();
+        if (cut > 0
+                && officeName.regionMatches(true, cut, suffix, 0, suffix.length())
+                && Character.isWhitespace(officeName.charAt(cut - 1))) {
+            return officeName.substring(0, cut).trim();
+        }
+        return officeName.trim();
     }
 
     private AuthSessionResponse toSessionResponse(User user) {

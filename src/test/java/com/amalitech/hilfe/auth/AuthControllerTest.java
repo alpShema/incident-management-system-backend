@@ -60,18 +60,20 @@ class AuthControllerTest {
         var result = mvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new LoginRequest("arms-token"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Login successful"))
-                .andExpect(jsonPath("$.data.userId").value("u1"))
-                .andExpect(jsonPath("$.data.email").value("john@test.com"))
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Login successful"),
+                        jsonPath("$.data.userId").value("u1"),
+                        jsonPath("$.data.email").value("john@test.com"))
                 .andReturn();
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(3);
-        assertThat(cookies).anyMatch(c -> c.startsWith("access_token="));
-        assertThat(cookies).anyMatch(c -> c.startsWith("refresh_token="));
-        assertThat(cookies).anyMatch(c -> c.startsWith("arms_token="));
-        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=None"));
+        assertThat(cookies)
+                .hasSize(3)
+                .anyMatch(c -> c.startsWith("access_token="))
+                .anyMatch(c -> c.startsWith("refresh_token="))
+                .anyMatch(c -> c.startsWith("arms_token="))
+                .allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=None"));
     }
 
     @Test
@@ -114,16 +116,18 @@ class AuthControllerTest {
         var result = mvc.perform(post("/auth/refresh-token")
                         .cookie(new MockCookie("refresh_token", "rt"))
                         .cookie(new MockCookie("arms_token", "arms-cookie-token")))
-                        .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.message").value("Token refreshed successfully"))
-                        .andExpect(jsonPath("$.data.userId").value("u1"))
+                        .andExpectAll(
+                                status().isOk(),
+                                jsonPath("$.message").value("Token refreshed successfully"),
+                                jsonPath("$.data.userId").value("u1"))
                         .andReturn();
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(3);
-        assertThat(cookies).anyMatch(c -> c.startsWith("access_token="));
-        assertThat(cookies).anyMatch(c -> c.startsWith("refresh_token="));
-        assertThat(cookies).anyMatch(c -> c.startsWith("arms_token=arms-cookie-token"));
+        assertThat(cookies)
+                .hasSize(3)
+                .anyMatch(c -> c.startsWith("access_token="))
+                .anyMatch(c -> c.startsWith("refresh_token="))
+                .anyMatch(c -> c.startsWith("arms_token=arms-cookie-token"));
     }
 
     @Test
@@ -134,8 +138,9 @@ class AuthControllerTest {
                 .andReturn();
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(3);
-        assertThat(cookies).allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
+        assertThat(cookies)
+                .hasSize(3)
+                .allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
     }
 
     @Test
@@ -168,10 +173,11 @@ class AuthControllerTest {
                                 null,
                                 List.of(() -> "ROLE_CLIENT")
                         ))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Permissions retrieved successfully"))
-                .andExpect(jsonPath("$.data.userId").value("u1"))
-                .andExpect(jsonPath("$.data.permissions[0]").value("incident.create"))
-                .andExpect(jsonPath("$.data.permissions[1]").value("incident.read.own"));
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.message").value("Permissions retrieved successfully"),
+                        jsonPath("$.data.userId").value("u1"),
+                        jsonPath("$.data.permissions[0]").value("incident.create"),
+                        jsonPath("$.data.permissions[1]").value("incident.read.own"));
     }
 }

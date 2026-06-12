@@ -1,5 +1,7 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.dto.IncidentDateFilter;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -14,9 +16,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,22 +34,29 @@ public class DashboardService {
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final SlaService slaService;
 
     public DashboardStats getStats(String userId, RoleCode role) {
         if (role == RoleCode.AGENT) {
             return agentRepository.findByUserId(userId)
                     .map(agent -> {
                         List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agent.getId()));
-                        long total = incidentRepository.countByAssignedToId(agent.getId());
-                        return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+                        long total = byStatus.stream().mapToLong(LabelCount::count).sum();
+                        return new DashboardStats(total,
+                                countFor(byStatus, "open"), countFor(byStatus, "pending"),
+                                countFor(byStatus, "in progress"),
+                                countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
                     })
-                    .orElse(new DashboardStats(0, 0, 0, 0, 0));
+                    .orElse(new DashboardStats(0, 0, 0, 0, 0, 0));
         }
 
         if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
             List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusGlobal());
             long total = byStatus.stream().mapToLong(LabelCount::count).sum();
-            return new DashboardStats(total, countFor(byStatus, "open"), countFor(byStatus, "pending"), countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+            return new DashboardStats(total,
+                    countFor(byStatus, "open"), countFor(byStatus, "pending"),
+                    countFor(byStatus, "in progress"),
+                    countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
         }
 
         throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -53,29 +69,34 @@ public class DashboardService {
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        switch (role) {
+            case ADMIN, SUPER_ADMIN -> {
                 byStatus = toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
                         : incidentRepository.countByStatusGlobal());
-
-                List<MonthlyCount> allTrend = toMonthlyCount(
-                        incidentRepository.countByMonthSince(trendSince));
+                List<MonthlyCount> allTrend = fillMonthGaps(
+                        toMonthlyCount(incidentRepository.countByMonthSince(trendSince)),
+                        trendSince);
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
-        } else if (role == RoleCode.AGENT) {
-            var agentOpt = agentRepository.findByUserId(userId);
-            byStatus = agentOpt.map(agent -> toLabel(since != null
-                    ? incidentRepository.countByStatusForAgentSince(agent.getId(), since)
-                    : incidentRepository.countByStatusForAgent(agent.getId())))
-                    .orElse(List.of());
-
-            List<MonthlyCount> myTrend = agentOpt
-                    .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
-                    .orElse(List.of());
-            trends = List.of(
-                    new TrendSeries("My Assigned Incidents", myTrend)
-            );
-        } else {
-            throw new ArmsAuthException("Dashboard not available for this role", 403);
+            }
+            case AGENT -> {
+                var agentOpt = agentRepository.findByUserId(userId);
+                byStatus = agentOpt.map(agent -> toLabel(
+                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince)))
+                        .orElse(List.of());
+                List<MonthlyCount> myTrend = fillMonthGaps(
+                        toMonthlyCount(incidentRepository.countByMonthForUser(userId, trendSince)),
+                        trendSince);
+                List<MonthlyCount> assignedTrend = agentOpt
+                        .map(agent -> fillMonthGaps(
+                                toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)),
+                                trendSince))
+                        .orElseGet(() -> fillMonthGaps(List.of(), trendSince));
+                trends = List.of(
+                        new TrendSeries("My Incidents", myTrend),
+                        new TrendSeries("My Assigned Incidents", assignedTrend));
+            }
+            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
         }
 
         return new DashboardCharts(byStatus, trends);
@@ -84,7 +105,7 @@ public class DashboardService {
     public Page<IncidentResponse> getIncidents(
             String userId, RoleCode role,
             String query,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            IncidentFilterParams filters,
             Pageable pageable
     ) {
         String queryPattern = null;
@@ -98,16 +119,15 @@ public class DashboardService {
         final String finalQueryPattern = queryPattern;
 
         if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
-            return incidentRepository
-                    .findAllUnified(finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
-                    .map(IncidentResponse::from);
+            return slaService.toIncidentResponsePage(
+                    incidentRepository.findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)
+            );
         }
         if (role == RoleCode.AGENT) {
             return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> incidentRepository
-                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, statusId, severityId, incidentTypeId, categoryId, locationId, null, null, pageable)
-                            .map(IncidentResponse::from))
+                    .map(agentGroupIds -> slaService.toIncidentResponsePage(incidentRepository
+                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
         throw new ArmsAuthException("Dashboard not available for this role", 403);
@@ -116,12 +136,16 @@ public class DashboardService {
 
     public Page<IncidentResponse> getMyIncidents(
             String userId,
-            String statusId, String severityId, String incidentTypeId, String categoryId, String locationId,
+            IncidentFilterParams filters,
             Pageable pageable
     ) {
-        return incidentRepository
-                .findByUserIdFiltered(userId, statusId, severityId, incidentTypeId, categoryId, locationId, pageable)
-                .map(IncidentResponse::from);
+        return slaService.toIncidentResponsePage(
+                incidentRepository.findByUserIdFiltered(userId, filters.statusId(), filters.severityId(), filters.incidentTypeId(), filters.categoryId(), filters.locationId(), pageable)
+        );
+    }
+
+    public SlaReportResponse getSlaReport(Instant from, Instant to, String severityId) {
+        return slaService.getReport(from, to, severityId);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -159,5 +183,20 @@ public class DashboardService {
         return rows.stream()
                 .map(row -> new MonthlyCount((String) row[0], ((Number) row[2]).intValue()))
                 .toList();
+    }
+
+    private List<MonthlyCount> fillMonthGaps(List<MonthlyCount> data, Instant since) {
+        Map<String, Integer> countByMonth = data.stream()
+                .collect(Collectors.toMap(MonthlyCount::month, MonthlyCount::count));
+        List<MonthlyCount> full = new ArrayList<>();
+        YearMonth cursor = YearMonth.from(since.atZone(ZoneOffset.UTC));
+        YearMonth current = YearMonth.now(ZoneOffset.UTC);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
+        while (!cursor.isAfter(current)) {
+            String label = cursor.format(fmt);
+            full.add(new MonthlyCount(label, countByMonth.getOrDefault(label, 0)));
+            cursor = cursor.plusMonths(1);
+        }
+        return full;
     }
 }

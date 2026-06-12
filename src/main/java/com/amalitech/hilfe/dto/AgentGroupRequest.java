@@ -18,6 +18,9 @@ public record AgentGroupRequest(
         @Schema(description = "Internal department ID this agent group belongs to. Required on create.", example = "dept-facilities")
         String departmentId,
 
-        @Schema(description = "Optional list of agent IDs to add as members immediately on creation.", nullable = true)
-        List<String> agentIds
+        @Schema(description = "List of agent IDs to add as members. Required on create — at least one active agent must be provided. Optional on update: null leaves membership unchanged, empty list removes all members.", nullable = true)
+        List<String> agentIds,
+
+        @Schema(description = "Optional list of topic IDs to assign to this group. Replaces existing assignments when present. Pass an empty list to remove all topics.", nullable = true)
+        List<String> topicIds
 ) {}
