@@ -16,9 +16,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +40,7 @@ public class DashboardService {
         if (role == RoleCode.AGENT) {
             return agentRepository.findByUserId(userId)
                     .map(agent -> {
-                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgentCombined(agent.getId(), userId));
+                        List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agent.getId()));
                         long total = byStatus.stream().mapToLong(LabelCount::count).sum();
                         return new DashboardStats(total,
                                 countFor(byStatus, "open"), countFor(byStatus, "pending"),
@@ -67,20 +74,24 @@ public class DashboardService {
                 byStatus = toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
                         : incidentRepository.countByStatusGlobal());
-                List<MonthlyCount> allTrend = toMonthlyCount(
-                        incidentRepository.countByMonthSince(trendSince));
+                List<MonthlyCount> allTrend = fillMonthGaps(
+                        toMonthlyCount(incidentRepository.countByMonthSince(trendSince)),
+                        trendSince);
                 trends = List.of(new TrendSeries("All Incidents", allTrend));
             }
             case AGENT -> {
                 var agentOpt = agentRepository.findByUserId(userId);
-                byStatus = agentOpt.map(agent -> toLabel(since != null
-                        ? incidentRepository.countByStatusForAgentCombinedSince(agent.getId(), userId, since)
-                        : incidentRepository.countByStatusForAgentCombined(agent.getId(), userId)))
+                byStatus = agentOpt.map(agent -> toLabel(
+                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince)))
                         .orElse(List.of());
-                List<MonthlyCount> myTrend = toMonthlyCount(incidentRepository.countByMonthForUser(userId, trendSince));
+                List<MonthlyCount> myTrend = fillMonthGaps(
+                        toMonthlyCount(incidentRepository.countByMonthForUser(userId, trendSince)),
+                        trendSince);
                 List<MonthlyCount> assignedTrend = agentOpt
-                        .map(agent -> toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)))
-                        .orElse(List.of());
+                        .map(agent -> fillMonthGaps(
+                                toMonthlyCount(incidentRepository.countByMonthForAgent(agent.getId(), trendSince)),
+                                trendSince))
+                        .orElseGet(() -> fillMonthGaps(List.of(), trendSince));
                 trends = List.of(
                         new TrendSeries("My Incidents", myTrend),
                         new TrendSeries("My Assigned Incidents", assignedTrend));
@@ -172,5 +183,20 @@ public class DashboardService {
         return rows.stream()
                 .map(row -> new MonthlyCount((String) row[0], ((Number) row[2]).intValue()))
                 .toList();
+    }
+
+    private List<MonthlyCount> fillMonthGaps(List<MonthlyCount> data, Instant since) {
+        Map<String, Integer> countByMonth = data.stream()
+                .collect(Collectors.toMap(MonthlyCount::month, MonthlyCount::count));
+        List<MonthlyCount> full = new ArrayList<>();
+        YearMonth cursor = YearMonth.from(since.atZone(ZoneOffset.UTC));
+        YearMonth current = YearMonth.now(ZoneOffset.UTC);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
+        while (!cursor.isAfter(current)) {
+            String label = cursor.format(fmt);
+            full.add(new MonthlyCount(label, countByMonth.getOrDefault(label, 0)));
+            cursor = cursor.plusMonths(1);
+        }
+        return full;
     }
 }
