@@ -252,15 +252,14 @@ public class SlaService {
 
         long responseBreaches = rows.stream().filter(sla -> sla.getResponseBreachedAt() != null).count();
         long resolutionBreaches = rows.stream().filter(sla -> sla.getResolutionBreachedAt() != null).count();
-        Double avgResponse = averageMinutes(rows.stream()
-                .map(IncidentSla::getResponseElapsedMs)
-                .filter(Objects::nonNull)
-                .toList());
-        Double avgResolution = averageMinutes(rows.stream()
-                .map(IncidentSla::getResolutionElapsedMs)
-                .filter(Objects::nonNull)
-                .toList());
+        Double avgResponse = averageMinutes(rows.stream().map(IncidentSla::getResponseElapsedMs).filter(Objects::nonNull).toList());
+        Double avgResolution = averageMinutes(rows.stream().map(IncidentSla::getResolutionElapsedMs).filter(Objects::nonNull).toList());
+        List<SlaSeverityBreakdown> breakdown = buildSeverityBreakdown(rows);
 
+        return new SlaReportResponse(rows.size(), responseBreaches, resolutionBreaches, avgResponse, avgResolution, breakdown);
+    }
+
+    private Map<String, List<IncidentSla>> groupBySeverity(List<IncidentSla> rows) {
         Map<String, List<IncidentSla>> grouped = new LinkedHashMap<>();
         for (IncidentSla row : rows) {
             String key = row.getIncident() != null && row.getIncident().getSeverity() != null
@@ -268,24 +267,27 @@ public class SlaService {
                     : "unknown";
             grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(row);
         }
+        return grouped;
+    }
 
-        List<SlaSeverityBreakdown> breakdown = grouped.values().stream()
-                .map(group -> {
-                    Incident sampleIncident = group.getFirst().getIncident();
-                    Severity severity = sampleIncident != null ? sampleIncident.getSeverity() : null;
-                    return new SlaSeverityBreakdown(
-                            severity != null ? severity.getId() : null,
-                            severity != null ? severity.getName() : "Unknown",
-                            group.size(),
-                            group.stream().filter(sla -> sla.getResponseBreachedAt() != null).count(),
-                            group.stream().filter(sla -> sla.getResolutionBreachedAt() != null).count(),
-                            averageMinutes(group.stream().map(IncidentSla::getResponseElapsedMs).filter(Objects::nonNull).toList()),
-                            averageMinutes(group.stream().map(IncidentSla::getResolutionElapsedMs).filter(Objects::nonNull).toList())
-                    );
-                })
+    private List<SlaSeverityBreakdown> buildSeverityBreakdown(List<IncidentSla> rows) {
+        return groupBySeverity(rows).values().stream()
+                .map(this::toSeverityBreakdown)
                 .toList();
+    }
 
-        return new SlaReportResponse(rows.size(), responseBreaches, resolutionBreaches, avgResponse, avgResolution, breakdown);
+    private SlaSeverityBreakdown toSeverityBreakdown(List<IncidentSla> group) {
+        Incident sampleIncident = group.getFirst().getIncident();
+        Severity severity = sampleIncident != null ? sampleIncident.getSeverity() : null;
+        return new SlaSeverityBreakdown(
+                severity != null ? severity.getId() : null,
+                severity != null ? severity.getName() : "Unknown",
+                group.size(),
+                group.stream().filter(sla -> sla.getResponseBreachedAt() != null).count(),
+                group.stream().filter(sla -> sla.getResolutionBreachedAt() != null).count(),
+                averageMinutes(group.stream().map(IncidentSla::getResponseElapsedMs).filter(Objects::nonNull).toList()),
+                averageMinutes(group.stream().map(IncidentSla::getResolutionElapsedMs).filter(Objects::nonNull).toList())
+        );
     }
 
     private void scanResponseTimers(int atRiskPct) {
@@ -296,12 +298,18 @@ public class SlaService {
             }
             if (isBreached(now, sla.getResponseDueAt())) {
                 handleResponseBreach(sla, now);
-            } else if (sla.getResponseAtRiskNotifiedAt() == null
-                    && isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
-                publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESPONSE, remainingMinutes(now, sla.getResponseDueAt()));
-                sla.setResponseAtRiskNotifiedAt(now);
-                incidentSlaRepository.save(sla);
+            } else {
+                checkResponseAtRisk(sla, now, atRiskPct);
             }
+        }
+    }
+
+    private void checkResponseAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
+        if (sla.getResponseAtRiskNotifiedAt() == null
+                && isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
+            publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESPONSE, remainingMinutes(now, sla.getResponseDueAt()));
+            sla.setResponseAtRiskNotifiedAt(now);
+            incidentSlaRepository.save(sla);
         }
     }
 
@@ -313,12 +321,18 @@ public class SlaService {
             }
             if (isBreached(now, sla.getResolutionDueAt())) {
                 handleResolutionBreach(sla, now);
-            } else if (sla.getResolutionAtRiskNotifiedAt() == null
-                    && isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
-                publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESOLUTION, remainingMinutes(now, sla.getResolutionDueAt()));
-                sla.setResolutionAtRiskNotifiedAt(now);
-                incidentSlaRepository.save(sla);
+            } else {
+                checkResolutionAtRisk(sla, now, atRiskPct);
             }
+        }
+    }
+
+    private void checkResolutionAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
+        if (sla.getResolutionAtRiskNotifiedAt() == null
+                && isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
+            publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESOLUTION, remainingMinutes(now, sla.getResolutionDueAt()));
+            sla.setResolutionAtRiskNotifiedAt(now);
+            incidentSlaRepository.save(sla);
         }
     }
 
