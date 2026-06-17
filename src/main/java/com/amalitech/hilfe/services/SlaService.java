@@ -48,6 +48,7 @@ public class SlaService {
 
     private static final String STATUS_PENDING = "status-pending";
     private static final String STATUS_RESOLVED = "status-resolved";
+    private static final String STATUS_CLOSED = "status-closed";
     private static final String SLA_TYPE_RESPONSE = "RESPONSE";
     private static final String SLA_TYPE_RESOLUTION = "RESOLUTION";
     private static final String STATUS_BREACHED = "BREACHED";
@@ -125,7 +126,8 @@ public class SlaService {
 
         boolean enteringPending = !STATUS_PENDING.equals(previousStatusId) && STATUS_PENDING.equals(newStatusId);
         boolean leavingPending = STATUS_PENDING.equals(previousStatusId) && !STATUS_PENDING.equals(newStatusId);
-        boolean resolving = !STATUS_RESOLVED.equals(previousStatusId) && STATUS_RESOLVED.equals(newStatusId);
+        boolean resolving = !STATUS_RESOLVED.equals(previousStatusId) && STATUS_RESOLVED.equals(newStatusId)
+                || !STATUS_CLOSED.equals(previousStatusId) && STATUS_CLOSED.equals(newStatusId) && sla.getResolvedAtSnapshot() == null;
         boolean reopening = STATUS_RESOLVED.equals(previousStatusId) && "status-reopened".equals(newStatusId);
 
         if (enteringPending && sla.getPauseStartedAt() == null) {
