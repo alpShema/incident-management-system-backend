@@ -6,8 +6,9 @@ import com.amalitech.hilfe.notifications.content.NotificationDraft;
 import com.amalitech.hilfe.notifications.delivery.NotificationBroadcaster;
 import com.amalitech.hilfe.notifications.events.*;
 import com.amalitech.hilfe.notifications.persistence.NotificationPersistenceService;
-import lombok.RequiredArgsConstructor;
+import com.amalitech.hilfe.slack.service.SlackNotificationBroadcaster;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,12 +19,23 @@ import java.util.function.Supplier;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class NotificationEventListener {
 
     private final NotificationContentFactory contentFactory;
     private final NotificationPersistenceService persistenceService;
     private final NotificationBroadcaster broadcaster;
+    private final SlackNotificationBroadcaster slackBroadcaster;
+
+    public NotificationEventListener(
+            NotificationContentFactory contentFactory,
+            NotificationPersistenceService persistenceService,
+            NotificationBroadcaster broadcaster,
+            ObjectProvider<SlackNotificationBroadcaster> slackBroadcasterProvider) {
+        this.contentFactory = contentFactory;
+        this.persistenceService = persistenceService;
+        this.broadcaster = broadcaster;
+        this.slackBroadcaster = slackBroadcasterProvider.getIfAvailable();
+    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -121,6 +133,20 @@ public class NotificationEventListener {
             broadcaster.broadcast(notification);
         } catch (Exception ex) {
             log.error("Failed to broadcast notification for event {} user {} incident {}", eventType, recipientUserId, incidentId, ex);
+        }
+
+        // Also broadcast to Slack if enabled
+        broadcastToSlackSafely(notification, eventType, recipientUserId, incidentId);
+    }
+
+    private void broadcastToSlackSafely(Notification notification, String eventType, String recipientUserId, String incidentId) {
+        if (slackBroadcaster == null) {
+            return;
+        }
+        try {
+            slackBroadcaster.broadcast(notification);
+        } catch (Exception ex) {
+            log.error("Failed to send Slack notification for event {} user {} incident {}", eventType, recipientUserId, incidentId, ex);
         }
     }
 }
