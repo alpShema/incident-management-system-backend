@@ -16,6 +16,7 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
                 al.id,
                 actor.fullName,
+                actor.profileImg,
                 target.fullName,
                 al.action,
                 al.subjectType,
@@ -35,6 +36,7 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
                 al.id,
                 actor.fullName,
+                actor.profileImg,
                 target.fullName,
                 al.action,
                 al.subjectType,
@@ -55,6 +57,7 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
                 al.id,
                 actor.fullName,
+                actor.profileImg,
                 target.fullName,
                 al.action,
                 al.subjectType,
