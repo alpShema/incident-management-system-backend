@@ -503,12 +503,25 @@ public class IncidentService {
         if (incident.getAssignedToId() == null) {
             return false;
         }
-        List<String> actorDepartments = findAgentGroupIds(userId).orElse(List.of());
-        if (actorDepartments.isEmpty()) {
+        List<String> actorGroupIds = findAgentGroupIds(userId).orElse(List.of());
+        if (actorGroupIds.isEmpty()) {
             return false;
         }
-        List<String> assignedDepartments = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
-        return assignedDepartments.stream().anyMatch(actorDepartments::contains);
+        List<String> assignedGroupIds = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
+        if (assignedGroupIds.isEmpty()) {
+            return false;
+        }
+
+        // Compare by department rather than by group so that agents in different
+        // groups within the same department can access each other's incidents,
+        // consistent with the department-incidents listing query.
+        List<String> actorDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(actorGroupIds);
+        if (actorDeptIds.isEmpty()) {
+            // No department hierarchy — fall back to direct group overlap
+            return assignedGroupIds.stream().anyMatch(actorGroupIds::contains);
+        }
+        List<String> assignedDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(assignedGroupIds);
+        return assignedDeptIds.stream().anyMatch(actorDeptIds::contains);
     }
 
     private Incident findIncident(String incidentId) {
