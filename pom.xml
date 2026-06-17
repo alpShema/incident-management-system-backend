@@ -134,6 +134,20 @@
 			<artifactId>s3</artifactId>
 		</dependency>
 
+		<!-- ===== Slack API Client ===== -->
+		<dependency>
+			<groupId>com.slack.api</groupId>
+			<artifactId>slack-api-client</artifactId>
+			<version>1.39.0</version>
+		</dependency>
+
+		<!-- ===== Rate Limiting (Bucket4j) ===== -->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j-core</artifactId>
+			<version>8.7.0</version>
+		</dependency>
+
 		<!-- ===== Test ===== -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

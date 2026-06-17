@@ -169,3 +169,27 @@ media:
   max-file-size: ${MEDIA_MAX_FILE_SIZE:10485760}
   max-attachments: ${MEDIA_MAX_ATTACHMENTS:5}
   allowed-content-types: image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,text/plain
+
+# ──────────────────────────────────────────
+# Slack Bot Integration
+# ──────────────────────────────────────────
+slack:
+  enabled: ${SLACK_ENABLED:false}
+  signing-secret: ${SLACK_SIGNING_SECRET:}
+  bot-token: ${SLACK_BOT_TOKEN:}
+  client-id: ${SLACK_CLIENT_ID:}
+  client-secret: ${SLACK_CLIENT_SECRET:}
+  redirect-uri: ${SLACK_REDIRECT_URI:}
+  frontend-connect-url: ${SLACK_FRONTEND_CONNECT_URL:}
+  app-id: ${SLACK_APP_ID:}
+  notifications-enabled: ${SLACK_NOTIFICATIONS_ENABLED:false}
+  agent-features-enabled: ${SLACK_AGENT_FEATURES_ENABLED:false}
+  rate-limit:
+    requests-per-minute: ${SLACK_RATE_LIMIT_RPM:60}
+    burst-size: ${SLACK_RATE_LIMIT_BURST:10}
+
+# ──────────────────────────────────────────
+# Encryption (for Slack tokens at rest)
+# ──────────────────────────────────────────
+encryption:
+  key: ${ENCRYPTION_KEY:}
