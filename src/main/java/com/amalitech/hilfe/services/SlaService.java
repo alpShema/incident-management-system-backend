@@ -124,11 +124,9 @@ public class SlaService {
         Instant now = Instant.now();
         boolean changed = false;
 
-        boolean enteringPending = !STATUS_PENDING.equals(previousStatusId) && STATUS_PENDING.equals(newStatusId);
-        boolean leavingPending = STATUS_PENDING.equals(previousStatusId) && !STATUS_PENDING.equals(newStatusId);
-        boolean resolvingViaResolved = !STATUS_RESOLVED.equals(previousStatusId) && STATUS_RESOLVED.equals(newStatusId);
-        boolean resolvingViaClosed = !STATUS_CLOSED.equals(previousStatusId) && STATUS_CLOSED.equals(newStatusId) && sla.getResolvedAtSnapshot() == null;
-        boolean resolving = resolvingViaResolved || resolvingViaClosed;
+        boolean enteringPending = isTransitionTo(STATUS_PENDING, previousStatusId, newStatusId);
+        boolean leavingPending = isTransitionFrom(STATUS_PENDING, previousStatusId, newStatusId);
+        boolean resolving = isResolvingTransition(previousStatusId, newStatusId, sla);
         boolean reopening = STATUS_RESOLVED.equals(previousStatusId) && "status-reopened".equals(newStatusId);
 
         if (enteringPending && sla.getPauseStartedAt() == null) {
@@ -150,6 +148,21 @@ public class SlaService {
         if (changed) {
             incidentSlaRepository.save(sla);
         }
+    }
+
+    private boolean isTransitionTo(String status, String previousStatusId, String newStatusId) {
+        return !status.equals(previousStatusId) && status.equals(newStatusId);
+    }
+
+    private boolean isTransitionFrom(String status, String previousStatusId, String newStatusId) {
+        return status.equals(previousStatusId) && !status.equals(newStatusId);
+    }
+
+    private boolean isResolvingTransition(String previousStatusId, String newStatusId, IncidentSla sla) {
+        boolean viaResolved = !STATUS_RESOLVED.equals(previousStatusId) && STATUS_RESOLVED.equals(newStatusId);
+        boolean viaClosed = !STATUS_CLOSED.equals(previousStatusId) && STATUS_CLOSED.equals(newStatusId)
+                && sla.getResolvedAtSnapshot() == null;
+        return viaResolved || viaClosed;
     }
 
     private void applyPauseDelta(IncidentSla sla, Instant now) {
