@@ -138,6 +138,42 @@ class SlaServiceTest {
     }
 
     @Test
+    void onStatusChanged_forceClosedBeforeDeadline_marksResolvedAtSnapshotAndNoBreached() {
+        Instant now = Instant.now();
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofMinutes(1))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .resolutionDueAt(now.plus(Duration.ofMinutes(5)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResolvedAtSnapshot()).isNotNull();
+        assertThat(sla.getResolutionBreachedAt()).isNull();
+        assertThat(sla.getResolutionRemainingMsOnResolve()).isGreaterThan(0L);
+    }
+
+    @Test
+    void onStatusChanged_forceClosedAfterDeadline_marksBreached() {
+        Instant now = Instant.now();
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(3))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .resolutionDueAt(now.minus(Duration.ofMinutes(10)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResolvedAtSnapshot()).isNotNull();
+        assertThat(sla.getResolutionBreachedAt()).isEqualTo(sla.getResolutionDueAt());
+        assertThat(sla.getResolutionRemainingMsOnResolve()).isZero();
+    }
+
+    @Test
     void scanAndNotify_responseAtRisk_publishesNotificationsOnce() {
         Instant now = Instant.now();
         Incident incident = Incident.builder()
