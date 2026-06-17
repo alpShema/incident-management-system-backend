@@ -8,6 +8,8 @@ import java.time.Instant;
 public record IncidentSlaResponse(
         @Schema(description = "Configured response SLA threshold snapshot in minutes", nullable = true) Integer responseThresholdMinutes,
         @Schema(description = "Configured resolution SLA threshold snapshot in minutes", nullable = true) Integer resolutionThresholdMinutes,
+        @Schema(description = "Configured response SLA threshold snapshot in seconds", nullable = true) Long responseThresholdSeconds,
+        @Schema(description = "Configured resolution SLA threshold snapshot in seconds", nullable = true) Long resolutionThresholdSeconds,
         @Schema(description = "Response SLA due time", nullable = true) Instant responseDueAt,
         @Schema(description = "Resolution SLA due time", nullable = true) Instant resolutionDueAt,
         @Schema(description = "Timestamp of the first assigned-agent response", nullable = true) Instant firstResponseAt,
