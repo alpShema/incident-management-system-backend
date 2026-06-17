@@ -126,8 +126,9 @@ public class SlaService {
 
         boolean enteringPending = !STATUS_PENDING.equals(previousStatusId) && STATUS_PENDING.equals(newStatusId);
         boolean leavingPending = STATUS_PENDING.equals(previousStatusId) && !STATUS_PENDING.equals(newStatusId);
-        boolean resolving = !STATUS_RESOLVED.equals(previousStatusId) && STATUS_RESOLVED.equals(newStatusId)
-                || !STATUS_CLOSED.equals(previousStatusId) && STATUS_CLOSED.equals(newStatusId) && sla.getResolvedAtSnapshot() == null;
+        boolean resolvingViaResolved = !STATUS_RESOLVED.equals(previousStatusId) && STATUS_RESOLVED.equals(newStatusId);
+        boolean resolvingViaClosed = !STATUS_CLOSED.equals(previousStatusId) && STATUS_CLOSED.equals(newStatusId) && sla.getResolvedAtSnapshot() == null;
+        boolean resolving = resolvingViaResolved || resolvingViaClosed;
         boolean reopening = STATUS_RESOLVED.equals(previousStatusId) && "status-reopened".equals(newStatusId);
 
         if (enteringPending && sla.getPauseStartedAt() == null) {
