@@ -660,6 +660,48 @@ class IncidentServiceTest {
     }
 
     @Test
+    void getIncident_agentInSameDepartmentDifferentGroup_canAccess() {
+        // Agent A (group-x, dept-d) views incident assigned to Agent B (group-y, dept-d).
+        // The dept-incidents view shows this incident to Agent A, so the detail endpoint
+        // must also allow access — comparing departments, not raw groups.
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-b");
+        Agent agentA = Agent.builder().id("agent-a").userId("agent-user-a").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-a")).thenReturn(Optional.of(agentA));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-a")).thenReturn(List.of("group-x"));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-b")).thenReturn(List.of("group-y"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-x"))).thenReturn(List.of("dept-d"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-y"))).thenReturn(List.of("dept-d"));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("agent-user-a", RoleCode.AGENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_agentInDifferentDepartment_throws403() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-b");
+        Agent agentA = Agent.builder().id("agent-a").userId("agent-user-a").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-a")).thenReturn(Optional.of(agentA));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-a")).thenReturn(List.of("group-x"));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-b")).thenReturn(List.of("group-y"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-x"))).thenReturn(List.of("dept-1"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-y"))).thenReturn(List.of("dept-2"));
+
+        assertThatThrownBy(() -> incidentService.getIncident("agent-user-a", RoleCode.AGENT, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
     void getIncident_notFound_throws404() {
         when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
