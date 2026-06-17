@@ -402,6 +402,8 @@ public class SlaService {
         return new IncidentSlaResponse(
                 sla.getResponseThresholdMinutes(),
                 sla.getResolutionThresholdMinutes(),
+                toSeconds(sla.getResponseThresholdMinutes()),
+                toSeconds(sla.getResolutionThresholdMinutes()),
                 sla.getResponseDueAt(),
                 sla.getResolutionDueAt(),
                 sla.getFirstResponseAt(),
@@ -411,6 +413,10 @@ public class SlaService {
                 computeResolutionStatus(sla, effectiveNow),
                 sla.getPauseStartedAt() != null
         );
+    }
+
+    private Long toSeconds(Integer minutes) {
+        return minutes != null ? minutes * 60L : null;
     }
 
     private String computeResponseStatus(IncidentSla sla, Instant now) {
