@@ -35,8 +35,8 @@ class SeverityControllerTest {
     @Test
     void listSeverities_returns200WithData() throws Exception {
         when(severityService.listSeverities()).thenReturn(List.of(
-                new SeverityResponse("sev-1", "Low", "Low priority", true, 480, 4320, Instant.now(), Instant.now()),
-                new SeverityResponse("sev-2", "High", "High priority", true, 60, 480, Instant.now(), Instant.now())
+                new SeverityResponse("sev-1", "Low", "Low priority", true, 480, 4320, 28800L, 259200L, Instant.now(), Instant.now()),
+                new SeverityResponse("sev-2", "High", "High priority", true, 60, 480, 3600L, 28800L, Instant.now(), Instant.now())
         ));
 
         mvc.perform(get("/severities")
