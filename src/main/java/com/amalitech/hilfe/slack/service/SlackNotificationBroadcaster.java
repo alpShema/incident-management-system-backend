@@ -25,7 +25,7 @@ public class SlackNotificationBroadcaster {
     private final SlackAuditLogService auditLogService;
     private final SlackProperties slackProperties;
 
-    private static final String HILFE_WEB_URL = "https://hilfe.amalitech.net";
+    private static final String HILFE_WEB_URL = "https://hilfe-pro-frontend.amalitech-dev.net";
     private static final String EMOJI_CYCLE = ":arrows_counterclockwise:";
 
     @Async
