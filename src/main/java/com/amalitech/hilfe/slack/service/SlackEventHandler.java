@@ -53,6 +53,7 @@ public class SlackEventHandler {
     private final SlackAuditLogService auditLogService;
     private final AppHomeService appHomeService;
     private final IncidentModalService incidentModalService;
+    private final SlackNotificationPreferenceService preferenceService;
     private final SlackProperties slackProperties;
 
     public void handleEvent(String eventType, JsonNode event) {
@@ -180,7 +181,18 @@ public class SlackEventHandler {
             return buildEphemeralResponse(CONNECT_FIRST_MSG);
         }
 
-        return buildEphemeralResponse("Settings feature coming soon! Check back later.");
+        return buildEphemeralResponse(
+                "Open the *Home* tab to toggle your Slack notification preferences.");
+    }
+
+    private void handleNotificationToggle(String slackUserId, String actionId) {
+        String type = actionId.substring("toggle_notif_".length());
+        oauthService.findBySlackUserId(slackUserId).ifPresent(mapping -> {
+            String hilfeUserId = mapping.getHilfeUserId();
+            boolean current = preferenceService.isEnabled(hilfeUserId, type);
+            preferenceService.updatePreference(hilfeUserId, type, !current);
+            appHomeService.publishAppHome(slackUserId);
+        });
     }
 
     private String handleNewIncidentCommand(String userId, String triggerId) {
@@ -252,11 +264,6 @@ public class SlackEventHandler {
                         """.formatted(oauthUrl).strip());
                 yield "";
             }
-            case "open_notification_settings" -> {
-                slackClient.chatPostMessage(userId,
-                        "Use `/hilfe settings` to manage your notification preferences.");
-                yield "";
-            }
             case "create_incident" -> {
                 incidentModalService.openCreateIncidentModal(userId, triggerId);
                 yield "";
@@ -279,6 +286,10 @@ public class SlackEventHandler {
             }
             default -> {
                 if (actionId.startsWith("view_incident_")) {
+                    yield "";
+                }
+                if (actionId.startsWith("toggle_notif_")) {
+                    handleNotificationToggle(userId, actionId);
                     yield "";
                 }
                 log.debug("Unhandled action: {}", actionId);

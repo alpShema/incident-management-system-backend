@@ -11,6 +11,8 @@ import com.amalitech.hilfe.slack.service.SlackOAuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -127,20 +129,38 @@ class SlackNotificationBroadcasterTest {
                 argThat(msg -> !msg.contains("View in HILFE")));
     }
 
-    @Test
-    void broadcast_incidentSlaBreached_usesWarningEmoji() {
+    @ParameterizedTest
+    @CsvSource({
+            "INCIDENT_ASSIGNED,           :inbox_tray:",
+            "INCIDENT_ESCALATED,          :rotating_light:",
+            "INCIDENT_STATUS_CHANGED,     :arrows_counterclockwise:",
+            "INCIDENT_PENDING,            :hourglass_flowing_sand:",
+            "INCIDENT_REOPENED,           :arrows_counterclockwise:",
+            "INCIDENT_PRIORITY_CHANGED,   :small_orange_diamond:",
+            "INCIDENT_UNASSIGNED,         :outbox_tray:",
+            "INCIDENT_AUTO_CLOSED,        :white_check_mark:",
+            "INCIDENT_AUTO_CLOSED_CLIENT, :white_check_mark:",
+            "INCIDENT_AUTO_ASSIGNED_CLIENT,:handshake:",
+            "INCIDENT_REASSIGNED_CLIENT,  :arrows_counterclockwise:",
+            "INCIDENT_SLA_AT_RISK,        :warning:",
+            "INCIDENT_SLA_BREACHED,       :warning:"
+    })
+    void broadcast_notificationType_usesExpectedEmoji(String type, String expectedEmoji) {
+        String trimmedType = type.trim();
+        String trimmedEmoji = expectedEmoji.trim();
+
         notification = Notification.builder()
-                .id("notif-3").userId("hilfe-user-1")
-                .type("INCIDENT_SLA_BREACHED").title("SLA Breached").message("INC-200 SLA exceeded")
-                .incidentId("inc-2").build();
+                .id("notif-emoji").userId("hilfe-user-1")
+                .type(trimmedType).title("Test").message("Test message")
+                .incidentId("inc-1").build();
 
         when(slackProperties.notificationsEnabled()).thenReturn(true);
         when(oauthService.findByHilfeUserId("hilfe-user-1")).thenReturn(Optional.of(mapping));
-        when(preferenceService.isEnabled("hilfe-user-1", "INCIDENT_SLA_BREACHED")).thenReturn(true);
+        when(preferenceService.isEnabled("hilfe-user-1", trimmedType)).thenReturn(true);
 
         broadcaster.broadcast(notification);
 
         verify(slackClient).chatPostMessage(eq("U_SLACK_001"),
-                argThat(msg -> msg.contains(":warning:")));
+                argThat(msg -> msg.contains(trimmedEmoji)));
     }
 }

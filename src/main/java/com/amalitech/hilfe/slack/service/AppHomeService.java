@@ -28,10 +28,13 @@ import static com.slack.api.model.block.element.BlockElements.*;
 @ConditionalOnProperty(name = "slack.enabled", havingValue = "true")
 public class AppHomeService {
 
+    private static final String STYLE_PRIMARY = "primary";
+
     private final SlackClient slackClient;
     private final SlackOAuthService oauthService;
     private final UserRepository userRepository;
     private final IncidentRepository incidentRepository;
+    private final SlackNotificationPreferenceService preferenceService;
     private final SlackProperties slackProperties;
 
     public void publishAppHome(String slackUserId) {
@@ -40,7 +43,7 @@ public class AppHomeService {
         View view;
         if (mapping.isPresent()) {
             Optional<User> user = userRepository.findById(mapping.get().getHilfeUserId());
-            view = buildConnectedHome(user.orElse(null));
+            view = buildConnectedHome(user.orElse(null), mapping.get().getHilfeUserId());
         } else {
             view = buildDisconnectedHome();
         }
@@ -49,7 +52,7 @@ public class AppHomeService {
         log.debug("Published app home for user {}", slackUserId);
     }
 
-    private View buildConnectedHome(User user) {
+    private View buildConnectedHome(User user, String hilfeUserId) {
         List<LayoutBlock> blocks = new ArrayList<>();
 
         String name = user != null ? user.getFullName() : "there";
@@ -69,14 +72,6 @@ public class AppHomeService {
                 + name + (email.isBlank() ? "" : "  ·  " + email);
         blocks.add(section(s -> s.text(markdownText(statusLine))));
 
-        // Notification settings — mirrors Jira's "Personal Notifications" button
-        blocks.add(actions(a -> a.elements(List.of(
-                button(b -> b
-                        .actionId("open_notification_settings")
-                        .text(plainText(pt -> pt.text("⚙️  Notification Settings").emoji(true)))
-                )
-        ))));
-
         blocks.add(divider());
 
         // ── Work section ──────────────────────────────────────────────────────
@@ -91,7 +86,7 @@ public class AppHomeService {
                 button(b -> b
                         .actionId("create_incident")
                         .text(plainText("New Incident"))
-                        .style("primary")
+                        .style(STYLE_PRIMARY)
                 ),
                 button(b -> b
                         .actionId("view_my_incidents")
@@ -116,6 +111,18 @@ public class AppHomeService {
 
         blocks.add(divider());
 
+        // ── Notification preferences ──────────────────────────────────────────
+        blocks.add(section(s -> s.text(markdownText("🔔  *Notification Preferences*"))));
+        blocks.add(context(c -> c.elements(List.of(
+                markdownText("Toggle which events send you a Slack DM.")
+        ))));
+        for (String type : SlackNotificationPreferenceService.NOTIFICATION_TYPES) {
+            boolean enabled = hilfeUserId != null && preferenceService.isEnabled(hilfeUserId, type);
+            blocks.add(buildNotificationToggle(type, enabled));
+        }
+
+        blocks.add(divider());
+
         // ── Commands ──────────────────────────────────────────────────────────
         blocks.add(section(s -> s.text(markdownText("Commands"))));
         blocks.add(section(s -> s.fields(List.of(
@@ -135,6 +142,37 @@ public class AppHomeService {
         ))));
 
         return Views.view(v -> v.type("home").blocks(blocks));
+    }
+
+    private LayoutBlock buildNotificationToggle(String type, boolean enabled) {
+        return section(s -> s
+                .text(markdownText("*" + notifLabel(type) + "*"))
+                .accessory(button(b -> {
+                    b.actionId("toggle_notif_" + type)
+                     .text(plainText(enabled ? "🔔  On" : "🔕  Off"));
+                    if (enabled) b.style(STYLE_PRIMARY);
+                    return b;
+                }))
+        );
+    }
+
+    private static String notifLabel(String type) {
+        return switch (type) {
+            case "INCIDENT_ASSIGNED"             -> "New Assignment";
+            case "INCIDENT_ESCALATED"            -> "Escalation Alert";
+            case "INCIDENT_STATUS_CHANGED"       -> "Status Updates";
+            case "INCIDENT_PENDING"              -> "Pending Notice";
+            case "INCIDENT_REOPENED"             -> "Incident Reopened";
+            case "INCIDENT_PRIORITY_CHANGED"     -> "Priority Changes";
+            case "INCIDENT_UNASSIGNED"           -> "Reassignment";
+            case "INCIDENT_AUTO_CLOSED"          -> "Auto-Closed (Agent)";
+            case "INCIDENT_AUTO_CLOSED_CLIENT"   -> "Auto-Closed";
+            case "INCIDENT_AUTO_ASSIGNED_CLIENT" -> "Agent Assigned";
+            case "INCIDENT_REASSIGNED_CLIENT"    -> "New Agent";
+            case "INCIDENT_SLA_AT_RISK"          -> "SLA At Risk";
+            case "INCIDENT_SLA_BREACHED"         -> "SLA Breached";
+            default                              -> type;
+        };
     }
 
     private View buildDisconnectedHome() {
@@ -174,7 +212,7 @@ public class AppHomeService {
                 button(b -> b
                         .actionId("connect_from_home")
                         .text(plainText("Connect to HILFE"))
-                        .style("primary")
+                        .style(STYLE_PRIMARY)
                 )
         ))));
 

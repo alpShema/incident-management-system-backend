@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.slack;
 
 import com.amalitech.hilfe.config.SlackProperties;
+import com.amalitech.hilfe.models.SlackUserMapping;
 import com.amalitech.hilfe.slack.client.SlackClient;
 import com.amalitech.hilfe.slack.service.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -26,6 +28,7 @@ class SlackEventHandlerTest {
     @Mock private SlackAuditLogService auditLogService;
     @Mock private AppHomeService appHomeService;
     @Mock private IncidentModalService incidentModalService;
+    @Mock private SlackNotificationPreferenceService preferenceService;
     @Mock private SlackProperties slackProperties;
 
     @InjectMocks
@@ -277,5 +280,28 @@ class SlackEventHandlerTest {
         handler.handleInteraction("block_actions", payload);
 
         verify(incidentModalService).handleCategorySelection(payload);
+    }
+
+    @Test
+    void handleInteraction_blockActions_toggleNotif_flipsPreferenceAndRefreshesHome() {
+        SlackUserMapping mapping = SlackUserMapping.builder()
+                .slackUserId("U1").hilfeUserId("h1").build();
+
+        ObjectNode action = mapper.createObjectNode();
+        action.put("action_id", "toggle_notif_INCIDENT_ASSIGNED");
+        ObjectNode user = mapper.createObjectNode();
+        user.put("id", "U1");
+        ObjectNode payload = mapper.createObjectNode();
+        payload.set("user", user);
+        payload.put("trigger_id", "trigger-1");
+        payload.set("actions", mapper.createArrayNode().add(action));
+
+        when(oauthService.findBySlackUserId("U1")).thenReturn(Optional.of(mapping));
+        when(preferenceService.isEnabled("h1", "INCIDENT_ASSIGNED")).thenReturn(true);
+
+        handler.handleInteraction("block_actions", payload);
+
+        verify(preferenceService).updatePreference("h1", "INCIDENT_ASSIGNED", false);
+        verify(appHomeService).publishAppHome("U1");
     }
 }
