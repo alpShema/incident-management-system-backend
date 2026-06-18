@@ -1,12 +1,14 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.dto.SeverityRequest;
+import com.amalitech.hilfe.dto.UpdateSeveritySlaRequest;
 import com.amalitech.hilfe.models.Severity;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.services.SeverityService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -64,5 +66,53 @@ class SeverityServiceTest {
         assertThat(response.description()).isEqualTo("Medium priority");
         assertThat(s.getName()).isEqualTo("Medium");
         assertThat(s.getDescription()).isEqualTo("Medium priority");
+    }
+
+    @Test
+    void updateSeveritySla_bothFields_updatesBoth() {
+        Severity s = severity();
+        s.setResponseTimeMinutes(60);
+        s.setResolutionTimeMinutes(480);
+        when(severityRepository.findById("sev-1")).thenReturn(Optional.of(s));
+        when(severityRepository.save(any(Severity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(30, 240));
+
+        ArgumentCaptor<Severity> captor = ArgumentCaptor.forClass(Severity.class);
+        verify(severityRepository).save(captor.capture());
+        assertThat(captor.getValue().getResponseTimeMinutes()).isEqualTo(30);
+        assertThat(captor.getValue().getResolutionTimeMinutes()).isEqualTo(240);
+    }
+
+    @Test
+    void updateSeveritySla_onlyResponseTime_leavesResolutionUnchanged() {
+        Severity s = severity();
+        s.setResponseTimeMinutes(60);
+        s.setResolutionTimeMinutes(480);
+        when(severityRepository.findById("sev-1")).thenReturn(Optional.of(s));
+        when(severityRepository.save(any(Severity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(30, null));
+
+        ArgumentCaptor<Severity> captor = ArgumentCaptor.forClass(Severity.class);
+        verify(severityRepository).save(captor.capture());
+        assertThat(captor.getValue().getResponseTimeMinutes()).isEqualTo(30);
+        assertThat(captor.getValue().getResolutionTimeMinutes()).isEqualTo(480);  // unchanged
+    }
+
+    @Test
+    void updateSeveritySla_onlyResolutionTime_leavesResponseUnchanged() {
+        Severity s = severity();
+        s.setResponseTimeMinutes(60);
+        s.setResolutionTimeMinutes(480);
+        when(severityRepository.findById("sev-1")).thenReturn(Optional.of(s));
+        when(severityRepository.save(any(Severity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(null, 240));
+
+        ArgumentCaptor<Severity> captor = ArgumentCaptor.forClass(Severity.class);
+        verify(severityRepository).save(captor.capture());
+        assertThat(captor.getValue().getResponseTimeMinutes()).isEqualTo(60);    // unchanged
+        assertThat(captor.getValue().getResolutionTimeMinutes()).isEqualTo(240);
     }
 }
