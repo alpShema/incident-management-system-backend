@@ -171,7 +171,6 @@ public class SlackOAuthService {
     public String buildOAuthUrl(String state) {
         String baseUrl = slackProperties.frontendConnectUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            // Fallback to backend authorize page for backward compatibility / local testing
             baseUrl = slackProperties.redirectUri().replace("/callback", "/authorize");
         }
         return baseUrl + "?state=" + state;
