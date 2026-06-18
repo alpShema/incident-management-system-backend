@@ -56,7 +56,7 @@ public class IncidentModalService {
     private static final String MODAL             = "modal";
     private static final String PLAIN_TEXT        = "plain_text";
 
-    private static final String HILFE_WEB_URL = "https://hilfe.amalitech.net";
+    private static final String HILFE_WEB_URL = "https://hilfe-pro-frontend.amalitech-dev.net";
 
     private record ModalState(
             String title,
