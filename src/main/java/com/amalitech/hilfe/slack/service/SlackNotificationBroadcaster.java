@@ -26,6 +26,7 @@ public class SlackNotificationBroadcaster {
     private final SlackProperties slackProperties;
 
     private static final String HILFE_WEB_URL = "https://hilfe.amalitech.net";
+    private static final String EMOJI_CYCLE = ":arrows_counterclockwise:";
 
     @Async
     public void broadcast(Notification notification) {
@@ -88,11 +89,20 @@ public class SlackNotificationBroadcaster {
 
     private String getNotificationEmoji(String type) {
         return switch (type) {
-            case "INCIDENT_ASSIGNED" -> ":inbox_tray:";
-            case "INCIDENT_STATUS_CHANGED" -> ":arrows_counterclockwise:";
-            case "INCIDENT_NEW_MESSAGE" -> ":speech_balloon:";
-            case "INCIDENT_SLA_BREACHED" -> ":warning:";
-            default -> ":bell:";
+            case "INCIDENT_ASSIGNED"             -> ":inbox_tray:";
+            case "INCIDENT_ESCALATED"            -> ":rotating_light:";
+            case "INCIDENT_STATUS_CHANGED"       -> EMOJI_CYCLE;
+            case "INCIDENT_PENDING"              -> ":hourglass_flowing_sand:";
+            case "INCIDENT_REOPENED"             -> EMOJI_CYCLE;
+            case "INCIDENT_PRIORITY_CHANGED"     -> ":small_orange_diamond:";
+            case "INCIDENT_UNASSIGNED"           -> ":outbox_tray:";
+            case "INCIDENT_AUTO_CLOSED"          -> ":white_check_mark:";
+            case "INCIDENT_AUTO_CLOSED_CLIENT"   -> ":white_check_mark:";
+            case "INCIDENT_AUTO_ASSIGNED_CLIENT" -> ":handshake:";
+            case "INCIDENT_REASSIGNED_CLIENT"    -> EMOJI_CYCLE;
+            case "INCIDENT_SLA_AT_RISK"          -> ":warning:";
+            case "INCIDENT_SLA_BREACHED"         -> ":warning:";
+            default                              -> ":bell:";
         };
     }
 }
