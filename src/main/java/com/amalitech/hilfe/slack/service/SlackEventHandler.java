@@ -241,6 +241,22 @@ public class SlackEventHandler {
         log.debug("Block action: {} from user {}", actionId, userId);
 
         return switch (actionId) {
+            case "connect_from_home" -> {
+                String teamId = payload.path("team").path("id").asText();
+                String state = oauthService.generateOAuthState(userId, teamId);
+                String oauthUrl = oauthService.buildOAuthUrl(state);
+                slackClient.chatPostMessage(userId,
+                        "Click the button below to connect your HILFE account:",
+                        """
+                        [{"type":"actions","elements":[{"type":"button","text":{"type":"plain_text","text":"🔗  Connect to HILFE","emoji":true},"url":"%s","style":"primary","action_id":"open_connect_url"}]}]
+                        """.formatted(oauthUrl).strip());
+                yield "";
+            }
+            case "open_notification_settings" -> {
+                slackClient.chatPostMessage(userId,
+                        "Use `/hilfe settings` to manage your notification preferences.");
+                yield "";
+            }
             case "create_incident" -> {
                 incidentModalService.openCreateIncidentModal(userId, triggerId);
                 yield "";
@@ -251,6 +267,14 @@ public class SlackEventHandler {
             }
             case "view_assigned_incidents" -> {
                 incidentModalService.openAssignedIncidentsModal(userId, triggerId);
+                yield "";
+            }
+            case "category_select" -> {
+                try {
+                    incidentModalService.handleCategorySelection(payload);
+                } catch (Exception e) {
+                    log.error("Failed to handle category selection", e);
+                }
                 yield "";
             }
             default -> {

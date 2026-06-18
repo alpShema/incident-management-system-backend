@@ -11,26 +11,19 @@ import org.springframework.stereotype.Service;
 public class TokenEncryptionService {
 
     private final TextEncryptor encryptor;
-    private final boolean enabled;
 
     public TokenEncryptionService(EncryptionProperties properties) {
-        if (properties.key() != null && !properties.key().isBlank()) {
-            this.encryptor = Encryptors.text(properties.key(), "deadbeef");
-            this.enabled = true;
-            log.info("Token encryption enabled");
-        } else {
-            this.encryptor = null;
-            this.enabled = false;
-            log.warn("Token encryption disabled - ENCRYPTION_KEY not set");
+        if (properties.key() == null || properties.key().isBlank()) {
+            throw new IllegalStateException(
+                    "ENCRYPTION_KEY must be set — refusing to start without Slack token encryption. " +
+                    "Set the ENCRYPTION_KEY environment variable to a random secret of at least 32 characters.");
         }
+        this.encryptor = Encryptors.text(properties.key(), "deadbeef");
+        log.info("Token encryption enabled");
     }
 
     public String encrypt(String plainText) {
         if (plainText == null || plainText.isBlank()) {
-            return plainText;
-        }
-        if (!enabled) {
-            log.warn("Encryption requested but not enabled - storing in plain text");
             return plainText;
         }
         return encryptor.encrypt(plainText);
@@ -40,18 +33,15 @@ public class TokenEncryptionService {
         if (encryptedText == null || encryptedText.isBlank()) {
             return encryptedText;
         }
-        if (!enabled) {
-            return encryptedText;
-        }
         try {
             return encryptor.decrypt(encryptedText);
         } catch (Exception e) {
-            log.error("Failed to decrypt token - may be stored in plain text", e);
+            log.error("Failed to decrypt token", e);
             return encryptedText;
         }
     }
 
     public boolean isEnabled() {
-        return enabled;
+        return true;
     }
 }

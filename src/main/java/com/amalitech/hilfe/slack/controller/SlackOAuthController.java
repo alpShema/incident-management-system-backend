@@ -152,7 +152,7 @@ public class SlackOAuthController {
             @RequestHeader(value = "X-Slack-Signature", required = false) String signature,
             @RequestHeader(value = "X-Slack-Request-Timestamp", required = false) String timestamp
     ) {
-        if (signature != null && timestamp != null && !signatureValidator.isValid(signature, timestamp, rawBody)) {
+        if (signature == null || timestamp == null || !signatureValidator.isValid(signature, timestamp, rawBody)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of(ERROR_KEY, SlackConstants.INVALID_SIGNATURE));
         }
