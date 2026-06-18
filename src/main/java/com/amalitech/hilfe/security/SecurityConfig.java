@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/graphiql/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/slack/**").permitAll() // Slack endpoints use signature validation
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
