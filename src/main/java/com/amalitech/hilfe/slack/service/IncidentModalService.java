@@ -49,6 +49,8 @@ public class IncidentModalService {
     private static final String ACTION_CATEGORY    = "category_select";
     private static final String ACTION_TOPIC       = "topic_select";
     private static final String ACTION_LOCATION    = "location_select";
+    private static final String ACTION_SEVERITY    = "severity_select";
+    private static final String SEVERITY_BLOCK     = "severity_block";
     private static final String STATUS_ACTIVE      = "active";
     private static final String DESCRIPTION_BLOCK = "description_block";
     private static final String MODAL             = "modal";
@@ -62,10 +64,12 @@ public class IncidentModalService {
             String locationId,
             String locationName,
             String categoryId,
-            String categoryName
+            String categoryName,
+            String severityId,
+            String severityName
     ) {
         static ModalState empty() {
-            return new ModalState(null, null, null, null, null, null);
+            return new ModalState(null, null, null, null, null, null, null, null);
         }
     }
 
@@ -76,6 +80,7 @@ public class IncidentModalService {
     private final IncidentCategoryRepository incidentCategoryRepository;
     private final IncidentTypeRepository incidentTypeRepository;
     private final LocationRepository locationRepository;
+    private final SeverityRepository severityRepository;
     private final IncidentRepository incidentRepository;
     private final UserRepository userRepository;
     private final SlackProperties slackProperties;
@@ -90,8 +95,9 @@ public class IncidentModalService {
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
+        List<Severity> severities = severityRepository.findByStatus(true);
 
-        View modal = buildCreateIncidentModal(categories, locations, List.of(), ModalState.empty());
+        View modal = buildCreateIncidentModal(categories, locations, List.of(), severities, ModalState.empty());
         slackClient.viewsOpen(triggerId, modal);
 
         auditLogService.log("INCIDENT_MODAL_OPENED", slackUserId, mapping.getHilfeUserId(),
@@ -141,16 +147,20 @@ public class IncidentModalService {
 
         JsonNode stateValues = payload.path("view").path("state").path("values");
 
-        String currentTitle       = extractTextValue(stateValues, TITLE_BLOCK, ACTION_TITLE);
-        String currentDescription = extractTextValue(stateValues, DESCRIPTION_BLOCK, ACTION_DESCRIPTION);
-        String currentLocationId  = extractSelectValue(stateValues, LOCATION_BLOCK, ACTION_LOCATION);
+        String currentTitle        = extractTextValue(stateValues, TITLE_BLOCK, ACTION_TITLE);
+        String currentDescription  = extractTextValue(stateValues, DESCRIPTION_BLOCK, ACTION_DESCRIPTION);
+        String currentLocationId   = extractSelectValue(stateValues, LOCATION_BLOCK, ACTION_LOCATION);
         String currentLocationName = stateValues.path(LOCATION_BLOCK).path(ACTION_LOCATION)
+                .path(SELECTED_OPTION).path("text").path("text").asText(null);
+        String currentSeverityId   = extractSelectValue(stateValues, SEVERITY_BLOCK, ACTION_SEVERITY);
+        String currentSeverityName = stateValues.path(SEVERITY_BLOCK).path(ACTION_SEVERITY)
                 .path(SELECTED_OPTION).path("text").path("text").asText(null);
 
         List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(STATUS_ACTIVE);
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
+        List<Severity> severities = severityRepository.findByStatus(true);
         List<IncidentType> topics = categoryId != null
                 ? incidentTypeRepository.findByCategoryIdWithAgentAndStatus(categoryId, STATUS_ACTIVE)
                 : List.of();
@@ -158,8 +168,9 @@ public class IncidentModalService {
         ModalState state = new ModalState(
                 currentTitle, currentDescription,
                 currentLocationId, currentLocationName,
-                categoryId, categoryName);
-        View updated = buildCreateIncidentModal(categories, locations, topics, state);
+                categoryId, categoryName,
+                currentSeverityId, currentSeverityName);
+        View updated = buildCreateIncidentModal(categories, locations, topics, severities, state);
 
         slackClient.viewsUpdate(viewId, updated);
         log.debug("Modal updated for category selection: {}", categoryId);
@@ -181,13 +192,14 @@ public class IncidentModalService {
         String categoryId     = extractSelectValue(stateValues, CATEGORY_BLOCK, ACTION_CATEGORY);
         String incidentTypeId = extractSelectValue(stateValues, TOPIC_BLOCK, ACTION_TOPIC);
         String locationId     = extractSelectValue(stateValues, LOCATION_BLOCK, ACTION_LOCATION);
+        String severityId     = extractSelectValue(stateValues, SEVERITY_BLOCK, ACTION_SEVERITY);
 
         Map<String, String> errors = validateSubmission(title, description, categoryId, incidentTypeId, locationId);
         if (!errors.isEmpty()) return buildValidationErrorResponse(errors);
 
         try {
             CreateIncidentRequest request = new CreateIncidentRequest(
-                    title, description, incidentTypeId, locationId, null, List.of());
+                    title, description, incidentTypeId, locationId, severityId, List.of());
 
             IncidentResponse incident = incidentService.createIncident(mapping.getHilfeUserId(), request);
 
@@ -213,12 +225,14 @@ public class IncidentModalService {
     private View buildCreateIncidentModal(List<IncidentCategory> categories,
                                           List<Location> locations,
                                           List<IncidentType> topics,
+                                          List<Severity> severities,
                                           ModalState state) {
         List<LayoutBlock> blocks = new ArrayList<>();
         blocks.add(buildTitleBlock(state.title()));
         blocks.add(buildCategoryBlock(categories, state.categoryId(), state.categoryName()));
         blocks.add(buildTopicBlock(state.categoryId(), topics));
         blocks.add(buildLocationBlock(locations, state.locationId(), state.locationName()));
+        blocks.add(buildSeverityBlock(severities, state.severityId(), state.severityName()));
         blocks.add(buildDescriptionBlock(state.description()));
 
         return View.builder()
@@ -304,6 +318,26 @@ public class IncidentModalService {
         );
     }
 
+    private LayoutBlock buildSeverityBlock(List<Severity> severities,
+                                            String currentSeverityId, String currentSeverityName) {
+        return input(i -> i
+                .blockId(SEVERITY_BLOCK)
+                .optional(true)
+                .label(plainText("Priority"))
+                .element(staticSelect(s -> {
+                    var b = s.actionId(ACTION_SEVERITY)
+                            .placeholder(plainText("Select priority (optional)"))
+                            .options(severities.stream()
+                                    .map(sv -> option(plainText(sv.getName()), sv.getId()))
+                                    .toList());
+                    if (currentSeverityId != null && currentSeverityName != null) {
+                        b.initialOption(option(plainText(currentSeverityName), currentSeverityId));
+                    }
+                    return b;
+                }))
+        );
+    }
+
     private LayoutBlock buildDescriptionBlock(String currentDescription) {
         return input(i -> i
                 .blockId(DESCRIPTION_BLOCK)
@@ -311,7 +345,6 @@ public class IncidentModalService {
                 .element(plainTextInput(p -> {
                     var b = p.actionId(ACTION_DESCRIPTION)
                             .placeholder(plainText("Describe the incident in detail..."))
-                            .multiline(true)
                             .maxLength(1000);
                     if (currentDescription != null && !currentDescription.isBlank()) b.initialValue(currentDescription);
                     return b;
