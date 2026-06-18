@@ -78,8 +78,12 @@ public class SeverityService {
     public SeverityResponse updateSeveritySla(String id, UpdateSeveritySlaRequest request) {
         Severity severity = severityRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException(MSG_SEVERITY_NOT_FOUND, 404));
-        severity.setResponseTimeMinutes(request.responseTimeMinutes());
-        severity.setResolutionTimeMinutes(request.resolutionTimeMinutes());
+        if (request.responseTimeMinutes() != null) {
+            severity.setResponseTimeMinutes(request.responseTimeMinutes());
+        }
+        if (request.resolutionTimeMinutes() != null) {
+            severity.setResolutionTimeMinutes(request.resolutionTimeMinutes());
+        }
         return SeverityResponse.from(severityRepository.save(severity));
     }
 
