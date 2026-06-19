@@ -157,34 +157,31 @@ public class AppHomeService {
         return Views.view(v -> v.type("home").blocks(blocks));
     }
 
-    public void openNotificationSettingsModal(String slackUserId, String triggerId, String hilfeUserId) {
-        List<OptionObject> allOptions = SlackNotificationPreferenceService.NOTIFICATION_TYPES.stream()
-                .map(type -> option(plainText(notifLabel(type)), type))
-                .toList();
+    // Slack checkboxes element allows at most 10 options — split across two groups
+    private static final List<String> NOTIF_GROUP_1 = List.of(
+            "INCIDENT_ASSIGNED", "INCIDENT_ESCALATED", "INCIDENT_STATUS_CHANGED",
+            "INCIDENT_PENDING", "INCIDENT_REOPENED", "INCIDENT_PRIORITY_CHANGED",
+            "INCIDENT_UNASSIGNED"
+    );
+    private static final List<String> NOTIF_GROUP_2 = List.of(
+            "INCIDENT_AUTO_CLOSED", "INCIDENT_AUTO_CLOSED_CLIENT",
+            "INCIDENT_AUTO_ASSIGNED_CLIENT", "INCIDENT_REASSIGNED_CLIENT",
+            "INCIDENT_SLA_AT_RISK", "INCIDENT_SLA_BREACHED"
+    );
 
-        // Single DB query instead of one per type — avoids exhausting the 3-second trigger_id window
+    public void openNotificationSettingsModal(String slackUserId, String triggerId, String hilfeUserId) {
+        // Single DB query — avoids exhausting the 3-second trigger_id window
         Set<String> disabledTypes = preferenceService.getPreferences(hilfeUserId).stream()
                 .filter(p -> Boolean.FALSE.equals(p.getEnabled()))
                 .map(SlackNotificationPreference::getNotificationType)
                 .collect(Collectors.toSet());
 
-        List<OptionObject> enabledOptions = SlackNotificationPreferenceService.NOTIFICATION_TYPES.stream()
-                .filter(type -> !disabledTypes.contains(type))
-                .map(type -> option(plainText(notifLabel(type)), type))
-                .toList();
-
         List<LayoutBlock> blocks = List.of(
                 section(s -> s.text(markdownText("Choose which events send you a Slack DM."))),
-                input(i -> i
-                        .blockId("notif_prefs_block")
-                        .label(plainText("Notification types"))
-                        .optional(true)
-                        .element(checkboxes(c -> {
-                            c.actionId("notif_types").options(allOptions);
-                            if (!enabledOptions.isEmpty()) c.initialOptions(enabledOptions);
-                            return c;
-                        }))
-                )
+                buildCheckboxBlock("notif_prefs_block_1", "notif_types_1",
+                        "Incident Events", NOTIF_GROUP_1, disabledTypes),
+                buildCheckboxBlock("notif_prefs_block_2", "notif_types_2",
+                        "Automated & SLA Events", NOTIF_GROUP_2, disabledTypes)
         );
 
         View modal = Views.view(v -> v
@@ -200,14 +197,37 @@ public class AppHomeService {
         log.debug("Opened notification settings modal for Slack user {}", slackUserId);
     }
 
+    private LayoutBlock buildCheckboxBlock(String blockId, String actionId, String label,
+                                           List<String> types, Set<String> disabledTypes) {
+        List<OptionObject> all = types.stream()
+                .map(type -> option(plainText(notifLabel(type)), type))
+                .toList();
+        List<OptionObject> enabled = types.stream()
+                .filter(type -> !disabledTypes.contains(type))
+                .map(type -> option(plainText(notifLabel(type)), type))
+                .toList();
+
+        return input(i -> i
+                .blockId(blockId)
+                .label(plainText(label))
+                .optional(true)
+                .element(checkboxes(c -> {
+                    c.actionId(actionId).options(all);
+                    if (!enabled.isEmpty()) c.initialOptions(enabled);
+                    return c;
+                }))
+        );
+    }
+
     public void handleNotificationSettingsSubmission(JsonNode payload, String hilfeUserId) {
         String slackUserId = payload.path("user").path("id").asText();
 
-        JsonNode selectedOptions = payload.path("view").path("state").path("values")
-                .path("notif_prefs_block").path("notif_types").path("selected_options");
-
+        JsonNode values = payload.path("view").path("state").path("values");
         Set<String> enabled = new HashSet<>();
-        for (JsonNode opt : selectedOptions) {
+        for (JsonNode opt : values.path("notif_prefs_block_1").path("notif_types_1").path("selected_options")) {
+            enabled.add(opt.path("value").asText());
+        }
+        for (JsonNode opt : values.path("notif_prefs_block_2").path("notif_types_2").path("selected_options")) {
             enabled.add(opt.path("value").asText());
         }
 
