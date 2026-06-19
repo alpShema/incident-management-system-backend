@@ -13,6 +13,7 @@ public record SlackProperties(
         String clientSecret,
         String redirectUri,
         String frontendConnectUrl,
+        String frontendSuccessUrl,
         String appId,
         boolean notificationsEnabled,
         boolean agentFeaturesEnabled,

@@ -2,8 +2,10 @@ package com.amalitech.hilfe.slack.controller;
 
 import com.amalitech.hilfe.config.SlackProperties;
 import com.amalitech.hilfe.slack.SlackConstants;
+import com.amalitech.hilfe.slack.client.SlackClient;
 import com.amalitech.hilfe.slack.security.SlackRateLimiter;
 import com.amalitech.hilfe.slack.security.SlackSignatureValidator;
+import com.amalitech.hilfe.slack.service.AppHomeService;
 import com.amalitech.hilfe.slack.service.SlackAuditLogService;
 import com.amalitech.hilfe.slack.service.SlackOAuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -55,8 +58,20 @@ public class SlackOAuthController {
             </html>
             """;
 
+    private static final String WELCOME_MESSAGE = """
+            🎉 *You're now connected to HILFE!*
+
+            Your Slack account is linked to your HILFE account. You can now:
+            • Create incidents with `/hilfe new`
+            • View your tickets with `/hilfe my`
+            • Receive real-time DM notifications for all incident updates
+
+            Open the *Home* tab to manage your notification preferences.""";
+
     private final SlackOAuthService oauthService;
     private final SlackAuditLogService auditLogService;
+    private final SlackClient slackClient;
+    private final AppHomeService appHomeService;
     private final SlackRateLimiter rateLimiter;
     private final SlackSignatureValidator signatureValidator;
     private final SlackProperties slackProperties;
@@ -121,8 +136,19 @@ public class SlackOAuthController {
                     oauthState.get().slackTeamId()
             );
 
+            String slackUserId = oauthState.get().slackUserId();
             log.info("OAuth successful for Slack user {} -> HILFE user {}",
-                    oauthState.get().slackUserId(), mapping.getHilfeUserId());
+                    slackUserId, mapping.getHilfeUserId());
+
+            slackClient.chatPostMessage(slackUserId, WELCOME_MESSAGE);
+            appHomeService.publishAppHome(slackUserId);
+
+            String successUrl = slackProperties.frontendSuccessUrl();
+            if (successUrl != null && !successUrl.isBlank()) {
+                return ResponseEntity.status(HttpStatus.FOUND)
+                        .header(HttpHeaders.LOCATION, successUrl)
+                        .build();
+            }
 
             return ResponseEntity.ok()
                     .contentType(MediaType.TEXT_HTML)
@@ -132,7 +158,7 @@ public class SlackOAuthController {
 
             auditLogService.log(
                     "AUTH_FAILED",
-                    oauthState.get().slackUserId(),
+                    oauthState.get().slackUserId(),  // slackUserId may not be set yet if connectUser threw
                     null,
                     "OAUTH",
                     null,
