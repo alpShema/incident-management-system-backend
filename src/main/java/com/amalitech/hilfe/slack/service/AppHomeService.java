@@ -261,49 +261,47 @@ public class AppHomeService {
     private View buildDisconnectedHome() {
         List<LayoutBlock> blocks = new ArrayList<>();
 
-        // ── Greeting ──────────────────────────────────────────────────────────
+        // ── Welcome ───────────────────────────────────────────────────────────
+        blocks.add(section(s -> s.text(markdownText(" "))));
         blocks.add(section(s -> s.text(markdownText(
-                "👋  Hi — Welcome to HILFE for Slack.\n"
-                + "Here are a few ways you can get the most out of HILFE:"
+                "*Welcome to HILFE for Slack!* 👋\n"
+                + "HILFE is an IT support platform that helps you report, track, and resolve incidents — right from Slack."
         ))));
+        blocks.add(section(s -> s.text(markdownText(" "))));
 
         blocks.add(divider());
 
-        // ── Feature highlights ────────────────────────────────────────────────
-        blocks.add(section(s -> s.text(markdownText(
-                "✨  *Submit incidents*\n"
-                + "Create and track IT support issues in seconds, right from Slack."
-        ))));
-
-        blocks.add(section(s -> s.text(markdownText(
-                "🔔  *Real-time notifications*\n"
-                + "Get notified the moment your ticket is assigned, updated, or resolved."
-        ))));
-
-        blocks.add(section(s -> s.text(markdownText(
-                "📋  *Track your work*\n"
-                + "View all your open incidents and monitor progress at a glance."
-        ))));
+        // ── Getting started ───────────────────────────────────────────────────
+        blocks.add(section(s -> s.text(markdownText(" "))));
+        blocks.add(section(s -> s.text(markdownText("*Getting Started:*"))));
+        blocks.add(section(s -> s.text(markdownText("• Use `/hilfe new` to create an incident in any channel"))));
+        blocks.add(section(s -> s.text(markdownText("• Use `/hilfe my` to view your open incidents"))));
+        blocks.add(section(s -> s.text(markdownText("• Get real-time DMs when your ticket is updated or resolved"))));
+        blocks.add(section(s -> s.text(markdownText("• Manage notification preferences from the Home tab"))));
+        blocks.add(section(s -> s.text(markdownText(" "))));
 
         blocks.add(divider());
 
-        // ── CTA ───────────────────────────────────────────────────────────────
+        // ── Connect CTA ───────────────────────────────────────────────────────
+        blocks.add(section(s -> s.text(markdownText(" "))));
         blocks.add(section(s -> s.text(markdownText(
-                "🖥️  Ready to get started? Connect your HILFE account."
+                "*Connect Your HILFE Account*\n"
+                + "To use HILFE for Slack, connect your <https://hilfe.amalitech.net|HILFE> account for secure access."
         ))));
+
         blocks.add(actions(a -> a.elements(List.of(
                 button(b -> b
                         .actionId("connect_from_home")
-                        .text(plainText("Connect to HILFE"))
+                        .text(plainText("Connect Account"))
                         .style(STYLE_PRIMARY)
                 )
         ))));
 
-        blocks.add(divider());
+        blocks.add(section(s -> s.text(markdownText(" "))));
 
         // ── Footer ────────────────────────────────────────────────────────────
         blocks.add(context(c -> c.elements(List.of(
-                markdownText("<https://hilfe.amalitech.net|Open HILFE Web Platform>")
+                markdownText("Your data remains private and secure. You can disconnect at any time.")
         ))));
 
         return Views.view(v -> v.type("home").blocks(blocks));

@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/graphiql/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/slack/**").permitAll() // Slack endpoints use signature validation
+                        .requestMatchers("/images/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
