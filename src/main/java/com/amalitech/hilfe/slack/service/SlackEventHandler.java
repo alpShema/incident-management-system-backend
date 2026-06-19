@@ -1,11 +1,14 @@
 package com.amalitech.hilfe.slack.service;
 
 import com.amalitech.hilfe.config.SlackProperties;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.slack.client.SlackClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -53,8 +56,8 @@ public class SlackEventHandler {
     private final SlackAuditLogService auditLogService;
     private final AppHomeService appHomeService;
     private final IncidentModalService incidentModalService;
-    private final SlackNotificationPreferenceService preferenceService;
     private final SlackProperties slackProperties;
+    private final UserAuthorityService userAuthorityService;
 
     public void handleEvent(String eventType, JsonNode event) {
         String userId = event.path("user").asText();
@@ -182,17 +185,7 @@ public class SlackEventHandler {
         }
 
         return buildEphemeralResponse(
-                "Open the *Home* tab to toggle your Slack notification preferences.");
-    }
-
-    private void handleNotificationToggle(String slackUserId, String actionId) {
-        String type = actionId.substring("toggle_notif_".length());
-        oauthService.findBySlackUserId(slackUserId).ifPresent(mapping -> {
-            String hilfeUserId = mapping.getHilfeUserId();
-            boolean current = preferenceService.isEnabled(hilfeUserId, type);
-            preferenceService.updatePreference(hilfeUserId, type, !current);
-            appHomeService.publishAppHome(slackUserId);
-        });
+                "Open the *Home* tab and click *⚙️ Notification Settings* to manage your preferences.");
     }
 
     private String handleNewIncidentCommand(String userId, String triggerId) {
@@ -230,6 +223,16 @@ public class SlackEventHandler {
 
         if (!slackProperties.agentFeaturesEnabled()) {
             return buildEphemeralResponse("This feature is not enabled.");
+        }
+
+        boolean canView = oauthService.findBySlackUserId(userId)
+                .flatMap(m -> userAuthorityService.resolveByUserId(m.getHilfeUserId()))
+                .map(r -> r.authorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .anyMatch(RbacPermissions.INCIDENT_READ_ASSIGNED::equals))
+                .orElse(false);
+        if (!canView) {
+            return buildEphemeralResponse("You don't have permission to use this command.");
         }
 
         try {
@@ -276,6 +279,13 @@ public class SlackEventHandler {
                 incidentModalService.openAssignedIncidentsModal(userId, triggerId);
                 yield "";
             }
+            case "open_notification_settings" -> {
+                oauthService.findBySlackUserId(userId).ifPresent(mapping ->
+                        appHomeService.openNotificationSettingsModal(
+                                userId, triggerId, mapping.getHilfeUserId())
+                );
+                yield "";
+            }
             case "category_select" -> {
                 try {
                     incidentModalService.handleCategorySelection(payload);
@@ -286,10 +296,6 @@ public class SlackEventHandler {
             }
             default -> {
                 if (actionId.startsWith("view_incident_")) {
-                    yield "";
-                }
-                if (actionId.startsWith("toggle_notif_")) {
-                    handleNotificationToggle(userId, actionId);
                     yield "";
                 }
                 log.debug("Unhandled action: {}", actionId);
@@ -306,7 +312,13 @@ public class SlackEventHandler {
 
         return switch (callbackId) {
             case "create_incident" -> incidentModalService.handleCreateIncidentSubmission(payload);
-            case "notification_settings" -> "";
+            case "notification_settings" -> {
+                oauthService.findBySlackUserId(userId).ifPresent(mapping ->
+                        appHomeService.handleNotificationSettingsSubmission(
+                                payload, mapping.getHilfeUserId())
+                );
+                yield "";
+            }
             default -> {
                 log.debug("Unhandled callback_id: {}", callbackId);
                 yield "";

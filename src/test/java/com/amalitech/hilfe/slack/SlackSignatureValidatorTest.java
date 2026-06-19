@@ -23,7 +23,7 @@ class SlackSignatureValidatorTest {
     void setUp() {
         enabledProps = new SlackProperties(
                 true, SIGNING_SECRET, "token", "client-id", "client-secret",
-                "https://api.test/callback", "https://connect.test", "app-id",
+                "https://api.test/callback", "https://connect.test", null, "app-id",
                 true, true, new SlackProperties.RateLimit(60, 10));
         validator = new SlackSignatureValidator(enabledProps);
     }
@@ -95,7 +95,7 @@ class SlackSignatureValidatorTest {
     void isValid_whenSlackDisabled_returnsFalse() throws Exception {
         SlackProperties disabled = new SlackProperties(
                 false, SIGNING_SECRET, "token", "id", "secret",
-                "https://redirect", "https://connect", "app-id",
+                "https://redirect", "https://connect", null, "app-id",
                 true, true, new SlackProperties.RateLimit(60, 10));
         var disabledValidator = new SlackSignatureValidator(disabled);
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
