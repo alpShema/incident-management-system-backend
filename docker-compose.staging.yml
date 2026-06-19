@@ -53,6 +53,8 @@ services:
       SLACK_REDIRECT_URI: ${SLACK_REDIRECT_URI}
       SLACK_FRONTEND_CONNECT_URL: ${SLACK_FRONTEND_CONNECT_URL}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      AMALI_AI_API_KEY: ${AMALI_AI_API_KEY}
+      AMALI_AI_BASE_URL: ${AMALI_AI_BASE_URL}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 30s
