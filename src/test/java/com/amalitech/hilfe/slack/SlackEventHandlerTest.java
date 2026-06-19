@@ -2,6 +2,7 @@ package com.amalitech.hilfe.slack;
 
 import com.amalitech.hilfe.config.SlackProperties;
 import com.amalitech.hilfe.models.SlackUserMapping;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.slack.client.SlackClient;
 import com.amalitech.hilfe.slack.service.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,7 +14,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,8 +31,8 @@ class SlackEventHandlerTest {
     @Mock private SlackAuditLogService auditLogService;
     @Mock private AppHomeService appHomeService;
     @Mock private IncidentModalService incidentModalService;
-    @Mock private SlackNotificationPreferenceService preferenceService;
     @Mock private SlackProperties slackProperties;
+    @Mock private UserAuthorityService userAuthorityService;
 
     @InjectMocks
     private SlackEventHandler handler;
@@ -180,13 +183,32 @@ class SlackEventHandlerTest {
 
     @Test
     void handleCommand_assigned_whenConnectedAndFeatureEnabled_opensModal() {
+        SlackUserMapping mapping = SlackUserMapping.builder()
+                .slackUserId("U1").hilfeUserId("h1").build();
+        var resolved = new UserAuthorityService.ResolvedAuthorities(
+                "h1", "agent@test.com", "AGENT",
+                List.of(new SimpleGrantedAuthority("incident.read.assigned")), 1);
         when(oauthService.isConnected("U1")).thenReturn(true);
         when(slackProperties.agentFeaturesEnabled()).thenReturn(true);
+        when(oauthService.findBySlackUserId("U1")).thenReturn(Optional.of(mapping));
+        when(userAuthorityService.resolveByUserId("h1")).thenReturn(Optional.of(resolved));
 
         String response = handler.handleCommand("assigned", "U1", "trigger-1", "T1");
 
         verify(incidentModalService).openAssignedIncidentsModal("U1", "trigger-1");
         assertThat(response).isEmpty();
+    }
+
+    @Test
+    void handleCommand_assigned_whenUserLacksPermission_returnsNotAllowed() {
+        when(oauthService.isConnected("U1")).thenReturn(true);
+        when(slackProperties.agentFeaturesEnabled()).thenReturn(true);
+        when(oauthService.findBySlackUserId("U1")).thenReturn(Optional.empty());
+
+        String response = handler.handleCommand("assigned", "U1", "trigger-1", "T1");
+
+        verifyNoInteractions(incidentModalService);
+        assertThat(response).contains("permission");
     }
 
     @Test
@@ -283,12 +305,12 @@ class SlackEventHandlerTest {
     }
 
     @Test
-    void handleInteraction_blockActions_toggleNotif_flipsPreferenceAndRefreshesHome() {
+    void handleInteraction_blockActions_openNotificationSettings_opensModal() {
         SlackUserMapping mapping = SlackUserMapping.builder()
                 .slackUserId("U1").hilfeUserId("h1").build();
 
         ObjectNode action = mapper.createObjectNode();
-        action.put("action_id", "toggle_notif_INCIDENT_ASSIGNED");
+        action.put("action_id", "open_notification_settings");
         ObjectNode user = mapper.createObjectNode();
         user.put("id", "U1");
         ObjectNode payload = mapper.createObjectNode();
@@ -297,11 +319,9 @@ class SlackEventHandlerTest {
         payload.set("actions", mapper.createArrayNode().add(action));
 
         when(oauthService.findBySlackUserId("U1")).thenReturn(Optional.of(mapping));
-        when(preferenceService.isEnabled("h1", "INCIDENT_ASSIGNED")).thenReturn(true);
 
         handler.handleInteraction("block_actions", payload);
 
-        verify(preferenceService).updatePreference("h1", "INCIDENT_ASSIGNED", false);
-        verify(appHomeService).publishAppHome("U1");
+        verify(appHomeService).openNotificationSettingsModal("U1", "trigger-1", "h1");
     }
 }
