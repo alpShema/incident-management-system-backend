@@ -257,33 +257,61 @@ public class SlackEventHandler {
 
         return switch (actionId) {
             case "connect_from_home" -> {
-                String teamId = payload.path("team").path("id").asText();
-                String state = oauthService.generateOAuthState(userId, teamId);
-                String oauthUrl = oauthService.buildOAuthUrl(state);
-                slackClient.chatPostMessage(userId,
-                        "Click the button below to connect your HILFE account:",
-                        """
-                        [{"type":"actions","elements":[{"type":"button","text":{"type":"plain_text","text":"🔗  Connect to HILFE","emoji":true},"url":"%s","style":"primary","action_id":"open_connect_url"}]}]
-                        """.formatted(oauthUrl).strip());
+                try {
+                    String teamId = payload.path("team").path("id").asText();
+                    String state = oauthService.generateOAuthState(userId, teamId);
+                    String oauthUrl = oauthService.buildOAuthUrl(state);
+                    slackClient.chatPostMessage(userId,
+                            "Click the button below to connect your HILFE account:",
+                            """
+                            [{"type":"actions","elements":[{"type":"button","text":{"type":"plain_text","text":"🔗  Connect to HILFE","emoji":true},"url":"%s","style":"primary","action_id":"open_connect_url"}]}]
+                            """.formatted(oauthUrl).strip());
+                } catch (Exception e) {
+                    log.error("Failed to send connect link to user {}", userId, e);
+                }
                 yield "";
             }
             case "create_incident" -> {
-                incidentModalService.openCreateIncidentModal(userId, triggerId);
+                try {
+                    incidentModalService.openCreateIncidentModal(userId, triggerId);
+                } catch (Exception e) {
+                    log.error("Failed to open create incident modal for user {}", userId, e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while opening the incident form. Please try again.");
+                }
                 yield "";
             }
             case "view_my_incidents" -> {
-                incidentModalService.openMyIncidentsModal(userId, triggerId);
+                try {
+                    incidentModalService.openMyIncidentsModal(userId, triggerId);
+                } catch (Exception e) {
+                    log.error("Failed to open my incidents modal for user {}", userId, e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while loading your incidents. Please try again.");
+                }
                 yield "";
             }
             case "view_assigned_incidents" -> {
-                incidentModalService.openAssignedIncidentsModal(userId, triggerId);
+                try {
+                    incidentModalService.openAssignedIncidentsModal(userId, triggerId);
+                } catch (Exception e) {
+                    log.error("Failed to open assigned incidents modal for user {}", userId, e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while loading assigned incidents. Please try again.");
+                }
                 yield "";
             }
             case "open_notification_settings" -> {
-                oauthService.findBySlackUserId(userId).ifPresent(mapping ->
-                        appHomeService.openNotificationSettingsModal(
-                                userId, triggerId, mapping.getHilfeUserId())
-                );
+                try {
+                    oauthService.findBySlackUserId(userId).ifPresent(mapping ->
+                            appHomeService.openNotificationSettingsModal(
+                                    userId, triggerId, mapping.getHilfeUserId())
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to open notification settings for user {}", userId, e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while opening notification settings. Please try again.");
+                }
                 yield "";
             }
             case "category_select" -> {
@@ -291,6 +319,8 @@ public class SlackEventHandler {
                     incidentModalService.handleCategorySelection(payload);
                 } catch (Exception e) {
                     log.error("Failed to handle category selection", e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while updating the form. Please try again.");
                 }
                 yield "";
             }
@@ -311,12 +341,27 @@ public class SlackEventHandler {
         log.debug("View submission: {} from user {}", callbackId, userId);
 
         return switch (callbackId) {
-            case "create_incident" -> incidentModalService.handleCreateIncidentSubmission(payload);
+            case "create_incident" -> {
+                try {
+                    yield incidentModalService.handleCreateIncidentSubmission(payload);
+                } catch (Exception e) {
+                    log.error("Failed to handle incident submission for user {}", userId, e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while creating the incident. Please try again.");
+                    yield "";
+                }
+            }
             case "notification_settings" -> {
-                oauthService.findBySlackUserId(userId).ifPresent(mapping ->
-                        appHomeService.handleNotificationSettingsSubmission(
-                                payload, mapping.getHilfeUserId())
-                );
+                try {
+                    oauthService.findBySlackUserId(userId).ifPresent(mapping ->
+                            appHomeService.handleNotificationSettingsSubmission(
+                                    payload, mapping.getHilfeUserId())
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to save notification preferences for user {}", userId, e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while saving your notification preferences. Please try again.");
+                }
                 yield "";
             }
             default -> {
