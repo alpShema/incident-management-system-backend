@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.slack.service;
 
 import com.amalitech.hilfe.config.SlackProperties;
+import com.amalitech.hilfe.models.SlackNotificationPreference;
 import com.amalitech.hilfe.models.SlackUserMapping;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.IncidentRepository;
@@ -27,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.slack.api.model.block.Blocks.*;
 import static com.slack.api.model.block.composition.BlockCompositions.*;
@@ -160,8 +162,14 @@ public class AppHomeService {
                 .map(type -> option(plainText(notifLabel(type)), type))
                 .toList();
 
+        // Single DB query instead of one per type — avoids exhausting the 3-second trigger_id window
+        Set<String> disabledTypes = preferenceService.getPreferences(hilfeUserId).stream()
+                .filter(p -> Boolean.FALSE.equals(p.getEnabled()))
+                .map(SlackNotificationPreference::getNotificationType)
+                .collect(Collectors.toSet());
+
         List<OptionObject> enabledOptions = SlackNotificationPreferenceService.NOTIFICATION_TYPES.stream()
-                .filter(type -> preferenceService.isEnabled(hilfeUserId, type))
+                .filter(type -> !disabledTypes.contains(type))
                 .map(type -> option(plainText(notifLabel(type)), type))
                 .toList();
 
