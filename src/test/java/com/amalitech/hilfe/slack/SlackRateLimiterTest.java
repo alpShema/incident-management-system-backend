@@ -16,7 +16,7 @@ class SlackRateLimiterTest {
     void setUp() {
         SlackProperties props = new SlackProperties(
                 true, "secret", "token", "id", "secret",
-                "https://redirect", "https://connect", "app-id",
+                "https://redirect", "https://connect", null, "app-id",
                 true, true, new SlackProperties.RateLimit(5, 2));
         rateLimiter = new SlackRateLimiter(props);
     }

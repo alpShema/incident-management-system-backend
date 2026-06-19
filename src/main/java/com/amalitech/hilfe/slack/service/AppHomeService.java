@@ -5,9 +5,17 @@ import com.amalitech.hilfe.models.SlackUserMapping;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.slack.client.SlackClient;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.security.core.GrantedAuthority;
 import com.slack.api.model.block.LayoutBlock;
+import com.slack.api.model.block.composition.OptionObject;
 import com.slack.api.model.view.View;
+import com.slack.api.model.view.ViewClose;
+import com.slack.api.model.view.ViewSubmit;
+import com.slack.api.model.view.ViewTitle;
 import com.slack.api.model.view.Views;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,8 +23,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.slack.api.model.block.Blocks.*;
 import static com.slack.api.model.block.composition.BlockCompositions.*;
@@ -29,6 +39,7 @@ import static com.slack.api.model.block.element.BlockElements.*;
 public class AppHomeService {
 
     private static final String STYLE_PRIMARY = "primary";
+    private static final String PLAIN_TEXT = "plain_text";
 
     private final SlackClient slackClient;
     private final SlackOAuthService oauthService;
@@ -36,6 +47,7 @@ public class AppHomeService {
     private final IncidentRepository incidentRepository;
     private final SlackNotificationPreferenceService preferenceService;
     private final SlackProperties slackProperties;
+    private final UserAuthorityService userAuthorityService;
 
     public void publishAppHome(String slackUserId) {
         Optional<SlackUserMapping> mapping = oauthService.findBySlackUserId(slackUserId);
@@ -95,7 +107,8 @@ public class AppHomeService {
         ))));
 
         // ── Agent section ─────────────────────────────────────────────────────
-        if (slackProperties.agentFeaturesEnabled() && user != null && isAgent(user)) {
+        if (slackProperties.agentFeaturesEnabled() && hilfeUserId != null
+                && hasPermission(hilfeUserId, RbacPermissions.INCIDENT_READ_ASSIGNED)) {
             blocks.add(divider());
             blocks.add(section(s -> s.text(markdownText("Assigned to you"))));
             blocks.add(section(s -> s.text(markdownText(
@@ -112,14 +125,12 @@ public class AppHomeService {
         blocks.add(divider());
 
         // ── Notification preferences ──────────────────────────────────────────
-        blocks.add(section(s -> s.text(markdownText("🔔  *Notification Preferences*"))));
-        blocks.add(context(c -> c.elements(List.of(
-                markdownText("Toggle which events send you a Slack DM.")
+        blocks.add(actions(a -> a.elements(List.of(
+                button(b -> b
+                        .actionId("open_notification_settings")
+                        .text(plainText(pt -> pt.text("⚙️  Notification Settings").emoji(true)))
+                )
         ))));
-        for (String type : SlackNotificationPreferenceService.NOTIFICATION_TYPES) {
-            boolean enabled = hilfeUserId != null && preferenceService.isEnabled(hilfeUserId, type);
-            blocks.add(buildNotificationToggle(type, enabled));
-        }
 
         blocks.add(divider());
 
@@ -144,16 +155,60 @@ public class AppHomeService {
         return Views.view(v -> v.type("home").blocks(blocks));
     }
 
-    private LayoutBlock buildNotificationToggle(String type, boolean enabled) {
-        return section(s -> s
-                .text(markdownText("*" + notifLabel(type) + "*"))
-                .accessory(button(b -> {
-                    b.actionId("toggle_notif_" + type)
-                     .text(plainText(enabled ? "🔔  On" : "🔕  Off"));
-                    if (enabled) b.style(STYLE_PRIMARY);
-                    return b;
-                }))
+    public void openNotificationSettingsModal(String slackUserId, String triggerId, String hilfeUserId) {
+        List<OptionObject> allOptions = SlackNotificationPreferenceService.NOTIFICATION_TYPES.stream()
+                .map(type -> option(plainText(notifLabel(type)), type))
+                .toList();
+
+        List<OptionObject> enabledOptions = SlackNotificationPreferenceService.NOTIFICATION_TYPES.stream()
+                .filter(type -> preferenceService.isEnabled(hilfeUserId, type))
+                .map(type -> option(plainText(notifLabel(type)), type))
+                .toList();
+
+        List<LayoutBlock> blocks = List.of(
+                section(s -> s.text(markdownText("Choose which events send you a Slack DM."))),
+                input(i -> i
+                        .blockId("notif_prefs_block")
+                        .label(plainText("Notification types"))
+                        .optional(true)
+                        .element(checkboxes(c -> {
+                            c.actionId("notif_types").options(allOptions);
+                            if (!enabledOptions.isEmpty()) c.initialOptions(enabledOptions);
+                            return c;
+                        }))
+                )
         );
+
+        View modal = Views.view(v -> v
+                .type("modal")
+                .callbackId("notification_settings")
+                .title(ViewTitle.builder().type(PLAIN_TEXT).text("Notification Settings").emoji(true).build())
+                .submit(ViewSubmit.builder().type(PLAIN_TEXT).text("Save").emoji(true).build())
+                .close(ViewClose.builder().type(PLAIN_TEXT).text("Cancel").emoji(true).build())
+                .blocks(blocks)
+        );
+
+        slackClient.viewsOpen(triggerId, modal);
+        log.debug("Opened notification settings modal for Slack user {}", slackUserId);
+    }
+
+    public void handleNotificationSettingsSubmission(JsonNode payload, String hilfeUserId) {
+        String slackUserId = payload.path("user").path("id").asText();
+
+        JsonNode selectedOptions = payload.path("view").path("state").path("values")
+                .path("notif_prefs_block").path("notif_types").path("selected_options");
+
+        Set<String> enabled = new HashSet<>();
+        for (JsonNode opt : selectedOptions) {
+            enabled.add(opt.path("value").asText());
+        }
+
+        for (String type : SlackNotificationPreferenceService.NOTIFICATION_TYPES) {
+            preferenceService.updatePreference(hilfeUserId, type, enabled.contains(type));
+        }
+
+        publishAppHome(slackUserId);
+        log.debug("Saved notification preferences for HILFE user {}", hilfeUserId);
     }
 
     private static String notifLabel(String type) {
@@ -226,10 +281,11 @@ public class AppHomeService {
         return Views.view(v -> v.type("home").blocks(blocks));
     }
 
-    private boolean isAgent(User user) {
-        String roleCode = user.getRoleCode();
-        return "AGENT".equalsIgnoreCase(roleCode)
-                || "ADMIN".equalsIgnoreCase(roleCode)
-                || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
+    private boolean hasPermission(String hilfeUserId, String permissionCode) {
+        return userAuthorityService.resolveByUserId(hilfeUserId)
+                .map(resolved -> resolved.authorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .anyMatch(permissionCode::equals))
+                .orElse(false);
     }
 }
