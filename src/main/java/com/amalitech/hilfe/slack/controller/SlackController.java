@@ -2,6 +2,7 @@ package com.amalitech.hilfe.slack.controller;
 
 import com.amalitech.hilfe.config.SlackProperties;
 import com.amalitech.hilfe.slack.SlackConstants;
+import com.amalitech.hilfe.slack.client.SlackClient;
 import com.amalitech.hilfe.slack.security.SlackRateLimiter;
 import com.amalitech.hilfe.slack.security.SlackSignatureValidator;
 import com.amalitech.hilfe.slack.service.SlackAuditLogService;
@@ -38,6 +39,7 @@ public class SlackController {
     private final SlackAuditLogService auditLogService;
     private final SlackProperties slackProperties;
     private final ObjectMapper objectMapper;
+    private final SlackClient slackClient;
 
     @SuppressWarnings("java:S6863") // Slack requires HTTP 200 even on errors, or it retries the request
     @PostMapping(value = "/events", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -148,13 +150,14 @@ public class SlackController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(SlackConstants.INVALID_SIGNATURE);
         }
 
+        String userId = null;
         try {
             // Interactions come as payload=<url-encoded-json>
             String payloadJson = extractPayload(rawBody);
             JsonNode payload = objectMapper.readTree(payloadJson);
 
             String type = payload.path("type").asText();
-            String userId = payload.path("user").path("id").asText();
+            userId = payload.path("user").path("id").asText();
 
             if (!rateLimiter.tryAcquire(userId)) {
                 return ResponseEntity.ok(buildSlackMessage(
@@ -170,6 +173,14 @@ public class SlackController {
 
         } catch (Exception e) {
             log.error("Error processing Slack interaction", e);
+            if (userId != null && !userId.isBlank()) {
+                try {
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong. Please try again or contact support.");
+                } catch (Exception dmEx) {
+                    log.warn("Failed to send error DM to user {}", userId, dmEx);
+                }
+            }
             return ResponseEntity.ok("");
         }
     }
