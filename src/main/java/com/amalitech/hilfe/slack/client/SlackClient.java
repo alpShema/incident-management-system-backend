@@ -89,7 +89,10 @@ public class SlackClient {
             );
 
             if (!response.isOk()) {
-                log.error("Slack views.open failed: {}", response.getError());
+                log.error("Slack views.open failed: {} | details: {}",
+                        response.getError(),
+                        response.getResponseMetadata() != null
+                                ? response.getResponseMetadata().getMessages() : "none");
                 throw new com.amalitech.hilfe.slack.exception.SlackClientException(
                         "Failed to open view: " + response.getError());
             }
