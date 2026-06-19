@@ -78,6 +78,8 @@ services:
       SLACK_REDIRECT_URI: ${SLACK_REDIRECT_URI}
       SLACK_FRONTEND_CONNECT_URL: ${SLACK_FRONTEND_CONNECT_URL}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      AMALI_AI_API_KEY: ${AMALI_AI_API_KEY}
+      AMALI_AI_BASE_URL: ${AMALI_AI_BASE_URL}
     depends_on:
       db:
         condition: service_healthy
