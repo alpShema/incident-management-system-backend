@@ -634,11 +634,11 @@ public class IncidentService {
         if (!STATUS_REOPENED.equals(newStatus.getId())) return;
         if (incident.getResolvedAt() == null) return;
 
-        int windowHours = autoCloseService.readDurationHours();
-        Instant deadline = incident.getResolvedAt().plus(windowHours, java.time.temporal.ChronoUnit.HOURS);
+        int windowSeconds = autoCloseService.readDurationSeconds();
+        Instant deadline = incident.getResolvedAt().plusSeconds(windowSeconds);
         if (Instant.now().isAfter(deadline)) {
             throw new ArmsAuthException(
-                    "Reopen window has expired. Incidents must be reopened within " + windowHours + " hours of resolution.",
+                    "Reopen window has expired. Incidents must be reopened within " + windowSeconds + " seconds of resolution.",
                     403);
         }
     }
