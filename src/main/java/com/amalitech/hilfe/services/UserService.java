@@ -31,7 +31,7 @@ public class UserService {
     private final ActivityLogService activityLogService;
 
     public Page<UserRoleSummaryResponse> getUsers(
-            String query, RoleCode roleCode, String locationId, String status,
+            String query, String roleCode, String locationId, String status,
             Pageable pageable
     ) {
         String queryPattern = null;
@@ -51,7 +51,7 @@ public class UserService {
                 default -> null;
             };
         }
-        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, statusFilter, resolvedPageable);
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, statusFilter, resolvedPageable);
     }
 
     @Transactional
