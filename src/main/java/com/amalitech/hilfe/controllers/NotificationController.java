@@ -54,8 +54,8 @@ public class NotificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        int clampedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-        int clampedPage = Math.max(page, 0);
+        int clampedSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+        int clampedPage = Math.clamp(page, 0, Integer.MAX_VALUE);
         Pageable pageable = PageRequest.of(clampedPage, clampedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ResponseEntity.ok(ApiResponse.success("Notifications retrieved successfully",
                 notificationService.getNotifications(principal.userId(), pageable)));
