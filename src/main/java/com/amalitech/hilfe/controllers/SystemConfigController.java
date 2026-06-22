@@ -57,7 +57,7 @@ public class SystemConfigController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Auto-close configuration updated successfully",
-                autoCloseService.updateConfig(request.durationHours())));
+                autoCloseService.updateConfig(request.durationSeconds())));
     }
 
     @Operation(
