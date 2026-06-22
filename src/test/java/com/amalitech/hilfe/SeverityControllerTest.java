@@ -67,7 +67,7 @@ class SeverityControllerTest {
     void updateSeveritySla_belowMinimumValue_returns400() throws Exception {
         mvc.perform(patch("/severities/sev-1/sla")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"responseTimeMinutes\": 0}")
+                        .content("{\"responseTimeSeconds\": 0}")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 "user", null, List.of(() -> "severity.update")))))
                 .andExpect(status().isBadRequest());
@@ -82,7 +82,7 @@ class SeverityControllerTest {
 
         mvc.perform(patch("/severities/sev-1/sla")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"responseTimeMinutes\": 30}")
+                        .content("{\"responseTimeSeconds\": 1800}")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 "user", null, List.of(() -> "severity.update")))))
                 .andExpect(status().isOk())

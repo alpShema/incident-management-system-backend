@@ -76,7 +76,7 @@ class SeverityServiceTest {
         when(severityRepository.findById("sev-1")).thenReturn(Optional.of(s));
         when(severityRepository.save(any(Severity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(30, 240));
+        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(1800, 14400));
 
         ArgumentCaptor<Severity> captor = ArgumentCaptor.forClass(Severity.class);
         verify(severityRepository).save(captor.capture());
@@ -92,7 +92,7 @@ class SeverityServiceTest {
         when(severityRepository.findById("sev-1")).thenReturn(Optional.of(s));
         when(severityRepository.save(any(Severity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(30, null));
+        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(1800, null));
 
         ArgumentCaptor<Severity> captor = ArgumentCaptor.forClass(Severity.class);
         verify(severityRepository).save(captor.capture());
@@ -108,7 +108,7 @@ class SeverityServiceTest {
         when(severityRepository.findById("sev-1")).thenReturn(Optional.of(s));
         when(severityRepository.save(any(Severity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(null, 240));
+        severityService.updateSeveritySla("sev-1", new UpdateSeveritySlaRequest(null, 14400));
 
         ArgumentCaptor<Severity> captor = ArgumentCaptor.forClass(Severity.class);
         verify(severityRepository).save(captor.capture());
