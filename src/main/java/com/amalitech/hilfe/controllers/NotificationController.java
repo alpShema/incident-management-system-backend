@@ -2,16 +2,18 @@ package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.NotificationResponse;
+import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @Tag(
         name = "Notifications",
@@ -36,19 +38,27 @@ public class NotificationController {
 
     private final NotificationService notificationService;
 
+    private static final int MAX_PAGE_SIZE = 50;
+
     @Operation(
             summary = "List notifications",
-            description = "Returns all notifications for the authenticated user, newest first. "
+            description = "Returns a paginated list of notifications for the authenticated user, newest first. "
+                    + "Defaults to page 0 with 20 items. Maximum page size is 50 — larger values are clamped. "
                     + "Use this endpoint for the initial load and to re-sync after a WebSocket reconnect. "
                     + "For live updates, subscribe to `/topic/users/{userId}/notifications` over the `/ws` "
                     + "WebSocket endpoint (see the Notifications tag description for the full contract)."
     )
     @GetMapping
-    public ResponseEntity<ApiResponse<List<NotificationResponse>>> getNotifications(
-            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
+    public ResponseEntity<ApiResponse<PageResponse<NotificationResponse>>> getNotifications(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
+        int clampedSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+        int clampedPage = Math.clamp(page, 0, Integer.MAX_VALUE);
+        Pageable pageable = PageRequest.of(clampedPage, clampedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ResponseEntity.ok(ApiResponse.success("Notifications retrieved successfully",
-                notificationService.getNotifications(principal.userId())));
+                notificationService.getNotifications(principal.userId(), pageable)));
     }
 
     @Operation(summary = "Unread count", description = "Returns the number of unread notifications for the authenticated user.")
