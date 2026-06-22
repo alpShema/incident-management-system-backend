@@ -88,7 +88,7 @@ class UserControllerTest {
 
     @Test
     void listUsers_filterByRole_returnsCountsFields() throws Exception {
-        when(userService.getUsers(isNull(), eq(RoleCode.AGENT), isNull(), isNull(), any()))
+        when(userService.getUsers(isNull(), eq("AGENT"), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(
                         List.of(new UserRoleSummaryResponse("u2", "agent@test.com", "Agent One", null, RoleCode.AGENT, "Agent", true, "Accra", 1L, 7L)),
                         PageRequest.of(0, 20), 1));
