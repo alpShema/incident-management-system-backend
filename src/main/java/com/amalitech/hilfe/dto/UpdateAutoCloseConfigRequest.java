@@ -6,9 +6,9 @@ import jakarta.validation.constraints.NotNull;
 
 @Schema(description = "Request body to update the global auto-close duration")
 public record UpdateAutoCloseConfigRequest(
-        @Schema(description = "Number of hours after resolution before auto-close fires. Minimum 1.", example = "72")
-        @NotNull(message = "durationHours is required")
-        @Min(value = 1, message = "durationHours must be at least 1")
-        Integer durationHours
+        @Schema(description = "Duration in seconds after resolution before auto-close fires. Minimum 1.", example = "259200")
+        @NotNull(message = "durationSeconds is required")
+        @Min(value = 1, message = "durationSeconds must be at least 1")
+        Integer durationSeconds
 ) {
 }
