@@ -38,4 +38,8 @@ build/
 .vscode/
 .claude
 docs
-skills
+skillsapplication-local.yaml
+
+### Local dev ###
+temp_client/
+src/main/resources/application-local.yaml
