@@ -42,6 +42,7 @@ spring:
     enabled: true
     baseline-on-migrate: true
     repair-on-migrate: true
+    validate-on-migrate: false
 
 # ──────────────────────────────────────────
 # Server
@@ -128,7 +129,7 @@ logging:
 # ARMS SSO Integration
 # ──────────────────────────────────────────
 arms:
-  sso-url: ${ARMS_SSO_URL}
+  sso-url: ${ARMS_SSO_URL:http://localhost}
 
 # ──────────────────────────────────────────
 # Cookie
@@ -194,3 +195,32 @@ slack:
 # ──────────────────────────────────────────
 encryption:
   key: ${ENCRYPTION_KEY:}
+
+# ──────────────────────────────────────────
+# FAQ Chatbot
+# ──────────────────────────────────────────
+chatbot:
+  confidence-threshold: ${CHATBOT_CONFIDENCE_THRESHOLD:0.25}
+  rate-limit: ${CHATBOT_RATE_LIMIT:30}
+  conversation-window-size: ${CHATBOT_CONVERSATION_WINDOW_SIZE:10}
+  summary-trigger-interval: ${CHATBOT_SUMMARY_TRIGGER_INTERVAL:5}
+
+# ──────────────────────────────────────────
+# AmaliAI Proxy (shared key for both LLM and embeddings)
+# ──────────────────────────────────────────
+amali-ai:
+  api-key: ${AMALI_AI_API_KEY:}
+  base-url: ${AMALI_AI_BASE_URL:}
+  provider: openai
+
+# ──────────────────────────────────────────
+# AI Embedding
+# ──────────────────────────────────────────
+embedding:
+  model: ${EMBEDDING_MODEL:text-embedding-3-small}
+
+# ──────────────────────────────────────────
+# AI LLM
+# ──────────────────────────────────────────
+llm:
+  model: ${LLM_MODEL:gpt-4o-mini}

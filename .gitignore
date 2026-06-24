@@ -39,3 +39,7 @@ build/
 .claude
 docs
 skills
+
+### Local dev ###
+temp_client/
+src/main/resources/application-local.yaml

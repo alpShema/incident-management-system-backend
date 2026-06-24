@@ -46,11 +46,19 @@ public final class RbacPermissions {
     public static final String DASHBOARD_ADMIN = "dashboard.admin";
     public static final String SYSTEM_CONFIG_READ = "system.config.read";
     public static final String SYSTEM_CONFIG_UPDATE = "system.config.update";
+    public static final String FAQ_READ = "faq.read";
+    public static final String FAQ_CREATE = "faq.create";
+    public static final String FAQ_UPDATE = "faq.update";
+    public static final String FAQ_DELETE = "faq.delete";
+    public static final String CHATBOT_QUERY = "chatbot.query";
+    public static final String CHATBOT_INTERACTIONS_READ = "chatbot.interactions.read";
 
     public static final List<String> CLIENT_DEFAULTS = List.of(
             INCIDENT_CREATE,
             INCIDENT_READ_OWN,
-            INCIDENT_STATUS_CHANGE
+            INCIDENT_STATUS_CHANGE,
+            FAQ_READ,
+            CHATBOT_QUERY
     );
 
     public static final List<String> AGENT_DEFAULTS = List.of(
@@ -60,7 +68,9 @@ public final class RbacPermissions {
             INCIDENT_SEVERITY_CHANGE,
             AGENT_READ,
             AGENT_AVAILABILITY_UPDATE,
-            DASHBOARD_AGENT
+            DASHBOARD_AGENT,
+            FAQ_READ,
+            CHATBOT_QUERY
     );
 
     public static final List<String> ADMIN_DEFAULTS = List.of(
@@ -99,7 +109,13 @@ public final class RbacPermissions {
             RBAC_PERMISSION_READ,
             DASHBOARD_ADMIN,
             SYSTEM_CONFIG_READ,
-            SYSTEM_CONFIG_UPDATE
+            SYSTEM_CONFIG_UPDATE,
+            FAQ_READ,
+            FAQ_CREATE,
+            FAQ_UPDATE,
+            FAQ_DELETE,
+            CHATBOT_QUERY,
+            CHATBOT_INTERACTIONS_READ
     );
 
     public static final List<String> SUPER_ADMIN_DEFAULTS = List.of(
@@ -138,7 +154,13 @@ public final class RbacPermissions {
             RBAC_PERMISSION_READ,
             DASHBOARD_ADMIN,
             SYSTEM_CONFIG_READ,
-            SYSTEM_CONFIG_UPDATE
+            SYSTEM_CONFIG_UPDATE,
+            FAQ_READ,
+            FAQ_CREATE,
+            FAQ_UPDATE,
+            FAQ_DELETE,
+            CHATBOT_QUERY,
+            CHATBOT_INTERACTIONS_READ
     );
 
     private RbacPermissions() {
