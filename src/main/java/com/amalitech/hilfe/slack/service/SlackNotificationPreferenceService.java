@@ -29,7 +29,8 @@ public class SlackNotificationPreferenceService {
             "INCIDENT_AUTO_ASSIGNED_CLIENT",
             "INCIDENT_REASSIGNED_CLIENT",
             "INCIDENT_SLA_AT_RISK",
-            "INCIDENT_SLA_BREACHED"
+            "INCIDENT_SLA_BREACHED",
+            "NEW_INCIDENT_MESSAGE"
     );
 
     public List<SlackNotificationPreference> getPreferences(String userId) {
