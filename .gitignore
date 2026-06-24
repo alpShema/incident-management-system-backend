@@ -38,7 +38,7 @@ build/
 .vscode/
 .claude
 docs
-skillsapplication-local.yaml
+skills
 
 ### Local dev ###
 temp_client/

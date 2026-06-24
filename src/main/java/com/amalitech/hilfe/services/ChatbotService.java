@@ -5,7 +5,6 @@ import com.amalitech.hilfe.dto.ChatbotInteractionResponse;
 import com.amalitech.hilfe.dto.ChatbotQueryResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.exceptions.ServiceUnavailableException;
-import com.amalitech.hilfe.models.ChatbotInteraction;
 import com.amalitech.hilfe.models.Faq;
 import com.amalitech.hilfe.repositories.ChatbotInteractionRepository;
 import com.amalitech.hilfe.repositories.FaqRepository;
@@ -13,12 +12,10 @@ import com.amalitech.hilfe.services.ConversationContextService.ConversationConte
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @Slf4j
@@ -39,6 +36,7 @@ public class ChatbotService {
     private final LlmService llmService;
     private final ConversationContextService contextService;
     private final ChatbotProperties props;
+    private final ChatbotInteractionLogService interactionLogService;
 
     public ChatbotQueryResponse query(String userId, String rawQuery) {
         ConversationContext ctx = contextService.getContext(userId);
@@ -68,7 +66,7 @@ public class ChatbotService {
 
             // 4. Threshold check
             if (matchOpt.isEmpty() || similarity < props.confidenceThreshold()) {
-                logInteraction(userId, rawQuery, null, similarity, OUTCOME_ESCALATED);
+                interactionLogService.logInteraction(userId, rawQuery, null, similarity, OUTCOME_ESCALATED);
                 return new ChatbotQueryResponse(ESCALATION_HINT, roundedSimilarity, OUTCOME_ESCALATED);
             }
 
@@ -86,7 +84,7 @@ public class ChatbotService {
             contextService.addTurn(userId, rawQuery, answer);
 
             // 7. Log interaction async
-            logInteraction(userId, rawQuery, faq.getId(), similarity, OUTCOME_ANSWERED);
+            interactionLogService.logInteraction(userId, rawQuery, faq.getId(), similarity, OUTCOME_ANSWERED);
 
             return new ChatbotQueryResponse(answer, roundedSimilarity, OUTCOME_ANSWERED);
 
@@ -94,7 +92,7 @@ public class ChatbotService {
             throw e;
         } catch (Exception e) {
             log.error("Chatbot query failed for user {}: {}", userId, e.getMessage(), e);
-            logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
+            interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
             throw new ServiceUnavailableException("Chatbot service is temporarily unavailable. Please try again shortly.", e);
         }
     }
@@ -105,23 +103,6 @@ public class ChatbotService {
                 interactionRepository.findAllFiltered(userId, outcome, from, to, pageable)
                         .map(ChatbotInteractionResponse::from)
         );
-    }
-
-    @Async
-    protected void logInteraction(String userId, String query, String faqId, double confidence, String outcome) {
-        try {
-            ChatbotInteraction interaction = ChatbotInteraction.builder()
-                    .id(UUID.randomUUID().toString())
-                    .userId(userId)
-                    .query(query)
-                    .faqId(faqId)
-                    .confidence(confidence)
-                    .outcome(outcome)
-                    .build();
-            interactionRepository.save(interaction);
-        } catch (Exception e) {
-            log.error("Failed to log chatbot interaction for user {}: {}", userId, e.getMessage());
-        }
     }
 
 }

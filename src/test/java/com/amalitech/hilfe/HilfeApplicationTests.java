@@ -10,6 +10,8 @@ class HilfeApplicationTests {
 
 	@Test
 	void contextLoads() {
+		// Verifies that the Spring application context starts without errors.
+		// No assertions needed — a startup failure throws an exception and fails the test.
 	}
 
 }
