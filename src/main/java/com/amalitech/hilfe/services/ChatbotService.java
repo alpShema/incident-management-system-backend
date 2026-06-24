@@ -52,7 +52,7 @@ public class ChatbotService {
             Optional<Faq> matchOpt = Optional.empty();
             double similarity = 0.0;
 
-            if (vector != null) {
+            if (vector != null && vector.length > 0) {
                 String literal = EmbeddingService.toVectorLiteral(vector);
                 matchOpt = faqRepository.findClosestActive(literal);
                 if (matchOpt.isPresent()) {

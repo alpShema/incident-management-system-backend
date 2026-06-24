@@ -16,7 +16,7 @@ public class StubEmbeddingService implements EmbeddingService {
 
     @Override
     public float[] embed(String text) {
-        log.debug("StubEmbeddingService: returning null (no API key configured)");
-        return null;
+        log.debug("StubEmbeddingService: returning empty array (no API key configured)");
+        return new float[0];
     }
 }

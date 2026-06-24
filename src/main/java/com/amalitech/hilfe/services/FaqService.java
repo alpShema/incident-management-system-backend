@@ -83,7 +83,7 @@ public class FaqService {
     private void embedAndStore(Faq faq) {
         try {
             float[] vector = embeddingService.embed(faq.getQuestion() + " " + faq.getAnswer());
-            if (vector != null) {
+            if (vector != null && vector.length > 0) {
                 String literal = EmbeddingService.toVectorLiteral(vector);
                 faqRepository.updateEmbedding(faq.getId(), literal);
                 log.debug("Embedding stored for FAQ {}", faq.getId());
