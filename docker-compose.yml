@@ -16,7 +16,7 @@ services:
   # hilfe-net bridge network.
   # --------------------------------------------------------------------------
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: hilfe-db
     restart: unless-stopped
     ports:
