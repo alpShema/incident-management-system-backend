@@ -248,7 +248,7 @@ public class SlaService {
                 incidents.getContent().stream().map(Incident::getId).toList()
         );
         List<IncidentResponse> content = incidents.getContent().stream()
-                .map(incident -> IncidentResponse.from(incident, null, byIncidentId.get(incident.getId())))
+                .map(incident -> IncidentResponse.from(incident, List.of(), byIncidentId.get(incident.getId())))
                 .toList();
         return new PageImpl<>(content, incidents.getPageable(), incidents.getTotalElements());
     }
