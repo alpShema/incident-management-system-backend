@@ -58,12 +58,12 @@ type AuthSession {
   fullName: String
   profileImg: String
   role: String!
-  permissions: [String!]!
+  permissions: [String!]
 }
 
 type UserPermissions {
   userId: ID!
-  permissions: [String!]!
+  permissions: [String!]
 }
 
 # ──────────────────────────────────────
@@ -103,7 +103,7 @@ type Incident {
   createdAt: Instant!
   updatedAt: Instant!
   sla: IncidentSla
-  attachments: [MediaFile!]!
+  attachments: [MediaFile!]
 }
 
 type IncidentPage {
@@ -131,7 +131,7 @@ type Message {
   incidentId: ID!
   sender: MessageSender
   content: String
-  attachments: [MediaFile!]!
+  attachments: [MediaFile!]
   createdAt: Instant!
   updatedAt: Instant!
 }
@@ -189,7 +189,7 @@ type Role {
   name: String!
   description: String
   systemDefined: Boolean
-  permissions: [PermissionItem!]!
+  permissions: [PermissionItem!]
 }
 
 type RolePage {
@@ -205,7 +205,7 @@ type RolePage {
 type BulkAssignResult {
   roleCode: String!
   updatedCount: Int!
-  updatedUserIds: [String!]!
+  updatedUserIds: [String!]
 }
 
 type PermissionCatalog {
@@ -225,7 +225,7 @@ type Department {
   name: String!
   description: String
   status: Boolean
-  categoryCount: Long!
+  categoryCount: Long
 }
 
 type DepartmentPage {
@@ -295,7 +295,7 @@ type AgentGroup {
   description: String
   department: Lookup
   status: Boolean
-  memberCount: Long!
+  memberCount: Long
   updatedAt: Instant
   topics: [Lookup!]
 }
@@ -440,7 +440,7 @@ type MonthlyCount {
 
 type TrendSeries {
   label: String!
-  data: [MonthlyCount!]!
+  data: [MonthlyCount!]
 }
 
 type DashboardStats {
@@ -453,8 +453,8 @@ type DashboardStats {
 }
 
 type DashboardCharts {
-  byStatus: [LabelCount!]!
-  trends: [TrendSeries!]!
+  byStatus: [LabelCount!]
+  trends: [TrendSeries!]
 }
 
 type SlaSeverityBreakdown {
@@ -473,7 +473,7 @@ type SlaReport {
   resolutionBreachCount: Long!
   averageResponseMinutes: Float
   averageResolutionMinutes: Float
-  bySeverity: [SlaSeverityBreakdown!]!
+  bySeverity: [SlaSeverityBreakdown!]
 }
 
 # ──────────────────────────────────────
@@ -763,85 +763,85 @@ input UpdateSlaConfigInput {
 
 type Query {
   # Auth
-  myPermissions: UserPermissions!
+  myPermissions: UserPermissions
 
   # Incidents
-  incidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage!
-  myIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage!
-  deptIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage!
-  assignedIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage!
-  searchIncidents(query: String!, fromDate: Instant, toDate: Instant, page: PageInput): IncidentPage!
-  incident(id: ID!): Incident!
-  incidentHistory(id: ID!, page: PageInput): ActivityPage!
+  incidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  myIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  deptIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  assignedIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  searchIncidents(query: String!, fromDate: Instant, toDate: Instant, page: PageInput): IncidentPage
+  incident(id: ID!): Incident
+  incidentHistory(id: ID!, page: PageInput): ActivityPage
 
   # Messages
-  messages(incidentId: ID!, page: PageInput): MessagePage!
+  messages(incidentId: ID!, page: PageInput): MessagePage
 
   # Users
-  users(query: String, roleCode: String, locationId: String, status: String, page: PageInput): UserPage!
+  users(query: String, roleCode: String, locationId: String, status: String, page: PageInput): UserPage
 
   # Roles & permissions
-  roles(query: String, page: PageInput): RolePage!
-  permissionCatalog: PermissionCatalog!
+  roles(query: String, page: PageInput): RolePage
+  permissionCatalog: PermissionCatalog
 
   # Departments
-  departments(query: String, status: Boolean, page: PageInput): DepartmentPage!
-  department(id: ID!): Department!
-  departmentCategories(departmentId: ID!): [IncidentCategory!]!
+  departments(query: String, status: Boolean, page: PageInput): DepartmentPage
+  department(id: ID!): Department
+  departmentCategories(departmentId: ID!): [IncidentCategory!]
 
   # Locations
-  locations(query: String, status: Boolean, page: PageInput): LocationPage!
-  location(id: ID!): Location!
+  locations(query: String, status: Boolean, page: PageInput): LocationPage
+  location(id: ID!): Location
 
   # Agents
-  agents(departmentId: String, query: String, page: PageInput): AgentPage!
-  allAgents(departmentId: String, query: String, page: PageInput): AgentPage!
-  myAgentStatus: Agent!
+  agents(departmentId: String, query: String, page: PageInput): AgentPage
+  allAgents(departmentId: String, query: String, page: PageInput): AgentPage
+  myAgentStatus: Agent
 
   # Agent groups
-  agentGroups(query: String, departmentId: String, page: PageInput): AgentGroupPage!
-  allAgentGroups(status: String, query: String, departmentId: String, page: PageInput): AgentGroupPage!
-  agentGroup(id: ID!): AgentGroup!
-  agentGroupMembers(id: ID!): [AgentGroupMember!]!
-  agentGroupsByCategory(categoryId: ID!): [Lookup!]!
+  agentGroups(query: String, departmentId: String, page: PageInput): AgentGroupPage
+  allAgentGroups(status: String, query: String, departmentId: String, page: PageInput): AgentGroupPage
+  agentGroup(id: ID!): AgentGroup
+  agentGroupMembers(id: ID!): [AgentGroupMember!]
+  agentGroupsByCategory(categoryId: ID!): [Lookup!]
 
   # Incident categories
-  incidentCategories(status: String, query: String, page: PageInput): IncidentCategoryPage!
-  allIncidentCategories(state: String, query: String, page: PageInput): IncidentCategoryPage!
-  categoryTopics(categoryId: ID!, status: String): [IncidentTopic!]!
+  incidentCategories(status: String, query: String, page: PageInput): IncidentCategoryPage
+  allIncidentCategories(state: String, query: String, page: PageInput): IncidentCategoryPage
+  categoryTopics(categoryId: ID!, status: String): [IncidentTopic!]
 
   # Incident topics
-  incidentTopics(categoryId: String, departmentId: String, agentGroupId: String, status: String, query: String, page: PageInput): IncidentTopicPage!
+  incidentTopics(categoryId: String, departmentId: String, agentGroupId: String, status: String, query: String, page: PageInput): IncidentTopicPage
 
   # FAQs
-  faqs(active: Boolean, page: PageInput): FaqPage!
-  faq(id: ID!): Faq!
+  faqs(active: Boolean, page: PageInput): FaqPage
+  faq(id: ID!): Faq
 
   # Severities
-  severities: [Severity!]!
-  severity(id: ID!): Severity!
+  severities: [Severity!]
+  severity(id: ID!): Severity
 
   # Statuses
-  statuses: [Status!]!
+  statuses: [Status!]
 
   # Dashboard
-  dashboardStats: DashboardStats!
-  dashboardCharts(period: String): DashboardCharts!
-  slaReport(from: Instant, to: Instant, severityId: String): SlaReport!
+  dashboardStats: DashboardStats
+  dashboardCharts(period: String): DashboardCharts
+  slaReport(from: Instant, to: Instant, severityId: String): SlaReport
 
   # Notifications
-  notifications(page: PageInput): NotificationPage!
-  unreadNotificationCount: Long!
+  notifications(page: PageInput): NotificationPage
+  unreadNotificationCount: Long
 
   # Activities
-  activities(incidentId: ID, page: PageInput): ActivityPage!
+  activities(incidentId: ID, page: PageInput): ActivityPage
 
   # Chatbot
-  chatbotInteractions(userId: String, outcome: String, from: Instant, to: Instant, page: PageInput): ChatbotInteractionPage!
+  chatbotInteractions(userId: String, outcome: String, from: Instant, to: Instant, page: PageInput): ChatbotInteractionPage
 
   # System config
-  autoCloseConfig: AutoCloseConfig!
-  slaConfig: SlaConfig!
+  autoCloseConfig: AutoCloseConfig
+  slaConfig: SlaConfig
 }
 
 # ══════════════════════════════════════
@@ -850,87 +850,87 @@ type Query {
 
 type Mutation {
   # Auth
-  login(input: LoginInput!): AuthSession!
-  refreshToken: AuthSession!
-  logout: Boolean!
+  login(input: LoginInput!): AuthSession
+  refreshToken: AuthSession
+  logout: Boolean
 
   # Incidents
-  createIncident(input: CreateIncidentInput!): Incident!
-  updateIncidentStatus(id: ID!, input: UpdateIncidentStatusInput!): Incident!
-  updateIncidentSeverity(id: ID!, input: UpdateIncidentSeverityInput!): Incident!
-  assignIncident(id: ID!, input: AssignIncidentInput!): Incident!
+  createIncident(input: CreateIncidentInput!): Incident
+  updateIncidentStatus(id: ID!, input: UpdateIncidentStatusInput!): Incident
+  updateIncidentSeverity(id: ID!, input: UpdateIncidentSeverityInput!): Incident
+  assignIncident(id: ID!, input: AssignIncidentInput!): Incident
 
   # Messages
-  sendMessage(incidentId: ID!, input: SendMessageInput!): Message!
-  deleteMessage(incidentId: ID!, messageId: ID!): Boolean!
-  generateMessagePresignedUrl(incidentId: ID!, input: PresignedUrlInput!): PresignedUrl!
+  sendMessage(incidentId: ID!, input: SendMessageInput!): Message
+  deleteMessage(incidentId: ID!, messageId: ID!): Boolean
+  generateMessagePresignedUrl(incidentId: ID!, input: PresignedUrlInput!): PresignedUrl
 
   # Users
-  updateUserRole(userId: ID!, input: UpdateUserRoleInput!): UserSummary!
-  updateUserStatus(userId: ID!, input: UpdateUserStatusInput!): UserSummary!
+  updateUserRole(userId: ID!, input: UpdateUserRoleInput!): UserSummary
+  updateUserStatus(userId: ID!, input: UpdateUserStatusInput!): UserSummary
 
   # Roles
-  createRole(input: CreateRoleInput!): Role!
-  bulkAssignRole(roleCode: String!, input: BulkAssignRoleInput!): BulkAssignResult!
+  createRole(input: CreateRoleInput!): Role
+  bulkAssignRole(roleCode: String!, input: BulkAssignRoleInput!): BulkAssignResult
 
   # Chatbot
-  chatbotQuery(input: ChatbotQueryInput!): ChatbotResult!
+  chatbotQuery(input: ChatbotQueryInput!): ChatbotResult
 
   # Media
-  generateMediaPresignedUrl(input: PresignedUrlInput!): PresignedUrl!
+  generateMediaPresignedUrl(input: PresignedUrlInput!): PresignedUrl
 
   # Departments
-  createDepartment(input: DepartmentInput!): Department!
-  updateDepartment(id: ID!, input: DepartmentInput!): Department!
-  updateDepartmentStatus(id: ID!, input: UpdateDepartmentStatusInput!): Department!
-  linkCategoryToDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory!
-  unlinkCategoryFromDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory!
+  createDepartment(input: DepartmentInput!): Department
+  updateDepartment(id: ID!, input: DepartmentInput!): Department
+  updateDepartmentStatus(id: ID!, input: UpdateDepartmentStatusInput!): Department
+  linkCategoryToDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
+  unlinkCategoryFromDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
 
   # Locations
-  createLocation(input: CreateLocationInput!): Location!
-  updateLocation(id: ID!, input: UpdateLocationInput!): Location!
-  updateLocationStatus(id: ID!, input: UpdateLocationStatusInput!): Location!
+  createLocation(input: CreateLocationInput!): Location
+  updateLocation(id: ID!, input: UpdateLocationInput!): Location
+  updateLocationStatus(id: ID!, input: UpdateLocationStatusInput!): Location
 
   # Agents
-  updateMyAgentStatus(input: UpdateAvailabilityInput!): Agent!
-  updateAgentStatus(agentId: ID!, input: UpdateAvailabilityInput!): Agent!
+  updateMyAgentStatus(input: UpdateAvailabilityInput!): Agent
+  updateAgentStatus(agentId: ID!, input: UpdateAvailabilityInput!): Agent
 
   # Agent groups
-  createAgentGroup(input: AgentGroupInput!): AgentGroup!
-  updateAgentGroup(id: ID!, input: AgentGroupInput!): AgentGroup!
-  updateAgentGroupStatus(id: ID!, input: UpdateAgentGroupStatusInput!): AgentGroup!
-  addAgentGroupMember(id: ID!, input: AddAgentGroupMemberInput!): AgentGroupMember!
+  createAgentGroup(input: AgentGroupInput!): AgentGroup
+  updateAgentGroup(id: ID!, input: AgentGroupInput!): AgentGroup
+  updateAgentGroupStatus(id: ID!, input: UpdateAgentGroupStatusInput!): AgentGroup
+  addAgentGroupMember(id: ID!, input: AddAgentGroupMemberInput!): AgentGroupMember
 
   # Incident categories
-  createIncidentCategory(input: IncidentCategoryInput!): IncidentCategory!
-  updateIncidentCategory(id: ID!, input: UpdateIncidentCategoryInput!): IncidentCategory!
-  updateIncidentCategoryStatus(id: ID!, input: UpdateIncidentCategoryStatusInput!): IncidentCategory!
-  createCategoryTopic(categoryId: ID!, input: CreateTopicInput!): IncidentTopic!
-  updateCategoryTopic(categoryId: ID!, topicId: ID!, input: UpdateTopicInput!): IncidentTopic!
-  deleteCategoryTopic(categoryId: ID!, topicId: ID!): Boolean!
+  createIncidentCategory(input: IncidentCategoryInput!): IncidentCategory
+  updateIncidentCategory(id: ID!, input: UpdateIncidentCategoryInput!): IncidentCategory
+  updateIncidentCategoryStatus(id: ID!, input: UpdateIncidentCategoryStatusInput!): IncidentCategory
+  createCategoryTopic(categoryId: ID!, input: CreateTopicInput!): IncidentTopic
+  updateCategoryTopic(categoryId: ID!, topicId: ID!, input: UpdateTopicInput!): IncidentTopic
+  deleteCategoryTopic(categoryId: ID!, topicId: ID!): Boolean
 
   # Incident topics (global, by topic ID only)
-  updateTopicById(id: ID!, input: UpdateTopicInput!): IncidentTopic!
-  updateTopicStatus(id: ID!, input: UpdateTopicStatusInput!): IncidentTopic!
+  updateTopicById(id: ID!, input: UpdateTopicInput!): IncidentTopic
+  updateTopicStatus(id: ID!, input: UpdateTopicStatusInput!): IncidentTopic
 
   # FAQs
-  createFaq(input: CreateFaqInput!): Faq!
-  updateFaq(id: ID!, input: UpdateFaqInput!): Faq!
-  toggleFaqActive(id: ID!, active: Boolean!): Faq!
-  deleteFaq(id: ID!): Boolean!
+  createFaq(input: CreateFaqInput!): Faq
+  updateFaq(id: ID!, input: UpdateFaqInput!): Faq
+  toggleFaqActive(id: ID!, active: Boolean!): Faq
+  deleteFaq(id: ID!): Boolean
 
   # Severities
-  createSeverity(input: SeverityInput!): Severity!
-  updateSeverity(id: ID!, input: SeverityInput!): Severity!
-  updateSeveritySla(id: ID!, input: UpdateSeveritySlaInput!): Severity!
-  deactivateSeverity(id: ID!): Severity!
-  deleteSeverity(id: ID!): Boolean!
+  createSeverity(input: SeverityInput!): Severity
+  updateSeverity(id: ID!, input: SeverityInput!): Severity
+  updateSeveritySla(id: ID!, input: UpdateSeveritySlaInput!): Severity
+  deactivateSeverity(id: ID!): Severity
+  deleteSeverity(id: ID!): Boolean
 
   # Notifications
-  markNotificationRead(id: ID!): Notification!
-  markAllNotificationsRead: Boolean!
+  markNotificationRead(id: ID!): Notification
+  markAllNotificationsRead: Boolean
 
   # System config
-  updateAutoCloseConfig(input: UpdateAutoCloseConfigInput!): AutoCloseConfig!
-  updateSlaConfig(input: UpdateSlaConfigInput!): SlaConfig!
+  updateAutoCloseConfig(input: UpdateAutoCloseConfigInput!): AutoCloseConfig
+  updateSlaConfig(input: UpdateSlaConfigInput!): SlaConfig
 }
