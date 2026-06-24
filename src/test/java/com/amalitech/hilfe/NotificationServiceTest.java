@@ -96,4 +96,10 @@ class NotificationServiceTest {
         notificationService.markAllAsRead("u1");
         verify(notificationRepository).markAllReadByUserId("u1");
     }
+
+    @Test
+    void clearAll_delegatesToRepository() {
+        notificationService.clearAll("u1");
+        verify(notificationRepository).deleteAllByUserId("u1");
+    }
 }

@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -96,5 +97,14 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.message").value("All notifications marked as read"));
 
         verify(notificationService).markAllAsRead("u1");
+    }
+
+    @Test
+    void clearAll_returns200() throws Exception {
+        mvc.perform(delete("/notifications").with(authentication(auth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("All notifications cleared"));
+
+        verify(notificationService).clearAll("u1");
     }
 }
