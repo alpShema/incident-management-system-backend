@@ -5,11 +5,14 @@ import com.amalitech.hilfe.dto.MessageResponse;
 import com.amalitech.hilfe.dto.PresignedUrlRequest;
 import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.Message;
 import com.amalitech.hilfe.models.MessageMedia;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.notifications.NotificationEventPublisher;
+import com.amalitech.hilfe.notifications.events.NewIncidentMessageEvent;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
@@ -46,6 +49,7 @@ public class MessageService {
     private final MediaService mediaService;
     private final SimpMessagingTemplate messagingTemplate;
     private final SlaService slaService;
+    private final NotificationEventPublisher notificationEventPublisher;
 
     public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
@@ -88,7 +92,30 @@ public class MessageService {
         );
 
         messagingTemplate.convertAndSend("/topic/incidents/" + incidentId + "/messages", response);
+        publishMessageNotifications(userId, sender.getFullName(), incidentId, incident, content);
         return response;
+    }
+
+    private void publishMessageNotifications(String senderId, String senderName, String incidentId,
+                                              Incident incident, String content) {
+        int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
+        String preview = (content != null && !content.isBlank())
+                ? content.substring(0, Math.min(80, content.length()))
+                : "[attachment]";
+
+        String clientUserId = incident.getUserId();
+        String assignedAgentUserId = incident.getAssignedToId() != null
+                ? agentRepository.findById(incident.getAssignedToId()).map(Agent::getUserId).orElse(null)
+                : null;
+
+        if (clientUserId != null && !clientUserId.equals(senderId)) {
+            notificationEventPublisher.publish(
+                    new NewIncidentMessageEvent(clientUserId, incidentId, incidentNo, senderName, preview));
+        }
+        if (assignedAgentUserId != null && !assignedAgentUserId.equals(senderId)) {
+            notificationEventPublisher.publish(
+                    new NewIncidentMessageEvent(assignedAgentUserId, incidentId, incidentNo, senderName, preview));
+        }
     }
 
     public MessageResponse sendMessage(String userId, RoleCode role, String incidentId, String content, List<AttachmentRef> attachments) {

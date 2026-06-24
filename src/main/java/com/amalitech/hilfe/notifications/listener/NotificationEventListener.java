@@ -115,6 +115,12 @@ public class NotificationEventListener {
         handle(event.getClass().getSimpleName(), event.recipientUserId(), event.incidentId(), () -> contentFactory.from(event));
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onNewIncidentMessage(NewIncidentMessageEvent event) {
+        handle(event.getClass().getSimpleName(), event.recipientUserId(), event.incidentId(), () -> contentFactory.from(event));
+    }
+
     private void handle(String eventType, String recipientUserId, String incidentId, Supplier<NotificationDraft> draftSupplier) {
         try {
             NotificationDraft draft = draftSupplier.get();
