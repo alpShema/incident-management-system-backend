@@ -17,6 +17,7 @@ import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.MessageMediaRepository;
 import com.amalitech.hilfe.repositories.MessageRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.notifications.NotificationEventPublisher;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.MessageService;
 import com.amalitech.hilfe.services.SlaService;
@@ -50,6 +51,7 @@ class MessageServiceTest {
     @Mock MediaService mediaService;
     @Mock SlaService slaService;
     @Mock SimpMessagingTemplate messagingTemplate;
+    @Mock NotificationEventPublisher notificationEventPublisher;
     @InjectMocks MessageService messageService;
 
     @Test
