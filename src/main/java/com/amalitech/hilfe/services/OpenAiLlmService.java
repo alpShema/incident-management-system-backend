@@ -20,6 +20,9 @@ import java.util.Map;
 @ConditionalOnProperty(name = "amali-ai.api-key", matchIfMissing = false)
 public class OpenAiLlmService implements LlmService {
 
+    private static final String ROLE    = "role";
+    private static final String CONTENT = "content";
+
     private static final String REWRITE_SYSTEM_PROMPT = """
             You are a query rewriter for a support FAQ chatbot.
             Given the user's latest message and the recent conversation history, \
@@ -56,14 +59,14 @@ public class OpenAiLlmService implements LlmService {
     @Override
     public String rewriteQuery(String userQuery, List<String> recentTurns) {
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", REWRITE_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, "system", CONTENT, REWRITE_SYSTEM_PROMPT));
 
         if (!recentTurns.isEmpty()) {
             String history = String.join("\n", recentTurns);
-            messages.add(Map.of("role", "user", "content",
+            messages.add(Map.of(ROLE, "user", CONTENT,
                     "Conversation so far:\n" + history + "\n\nLatest message: " + userQuery));
         } else {
-            messages.add(Map.of("role", "user", "content", userQuery));
+            messages.add(Map.of(ROLE, "user", CONTENT, userQuery));
         }
 
         return callChatCompletion(messages);
@@ -72,7 +75,7 @@ public class OpenAiLlmService implements LlmService {
     @Override
     public String generateAnswer(String userQuery, String faqQuestion, String faqAnswer, String conversationSummary) {
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", ANSWER_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, "system", CONTENT, ANSWER_SYSTEM_PROMPT));
 
         StringBuilder userContent = new StringBuilder();
         if (conversationSummary != null && !conversationSummary.isBlank()) {
@@ -83,7 +86,7 @@ public class OpenAiLlmService implements LlmService {
                 .append("A: ").append(faqAnswer).append("\n\n")
                 .append("User's question: ").append(userQuery);
 
-        messages.add(Map.of("role", "user", "content", userContent.toString()));
+        messages.add(Map.of(ROLE, "user", CONTENT, userContent.toString()));
 
         return callChatCompletion(messages);
     }
