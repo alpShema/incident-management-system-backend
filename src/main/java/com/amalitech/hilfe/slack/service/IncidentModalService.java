@@ -105,6 +105,10 @@ public class IncidentModalService {
     }
 
     public void openMyIncidentsModal(String slackUserId, String triggerId) {
+        openMyIncidentsModal(slackUserId, triggerId, null, 0);
+    }
+
+    public void openMyIncidentsModal(String slackUserId, String triggerId, String viewId, int page) {
         SlackUserMapping mapping = oauthService.findBySlackUserId(slackUserId)
                 .orElseThrow(SlackNotConnectedException::new);
 
@@ -112,13 +116,22 @@ public class IncidentModalService {
                 mapping.getHilfeUserId(), null,
                 new IncidentFilterParams(null, null, null, null, null),
                 new IncidentDateFilter(null, false, null, false),
-                PageRequest.of(0, 10, Sort.by("createdAt").descending())
+                PageRequest.of(page, 10, Sort.by("createdAt").descending())
         );
 
-        slackClient.viewsOpen(triggerId, buildMyIncidentsModal(incidents.getContent()));
+        View modal = buildMyIncidentsModal(incidents.getContent(), page, incidents.getTotalElements());
+        if (viewId != null) {
+            slackClient.viewsUpdate(viewId, modal);
+        } else {
+            slackClient.viewsOpen(triggerId, modal);
+        }
     }
 
     public void openAssignedIncidentsModal(String slackUserId, String triggerId) {
+        openAssignedIncidentsModal(slackUserId, triggerId, null, 0);
+    }
+
+    public void openAssignedIncidentsModal(String slackUserId, String triggerId, String viewId, int page) {
         SlackUserMapping mapping = oauthService.findBySlackUserId(slackUserId)
                 .orElseThrow(SlackNotConnectedException::new);
 
@@ -131,10 +144,15 @@ public class IncidentModalService {
                 mapping.getHilfeUserId(), null,
                 new IncidentFilterParams(null, null, null, null, null),
                 new IncidentDateFilter(null, false, null, false),
-                PageRequest.of(0, 10, Sort.by("createdAt").descending())
+                PageRequest.of(page, 10, Sort.by("createdAt").descending())
         );
 
-        slackClient.viewsOpen(triggerId, buildAssignedIncidentsModal(incidents.getContent()));
+        View modal = buildAssignedIncidentsModal(incidents.getContent(), page, incidents.getTotalElements());
+        if (viewId != null) {
+            slackClient.viewsUpdate(viewId, modal);
+        } else {
+            slackClient.viewsOpen(triggerId, modal);
+        }
     }
 
     // ── Category selection — rebuild modal with topics ───────────────────────
@@ -352,7 +370,8 @@ public class IncidentModalService {
         );
     }
 
-    private View buildMyIncidentsModal(List<IncidentResponse> incidents) {
+    private View buildMyIncidentsModal(List<IncidentResponse> incidents, int page, long totalElements) {
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalElements / 10));
         List<LayoutBlock> blocks = new ArrayList<>();
         blocks.add(header(h -> h.text(plainText("My Incidents"))));
         blocks.add(divider());
@@ -366,15 +385,19 @@ public class IncidentModalService {
             }
         }
 
+        addPaginationBlocks(blocks, page, totalPages, "my_incidents_prev", "my_incidents_next");
+
         return View.builder()
                 .type(MODAL)
+                .privateMetadata("{\"page\":" + page + ",\"type\":\"MY\"}")
                 .title(ViewTitle.builder().type(PLAIN_TEXT).text("My Incidents").build())
                 .close(ViewClose.builder().type(PLAIN_TEXT).text("Close").build())
                 .blocks(blocks)
                 .build();
     }
 
-    private View buildAssignedIncidentsModal(List<IncidentResponse> incidents) {
+    private View buildAssignedIncidentsModal(List<IncidentResponse> incidents, int page, long totalElements) {
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalElements / 10));
         List<LayoutBlock> blocks = new ArrayList<>();
         blocks.add(header(h -> h.text(plainText("Assigned Incidents"))));
         blocks.add(divider());
@@ -387,12 +410,38 @@ public class IncidentModalService {
             }
         }
 
+        addPaginationBlocks(blocks, page, totalPages, "assigned_incidents_prev", "assigned_incidents_next");
+
         return View.builder()
                 .type(MODAL)
+                .privateMetadata("{\"page\":" + page + ",\"type\":\"ASSIGNED\"}")
                 .title(ViewTitle.builder().type(PLAIN_TEXT).text("Assigned").build())
                 .close(ViewClose.builder().type(PLAIN_TEXT).text("Close").build())
                 .blocks(blocks)
                 .build();
+    }
+
+    private void addPaginationBlocks(List<LayoutBlock> blocks, int page, int totalPages,
+                                     String prevActionId, String nextActionId) {
+        if (totalPages <= 1) return;
+
+        List<com.slack.api.model.block.element.BlockElement> navButtons = new ArrayList<>();
+        if (page > 0) {
+            int prevPage = page - 1;
+            navButtons.add(button(b -> b.text(plainText("← Previous"))
+                    .actionId(prevActionId)
+                    .value(String.valueOf(prevPage))));
+        }
+        if (page < totalPages - 1) {
+            int nextPage = page + 1;
+            navButtons.add(button(b -> b.text(plainText("Next →"))
+                    .actionId(nextActionId)
+                    .value(String.valueOf(nextPage))));
+        }
+        if (!navButtons.isEmpty()) {
+            blocks.add(actions(a -> a.elements(navButtons)));
+        }
+        blocks.add(section(s -> s.text(markdownText("_Page " + (page + 1) + " of " + totalPages + "_"))));
     }
 
     private LayoutBlock buildIncidentBlock(IncidentResponse incident) {

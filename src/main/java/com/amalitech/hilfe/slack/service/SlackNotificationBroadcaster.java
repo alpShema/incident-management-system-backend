@@ -102,6 +102,7 @@ public class SlackNotificationBroadcaster {
             case "INCIDENT_REASSIGNED_CLIENT"    -> EMOJI_CYCLE;
             case "INCIDENT_SLA_AT_RISK"          -> ":warning:";
             case "INCIDENT_SLA_BREACHED"         -> ":warning:";
+            case "NEW_INCIDENT_MESSAGE"          -> ":speech_balloon:";
             default                              -> ":bell:";
         };
     }

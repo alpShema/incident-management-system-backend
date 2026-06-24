@@ -252,6 +252,8 @@ public class SlackEventHandler {
         String actionId = action.path("action_id").asText();
         String userId = payload.path("user").path("id").asText();
         String triggerId = payload.path("trigger_id").asText();
+        String viewId = payload.path("view").path("id").asText(null);
+        String actionValue = action.path("value").asText(null);
 
         log.debug("Block action: {} from user {}", actionId, userId);
 
@@ -311,6 +313,22 @@ public class SlackEventHandler {
                     log.error("Failed to open notification settings for user {}", userId, e);
                     slackClient.chatPostMessage(userId,
                             "Something went wrong while opening notification settings. Please try again.");
+                }
+                yield "";
+            }
+            case "my_incidents_next", "my_incidents_prev" -> {
+                try {
+                    incidentModalService.openMyIncidentsModal(userId, triggerId, viewId, parsePage(actionValue));
+                } catch (Exception e) {
+                    log.error("Failed to paginate my incidents modal for user {}", userId, e);
+                }
+                yield "";
+            }
+            case "assigned_incidents_next", "assigned_incidents_prev" -> {
+                try {
+                    incidentModalService.openAssignedIncidentsModal(userId, triggerId, viewId, parsePage(actionValue));
+                } catch (Exception e) {
+                    log.error("Failed to paginate assigned incidents modal for user {}", userId, e);
                 }
                 yield "";
             }
@@ -376,6 +394,14 @@ public class SlackEventHandler {
         String callbackId = payload.path("view").path("callback_id").asText();
         log.debug("View closed: {}", callbackId);
         return "";
+    }
+
+    private int parsePage(String value) {
+        try {
+            return value != null ? Integer.parseInt(value) : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private String buildEphemeralResponse(String text) {
