@@ -46,7 +46,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login", "/auth/refresh-token", "/auth/logout").permitAll()
                         .requestMatchers("/actuator/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/graphiql/**").permitAll()
+                        .requestMatchers("/graphiql/**", "/graphql").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/slack/**").permitAll() // Slack endpoints use signature validation
                         .requestMatchers("/images/**").permitAll()

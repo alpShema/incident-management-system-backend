@@ -8,6 +8,7 @@ import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -17,6 +18,25 @@ import java.util.List;
 public class SwaggerConfig {
 
     private static final String COOKIE_SCHEME = "cookieAuth";
+
+    @Bean
+    public GroupedOpenApi restApiGroup() {
+        return GroupedOpenApi.builder()
+                .group("rest-api")
+                .displayName("REST API")
+                .pathsToExclude("/graphql")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi graphQlApiGroup() {
+        return GroupedOpenApi.builder()
+                .group("graphql-api")
+                .displayName("GraphQL API")
+                .pathsToMatch("/graphql")
+                .addOpenApiCustomizer(new GraphQlOpenApiConfig())
+                .build();
+    }
 
     @Bean
     public OpenAPI hilfeOpenAPI() {
