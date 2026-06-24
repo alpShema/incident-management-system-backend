@@ -137,6 +137,17 @@ public class NotificationContentFactory {
         );
     }
 
+    public NotificationDraft from(NewIncidentMessageEvent event) {
+        String preview = (event.preview() != null && !event.preview().isBlank()) ? event.preview() : "[attachment]";
+        return new NotificationDraft(
+                event.recipientUserId(),
+                event.incidentId(),
+                "NEW_INCIDENT_MESSAGE",
+                incidentRef(event.incidentNo()) + " — new message",
+                event.senderName() + " sent a message: \"" + preview + "\""
+        );
+    }
+
     public NotificationDraft from(IncidentSlaBreachedEvent event) {
         return new NotificationDraft(
                 event.recipientUserId(),
