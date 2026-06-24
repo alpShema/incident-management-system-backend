@@ -44,4 +44,9 @@ public class NotificationService {
     public void markAllAsRead(String userId) {
         notificationRepository.markAllReadByUserId(userId);
     }
+
+    @Transactional
+    public void clearAll(String userId) {
+        notificationRepository.deleteAllByUserId(userId);
+    }
 }

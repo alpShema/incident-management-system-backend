@@ -88,4 +88,14 @@ public class NotificationController {
         notificationService.markAllAsRead(principal.userId());
         return ResponseEntity.ok(ApiResponse.success("All notifications marked as read", null));
     }
+
+    @Operation(summary = "Clear all notifications", description = "Permanently deletes all notifications for the authenticated user.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Notifications cleared")
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<Void>> clearAll(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
+    ) {
+        notificationService.clearAll(principal.userId());
+        return ResponseEntity.ok(ApiResponse.success("All notifications cleared", null));
+    }
 }
