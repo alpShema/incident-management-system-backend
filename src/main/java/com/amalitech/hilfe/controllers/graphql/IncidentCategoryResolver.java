@@ -27,27 +27,27 @@ public class IncidentCategoryResolver {
 
     @QueryMapping
     public PageResponse<IncidentCategoryResponse> incidentCategories(
-            @Argument String status,
+            @Argument Boolean status,
             @Argument String query,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
-                categoryService.listCategories(status != null ? status : "active", query, PageInput.toPageable(page))
+                categoryService.listCategories(status != null ? status : Boolean.TRUE, query, PageInput.toPageable(page))
         );
     }
 
     @QueryMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public PageResponse<IncidentCategoryResponse> allIncidentCategories(
-            @Argument String state,
+            @Argument Boolean status,
             @Argument String query,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
-                categoryService.listAllCategories(state, query, PageInput.toPageable(page))
+                categoryService.listAllCategories(status, query, PageInput.toPageable(page))
         );
     }
 
     @QueryMapping
-    public List<IncidentTopicResponse> categoryTopics(@Argument String categoryId, @Argument String status) {
+    public List<IncidentTopicResponse> categoryTopics(@Argument String categoryId, @Argument Boolean status) {
         return categoryService.listTopicsByCategory(categoryId, status);
     }
 

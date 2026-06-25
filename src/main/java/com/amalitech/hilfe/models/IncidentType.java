@@ -41,7 +41,7 @@ public class IncidentType {
 
     @Column(nullable = false)
     @Builder.Default
-    private String status = "active";
+    private Boolean status = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
