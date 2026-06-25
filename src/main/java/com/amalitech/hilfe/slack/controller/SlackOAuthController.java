@@ -94,13 +94,18 @@ public class SlackOAuthController {
             @RequestParam("arms_token") String armsToken,
             @RequestParam("state") String state
     ) {
+        log.info("OAuth callback received: state={}", state);
+
         var oauthState = oauthService.validateAndConsumeState(state);
         if (oauthState.isEmpty()) {
-            log.warn("Invalid or expired OAuth state: {}", state);
+            log.warn("OAuth callback: invalid or expired state={}", state);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .contentType(MediaType.TEXT_HTML)
                     .body(buildErrorPage("Invalid or expired session. Please try connecting again."));
         }
+
+        log.info("OAuth state valid: slackUserId={} teamId={}",
+                oauthState.get().slackUserId(), oauthState.get().slackTeamId());
 
         try {
             var mapping = oauthService.connectUser(
@@ -110,16 +115,27 @@ public class SlackOAuthController {
             );
 
             String slackUserId = oauthState.get().slackUserId();
-            log.info("OAuth successful for Slack user {} -> HILFE user {}",
+            log.info("OAuth connectUser succeeded: slackUserId={} hilfeUserId={}",
                     slackUserId, mapping.getHilfeUserId());
 
             sendPostConnectionNotifications(slackUserId);
 
+            String successUrl = slackProperties.frontendSuccessUrl();
+            log.info("OAuth redirect target: '{}'", successUrl);
+
+            if (successUrl == null || successUrl.isBlank()) {
+                log.error("SLACK_FRONTEND_SUCCESS_URL is not configured — cannot redirect");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .contentType(MediaType.TEXT_HTML)
+                        .body(buildErrorPage("Configuration error: success redirect URL is not set. Contact your administrator."));
+            }
+
+            log.info("OAuth complete — redirecting slackUserId={} to {}", slackUserId, successUrl);
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .header(HttpHeaders.LOCATION, slackProperties.frontendSuccessUrl())
+                    .header(HttpHeaders.LOCATION, successUrl)
                     .build();
         } catch (Exception e) {
-            log.error("OAuth callback failed for state {}", state, e);
+            log.error("OAuth callback failed: state={}", state, e);
 
             auditLogService.log(
                     "AUTH_FAILED",

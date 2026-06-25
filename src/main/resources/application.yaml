@@ -106,8 +106,8 @@ info:
 # ──────────────────────────────────────────
 app:
   base-url: ${APP_BASE_URL:https://hilfe.amalitech.net}
-  slack-image-report-url: ${SLACK_IMAGE_REPORT_URL:https://i.ibb.co/VYXTtTTF/screenshot1.jpg}
-  slack-image-updates-url: ${SLACK_IMAGE_UPDATES_URL:https://i.ibb.co/rRbTY5S5/screenshot2.jpg}
+  slack-image-report-url: ${SLACK_IMAGE_REPORT_URL:${app.base-url}/images/slack-report.jpg}
+  slack-image-updates-url: ${SLACK_IMAGE_UPDATES_URL:${app.base-url}/images/slack-updates.jpg}
   jwt:
     issuer: ${JWT_ISSUER:hilfe}
     audience: ${JWT_AUDIENCE:hilfe-web}
