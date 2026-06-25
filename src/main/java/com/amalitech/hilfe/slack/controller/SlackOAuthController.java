@@ -31,33 +31,6 @@ public class SlackOAuthController {
 
     private static final String SLACK_USER_ID_PARAM = "slack_user_id=";
     private static final String ERROR_KEY = "error";
-    private static final String SUCCESS_PAGE = """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Connected to HILFE</title>
-                <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
-                    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
-                    h1 { color: #2eb67d; margin-bottom: 16px; }
-                    p { color: #666; margin-bottom: 24px; }
-                    .btn { display: inline-block; background: #4a154b; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; }
-                    .btn:hover { background: #611f69; }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <h1>Successfully Connected!</h1>
-                    <p>Your HILFE account is now connected to Slack. You can close this window and return to Slack.</p>
-                    <a href="slack://open" class="btn">Return to Slack</a>
-                </div>
-                <script>setTimeout(() => window.close(), 5000);</script>
-            </body>
-            </html>
-            """;
-
     private static final String WELCOME_MESSAGE = """
             🎉 *You're now connected to HILFE!*
 
@@ -143,16 +116,9 @@ public class SlackOAuthController {
             slackClient.chatPostMessage(slackUserId, WELCOME_MESSAGE);
             appHomeService.publishAppHome(slackUserId);
 
-            String successUrl = slackProperties.frontendSuccessUrl();
-            if (successUrl != null && !successUrl.isBlank()) {
-                return ResponseEntity.status(HttpStatus.FOUND)
-                        .header(HttpHeaders.LOCATION, successUrl)
-                        .build();
-            }
-
-            return ResponseEntity.ok()
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(SUCCESS_PAGE);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .header(HttpHeaders.LOCATION, slackProperties.frontendSuccessUrl())
+                    .build();
         } catch (Exception e) {
             log.error("OAuth callback failed for state {}", state, e);
 
