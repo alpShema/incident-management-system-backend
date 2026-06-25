@@ -113,8 +113,7 @@ public class SlackOAuthController {
             log.info("OAuth successful for Slack user {} -> HILFE user {}",
                     slackUserId, mapping.getHilfeUserId());
 
-            slackClient.chatPostMessage(slackUserId, WELCOME_MESSAGE);
-            appHomeService.publishAppHome(slackUserId);
+            sendPostConnectionNotifications(slackUserId);
 
             return ResponseEntity.status(HttpStatus.FOUND)
                     .header(HttpHeaders.LOCATION, slackProperties.frontendSuccessUrl())
@@ -168,6 +167,19 @@ public class SlackOAuthController {
                 "ok", true,
                 "message", "Successfully disconnected from HILFE"
         ));
+    }
+
+    private void sendPostConnectionNotifications(String slackUserId) {
+        try {
+            slackClient.chatPostMessage(slackUserId, WELCOME_MESSAGE);
+        } catch (Exception e) {
+            log.warn("Failed to send welcome message to Slack user {}", slackUserId, e);
+        }
+        try {
+            appHomeService.publishAppHome(slackUserId);
+        } catch (Exception e) {
+            log.warn("Failed to publish app home for Slack user {} after OAuth", slackUserId, e);
+        }
     }
 
     private String extractSlackUserId(String body) {
