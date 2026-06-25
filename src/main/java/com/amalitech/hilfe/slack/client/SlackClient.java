@@ -114,7 +114,9 @@ public class SlackClient {
             );
 
             if (!response.isOk()) {
-                log.error("Slack views.publish failed: {}", response.getError());
+                log.error("Slack views.publish failed: {} | detail: {}",
+                        response.getError(),
+                        response.getResponseMetadata() != null ? response.getResponseMetadata().getMessages() : "none");
                 throw new com.amalitech.hilfe.slack.exception.SlackClientException(
                         "Failed to publish view: " + response.getError());
             }
