@@ -25,8 +25,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class IncidentCategoryService {
-    private static final String STATUS_ACTIVE = "active";
-    private static final String STATUS_INACTIVE = "inactive";
     private static final String CATEGORY_NOT_FOUND = "Incident category not found";
     private static final String TOPIC_NOT_FOUND = "Incident topic not found";
     private static final String TOPIC_NOT_FOUND_AFTER_UPDATE = "Incident topic not found after update";
@@ -38,17 +36,16 @@ public class IncidentCategoryService {
     private final IncidentRepository incidentRepository;
     private final EntityManager entityManager;
 
-    public Page<IncidentCategoryResponse> listCategories(String status, String query, Pageable pageable) {
-        String resolvedStatus = (status == null || status.isBlank()) ? STATUS_ACTIVE : status.toLowerCase();
+    public Page<IncidentCategoryResponse> listCategories(Boolean status, String query, Pageable pageable) {
+        Boolean resolvedStatus = status != null ? status : Boolean.TRUE;
         String queryPattern = buildQueryPattern(query);
         return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
                 .map(IncidentCategoryResponse::from);
     }
 
-    public Page<IncidentCategoryResponse> listAllCategories(String state, String query, Pageable pageable) {
-        String resolvedStatus = resolveStateFilter(state);
+    public Page<IncidentCategoryResponse> listAllCategories(Boolean status, String query, Pageable pageable) {
         String queryPattern = buildQueryPattern(query);
-        return categoryRepository.findAllWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
+        return categoryRepository.findAllWithDepartmentAndQueryPaged(status, queryPattern, pageable)
                 .map(IncidentCategoryResponse::from);
     }
 
@@ -113,17 +110,16 @@ public class IncidentCategoryService {
     public IncidentCategoryResponse updateCategoryStatus(String id, Boolean status) {
         IncidentCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
-        category.setStatus(Boolean.TRUE.equals(status) ? STATUS_ACTIVE : STATUS_INACTIVE);
+        category.setStatus(status);
         categoryRepository.save(category);
         return IncidentCategoryResponse.from(category);
     }
 
-    public List<IncidentTopicResponse> listTopicsByCategory(String categoryId, String status) {
-        String resolvedStatus = normalizeTopicStatus(status);
+    public List<IncidentTopicResponse> listTopicsByCategory(String categoryId, Boolean status) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ArmsAuthException(CATEGORY_NOT_FOUND, 404);
         }
-        return typeRepository.findByCategoryIdWithAgentAndStatus(categoryId, resolvedStatus).stream()
+        return typeRepository.findByCategoryIdWithAgentAndStatus(categoryId, status).stream()
                 .map(IncidentTopicResponse::from)
                 .toList();
     }
@@ -133,17 +129,16 @@ public class IncidentCategoryService {
             String categoryId,
             String departmentId,
             String agentGroupId,
-            String status,
+            Boolean status,
             String query,
             Pageable pageable
     ) {
-        String resolvedStatus = normalizeTopicStatus(status);
         String queryPattern = buildQueryPattern(query);
         return typeRepository.findAllTopicsFiltered(
                         blankToNull(categoryId),
                         blankToNull(departmentId),
                         blankToNull(agentGroupId),
-                        resolvedStatus,
+                        status,
                         queryPattern,
                         pageable)
                 .map(IncidentTopicListResponse::from);
@@ -220,10 +215,6 @@ public class IncidentCategoryService {
         IncidentType topic = typeRepository.findById(topicId)
                 .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND, 404));
 
-        // Resolve the effective category: use the incoming categoryId if provided,
-        // otherwise fall back to the topic's existing category. This ensures that when
-        // both categoryId and agentGroupId are updated together, the department check
-        // runs against the new category rather than the stale one.
         String effectiveCategoryId = (request.categoryId() != null && !request.categoryId().isBlank())
                 ? request.categoryId()
                 : topic.getCategoryId();
@@ -264,13 +255,12 @@ public class IncidentCategoryService {
     public IncidentTopicResponse updateTopicStatus(String topicId, Boolean status) {
         IncidentType topic = typeRepository.findById(topicId)
                 .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND, 404));
-        String target = Boolean.TRUE.equals(status) ? STATUS_ACTIVE : STATUS_INACTIVE;
-        if (target.equalsIgnoreCase(topic.getStatus())) {
+        if (status != null && status.equals(topic.getStatus())) {
             throw new ArmsAuthException(
                     Boolean.TRUE.equals(status) ? "Incident topic is already active"
                                                 : "Incident topic is already inactive", 409);
         }
-        topic.setStatus(target);
+        topic.setStatus(status);
         typeRepository.save(topic);
         entityManager.flush();
         entityManager.clear();
@@ -312,28 +302,8 @@ public class IncidentCategoryService {
 
     private IncidentCategory findActiveCategory(String categoryId) {
         return categoryRepository.findById(categoryId)
-                .filter(category -> STATUS_ACTIVE.equalsIgnoreCase(category.getStatus()))
+                .filter(category -> Boolean.TRUE.equals(category.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
-    }
-
-    private String normalizeTopicStatus(String status) {
-        if (status == null || status.isBlank() || "all".equalsIgnoreCase(status)) {
-            return null;
-        }
-        String value = status.trim().toLowerCase();
-        if (!STATUS_ACTIVE.equals(value) && !STATUS_INACTIVE.equals(value)) {
-            throw new ArmsAuthException("Invalid status. Allowed values are active, inactive, or all", 400);
-        }
-        return value;
-    }
-
-    private String resolveStateFilter(String state) {
-        if (state == null || state.isBlank() || "all".equalsIgnoreCase(state)) return null;
-        String lower = state.toLowerCase();
-        if (!STATUS_ACTIVE.equals(lower) && !STATUS_INACTIVE.equals(lower)) {
-            throw new ArmsAuthException("Invalid state filter. Allowed values are active, inactive, or all", 400);
-        }
-        return lower;
     }
 
     private String buildQueryPattern(String query) {

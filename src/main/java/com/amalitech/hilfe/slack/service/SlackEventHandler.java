@@ -332,6 +332,19 @@ public class SlackEventHandler {
                 }
                 yield "";
             }
+            case "disconnect_from_home" -> {
+                try {
+                    oauthService.disconnectUser(userId);
+                    appHomeService.publishAppHome(userId);
+                    slackClient.chatPostMessage(userId,
+                            "You have been disconnected from HILFE. Use `/hilfe connect` to reconnect.");
+                } catch (Exception e) {
+                    log.error("Failed to disconnect user {} from home tab", userId, e);
+                    slackClient.chatPostMessage(userId,
+                            "Something went wrong while disconnecting. Please try again.");
+                }
+                yield "";
+            }
             case "category_select" -> {
                 try {
                     incidentModalService.handleCategorySelection(payload);

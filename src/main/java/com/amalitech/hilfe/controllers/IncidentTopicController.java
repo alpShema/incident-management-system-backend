@@ -46,8 +46,8 @@ public class IncidentTopicController {
             @Parameter(description = "Filter by category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by department ID (from topic's category)") @RequestParam(required = false) String departmentId,
             @Parameter(description = "Filter by assigned agent group ID") @RequestParam(required = false) String agentGroupId,
-            @Parameter(description = "Filter by topic status: active, inactive, or all (default — returns both)")
-            @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by topic status: true for active, false for inactive, omit to return all")
+            @RequestParam(required = false) Boolean status,
             @Parameter(description = "Search text over topic name/description, category name, and agent-group name")
             @RequestParam(required = false) String query,
             Pageable pageable

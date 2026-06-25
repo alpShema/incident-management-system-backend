@@ -23,7 +23,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class DepartmentService {
-    private static final String STATUS_ACTIVE = "active";
 
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
@@ -104,7 +103,7 @@ public class DepartmentService {
 
     public List<IncidentCategoryResponse> listCategories(String departmentId) {
         findDepartmentByIdOrThrow(departmentId);
-        return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, STATUS_ACTIVE).stream()
+        return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, true).stream()
                 .map(IncidentCategoryResponse::from)
                 .toList();
     }
@@ -132,7 +131,7 @@ public class DepartmentService {
     }
 
     private DepartmentResponse toResponse(Department department) {
-        long categoryCount = categoryRepository.findByDepartmentIdAndStatus(department.getId(), STATUS_ACTIVE).size();
+        long categoryCount = categoryRepository.findByDepartmentIdAndStatus(department.getId(), true).size();
         return DepartmentResponse.from(department, categoryCount);
     }
 
@@ -149,7 +148,7 @@ public class DepartmentService {
 
     private IncidentCategory findCategory(String categoryId) {
         return categoryRepository.findById(categoryId)
-                .filter(category -> STATUS_ACTIVE.equalsIgnoreCase(category.getStatus()))
+                .filter(category -> Boolean.TRUE.equals(category.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("Incident category not found", 404));
     }
 }

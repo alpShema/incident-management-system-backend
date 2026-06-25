@@ -51,7 +51,6 @@ public class IncidentModalService {
     private static final String ACTION_LOCATION    = "location_select";
     private static final String ACTION_SEVERITY    = "severity_select";
     private static final String SEVERITY_BLOCK     = "severity_block";
-    private static final String STATUS_ACTIVE      = "active";
     private static final String DESCRIPTION_BLOCK = "description_block";
     private static final String MODAL             = "modal";
     private static final String PLAIN_TEXT        = "plain_text";
@@ -91,7 +90,7 @@ public class IncidentModalService {
         SlackUserMapping mapping = oauthService.findBySlackUserId(slackUserId)
                 .orElseThrow(SlackNotConnectedException::new);
 
-        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(STATUS_ACTIVE);
+        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(true);
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
@@ -174,13 +173,13 @@ public class IncidentModalService {
         String currentSeverityName = stateValues.path(SEVERITY_BLOCK).path(ACTION_SEVERITY)
                 .path(SELECTED_OPTION).path("text").path("text").asText(null);
 
-        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(STATUS_ACTIVE);
+        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(true);
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
         List<Severity> severities = severityRepository.findByStatus(true);
         List<IncidentType> topics = categoryId != null
-                ? incidentTypeRepository.findByCategoryIdWithAgentAndStatus(categoryId, STATUS_ACTIVE)
+                ? incidentTypeRepository.findByCategoryIdWithAgentAndStatus(categoryId, true)
                 : List.of();
 
         ModalState state = new ModalState(

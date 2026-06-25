@@ -329,7 +329,7 @@ type IncidentCategory {
   name: String!
   description: String
   department: Lookup
-  status: String
+  status: Boolean
   updatedAt: Instant
 }
 
@@ -348,7 +348,7 @@ type IncidentTopic {
   name: String!
   description: String
   visibleToGroup: Boolean!
-  status: String
+  status: Boolean
   category: Lookup
   updatedAt: Instant
 }
@@ -363,7 +363,7 @@ type IncidentTopicWithGroup {
   name: String!
   description: String
   visibleToGroup: Boolean!
-  status: String
+  status: Boolean
   category: Lookup
   agentGroup: AgentGroupSummary
 }
@@ -806,12 +806,12 @@ type Query {
   agentGroupsByCategory(categoryId: ID!): [Lookup!]
 
   # Incident categories
-  incidentCategories(status: String, query: String, page: PageInput): IncidentCategoryPage
-  allIncidentCategories(state: String, query: String, page: PageInput): IncidentCategoryPage
-  categoryTopics(categoryId: ID!, status: String): [IncidentTopic!]
+  incidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  allIncidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  categoryTopics(categoryId: ID!, status: Boolean): [IncidentTopic!]
 
   # Incident topics
-  incidentTopics(categoryId: String, departmentId: String, agentGroupId: String, status: String, query: String, page: PageInput): IncidentTopicPage
+  incidentTopics(categoryId: String, departmentId: String, agentGroupId: String, status: Boolean, query: String, page: PageInput): IncidentTopicPage
 
   # FAQs
   faqs(active: Boolean, page: PageInput): FaqPage
