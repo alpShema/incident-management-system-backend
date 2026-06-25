@@ -106,6 +106,7 @@ info:
 # ──────────────────────────────────────────
 app:
   base-url: ${APP_BASE_URL:https://hilfe.amalitech.net}
+  slack-image-base-url: ${SLACK_IMAGE_BASE_URL:https://i.ibb.co}
   jwt:
     issuer: ${JWT_ISSUER:hilfe}
     audience: ${JWT_AUDIENCE:hilfe-web}
