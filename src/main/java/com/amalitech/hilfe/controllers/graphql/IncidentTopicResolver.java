@@ -23,7 +23,7 @@ public class IncidentTopicResolver {
             @Argument String categoryId,
             @Argument String departmentId,
             @Argument String agentGroupId,
-            @Argument String status,
+            @Argument Boolean status,
             @Argument String query,
             @Argument PageInput page) {
         return PageInput.toPageResponse(

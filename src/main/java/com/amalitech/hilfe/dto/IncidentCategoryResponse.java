@@ -11,7 +11,7 @@ public record IncidentCategoryResponse(
         @Schema(description = "Category display name", example = "Facilities") String name,
         @Schema(description = "Optional description of the category", nullable = true) String description,
         @Schema(description = "Internal department this category belongs to", nullable = true) LookupResponse department,
-        @Schema(description = "Category status", example = "active") String status,
+        @Schema(description = "Whether the category is active") Boolean status,
         @Schema(description = "Timestamp when the category was last updated (UTC)") Instant updatedAt
 ) {
     public static IncidentCategoryResponse from(IncidentCategory category) {

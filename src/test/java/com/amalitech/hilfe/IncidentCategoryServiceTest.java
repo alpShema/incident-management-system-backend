@@ -58,7 +58,7 @@ class IncidentCategoryServiceTest {
                 .name("Facility")
                 .description("Facility related incidents")
                 .departmentId("dept-1")
-                .status("active")
+                .status(true)
                 .build();
     }
 
@@ -109,10 +109,10 @@ class IncidentCategoryServiceTest {
     @Test
     void listCategories_returnsMappedList() {
         IncidentCategory cat = buildCategory();
-        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged("active", null, PageRequest.of(0, 20)))
+        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged(true, null, PageRequest.of(0, 20)))
                 .thenReturn(new PageImpl<>(List.of(cat), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listCategories("active", null, PageRequest.of(0, 20));
+        var result = categoryService.listCategories(true, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
@@ -137,44 +137,34 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq(null), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        categoryService.listAllCategories("all", null, PageRequest.of(0, 20));
+        categoryService.listAllCategories(null, null, PageRequest.of(0, 20));
 
         verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, null, PageRequest.of(0, 20));
     }
 
     @Test
-    void listAllCategories_stateActive_filtersToActiveOnly() {
+    void listAllCategories_statusTrue_filtersToActiveOnly() {
         IncidentCategory active = buildCategory();
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq("active"), eq(null), any()))
+        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(true), eq(null), any()))
                 .thenReturn(new PageImpl<>(List.of(active), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories("active", null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(true, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).status()).isEqualTo("active");
+        assertThat(result.getContent().get(0).status()).isTrue();
     }
 
     @Test
-    void listAllCategories_stateInactive_filtersToInactiveOnly() {
+    void listAllCategories_statusFalse_filtersToInactiveOnly() {
         IncidentCategory inactive = IncidentCategory.builder()
-                .id("cat-2").name("Old Category").status("inactive").build();
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq("inactive"), eq(null), any()))
+                .id("cat-2").name("Old Category").status(false).build();
+        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(false), eq(null), any()))
                 .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories("inactive", null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(false, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).status()).isEqualTo("inactive");
-    }
-
-    @Test
-    void listAllCategories_invalidState_throws400() {
-        var pageable = PageRequest.of(0, 20);
-        assertThatThrownBy(() -> categoryService.listAllCategories("unknown", null, pageable))
-                .isInstanceOf(com.amalitech.hilfe.exceptions.ArmsAuthException.class)
-                .hasMessageContaining("Invalid state filter")
-                .extracting(e -> ((com.amalitech.hilfe.exceptions.ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
+        assertThat(result.getContent().get(0).status()).isFalse();
     }
 
     @Test
@@ -368,19 +358,19 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateCategoryStatus("cat-1", false);
 
-        assertThat(cat.getStatus()).isEqualTo("inactive");
+        assertThat(cat.getStatus()).isFalse();
         verify(categoryRepository).save(cat);
     }
 
     @Test
     void updateCategoryStatus_activate_setsActive() {
         IncidentCategory cat = buildCategory();
-        cat.setStatus("inactive");
+        cat.setStatus(false);
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
 
         categoryService.updateCategoryStatus("cat-1", true);
 
-        assertThat(cat.getStatus()).isEqualTo("active");
+        assertThat(cat.getStatus()).isTrue();
         verify(categoryRepository).save(cat);
     }
 
@@ -565,7 +555,7 @@ class IncidentCategoryServiceTest {
         when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-        categoryService.listTopics(null, null, null, "all", null, pageable);
+        categoryService.listTopics(null, null, null, null, null, pageable);
 
         verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, pageable);
     }
@@ -573,24 +563,13 @@ class IncidentCategoryServiceTest {
     @Test
     void listTopics_statusActive_filtersActiveTopics() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(null, null, null, "active", null, pageable))
+        when(typeRepository.findAllTopicsFiltered(null, null, null, true, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
 
-        var result = categoryService.listTopics(null, null, null, "active", null, pageable);
+        var result = categoryService.listTopics(null, null, null, true, null, pageable);
 
         assertThat(result.getTotalElements()).isEqualTo(1);
-        verify(typeRepository).findAllTopicsFiltered(null, null, null, "active", null, pageable);
-    }
-
-    @Test
-    void listTopics_rejectsInvalidStatus() {
-        var pageable = PageRequest.of(0, 20);
-
-        assertThatThrownBy(() -> categoryService.listTopics(null, null, null, "archived", null, pageable))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Invalid status. Allowed values are active, inactive, or all")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, true, null, pageable);
     }
 
     // ── listTopicsByCategory ──────────────────────────────────────────────────
@@ -610,34 +589,25 @@ class IncidentCategoryServiceTest {
     @Test
     void listTopicsByCategory_statusActive_passesActiveToRepository() {
         when(categoryRepository.existsById("cat-1")).thenReturn(true);
-        when(typeRepository.findByCategoryIdWithAgentAndStatus("cat-1", "active"))
+        when(typeRepository.findByCategoryIdWithAgentAndStatus("cat-1", true))
                 .thenReturn(List.of(buildHydratedType()));
 
-        var result = categoryService.listTopicsByCategory("cat-1", "active");
+        var result = categoryService.listTopicsByCategory("cat-1", true);
 
         assertThat(result).hasSize(1);
-        verify(typeRepository).findByCategoryIdWithAgentAndStatus("cat-1", "active");
+        verify(typeRepository).findByCategoryIdWithAgentAndStatus("cat-1", true);
     }
 
     @Test
     void listTopicsByCategory_statusInactive_passesInactiveToRepository() {
         when(categoryRepository.existsById("cat-1")).thenReturn(true);
-        when(typeRepository.findByCategoryIdWithAgentAndStatus("cat-1", "inactive"))
+        when(typeRepository.findByCategoryIdWithAgentAndStatus("cat-1", false))
                 .thenReturn(List.of());
 
-        var result = categoryService.listTopicsByCategory("cat-1", "inactive");
+        var result = categoryService.listTopicsByCategory("cat-1", false);
 
         assertThat(result).isEmpty();
-        verify(typeRepository).findByCategoryIdWithAgentAndStatus("cat-1", "inactive");
-    }
-
-    @Test
-    void listTopicsByCategory_invalidStatus_throws400() {
-        assertThatThrownBy(() -> categoryService.listTopicsByCategory("cat-1", "unknown"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Invalid status")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
+        verify(typeRepository).findByCategoryIdWithAgentAndStatus("cat-1", false);
     }
 
     @Test
