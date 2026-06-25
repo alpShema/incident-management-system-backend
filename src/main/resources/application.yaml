@@ -125,6 +125,12 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
+# ──────────────────────────────────────────
+# AI Embedding
+# ──────────────────────────────────────────
+embedding:
+  model: ${EMBEDDING_MODEL:text-embedding-3-small}
+
 ---
 spring:
   config:

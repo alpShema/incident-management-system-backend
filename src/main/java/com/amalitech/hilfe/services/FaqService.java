@@ -10,9 +10,12 @@ import com.amalitech.hilfe.models.Faq;
 import com.amalitech.hilfe.repositories.FaqRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.util.UUID;
@@ -35,7 +38,7 @@ public class FaqService {
                 .build();
 
         faq = faqRepository.save(faq);
-        embedAndStore(faq);
+        scheduleEmbedAfterCommit(faq);
         return FaqResponse.from(faq);
     }
 
@@ -53,7 +56,7 @@ public class FaqService {
             reEmbed = true;
         }
         faq = faqRepository.save(faq);
-        if (reEmbed) embedAndStore(faq);
+        if (reEmbed) scheduleEmbedAfterCommit(faq);
         return FaqResponse.from(faq);
     }
 
@@ -80,6 +83,17 @@ public class FaqService {
         );
     }
 
+    // Registers the embedding update to run after the current transaction commits,
+    // so a vector-store failure cannot roll back the FAQ save.
+    private void scheduleEmbedAfterCommit(Faq faq) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                embedAndStore(faq);
+            }
+        });
+    }
+
     private void embedAndStore(Faq faq) {
         try {
             float[] vector = embeddingService.embed(faq.getQuestion() + " " + faq.getAnswer());
@@ -90,7 +104,7 @@ public class FaqService {
             } else {
                 log.debug("No embedding generated for FAQ {} (stub mode)", faq.getId());
             }
-        } catch (ServiceUnavailableException e) {
+        } catch (ServiceUnavailableException | DataAccessException e) {
             log.warn("Embedding unavailable for FAQ {} — saved without vector, semantic search will not match it: {}", faq.getId(), e.getMessage());
         }
     }
