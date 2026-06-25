@@ -5,7 +5,6 @@ import com.amalitech.hilfe.dto.IncidentTopicListResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.dto.LookupResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentTypeStatusRequest;
-import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.IncidentCategoryService;
