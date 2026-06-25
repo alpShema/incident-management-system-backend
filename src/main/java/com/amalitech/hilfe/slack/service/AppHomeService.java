@@ -136,6 +136,18 @@ public class AppHomeService {
 
         blocks.add(divider());
 
+        // ── Account management ────────────────────────────────────────────────
+        blocks.add(section(s -> s.text(markdownText("*Account*"))));
+        blocks.add(actions(a -> a.elements(List.of(
+                button(b -> b
+                        .actionId("disconnect_from_home")
+                        .text(plainText("Disconnect"))
+                        .style("danger")
+                )
+        ))));
+
+        blocks.add(divider());
+
         // ── Commands ──────────────────────────────────────────────────────────
         blocks.add(section(s -> s.text(markdownText("Commands"))));
         blocks.add(section(s -> s.fields(List.of(
