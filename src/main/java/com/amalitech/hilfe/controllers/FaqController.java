@@ -2,6 +2,7 @@ package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.CreateFaqRequest;
+import com.amalitech.hilfe.dto.FaqBulkUploadResult;
 import com.amalitech.hilfe.dto.FaqResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
@@ -11,12 +12,18 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/faqs")
@@ -82,5 +89,42 @@ public class FaqController {
     public ResponseEntity<ApiResponse<Void>> deleteFaq(@PathVariable String id) {
         faqService.deleteFaq(id);
         return ResponseEntity.ok(ApiResponse.success("FAQ deleted", null));
+    }
+
+    @GetMapping("/template")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
+    @Operation(summary = "Download CSV template", description = "Returns a blank CSV file with the required headers (question, answer) for bulk upload")
+    public ResponseEntity<Resource> downloadTemplate() {
+        byte[] csvBytes = "question,answer\n".getBytes();
+        ByteArrayResource resource = new ByteArrayResource(csvBytes);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename("faq_template.csv").build().toString())
+                .contentLength(csvBytes.length)
+                .body(resource);
+    }
+
+    @PostMapping("/bulk")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
+    @Operation(summary = "Bulk upload FAQs", description = "Upload a CSV file with question and answer columns to create multiple FAQs at once")
+    public ResponseEntity<ApiResponse<FaqBulkUploadResult>> bulkUpload(
+            @RequestParam("file") MultipartFile file
+    ) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.success("Uploaded file is empty", null));
+        }
+        String filename = file.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.success("Only CSV files are accepted", null));
+        }
+        FaqBulkUploadResult result = faqService.bulkImport(file);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(
+                        result.created() + " FAQ(s) created, " + result.failed() + " row(s) skipped",
+                        result
+                ));
     }
 }
