@@ -478,20 +478,20 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
         ex.put("[categories] list (active)", ex(
                 "List active incident categories — open to authenticated users",
                 null,
-                q("query IncidentCategories($query: String, $page: PageInput) {\n  incidentCategories(status: \"active\", query: $query, page: $page) {\n    items { id name description department { name } status }\n    totalElements\n  }\n}",
+                q("query IncidentCategories($query: String, $page: PageInput) {\n  incidentCategories(status: true, query: $query, page: $page) {\n    items { id name description department { name } status }\n    totalElements\n  }\n}",
                         vars(K_QUERY, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
 
         ex.put("[categories] allCategories (admin)", ex(
                 "List all categories — requires: ADMIN or SUPER_ADMIN",
                 "Includes both active and inactive categories.",
-                q("query AllCategories($state: String, $page: PageInput) {\n  allIncidentCategories(state: $state, page: $page) {\n    items { id name status department { name } updatedAt }\n    totalElements\n  }\n}",
-                        vars("state", "all", K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
+                q("query AllCategories($status: Boolean, $page: PageInput) {\n  allIncidentCategories(status: $status, page: $page) {\n    items { id name status department { name } updatedAt }\n    totalElements\n  }\n}",
+                        vars(K_STATUS, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
 
         ex.put("[categories] topics", ex(
                 "List topics in a category — open to authenticated users",
                 null,
-                q("query CategoryTopics($categoryId: ID!, $status: String) {\n  categoryTopics(categoryId: $categoryId, status: $status) {\n    id name description visibleToGroup status\n  }\n}",
-                        vars(K_CATEGORY_ID, CAT_UUID, K_STATUS, K_ACTIVE))));
+                q("query CategoryTopics($categoryId: ID!, $status: Boolean) {\n  categoryTopics(categoryId: $categoryId, status: $status) {\n    id name description visibleToGroup status\n  }\n}",
+                        vars(K_CATEGORY_ID, CAT_UUID, K_STATUS, true))));
 
         ex.put("[categories] create", ex(
                 "Create an incident category — requires: incident-category.create",
@@ -523,8 +523,8 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
         ex.put("[topics] list", ex(
                 "List incident topics (global) — open to authenticated users",
                 "Paginated, filterable list across all categories.",
-                q("query IncidentTopics($categoryId: String, $departmentId: String, $status: String, $query: String, $page: PageInput) {\n  incidentTopics(categoryId: $categoryId, departmentId: $departmentId, status: $status, query: $query, page: $page) {\n    items {\n      id name description visibleToGroup status\n      category { id name }\n      agentGroup { id name }\n    }\n    totalElements hasNext\n  }\n}",
-                        vars(K_CATEGORY_ID, null, K_DEPARTMENT_ID, null, K_STATUS, K_ACTIVE, K_QUERY, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
+                q("query IncidentTopics($categoryId: String, $departmentId: String, $status: Boolean, $query: String, $page: PageInput) {\n  incidentTopics(categoryId: $categoryId, departmentId: $departmentId, status: $status, query: $query, page: $page) {\n    items {\n      id name description visibleToGroup status\n      category { id name }\n      agentGroup { id name }\n    }\n    totalElements hasNext\n  }\n}",
+                        vars(K_CATEGORY_ID, null, K_DEPARTMENT_ID, null, K_STATUS, true, K_QUERY, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
 
         ex.put("[topics] updateById", ex(
                 "Update topic by ID (global) — requires: incident-type.update",

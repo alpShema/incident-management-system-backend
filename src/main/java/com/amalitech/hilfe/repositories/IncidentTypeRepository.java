@@ -43,7 +43,7 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
                     WHERE (:categoryId IS NULL OR it.categoryId = :categoryId)
                       AND (:departmentId IS NULL OR c.departmentId = :departmentId)
                       AND (:agentGroupId IS NULL OR it.agentGroupId = :agentGroupId)
-                      AND (:status IS NULL OR LOWER(it.status) = :status)
+                      AND (:status IS NULL OR it.status = :status)
                       AND (:queryPattern IS NULL OR (
                            LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(it.description) LIKE :queryPattern ESCAPE '!'
@@ -58,7 +58,7 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
                     WHERE (:categoryId IS NULL OR it.categoryId = :categoryId)
                       AND (:departmentId IS NULL OR c.departmentId = :departmentId)
                       AND (:agentGroupId IS NULL OR it.agentGroupId = :agentGroupId)
-                      AND (:status IS NULL OR LOWER(it.status) = :status)
+                      AND (:status IS NULL OR it.status = :status)
                       AND (:queryPattern IS NULL OR (
                            LOWER(it.name) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(it.description) LIKE :queryPattern ESCAPE '!'
@@ -71,7 +71,7 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
             @Param("categoryId") String categoryId,
             @Param("departmentId") String departmentId,
             @Param("agentGroupId") String agentGroupId,
-            @Param("status") String status,
+            @Param("status") Boolean status,
             @Param("queryPattern") String queryPattern,
             Pageable pageable
     );
@@ -81,11 +81,11 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
             LEFT JOIN FETCH it.category
             LEFT JOIN FETCH it.agentGroup ag
             WHERE it.categoryId = :categoryId
-              AND (:status IS NULL OR LOWER(it.status) = :status)
+              AND (:status IS NULL OR it.status = :status)
             """)
     List<IncidentType> findByCategoryIdWithAgentAndStatus(
             @Param("categoryId") String categoryId,
-            @Param("status") String status);
+            @Param("status") Boolean status);
 
     @Query("SELECT it FROM IncidentType it LEFT JOIN FETCH it.category WHERE it.agentGroupId = :agentGroupId")
     List<IncidentType> findByAgentGroupId(@Param("agentGroupId") String agentGroupId);

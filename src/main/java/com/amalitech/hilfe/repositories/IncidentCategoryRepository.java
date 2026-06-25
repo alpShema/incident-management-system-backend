@@ -14,8 +14,8 @@ import java.util.List;
 @Repository
 public interface IncidentCategoryRepository extends JpaRepository<IncidentCategory, String> {
     boolean existsByNameIgnoreCase(String name);
-    List<IncidentCategory> findByStatus(String status);
-    List<IncidentCategory> findByDepartmentIdAndStatus(String departmentId, String status);
+    List<IncidentCategory> findByStatus(Boolean status);
+    List<IncidentCategory> findByDepartmentIdAndStatus(String departmentId, Boolean status);
     boolean existsByDepartmentId(String departmentId);
 
     @Query("""
@@ -23,7 +23,7 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
             LEFT JOIN FETCH c.department
             WHERE c.status = :status
             """)
-    List<IncidentCategory> findByStatusWithDepartment(@Param("status") String status);
+    List<IncidentCategory> findByStatusWithDepartment(@Param("status") Boolean status);
 
     @Query("""
             SELECT c FROM IncidentCategory c
@@ -35,7 +35,7 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
                    OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
             """)
     List<IncidentCategory> findByStatusWithDepartmentAndQuery(
-            @Param("status") String status,
+            @Param("status") Boolean status,
             @Param("queryPattern") String queryPattern);
 
     @Query(value = """
@@ -57,14 +57,14 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
                    OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
             """)
     Page<IncidentCategory> findByStatusWithDepartmentAndQueryPaged(
-            @Param("status") String status,
+            @Param("status") Boolean status,
             @Param("queryPattern") String queryPattern,
             Pageable pageable);
 
     @Query(value = """
             SELECT c FROM IncidentCategory c
             LEFT JOIN FETCH c.department d
-            WHERE c.status = 'active'
+            WHERE c.status = TRUE
             AND (:queryPattern IS NULL
                 OR LOWER(c.name) LIKE :queryPattern
                 OR LOWER(c.description) LIKE :queryPattern
@@ -73,7 +73,7 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
             countQuery = """
             SELECT COUNT(c) FROM IncidentCategory c
             LEFT JOIN c.department d
-            WHERE c.status = 'active'
+            WHERE c.status = TRUE
             AND (:queryPattern IS NULL
                 OR LOWER(c.name) LIKE :queryPattern
                 OR LOWER(c.description) LIKE :queryPattern
@@ -100,7 +100,7 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
                    OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
             """)
     Page<IncidentCategory> findAllWithDepartmentAndQueryPaged(
-            @Param("status") String status,
+            @Param("status") Boolean status,
             @Param("queryPattern") String queryPattern,
             Pageable pageable);
 
@@ -118,5 +118,5 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
             """)
     List<IncidentCategory> findByDepartmentIdAndStatusWithDepartment(
             @Param("departmentId") String departmentId,
-            @Param("status") String status);
+            @Param("status") Boolean status);
 }

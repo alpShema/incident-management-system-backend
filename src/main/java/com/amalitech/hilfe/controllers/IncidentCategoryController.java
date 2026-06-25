@@ -32,7 +32,7 @@ public class IncidentCategoryController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listCategories(
-            @Parameter(description = "Filter by status: active (default) or inactive") @RequestParam(required = false, defaultValue = "active") String status,
+            @Parameter(description = "Filter by status: true (default) for active, false for inactive") @RequestParam(required = false) Boolean status,
             @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
             Pageable pageable
     ) {
@@ -53,12 +53,12 @@ public class IncidentCategoryController {
     @GetMapping("/all")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listAllCategories(
-            @Parameter(description = "Filter by state: active, inactive, or all (default)") @RequestParam(required = false) String state,
+            @Parameter(description = "Filter by status: true for active, false for inactive, omit for all") @RequestParam(required = false) Boolean status,
             @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
-                PageResponse.from(categoryService.listAllCategories(state, query, pageable))));
+                PageResponse.from(categoryService.listAllCategories(status, query, pageable))));
     }
 
     @Operation(summary = "Create an incident category", description = "Creates a new category under an internal department. `departmentId` is required. Requires `incident-category.create` permission.")
@@ -109,7 +109,7 @@ public class IncidentCategoryController {
     @GetMapping("/{id}/topics")
     public ResponseEntity<ApiResponse<List<IncidentTopicResponse>>> listTopics(
             @Parameter(description = "Stable category ID", example = "cat-it") @PathVariable String id,
-            @Parameter(description = "Filter by topic status: active, inactive, or all (default)") @RequestParam(required = false) String status
+            @Parameter(description = "Filter by topic status: true for active, false for inactive, omit for all") @RequestParam(required = false) Boolean status
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident topics retrieved successfully", categoryService.listTopicsByCategory(id, status)));
     }
