@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TABLE "Faq" (
+CREATE TABLE IF NOT EXISTS "Faq" (
     id          TEXT PRIMARY KEY,
     question    TEXT NOT NULL,
     answer      TEXT NOT NULL,
@@ -12,4 +12,4 @@ CREATE TABLE "Faq" (
     updated_at  TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX ON "Faq" USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX IF NOT EXISTS faq_embedding_idx ON "Faq" USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);

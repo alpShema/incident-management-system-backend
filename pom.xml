@@ -141,6 +141,13 @@
 			<version>1.39.0</version>
 		</dependency>
 
+		<!-- ===== CSV Parsing ===== -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-csv</artifactId>
+			<version>1.11.0</version>
+		</dependency>
+
 		<!-- ===== Rate Limiting (Bucket4j) ===== -->
 		<dependency>
 			<groupId>com.bucket4j</groupId>

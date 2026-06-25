@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.CreateFaqRequest;
+import com.amalitech.hilfe.dto.FaqBulkUploadResult;
 import com.amalitech.hilfe.dto.FaqResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
@@ -10,6 +11,9 @@ import com.amalitech.hilfe.models.Faq;
 import com.amalitech.hilfe.repositories.FaqRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -17,7 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -81,6 +91,63 @@ public class FaqService {
         return PageResponse.from(
                 faqRepository.findAllFiltered(active, pageable).map(FaqResponse::from)
         );
+    }
+
+    @Transactional
+    public FaqBulkUploadResult bulkImport(MultipartFile file) {
+        List<FaqBulkUploadResult.RowError> errors = new ArrayList<>();
+        int created = 0;
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+             CSVParser csvParser = CSVFormat.DEFAULT.builder()
+                     .setHeader()
+                     .setSkipHeaderRecord(true)
+                     .setTrim(true)
+                     .setIgnoreEmptyLines(true)
+                     .build()
+                     .parse(reader)) {
+
+            int rowNumber = 1;
+            for (CSVRecord csvRecord : csvParser) {
+                rowNumber++;
+                String question = csvRecord.isMapped("question") ? csvRecord.get("question") : "";
+                String answer = csvRecord.isMapped("answer") ? csvRecord.get("answer") : "";
+                String validationError = validateRow(question, answer);
+                if (validationError != null) {
+                    errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
+                } else {
+                    created += saveRow(question, answer, rowNumber, errors);
+                }
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
+        }
+
+        return new FaqBulkUploadResult(created, errors.size(), errors);
+    }
+
+    private String validateRow(String question, String answer) {
+        if (!StringUtils.hasText(question)) return "question is blank";
+        if (!StringUtils.hasText(answer)) return "answer is blank";
+        return null;
+    }
+
+    private int saveRow(String question, String answer, int rowNumber, List<FaqBulkUploadResult.RowError> errors) {
+        try {
+            Faq faq = Faq.builder()
+                    .id(UUID.randomUUID().toString())
+                    .question(sanitize(question))
+                    .answer(sanitize(answer))
+                    .active(true)
+                    .build();
+            faq = faqRepository.save(faq);
+            embedAndStore(faq);
+            return 1;
+        } catch (Exception e) {
+            log.warn("Failed to create FAQ at row {}: {}", rowNumber, e.getMessage());
+            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "failed to save: " + e.getMessage()));
+            return 0;
+        }
     }
 
     // Registers the embedding update to run after the current transaction commits,
