@@ -48,6 +48,9 @@ public class AppHomeService {
     @Value("${app.base-url:https://hilfe.amalitech.net}")
     private String appBaseUrl;
 
+    @Value("${app.slack-image-base-url:https://i.ibb.co}")
+    private String slackImageBaseUrl;
+
     private final SlackClient slackClient;
     private final SlackOAuthService oauthService;
     private final UserRepository userRepository;
@@ -288,7 +291,7 @@ public class AppHomeService {
 
         // ── Feature 1: Report ─────────────────────────────────────────────────
         blocks.add(Blocks.image(i -> i
-                .imageUrl(appBaseUrl + "/images/slack-report.jpg")
+                .imageUrl(slackImageBaseUrl + "/VYXTtTTF/screenshot1.jpg")
                 .altText("Reporting an incident from Slack")));
         blocks.add(section(s -> s.text(markdownText(
                 ":memo: *Report incidents from Slack*\n"
@@ -298,7 +301,7 @@ public class AppHomeService {
 
         // ── Feature 2: Notifications ─────────────────────────────────────────
         blocks.add(Blocks.image(i -> i
-                .imageUrl(appBaseUrl + "/images/slack-updates.jpg")
+                .imageUrl(slackImageBaseUrl + "/rRbTY5S5/screenshot2.jpg")
                 .altText("Incident update notification in Slack")));
         blocks.add(section(s -> s.text(markdownText(
                 ":bell: *Stay updated*\n"
