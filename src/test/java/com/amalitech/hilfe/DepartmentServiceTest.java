@@ -48,7 +48,7 @@ class DepartmentServiceTest {
         Department dept = department(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", true);
 
@@ -61,7 +61,7 @@ class DepartmentServiceTest {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
@@ -74,7 +74,7 @@ class DepartmentServiceTest {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active"))
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true))
                 .thenReturn(java.util.List.of(mock(com.amalitech.hilfe.models.IncidentCategory.class)));
 
         DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
@@ -89,7 +89,7 @@ class DepartmentServiceTest {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
@@ -143,7 +143,7 @@ class DepartmentServiceTest {
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.existsByNameIgnoreCase("Facilities Updated")).thenReturn(false);
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.updateDepartment(
                 "dept-1", new DepartmentRequest("  Facilities Updated  ", "  Updated description  "));
@@ -157,7 +157,7 @@ class DepartmentServiceTest {
     void getDepartment_inactiveDepartment_isReturned() {
         Department dept = department(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", "active")).thenReturn(java.util.List.of());
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.getDepartment("dept-1");
 

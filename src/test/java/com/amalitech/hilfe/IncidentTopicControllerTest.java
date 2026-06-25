@@ -56,7 +56,7 @@ class IncidentTopicControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
-                "active",
+                true,
                 LookupResponse.from("cat-1", "Facilities"),
                 new IncidentTopicListResponse.AgentGroupSummary(
                         "group-1",
@@ -76,47 +76,46 @@ class IncidentTopicControllerTest {
     }
 
     @Test
-    void listTopics_statusAll_returns200WithAllTopics() throws Exception {
+    void listTopics_noStatusFilter_returns200WithAllTopics() throws Exception {
         IncidentTopicListResponse active = new IncidentTopicListResponse(
-                "type-1", "Projector", "Projector issues", true, "active",
+                "type-1", "Projector", "Projector issues", true, true,
                 LookupResponse.from("cat-1", "Facilities"), null);
         IncidentTopicListResponse inactive = new IncidentTopicListResponse(
-                "type-2", "Old Topic", "Deprecated", true, "inactive",
+                "type-2", "Old Topic", "Deprecated", true, false,
                 LookupResponse.from("cat-1", "Facilities"), null);
-        when(incidentCategoryService.listTopics(any(), any(), any(), eq("all"), any(), any()))
+        when(incidentCategoryService.listTopics(any(), any(), any(), eq((Boolean) null), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(active, inactive), PageRequest.of(0, 20), 2));
 
         mvc.perform(get("/incident-topics")
-                        .param("status", "all")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(2))
-                .andExpect(jsonPath("$.data.items[0].status").value("active"))
-                .andExpect(jsonPath("$.data.items[1].status").value("inactive"));
+                .andExpect(jsonPath("$.data.items[0].status").value(true))
+                .andExpect(jsonPath("$.data.items[1].status").value(false));
     }
 
     @Test
-    void listTopics_statusInactive_returns200WithInactiveTopics() throws Exception {
+    void listTopics_statusFalse_returns200WithInactiveTopics() throws Exception {
         IncidentTopicListResponse inactive = new IncidentTopicListResponse(
-                "type-2", "Old Topic", "Deprecated", true, "inactive",
+                "type-2", "Old Topic", "Deprecated", true, false,
                 LookupResponse.from("cat-1", "Facilities"), null);
-        when(incidentCategoryService.listTopics(any(), any(), any(), eq("inactive"), any(), any()))
+        when(incidentCategoryService.listTopics(any(), any(), any(), eq(false), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
 
         mvc.perform(get("/incident-topics")
-                        .param("status", "inactive")
+                        .param("status", "false")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].status").value("inactive"))
+                .andExpect(jsonPath("$.data.items[0].status").value(false))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
     @Test
     void updateTopicStatus_deactivate_returns200() throws Exception {
         IncidentTopicResponse response = new IncidentTopicResponse(
-                "type-1", "Projector", "Projector issues", true, "inactive", null, null);
+                "type-1", "Projector", "Projector issues", true, false, null, null);
         when(incidentCategoryService.updateTopicStatus("type-1", false)).thenReturn(response);
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -128,13 +127,13 @@ class IncidentTopicControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident topic status updated successfully"))
-                .andExpect(jsonPath("$.data.status").value("inactive"));
+                .andExpect(jsonPath("$.data.status").value(false));
     }
 
     @Test
     void updateTopicStatus_activate_returns200() throws Exception {
         IncidentTopicResponse response = new IncidentTopicResponse(
-                "type-1", "Projector", "Projector issues", true, "active", null, null);
+                "type-1", "Projector", "Projector issues", true, true, null, null);
         when(incidentCategoryService.updateTopicStatus("type-1", true)).thenReturn(response);
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -145,14 +144,11 @@ class IncidentTopicControllerTest {
                         .content(objectMapper.writeValueAsString(new UpdateIncidentTypeStatusRequest(true)))
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("active"));
+                .andExpect(jsonPath("$.data.status").value(true));
     }
 
     @Test
     void listTopics_invalidStatus_returns400() throws Exception {
-        when(incidentCategoryService.listTopics(any(), any(), any(), eq("archived"), any(), any()))
-                .thenThrow(new ArmsAuthException("Invalid status. Allowed values are active, inactive, or all", 400));
-
         mvc.perform(get("/incident-topics")
                         .param("status", "archived")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
