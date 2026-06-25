@@ -55,6 +55,8 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       AMALI_AI_API_KEY: ${AMALI_AI_API_KEY}
       AMALI_AI_BASE_URL: ${AMALI_AI_BASE_URL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 30s
