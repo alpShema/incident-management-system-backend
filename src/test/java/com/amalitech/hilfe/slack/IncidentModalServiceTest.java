@@ -93,7 +93,7 @@ class IncidentModalServiceTest {
     @Test
     void openCreateIncidentModal_whenConnected_opensModal() {
         when(oauthService.findBySlackUserId("U_SLACK_001")).thenReturn(Optional.of(mapping));
-        when(incidentCategoryRepository.findByStatus("active")).thenReturn(List.of(category));
+        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of(category));
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(severityRepository.findByStatus(true)).thenReturn(List.of(severity));
 
@@ -105,7 +105,7 @@ class IncidentModalServiceTest {
     @Test
     void openCreateIncidentModal_logsAuditEvent() {
         when(oauthService.findBySlackUserId("U_SLACK_001")).thenReturn(Optional.of(mapping));
-        when(incidentCategoryRepository.findByStatus("active")).thenReturn(List.of());
+        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of());
         when(locationRepository.findAll()).thenReturn(List.of());
         when(severityRepository.findByStatus(true)).thenReturn(List.of());
 
@@ -130,10 +130,10 @@ class IncidentModalServiceTest {
 
     @Test
     void handleCategorySelection_withValidCategory_updatesModalWithTopics() {
-        when(incidentCategoryRepository.findByStatus("active")).thenReturn(List.of(category));
+        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of(category));
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(severityRepository.findByStatus(true)).thenReturn(List.of(severity));
-        when(incidentTypeRepository.findByCategoryIdWithAgentAndStatus("cat-1", "active"))
+        when(incidentTypeRepository.findByCategoryIdWithAgentAndStatus("cat-1", true))
                 .thenReturn(List.of(incidentType));
 
         JsonNode payload = buildCategorySelectionPayload("cat-1", "IT", "V_VIEW_001", "My Title", "My Desc");
@@ -145,7 +145,7 @@ class IncidentModalServiceTest {
 
     @Test
     void handleCategorySelection_withNullCategory_updatesModalWithEmptyTopics() {
-        when(incidentCategoryRepository.findByStatus("active")).thenReturn(List.of(category));
+        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of(category));
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(severityRepository.findByStatus(true)).thenReturn(List.of(severity));
 
