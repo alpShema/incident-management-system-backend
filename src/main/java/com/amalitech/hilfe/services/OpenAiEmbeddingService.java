@@ -35,6 +35,9 @@ public class OpenAiEmbeddingService implements EmbeddingService {
 
     @Override
     public float[] embed(String text) {
+        if (props.model() == null || props.model().isBlank()) {
+            throw new ServiceUnavailableException("Embedding model is not configured — set the EMBEDDING_MODEL environment variable");
+        }
         try {
             EmbeddingResponse response = restClient.post()
                     .body(Map.of("input", text, "model", props.model()))
