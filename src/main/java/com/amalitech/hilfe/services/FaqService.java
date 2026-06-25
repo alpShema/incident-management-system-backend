@@ -99,7 +99,7 @@ public class FaqService {
         int created = 0;
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
-             CSVParser parser = CSVFormat.DEFAULT.builder()
+             CSVParser csvParser = CSVFormat.DEFAULT.builder()
                      .setHeader()
                      .setSkipHeaderRecord(true)
                      .setTrim(true)
@@ -108,33 +108,15 @@ public class FaqService {
                      .parse(reader)) {
 
             int rowNumber = 1;
-            for (CSVRecord record : parser) {
+            for (CSVRecord record : csvParser) {
                 rowNumber++;
                 String question = record.isMapped("question") ? record.get("question") : "";
                 String answer = record.isMapped("answer") ? record.get("answer") : "";
-
-                if (!StringUtils.hasText(question)) {
-                    errors.add(new FaqBulkUploadResult.RowError(rowNumber, "question is blank"));
-                    continue;
-                }
-                if (!StringUtils.hasText(answer)) {
-                    errors.add(new FaqBulkUploadResult.RowError(rowNumber, "answer is blank"));
-                    continue;
-                }
-
-                try {
-                    Faq faq = Faq.builder()
-                            .id(UUID.randomUUID().toString())
-                            .question(sanitize(question))
-                            .answer(sanitize(answer))
-                            .active(true)
-                            .build();
-                    faq = faqRepository.save(faq);
-                    embedAndStore(faq);
-                    created++;
-                } catch (Exception e) {
-                    log.warn("Failed to create FAQ at row {}: {}", rowNumber, e.getMessage());
-                    errors.add(new FaqBulkUploadResult.RowError(rowNumber, "failed to save: " + e.getMessage()));
+                String validationError = validateRow(question, answer);
+                if (validationError != null) {
+                    errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
+                } else {
+                    created += saveRow(question, answer, rowNumber, errors);
                 }
             }
         } catch (Exception e) {
@@ -142,6 +124,30 @@ public class FaqService {
         }
 
         return new FaqBulkUploadResult(created, errors.size(), errors);
+    }
+
+    private String validateRow(String question, String answer) {
+        if (!StringUtils.hasText(question)) return "question is blank";
+        if (!StringUtils.hasText(answer)) return "answer is blank";
+        return null;
+    }
+
+    private int saveRow(String question, String answer, int rowNumber, List<FaqBulkUploadResult.RowError> errors) {
+        try {
+            Faq faq = Faq.builder()
+                    .id(UUID.randomUUID().toString())
+                    .question(sanitize(question))
+                    .answer(sanitize(answer))
+                    .active(true)
+                    .build();
+            faq = faqRepository.save(faq);
+            embedAndStore(faq);
+            return 1;
+        } catch (Exception e) {
+            log.warn("Failed to create FAQ at row {}: {}", rowNumber, e.getMessage());
+            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "failed to save: " + e.getMessage()));
+            return 0;
+        }
     }
 
     // Registers the embedding update to run after the current transaction commits,
