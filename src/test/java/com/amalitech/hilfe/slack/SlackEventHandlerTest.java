@@ -274,6 +274,7 @@ class SlackEventHandlerTest {
 
     @Test
     void handleInteraction_blockActions_createIncident_opensModal() {
+        when(oauthService.isConnected("U1")).thenReturn(true);
         ObjectNode action = mapper.createObjectNode();
         action.put("action_id", "create_incident");
         ObjectNode user = mapper.createObjectNode();
