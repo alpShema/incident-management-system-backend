@@ -115,8 +115,16 @@ public class SlackOAuthController {
 
             sendPostConnectionNotifications(slackUserId);
 
+            String successUrl = slackProperties.frontendSuccessUrl();
+            if (successUrl == null || successUrl.isBlank()) {
+                log.error("SLACK_FRONTEND_SUCCESS_URL is not configured — cannot redirect after OAuth");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .contentType(MediaType.TEXT_HTML)
+                        .body(buildErrorPage("Configuration error: success redirect URL is not set."));
+            }
+
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .header(HttpHeaders.LOCATION, slackProperties.frontendSuccessUrl())
+                    .header(HttpHeaders.LOCATION, successUrl)
                     .build();
         } catch (Exception e) {
             log.error("OAuth callback failed for state {}", state, e);
