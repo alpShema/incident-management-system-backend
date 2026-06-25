@@ -108,10 +108,10 @@ public class FaqService {
                      .parse(reader)) {
 
             int rowNumber = 1;
-            for (CSVRecord record : csvParser) {
+            for (CSVRecord csvRecord : csvParser) {
                 rowNumber++;
-                String question = record.isMapped("question") ? record.get("question") : "";
-                String answer = record.isMapped("answer") ? record.get("answer") : "";
+                String question = csvRecord.isMapped("question") ? csvRecord.get("question") : "";
+                String answer = csvRecord.isMapped("answer") ? csvRecord.get("answer") : "";
                 String validationError = validateRow(question, answer);
                 if (validationError != null) {
                     errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
