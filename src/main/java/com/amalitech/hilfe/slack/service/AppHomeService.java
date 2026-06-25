@@ -20,6 +20,7 @@ import com.slack.api.model.view.ViewTitle;
 import com.slack.api.model.view.Views;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.slack.api.model.block.Blocks;
 import static com.slack.api.model.block.Blocks.*;
 import static com.slack.api.model.block.composition.BlockCompositions.*;
 import static com.slack.api.model.block.element.BlockElements.*;
@@ -42,6 +44,9 @@ public class AppHomeService {
 
     private static final String STYLE_PRIMARY = "primary";
     private static final String PLAIN_TEXT = "plain_text";
+
+    @Value("${app.base-url:https://hilfe.amalitech.net}")
+    private String appBaseUrl;
 
     private final SlackClient slackClient;
     private final SlackOAuthService oauthService;
@@ -59,7 +64,7 @@ public class AppHomeService {
             Optional<User> user = userRepository.findById(mapping.get().getHilfeUserId());
             view = buildConnectedHome(user.orElse(null), mapping.get().getHilfeUserId());
         } else {
-            view = buildDisconnectedHome();
+            view = buildDisconnectedHome(slackUserId);
         }
 
         slackClient.viewsPublish(slackUserId, view);
@@ -270,50 +275,54 @@ public class AppHomeService {
         };
     }
 
-    private View buildDisconnectedHome() {
+    private View buildDisconnectedHome(String slackUserId) {
         List<LayoutBlock> blocks = new ArrayList<>();
 
-        // ── Welcome ───────────────────────────────────────────────────────────
-        blocks.add(section(s -> s.text(markdownText(" "))));
+        // ── Greeting ──────────────────────────────────────────────────────────
         blocks.add(section(s -> s.text(markdownText(
-                "*Welcome to HILFE for Slack!* 👋\n"
-                + "HILFE is an IT support platform that helps you report, track, and resolve incidents — right from Slack."
-        ))));
-        blocks.add(section(s -> s.text(markdownText(" "))));
+                "👋 *Hi <@" + slackUserId + "> — Welcome to HILFE for Slack*"))));
+        blocks.add(section(s -> s.text(markdownText(
+                "Here are a few ways you can get the most out of HILFE:"))));
 
         blocks.add(divider());
 
-        // ── Getting started ───────────────────────────────────────────────────
-        blocks.add(section(s -> s.text(markdownText(" "))));
-        blocks.add(section(s -> s.text(markdownText("*Getting Started:*"))));
-        blocks.add(section(s -> s.text(markdownText("• Use `/hilfe new` to create an incident in any channel"))));
-        blocks.add(section(s -> s.text(markdownText("• Use `/hilfe my` to view your open incidents"))));
-        blocks.add(section(s -> s.text(markdownText("• Get real-time DMs when your ticket is updated or resolved"))));
-        blocks.add(section(s -> s.text(markdownText("• Manage notification preferences from the Home tab"))));
-        blocks.add(section(s -> s.text(markdownText(" "))));
+        // ── Feature 1: Report ─────────────────────────────────────────────────
+        blocks.add(Blocks.image(i -> i
+                .imageUrl(appBaseUrl + "/images/slack-report.jpg")
+                .altText("Reporting an incident from Slack")));
+        blocks.add(section(s -> s.text(markdownText(
+                ":memo: *Report incidents from Slack*\n"
+                + "Create an incident with `/hilfe new` and it's logged in HILFE instantly."))));
 
         blocks.add(divider());
 
-        // ── Connect CTA ───────────────────────────────────────────────────────
-        blocks.add(section(s -> s.text(markdownText(" "))));
+        // ── Feature 2: Notifications ─────────────────────────────────────────
+        blocks.add(Blocks.image(i -> i
+                .imageUrl(appBaseUrl + "/images/slack-updates.jpg")
+                .altText("Incident update notification in Slack")));
         blocks.add(section(s -> s.text(markdownText(
-                "*Connect Your HILFE Account*\n"
-                + "To use HILFE for Slack, connect your <https://hilfe.amalitech.net|HILFE> account for secure access."
-        ))));
+                ":bell: *Stay updated*\n"
+                + "Get notified when your incident is assigned, updated, or resolved."))));
 
+        blocks.add(divider());
+
+        // ── CTA ───────────────────────────────────────────────────────────────
+        blocks.add(section(s -> s.text(markdownText(
+                ":inbox_tray: *Ready to get started?* Connect your HILFE account to begin."))));
         blocks.add(actions(a -> a.elements(List.of(
                 button(b -> b
                         .actionId("connect_from_home")
-                        .text(plainText("Connect Account"))
+                        .text(plainText(pt -> pt.text("Connect account").emoji(true)))
                         .style(STYLE_PRIMARY)
+                ),
+                button(b -> b
+                        .actionId("create_incident")
+                        .text(plainText(pt -> pt.text("Report an incident").emoji(true)))
+                ),
+                button(b -> b
+                        .actionId("view_my_incidents")
+                        .text(plainText(pt -> pt.text("View my incidents").emoji(true)))
                 )
-        ))));
-
-        blocks.add(section(s -> s.text(markdownText(" "))));
-
-        // ── Footer ────────────────────────────────────────────────────────────
-        blocks.add(context(c -> c.elements(List.of(
-                markdownText("Your data remains private and secure. You can disconnect at any time.")
         ))));
 
         return Views.view(v -> v.type("home").blocks(blocks));

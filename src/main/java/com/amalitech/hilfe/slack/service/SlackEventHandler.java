@@ -274,6 +274,10 @@ public class SlackEventHandler {
                 yield "";
             }
             case "create_incident" -> {
+                if (!oauthService.isConnected(userId)) {
+                    slackClient.chatPostMessage(userId, CONNECT_FIRST_MSG);
+                    yield "";
+                }
                 try {
                     incidentModalService.openCreateIncidentModal(userId, triggerId);
                 } catch (Exception e) {
@@ -284,6 +288,10 @@ public class SlackEventHandler {
                 yield "";
             }
             case "view_my_incidents" -> {
+                if (!oauthService.isConnected(userId)) {
+                    slackClient.chatPostMessage(userId, CONNECT_FIRST_MSG);
+                    yield "";
+                }
                 try {
                     incidentModalService.openMyIncidentsModal(userId, triggerId);
                 } catch (Exception e) {

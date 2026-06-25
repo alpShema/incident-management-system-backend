@@ -105,6 +105,7 @@ info:
 # Auth / JWT
 # ──────────────────────────────────────────
 app:
+  base-url: ${APP_BASE_URL:https://hilfe.amalitech.net}
   jwt:
     issuer: ${JWT_ISSUER:hilfe}
     audience: ${JWT_AUDIENCE:hilfe-web}
