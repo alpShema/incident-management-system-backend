@@ -151,7 +151,7 @@ class IncidentCategoryServiceTest {
         var result = categoryService.listAllCategories(true, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).status()).isEqualTo(true);
+        assertThat(result.getContent().get(0).status()).isTrue();
     }
 
     @Test
@@ -164,7 +164,7 @@ class IncidentCategoryServiceTest {
         var result = categoryService.listAllCategories(false, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).status()).isEqualTo(false);
+        assertThat(result.getContent().get(0).status()).isFalse();
     }
 
     @Test
@@ -358,7 +358,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateCategoryStatus("cat-1", false);
 
-        assertThat(cat.getStatus()).isEqualTo(false);
+        assertThat(cat.getStatus()).isFalse();
         verify(categoryRepository).save(cat);
     }
 
@@ -370,7 +370,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateCategoryStatus("cat-1", true);
 
-        assertThat(cat.getStatus()).isEqualTo(true);
+        assertThat(cat.getStatus()).isTrue();
         verify(categoryRepository).save(cat);
     }
 
