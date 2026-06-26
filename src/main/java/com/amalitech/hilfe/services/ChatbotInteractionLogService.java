@@ -16,7 +16,7 @@ public class ChatbotInteractionLogService {
 
     private final ChatbotInteractionRepository interactionRepository;
 
-    @Async
+    @Async("applicationTaskExecutor")
     public void logInteraction(String userId, String query, String faqId, double confidence, String outcome) {
         try {
             ChatbotInteraction interaction = ChatbotInteraction.builder()

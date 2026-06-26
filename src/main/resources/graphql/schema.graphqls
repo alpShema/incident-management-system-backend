@@ -918,6 +918,7 @@ type Mutation {
   updateFaq(id: ID!, input: UpdateFaqInput!): Faq
   toggleFaqActive(id: ID!, active: Boolean!): Faq
   deleteFaq(id: ID!): Boolean
+  reEmbedFaqs: Int!
 
   # Severities
   createSeverity(input: SeverityInput!): Severity
