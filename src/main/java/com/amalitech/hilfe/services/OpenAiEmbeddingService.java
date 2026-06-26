@@ -38,6 +38,7 @@ public class OpenAiEmbeddingService implements EmbeddingService {
         if (props.model() == null || props.model().isBlank()) {
             throw new ServiceUnavailableException("Embedding model is not configured — set the EMBEDDING_MODEL environment variable");
         }
+        long start = System.currentTimeMillis();
         try {
             EmbeddingResponse response = restClient.post()
                     .body(Map.of("input", text, "model", props.model()))
@@ -53,11 +54,11 @@ public class OpenAiEmbeddingService implements EmbeddingService {
             for (int i = 0; i < raw.size(); i++) {
                 vector[i] = raw.get(i).floatValue();
             }
-            log.debug("Embedded {} chars → {} dimensions", text.length(), vector.length);
+            log.debug("Embed done | {}ms | {} chars → {} dims | model={}", System.currentTimeMillis() - start, text.length(), vector.length, props.model());
             return vector;
 
         } catch (RestClientException e) {
-            log.error("Embedding API call failed: {}", e.getMessage());
+            log.error("Embed failed | {}ms | text=\"{}\" | {}", System.currentTimeMillis() - start, text.length() > 80 ? text.substring(0, 80) + "..." : text, e.getMessage());
             throw new ServiceUnavailableException("Embedding service is temporarily unavailable", e);
         }
     }
