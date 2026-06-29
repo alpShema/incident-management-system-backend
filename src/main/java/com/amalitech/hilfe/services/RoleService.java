@@ -113,6 +113,88 @@ public class RoleService {
         return new BulkAssignRoleResponse(role.getCode(), users.size(), users.stream().map(User::getId).toList());
     }
 
+    @Transactional
+    public RoleResponse updateRole(String roleCode, UpdateRoleRequest request) {
+        String normalizedCode = normalizeRoleCode(roleCode);
+        Role role = roleRepository.findByCode(normalizedCode)
+                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
+
+        if (Boolean.TRUE.equals(role.getSystemDefined())) {
+            throw new ArmsAuthException("System-defined roles cannot be modified", 403);
+        }
+
+        if (request.name() != null) {
+            String trimmedName = request.name().trim();
+            if (trimmedName.isBlank()) {
+                throw new ArmsAuthException("Role name must not be blank", 400);
+            }
+            if (roleRepository.existsByNameIgnoreCaseAndCodeNot(trimmedName, normalizedCode)) {
+                throw new ArmsAuthException("Role name already exists", 409);
+            }
+            role.setName(trimmedName);
+        }
+
+        if (request.description() != null) {
+            role.setDescription(request.description().isBlank() ? null : request.description().trim());
+        }
+
+        if (request.permissionCodes() != null) {
+            List<String> normalizedCodes = request.permissionCodes().stream()
+                    .map(String::trim)
+                    .map(String::toLowerCase)
+                    .distinct()
+                    .toList();
+            List<Permission> permissions = permissionRepository.findByCodeIn(normalizedCodes);
+            if (permissions.size() != normalizedCodes.size()) {
+                throw new ArmsAuthException("One or more permission codes are invalid", 400);
+            }
+            rolePermissionRepository.deleteByRoleCode(normalizedCode);
+            List<RolePermission> links = permissions.stream()
+                    .map(p -> RolePermission.builder()
+                            .roleCode(normalizedCode)
+                            .permission(p)
+                            .build())
+                    .toList();
+            rolePermissionRepository.saveAll(links);
+            roleRepository.save(role);
+            return toResponse(role, links);
+        }
+
+        roleRepository.save(role);
+        return toResponse(role);
+    }
+
+    @Transactional
+    public BulkAssignRoleResponse removeUsersFromRole(String roleCode, BulkAssignRoleRequest request) {
+        String normalizedCode = normalizeRoleCode(roleCode);
+        roleRepository.findByCode(normalizedCode)
+                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
+
+        List<String> userIds = request.userIds().stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(id -> !id.isBlank())
+                .distinct()
+                .toList();
+        if (userIds.isEmpty()) {
+            throw new ArmsAuthException("userIds must not be empty", 400);
+        }
+
+        List<User> users = userRepository.findAllById(userIds);
+        if (users.size() != userIds.size()) {
+            Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
+            List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
+            throw new ArmsAuthException("Users not found: " + String.join(", ", missing), 404);
+        }
+
+        List<User> toUpdate = users.stream()
+                .filter(u -> normalizedCode.equals(u.getRoleCode()))
+                .peek(u -> u.setRoleCode(null))
+                .toList();
+        userRepository.saveAll(toUpdate);
+        return new BulkAssignRoleResponse(normalizedCode, toUpdate.size(), toUpdate.stream().map(User::getId).toList());
+    }
+
     public PermissionCatalogResponse permissionCatalog() {
         List<RoleResponse.PermissionItem> all = permissionRepository.findAllByOrderByCodeAsc().stream()
                 .map(p -> new RoleResponse.PermissionItem(p.getCode(), p.getName(), p.getDescription()))
