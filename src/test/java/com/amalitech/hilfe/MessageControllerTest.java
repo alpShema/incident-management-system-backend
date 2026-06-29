@@ -40,6 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class MessageControllerTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Autowired MockMvc mvc;
     final ObjectMapper objectMapper = new ObjectMapper();
     @MockitoBean MessageService messageService;
@@ -90,8 +92,8 @@ class MessageControllerTest {
                 new MessageResponse.SenderInfo("u1", "Jane Doe", null),
                 null,
                 List.of(new MediaResponse("mm-1", "img.png", "image/png", 1024L, "https://download")),
-                Instant.now(),
-                Instant.now()
+                FIXED_NOW,
+                FIXED_NOW
         );
         when(messageService.sendMessage(anyString(), anyString(), eq("inc-1"), isNull(), anyList()))
                 .thenReturn(response);
