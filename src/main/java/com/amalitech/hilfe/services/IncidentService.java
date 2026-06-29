@@ -31,18 +31,26 @@ public class IncidentService {
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     private static final String SORT_CREATED_AT = "createdAt";
+    private static final String SORT_UPDATED_AT = "updatedAt";
+    private static final String SORT_TITLE = "title";
+    private static final String SORT_INCIDENT_NO = "incidentNo";
+    private static final String SORT_CATEGORY_NAME = "incidentType.category.name";
+    private static final String SORT_SEVERITY_NAME = "severity.name";
+    private static final String SORT_STATUS_NAME = "status.name";
     private static final String STATUS_NAME_IN_PROGRESS = "In Progress";
     private static final String IN_PROGRESS_NOT_CONFIGURED = "Default 'In Progress' status not configured";
 
     // Frontend sort alias → JPA field path
     private static final Map<String, String> SORT_FIELD_ALIASES = Map.of(
-            "category", "incidentType.category.name",
-            "priority", "severity.name"
+            "category", SORT_CATEGORY_NAME,
+            "priority", SORT_SEVERITY_NAME,
+            "priority.name", SORT_SEVERITY_NAME,
+            "status", SORT_STATUS_NAME
     );
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            SORT_CREATED_AT, "updatedAt", "title", "incidentNo",
-            "incidentType.category.name", "severity.name"
+            SORT_CREATED_AT, SORT_UPDATED_AT, SORT_TITLE, SORT_INCIDENT_NO,
+            SORT_CATEGORY_NAME, SORT_SEVERITY_NAME, SORT_STATUS_NAME
     );
 
     // from-status-id → to-status-id → roles permitted to make that transition

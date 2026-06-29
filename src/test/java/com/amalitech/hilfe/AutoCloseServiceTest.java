@@ -34,6 +34,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AutoCloseServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Mock SystemConfigRepository systemConfigRepository;
     @Mock IncidentRepository     incidentRepository;
     @Mock StatusRepository       statusRepository;
@@ -108,9 +110,9 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident i1 = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300)).build();
+                .resolvedAt(FIXED_NOW.minusSeconds(300)).build();
         Incident i2 = Incident.builder().id("inc-2").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300)).build();
+                .resolvedAt(FIXED_NOW.minusSeconds(300)).build();
 
         when(incidentRepository.findOverdueResolved(any(Instant.class))).thenReturn(List.of(i1, i2));
         when(statusRepository.findByNameIgnoreCase("Closed"))
@@ -157,7 +159,7 @@ class AutoCloseServiceTest {
         verify(incidentRepository).findOverdueResolved(cutoffCaptor.capture());
 
         Instant cutoff = cutoffCaptor.getValue();
-        Instant expectedCutoff = Instant.now().minusSeconds(durationSeconds);
+        Instant expectedCutoff = FIXED_NOW.minusSeconds(durationSeconds);
         // allow 5 seconds of test execution drift
         assertThat(cutoff).isBetween(expectedCutoff.minusSeconds(5), expectedCutoff.plusSeconds(5));
     }
@@ -169,7 +171,7 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300))
+                .resolvedAt(FIXED_NOW.minusSeconds(300))
                 .assignedToId("agent-1")
                 .userId("client-1")
                 .build();
@@ -192,7 +194,7 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300))
+                .resolvedAt(FIXED_NOW.minusSeconds(300))
                 .userId("client-user-1")
                 .build();
         incident.setIncidentNo(7);
@@ -211,7 +213,7 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300))
+                .resolvedAt(FIXED_NOW.minusSeconds(300))
                 .userId("client-user-1")
                 .build(); // no assignedToId
 

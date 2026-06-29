@@ -22,6 +22,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TokenRevocationServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Mock SessionRepository sessionRepository;
     @InjectMocks TokenRevocationService service;
 
@@ -46,7 +48,7 @@ class TokenRevocationServiceTest {
 
     @Test
     void revoke_savesSessionRecord() {
-        Instant expiresAt = Instant.now().plusSeconds(3600);
+        Instant expiresAt = FIXED_NOW.plusSeconds(3600);
 
         service.revoke("jti-3", "u1", expiresAt);
 
@@ -60,7 +62,7 @@ class TokenRevocationServiceTest {
 
     @Test
     void revoke_duplicateJti_doesNotThrow() {
-        Instant expiresAt = Instant.now().plusSeconds(3600);
+        Instant expiresAt = FIXED_NOW.plusSeconds(3600);
         when(sessionRepository.save(any(Session.class)))
                 .thenThrow(new DataIntegrityViolationException("pk conflict"));
 
