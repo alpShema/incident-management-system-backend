@@ -54,4 +54,10 @@ public class FaqResolver {
         faqService.deleteFaq(id);
         return true;
     }
+
+    @MutationMapping
+    @PreAuthorize("hasAuthority('faq.update')")
+    public int reEmbedFaqs() {
+        return faqService.reEmbedAll();
+    }
 }
