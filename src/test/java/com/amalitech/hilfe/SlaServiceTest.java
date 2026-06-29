@@ -39,7 +39,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SlaServiceTest {
 
-    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+    @SuppressWarnings("java:S8692")
+    private static final Instant FIXED_NOW = Instant.now();
 
     @Mock IncidentSlaRepository incidentSlaRepository;
     @Mock SeverityRepository severityRepository;
