@@ -28,6 +28,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Mock NotificationRepository notificationRepository;
     @InjectMocks NotificationService notificationService;
 
@@ -35,7 +37,7 @@ class NotificationServiceTest {
         return Notification.builder()
                 .id(id).userId(userId).incidentId("inc-1")
                 .type("INCIDENT_ASSIGNED").title("Title").message("Msg")
-                .read(read).createdAt(Instant.now()).build();
+                .read(read).createdAt(FIXED_NOW).build();
     }
 
     @Test

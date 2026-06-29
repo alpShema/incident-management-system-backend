@@ -39,6 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class NotificationControllerTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Autowired MockMvc mvc;
     @MockitoBean NotificationService notificationService;
     @MockitoBean TokenService tokenService;
@@ -50,7 +52,7 @@ class NotificationControllerTest {
 
     private NotificationResponse stubNotification() {
         return new NotificationResponse("n1", "inc-1", "INCIDENT_STATUS_CHANGED",
-                "Status updated", "Incident status changed to RESOLVED", false, Instant.now());
+                "Status updated", "Incident status changed to RESOLVED", false, FIXED_NOW);
     }
 
     @Test
@@ -81,7 +83,7 @@ class NotificationControllerTest {
     @Test
     void markAsRead_returns200WithUpdatedNotification() throws Exception {
         NotificationResponse read = new NotificationResponse("n1", "inc-1", "INCIDENT_STATUS_CHANGED",
-                "Status updated", "Incident status changed to RESOLVED", true, Instant.now());
+                "Status updated", "Incident status changed to RESOLVED", true, FIXED_NOW);
         when(notificationService.markAsRead("u1", "n1")).thenReturn(read);
 
         mvc.perform(patch("/notifications/n1/read").with(authentication(auth())))

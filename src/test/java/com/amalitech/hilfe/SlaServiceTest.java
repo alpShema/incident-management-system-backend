@@ -39,6 +39,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SlaServiceTest {
 
+    @SuppressWarnings("java:S8692")
+    private static final Instant FIXED_NOW = Instant.now();
+
     @Mock IncidentSlaRepository incidentSlaRepository;
     @Mock SeverityRepository severityRepository;
     @Mock SystemConfigRepository systemConfigRepository;
@@ -80,11 +83,11 @@ class SlaServiceTest {
         Incident incident = Incident.builder()
                 .id("inc-1")
                 .assignedToId("agent-1")
-                .createdAt(Instant.now().minus(Duration.ofMinutes(5)))
+                .createdAt(FIXED_NOW.minus(Duration.ofMinutes(5)))
                 .build();
         IncidentSla sla = IncidentSla.builder()
                 .incidentId("inc-1")
-                .responseDueAt(Instant.now().plus(Duration.ofMinutes(30)))
+                .responseDueAt(FIXED_NOW.plus(Duration.ofMinutes(30)))
                 .build();
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(Agent.builder().id("agent-1").userId("agent-user-1").build()));
         when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
@@ -98,7 +101,7 @@ class SlaServiceTest {
 
     @Test
     void onStatusChanged_pendingResumeShiftsDeadlines() {
-        Instant now = Instant.now();
+        Instant now = FIXED_NOW;
         Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(1))).build();
         IncidentSla sla = IncidentSla.builder()
                 .incidentId("inc-1")
@@ -121,7 +124,7 @@ class SlaServiceTest {
 
     @Test
     void onStatusChanged_resolvedLate_marksBreachAndRemainingBudget() {
-        Instant now = Instant.now();
+        Instant now = FIXED_NOW;
         Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(3))).build();
         IncidentSla sla = IncidentSla.builder()
                 .incidentId("inc-1")
@@ -139,7 +142,7 @@ class SlaServiceTest {
 
     @Test
     void onStatusChanged_forceClosedBeforeDeadline_marksResolvedAtSnapshotAndNoBreached() {
-        Instant now = Instant.now();
+        Instant now = FIXED_NOW;
         Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofMinutes(1))).build();
         IncidentSla sla = IncidentSla.builder()
                 .incidentId("inc-1")
@@ -157,7 +160,7 @@ class SlaServiceTest {
 
     @Test
     void onStatusChanged_forceClosedAfterDeadline_marksBreached() {
-        Instant now = Instant.now();
+        Instant now = FIXED_NOW;
         Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(3))).build();
         IncidentSla sla = IncidentSla.builder()
                 .incidentId("inc-1")
@@ -175,7 +178,7 @@ class SlaServiceTest {
 
     @Test
     void scanAndNotify_responseAtRisk_publishesNotificationsOnce() {
-        Instant now = Instant.now();
+        Instant now = FIXED_NOW;
         Incident incident = Incident.builder()
                 .id("inc-1")
                 .incidentNo(15)
@@ -208,11 +211,11 @@ class SlaServiceTest {
 
     @Test
     void getIncidentSlaResponse_pausedIncidentFreezesStatusAtPausePoint() {
-        Instant pauseStartedAt = Instant.now().minus(Duration.ofMinutes(2));
+        Instant pauseStartedAt = FIXED_NOW.minus(Duration.ofMinutes(2));
         IncidentSla sla = IncidentSla.builder()
                 .incidentId("inc-1")
                 .responseThresholdMinutes(60)
-                .responseDueAt(Instant.now().plus(Duration.ofMinutes(1)))
+                .responseDueAt(FIXED_NOW.plus(Duration.ofMinutes(1)))
                 .pauseStartedAt(pauseStartedAt)
                 .build();
         when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
@@ -244,7 +247,7 @@ class SlaServiceTest {
                 .incident(incident)
                 .responseElapsedMs(Duration.ofMinutes(30).toMillis())
                 .resolutionElapsedMs(Duration.ofHours(2).toMillis())
-                .responseBreachedAt(Instant.now())
+                .responseBreachedAt(FIXED_NOW)
                 .build();
         when(incidentSlaRepository.findForReport(null, false, null, false, null, false)).thenReturn(List.of(sla));
 

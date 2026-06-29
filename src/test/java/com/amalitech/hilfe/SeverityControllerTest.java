@@ -30,6 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class SeverityControllerTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Autowired MockMvc mvc;
     @MockitoBean SeverityService severityService;
     @MockitoBean TokenService tokenService;
@@ -37,8 +39,8 @@ class SeverityControllerTest {
     @Test
     void listSeverities_returns200WithData() throws Exception {
         when(severityService.listSeverities()).thenReturn(List.of(
-                new SeverityResponse("sev-1", "Low", "Low priority", true, 480, 4320, 28800L, 259200L, Instant.now(), Instant.now()),
-                new SeverityResponse("sev-2", "High", "High priority", true, 60, 480, 3600L, 28800L, Instant.now(), Instant.now())
+                new SeverityResponse("sev-1", "Low", "Low priority", true, 480, 4320, 28800L, 259200L, FIXED_NOW, FIXED_NOW),
+                new SeverityResponse("sev-2", "High", "High priority", true, 60, 480, 3600L, 28800L, FIXED_NOW, FIXED_NOW)
         ));
 
         mvc.perform(get("/severities")
@@ -78,7 +80,7 @@ class SeverityControllerTest {
         when(severityService.updateSeveritySla(
                 org.mockito.ArgumentMatchers.eq("sev-1"),
                 org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new SeverityResponse("sev-1", "Low", "Low priority", true, 30, 480, 1800L, 28800L, Instant.now(), Instant.now()));
+                .thenReturn(new SeverityResponse("sev-1", "Low", "Low priority", true, 30, 480, 1800L, 28800L, FIXED_NOW, FIXED_NOW));
 
         mvc.perform(patch("/severities/sev-1/sla")
                         .contentType(MediaType.APPLICATION_JSON)
