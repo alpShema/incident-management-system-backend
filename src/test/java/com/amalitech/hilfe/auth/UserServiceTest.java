@@ -54,30 +54,30 @@ class UserServiceTest {
         ));
         when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), isNull(), eq(pageable))).thenReturn(page);
 
-        Page<UserRoleSummaryResponse> result = userService.getUsers(null, null, null, (String) null, pageable);
+        Page<UserRoleSummaryResponse> result = userService.getUsers(null, null, null, (Boolean) null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().roleCode()).isEqualTo("ADMIN");
     }
 
     @Test
-    void getUsers_activeStatusString_passesTrue() {
+    void getUsers_activeStatus_passesTrue() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
         when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), eq(true), eq(pageable))).thenReturn(page);
 
-        userService.getUsers(null, null, null, "Active", pageable);
+        userService.getUsers(null, null, null, true, pageable);
 
         verify(userRepository).findUserRoleSummariesUnified(null, null, null, true, pageable);
     }
 
     @Test
-    void getUsers_inactiveStatusString_passesFalse() {
+    void getUsers_inactiveStatus_passesFalse() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
         when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), isNull(), eq(false), eq(pageable))).thenReturn(page);
 
-        userService.getUsers(null, null, null, "INACTIVE", pageable);
+        userService.getUsers(null, null, null, false, pageable);
 
         verify(userRepository).findUserRoleSummariesUnified(null, null, null, false, pageable);
     }
@@ -88,7 +88,7 @@ class UserServiceTest {
         Page<UserRoleSummaryResponse> page = new PageImpl<>(List.of());
         when(userRepository.findUserRoleSummariesUnified(isNull(), isNull(), eq("LOC-ACCRA"), isNull(), eq(pageable))).thenReturn(page);
 
-        userService.getUsers(null, null, "LOC-ACCRA", (String) null, pageable);
+        userService.getUsers(null, null, "LOC-ACCRA", (Boolean) null, pageable);
 
         verify(userRepository).findUserRoleSummariesUnified(null, null, "LOC-ACCRA", null, pageable);
     }

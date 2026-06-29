@@ -45,7 +45,7 @@ public class UserController {
             @Parameter(description = "Keyword search across full name and email") @RequestParam(required = false) String query,
             @Parameter(description = "Filter by role code (e.g., CLIENT, AGENT, ADMIN, or custom roles)") @RequestParam(required = false) String roleCode,
             @Parameter(description = "Filter by office location ID (case-insensitive)") @RequestParam(required = false) String locationId,
-            @Parameter(description = "Filter by account status. Pass `active` for active users, `inactive` for inactive users (case-insensitive)") @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by account status. Pass `true` for active users, `false` for inactive users, or omit for all.") @RequestParam(required = false) Boolean status,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully",

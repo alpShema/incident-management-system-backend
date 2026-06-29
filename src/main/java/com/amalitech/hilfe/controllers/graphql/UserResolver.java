@@ -26,7 +26,7 @@ public class UserResolver {
             @Argument String query,
             @Argument String roleCode,
             @Argument String locationId,
-            @Argument String status,
+            @Argument Boolean status,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
                 userService.getUsers(query, roleCode, locationId, status, PageInput.toPageable(page))

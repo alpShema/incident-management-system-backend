@@ -778,7 +778,7 @@ type Query {
   messages(incidentId: ID!, page: PageInput): MessagePage
 
   # Users
-  users(query: String, roleCode: String, locationId: String, status: String, page: PageInput): UserPage
+  users(query: String, roleCode: String, locationId: String, status: Boolean, page: PageInput): UserPage
 
   # Roles & permissions
   roles(query: String, page: PageInput): RolePage
@@ -800,7 +800,7 @@ type Query {
 
   # Agent groups
   agentGroups(query: String, departmentId: String, page: PageInput): AgentGroupPage
-  allAgentGroups(status: String, query: String, departmentId: String, page: PageInput): AgentGroupPage
+  allAgentGroups(status: Boolean, query: String, departmentId: String, page: PageInput): AgentGroupPage
   agentGroup(id: ID!): AgentGroup
   agentGroupMembers(id: ID!): [AgentGroupMember!]
   agentGroupsByCategory(categoryId: ID!): [Lookup!]
