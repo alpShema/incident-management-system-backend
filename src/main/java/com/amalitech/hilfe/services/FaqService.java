@@ -6,7 +6,6 @@ import com.amalitech.hilfe.dto.FaqResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.exceptions.ServiceUnavailableException;
 import com.amalitech.hilfe.models.Faq;
 import com.amalitech.hilfe.repositories.FaqRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +34,7 @@ import java.util.UUID;
 public class FaqService {
 
     private final FaqRepository faqRepository;
-    private final EmbeddingService embeddingService;
+    private final FaqEmbeddingService faqEmbeddingService;
 
     @Transactional
     public FaqResponse createFaq(CreateFaqRequest request) {
@@ -93,6 +91,24 @@ public class FaqService {
         );
     }
 
+    public int reEmbedAll() {
+        List<Faq> faqs = faqRepository.findAllWithoutEmbedding();
+        log.info("Re-embed triggered | {} FAQs missing embeddings", faqs.size());
+        if (faqs.isEmpty()) return 0;
+        int succeeded = 0;
+        for (Faq faq : faqs) {
+            log.debug("Re-embedding FAQ {} | question=\"{}\"", faq.getId(), faq.getQuestion());
+            if (faqEmbeddingService.embedAndStore(faq)) {
+                succeeded++;
+                log.info("Re-embed OK | faqId={} | {}/{}", faq.getId(), succeeded, faqs.size());
+            } else {
+                log.warn("Re-embed FAILED | faqId={} | question=\"{}\"", faq.getId(), faq.getQuestion());
+            }
+        }
+        log.info("Re-embed complete | {}/{} succeeded", succeeded, faqs.size());
+        return succeeded;
+    }
+
     @Transactional
     public FaqBulkUploadResult bulkImport(MultipartFile file) {
         List<FaqBulkUploadResult.RowError> errors = new ArrayList<>();
@@ -141,7 +157,7 @@ public class FaqService {
                     .active(true)
                     .build();
             faq = faqRepository.save(faq);
-            embedAndStore(faq);
+            faqEmbeddingService.embedAndStore(faq);
             return 1;
         } catch (Exception e) {
             log.warn("Failed to create FAQ at row {}: {}", rowNumber, e.getMessage());
@@ -151,29 +167,21 @@ public class FaqService {
     }
 
     // Registers the embedding update to run after the current transaction commits,
-    // so a vector-store failure cannot roll back the FAQ save.
+    // so a vector-store failure cannot roll back the FAQ save. The actual embed call
+    // must go through an @Async proxy method (FaqEmbeddingService) — calling a
+    // @Transactional repository method directly inside afterCommit() on this thread
+    // binds to the original transaction's not-yet-unbound resources instead of
+    // opening a fresh one, causing "No active transaction" errors.
     private void scheduleEmbedAfterCommit(Faq faq) {
+        log.debug("Scheduling post-commit embed | faqId={} | syncActive={}",
+                faq.getId(), TransactionSynchronizationManager.isSynchronizationActive());
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                embedAndStore(faq);
+                log.debug("Post-commit embed firing | faqId={}", faq.getId());
+                faqEmbeddingService.embedAndStoreAsync(faq);
             }
         });
-    }
-
-    private void embedAndStore(Faq faq) {
-        try {
-            float[] vector = embeddingService.embed(faq.getQuestion() + " " + faq.getAnswer());
-            if (vector != null && vector.length > 0) {
-                String literal = EmbeddingService.toVectorLiteral(vector);
-                faqRepository.updateEmbedding(faq.getId(), literal);
-                log.debug("Embedding stored for FAQ {}", faq.getId());
-            } else {
-                log.debug("No embedding generated for FAQ {} (stub mode)", faq.getId());
-            }
-        } catch (ServiceUnavailableException | DataAccessException e) {
-            log.warn("Embedding unavailable for FAQ {} — saved without vector, semantic search will not match it: {}", faq.getId(), e.getMessage());
-        }
     }
 
     private Faq findOrThrow(String id) {

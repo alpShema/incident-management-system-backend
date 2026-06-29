@@ -2,6 +2,7 @@ package com.amalitech.hilfe.models;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.domain.Persistable;
 
 import java.time.Instant;
 
@@ -12,7 +13,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ChatbotInteraction {
+public class ChatbotInteraction implements Persistable<String> {
 
     @Id
     private String id;
@@ -42,6 +43,21 @@ public class ChatbotInteraction {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "faq_id", insertable = false, updatable = false)
     private Faq faq;
+
+    @Transient
+    @Builder.Default
+    private boolean isNew = true;
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    @PostLoad
+    @PostPersist
+    void markNotNew() {
+        this.isNew = false;
+    }
 
     @PrePersist
     protected void onCreate() {

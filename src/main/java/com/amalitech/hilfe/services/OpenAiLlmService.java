@@ -34,12 +34,13 @@ public class OpenAiLlmService implements LlmService {
 
     private static final String ANSWER_SYSTEM_PROMPT = """
             You are a helpful support assistant for a helpdesk system.
-            You must answer the user's question using ONLY the FAQ content provided below.
-            Do NOT generate information that is not explicitly present in the FAQ content.
-            Do NOT speculate, infer beyond what is written, or add your own knowledge.
+            Every fact in your answer must come from the FAQ content provided below.
+            Do NOT add information, speculate, or infer anything beyond what is written there.
+            Do NOT just copy the FAQ answer verbatim — rephrase it in your own words, in a \
+            friendly conversational tone, and address the user's specific wording of the question.
             If the FAQ content does not fully address the question, say so clearly and \
             suggest the user raise a support ticket.
-            Keep your answer concise, friendly, and directly relevant to how the user asked.
+            Keep your answer concise and directly relevant to how the user asked.
             """;
 
     private final RestClient restClient;
@@ -53,11 +54,13 @@ public class OpenAiLlmService implements LlmService {
                 .defaultHeader("Provider", amaliAiProps.provider())
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
                 .build();
-        log.info("OpenAiLlmService initialized — model={}, url={}", llmProps.model(), amaliAiProps.llmUrl());
+        log.info("OpenAiLlmService initialized — model={}, temperature={}, maxTokens={}, url={}",
+                llmProps.model(), llmProps.temperature(), llmProps.maxTokens(), amaliAiProps.llmUrl());
     }
 
     @Override
     public String rewriteQuery(String userQuery, List<String> recentTurns) {
+        log.debug("LLM rewrite | query=\"{}\" | historyTurns={}", userQuery, recentTurns.size());
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of(ROLE, "system", CONTENT, REWRITE_SYSTEM_PROMPT));
 
@@ -69,11 +72,13 @@ public class OpenAiLlmService implements LlmService {
             messages.add(Map.of(ROLE, "user", CONTENT, userQuery));
         }
 
-        return callChatCompletion(messages);
+        return callChatCompletion("rewrite", messages);
     }
 
     @Override
     public String generateAnswer(String userQuery, String faqQuestion, String faqAnswer, String conversationSummary) {
+        log.debug("LLM answer | query=\"{}\" | faqQuestion=\"{}\" | hasSummary={}",
+                userQuery, faqQuestion, conversationSummary != null && !conversationSummary.isBlank());
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of(ROLE, "system", CONTENT, ANSWER_SYSTEM_PROMPT));
 
@@ -88,13 +93,19 @@ public class OpenAiLlmService implements LlmService {
 
         messages.add(Map.of(ROLE, "user", CONTENT, userContent.toString()));
 
-        return callChatCompletion(messages);
+        return callChatCompletion("answer", messages);
     }
 
-    private String callChatCompletion(List<Map<String, String>> messages) {
+    private String callChatCompletion(String operation, List<Map<String, String>> messages) {
+        long start = System.currentTimeMillis();
         try {
             ChatResponse response = restClient.post()
-                    .body(Map.of("model", props.model(), "messages", messages))
+                    .body(Map.of(
+                            "model", props.model(),
+                            "messages", messages,
+                            "temperature", props.temperature(),
+                            "max_tokens", props.maxTokens()
+                    ))
                     .retrieve()
                     .body(ChatResponse.class);
 
@@ -103,11 +114,11 @@ public class OpenAiLlmService implements LlmService {
             }
 
             String content = response.choices().getFirst().message().content();
-            log.debug("LLM response received ({} chars)", content.length());
+            log.debug("LLM {} done | {}ms | {} chars | model={}", operation, System.currentTimeMillis() - start, content.length(), props.model());
             return content;
 
         } catch (RestClientException e) {
-            log.error("LLM API call failed: {}", e.getMessage());
+            log.error("LLM {} failed | {}ms | {}", operation, System.currentTimeMillis() - start, e.getMessage());
             throw new ServiceUnavailableException("LLM service is temporarily unavailable", e);
         }
     }
