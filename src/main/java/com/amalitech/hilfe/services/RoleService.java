@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RoleService {
     private static final Set<String> PROTECTED_ROLES = Set.of("CLIENT", "AGENT", "ADMIN", "SUPER_ADMIN");
+    private static final String ROLE_NOT_FOUND = "Role not found";
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -86,7 +87,7 @@ public class RoleService {
     public BulkAssignRoleResponse bulkAssignRole(String roleCode, BulkAssignRoleRequest request) {
         String normalizedCode = normalizeRoleCode(roleCode);
         Role role = roleRepository.findByCode(normalizedCode)
-                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
 
         List<String> userIds = request.userIds().stream()
                 .filter(Objects::nonNull)
@@ -117,7 +118,7 @@ public class RoleService {
     public RoleResponse updateRole(String roleCode, UpdateRoleRequest request) {
         String normalizedCode = normalizeRoleCode(roleCode);
         Role role = roleRepository.findByCode(normalizedCode)
-                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
 
         if (Boolean.TRUE.equals(role.getSystemDefined())) {
             throw new ArmsAuthException("System-defined roles cannot be modified", 403);
@@ -168,7 +169,7 @@ public class RoleService {
     public BulkAssignRoleResponse removeUsersFromRole(String roleCode, BulkAssignRoleRequest request) {
         String normalizedCode = normalizeRoleCode(roleCode);
         roleRepository.findByCode(normalizedCode)
-                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
 
         List<String> userIds = request.userIds().stream()
                 .filter(Objects::nonNull)
@@ -189,7 +190,7 @@ public class RoleService {
 
         List<User> toUpdate = users.stream()
                 .filter(u -> normalizedCode.equals(u.getRoleCode()))
-                .peek(u -> u.setRoleCode(null))
+                .map(u -> { u.setRoleCode(null); return u; })
                 .toList();
         userRepository.saveAll(toUpdate);
         return new BulkAssignRoleResponse(normalizedCode, toUpdate.size(), toUpdate.stream().map(User::getId).toList());
