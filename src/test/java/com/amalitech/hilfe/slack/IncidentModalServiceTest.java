@@ -36,6 +36,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class IncidentModalServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Mock SlackClient slackClient;
     @Mock SlackOAuthService oauthService;
     @Mock SlackAuditLogService auditLogService;
@@ -65,7 +67,7 @@ class IncidentModalServiceTest {
                 .slackUserId("U_SLACK_001")
                 .hilfeUserId("hilfe-user-1")
                 .slackTeamId("T_TEAM_001")
-                .connectedAt(Instant.now())
+                .connectedAt(FIXED_NOW)
                 .build();
 
         category = new IncidentCategory();
