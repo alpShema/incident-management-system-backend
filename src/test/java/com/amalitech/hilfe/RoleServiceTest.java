@@ -284,8 +284,9 @@ class RoleServiceTest {
     void updateRole_blankName_throws400() {
         Role r = role("r1", "CUSTOM", "Old Name");
         when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        var request = new UpdateRoleRequest("   ", null, null);
 
-        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", new UpdateRoleRequest("   ", null, null)))
+        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("must not be blank")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -297,8 +298,9 @@ class RoleServiceTest {
         Role r = role("r1", "CUSTOM", "Old Name");
         when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
         when(roleRepository.existsByNameIgnoreCaseAndCodeNot("Existing Name", "CUSTOM")).thenReturn(true);
+        var request = new UpdateRoleRequest("Existing Name", null, null);
 
-        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", new UpdateRoleRequest("Existing Name", null, null)))
+        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("Role name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -352,8 +354,9 @@ class RoleServiceTest {
         Role r = role("r1", "CUSTOM", "Name");
         when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
         when(permissionRepository.findByCodeIn(anyList())).thenReturn(List.of());
+        var request = new UpdateRoleRequest(null, null, List.of("bad.code"));
 
-        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", new UpdateRoleRequest(null, null, List.of("bad.code"))))
+        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("invalid")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -364,8 +367,9 @@ class RoleServiceTest {
     @Test
     void updateRole_roleNotFound_throws404() {
         when(roleRepository.findByCode("MISSING")).thenReturn(Optional.empty());
+        var request = new UpdateRoleRequest("Name", null, null);
 
-        assertThatThrownBy(() -> roleService.updateRole("MISSING", new UpdateRoleRequest("Name", null, null)))
+        assertThatThrownBy(() -> roleService.updateRole("MISSING", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -375,8 +379,9 @@ class RoleServiceTest {
     void updateRole_systemDefinedRole_throws403() {
         Role r = Role.builder().id("r1").code("ADMIN").name("Admin").systemDefined(true).build();
         when(roleRepository.findByCode("ADMIN")).thenReturn(Optional.of(r));
+        var request = new UpdateRoleRequest("New Admin", null, null);
 
-        assertThatThrownBy(() -> roleService.updateRole("ADMIN", new UpdateRoleRequest("New Admin", null, null)))
+        assertThatThrownBy(() -> roleService.updateRole("ADMIN", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("System-defined roles cannot be modified")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -419,8 +424,9 @@ class RoleServiceTest {
     @Test
     void removeUsersFromRole_roleNotFound_throws404() {
         when(roleRepository.findByCode("MISSING")).thenReturn(Optional.empty());
+        var request = new BulkAssignRoleRequest(List.of("u1"));
 
-        assertThatThrownBy(() -> roleService.removeUsersFromRole("MISSING", new BulkAssignRoleRequest(List.of("u1"))))
+        assertThatThrownBy(() -> roleService.removeUsersFromRole("MISSING", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -431,8 +437,9 @@ class RoleServiceTest {
         Role r = role("r1", "CUSTOM", "Custom");
         when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
         when(userRepository.findAllById(anyList())).thenReturn(List.of());
+        var request = new BulkAssignRoleRequest(List.of("u1", "u2"));
 
-        assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", new BulkAssignRoleRequest(List.of("u1", "u2"))))
+        assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("u1")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -444,8 +451,9 @@ class RoleServiceTest {
     void removeUsersFromRole_emptyUserIds_throws400() {
         Role r = role("r1", "CUSTOM", "Custom");
         when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        var request = new BulkAssignRoleRequest(List.of("  "));
 
-        assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", new BulkAssignRoleRequest(List.of("  "))))
+        assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("must not be empty")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())

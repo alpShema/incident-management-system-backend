@@ -76,8 +76,9 @@ class InternalNoteServiceTest {
     @Test
     void createNote_incidentNotFound_throws404() {
         when(incidentRepository.existsById("bad-inc")).thenReturn(false);
+        var request = new InternalNoteRequest("body");
 
-        assertThatThrownBy(() -> noteService.createNote("u1", "bad-inc", new InternalNoteRequest("body")))
+        assertThatThrownBy(() -> noteService.createNote("u1", "bad-inc", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("Incident not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -105,8 +106,9 @@ class InternalNoteServiceTest {
     @Test
     void listNotes_incidentNotFound_throws404() {
         when(incidentRepository.existsById("bad")).thenReturn(false);
+        var pageable = PageRequest.of(0, 20);
 
-        assertThatThrownBy(() -> noteService.listNotes("u1", "bad", PageRequest.of(0, 20)))
+        assertThatThrownBy(() -> noteService.listNotes("u1", "bad", pageable))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
@@ -151,8 +153,9 @@ class InternalNoteServiceTest {
     @Test
     void updateNote_noteNotFound_throws404() {
         when(noteRepository.findByIdWithAuthor("bad")).thenReturn(Optional.empty());
+        var request = new InternalNoteRequest("body");
 
-        assertThatThrownBy(() -> noteService.updateNote("u1", "inc-1", "bad", new InternalNoteRequest("body")))
+        assertThatThrownBy(() -> noteService.updateNote("u1", "inc-1", "bad", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("Note not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -163,8 +166,9 @@ class InternalNoteServiceTest {
     void updateNote_incidentMismatch_throws404() {
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
+        var request = new InternalNoteRequest("body");
 
-        assertThatThrownBy(() -> noteService.updateNote("u1", "other-inc", "n1", new InternalNoteRequest("body")))
+        assertThatThrownBy(() -> noteService.updateNote("u1", "other-inc", "n1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("Note not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -175,8 +179,9 @@ class InternalNoteServiceTest {
     void updateNote_notAuthor_throws403() {
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
+        var request = new InternalNoteRequest("body");
 
-        assertThatThrownBy(() -> noteService.updateNote("u2", "inc-1", "n1", new InternalNoteRequest("body")))
+        assertThatThrownBy(() -> noteService.updateNote("u2", "inc-1", "n1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("You can only edit your own notes")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
