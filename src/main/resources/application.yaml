@@ -241,3 +241,5 @@ embedding:
 # ──────────────────────────────────────────
 llm:
   model: ${LLM_MODEL:gpt-4o-mini}
+  temperature: ${LLM_TEMPERATURE:0.2}
+  max-tokens: ${LLM_MAX_TOKENS:512}

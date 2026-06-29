@@ -54,7 +54,8 @@ public class OpenAiLlmService implements LlmService {
                 .defaultHeader("Provider", amaliAiProps.provider())
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
                 .build();
-        log.info("OpenAiLlmService initialized — model={}, url={}", llmProps.model(), amaliAiProps.llmUrl());
+        log.info("OpenAiLlmService initialized — model={}, temperature={}, maxTokens={}, url={}",
+                llmProps.model(), llmProps.temperature(), llmProps.maxTokens(), amaliAiProps.llmUrl());
     }
 
     @Override
@@ -99,7 +100,12 @@ public class OpenAiLlmService implements LlmService {
         long start = System.currentTimeMillis();
         try {
             ChatResponse response = restClient.post()
-                    .body(Map.of("model", props.model(), "messages", messages))
+                    .body(Map.of(
+                            "model", props.model(),
+                            "messages", messages,
+                            "temperature", props.temperature(),
+                            "max_tokens", props.maxTokens()
+                    ))
                     .retrieve()
                     .body(ChatResponse.class);
 
