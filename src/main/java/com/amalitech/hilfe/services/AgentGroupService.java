@@ -44,12 +44,9 @@ public class AgentGroupService {
                 .map(this::toResponse);
     }
 
-    public Page<AgentGroupResponse> listAllAgentGroups(String status, String query, String departmentId, Pageable pageable) {
-        Boolean statusFilter = (status == null || status.isBlank() || status.equalsIgnoreCase("all"))
-                ? null
-                : resolveStatusFilter(status);
+    public Page<AgentGroupResponse> listAllAgentGroups(Boolean status, String query, String departmentId, Pageable pageable) {
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
-        return agentGroupRepository.listAllAgentGroups(statusFilter, queryPattern, departmentId, pageable)
+        return agentGroupRepository.listAllAgentGroups(status, queryPattern, departmentId, pageable)
                 .map(this::toResponse);
     }
 
@@ -60,12 +57,6 @@ public class AgentGroupService {
         return agentGroupRepository.findByDepartmentIdAndStatus(departmentId, true).stream()
                 .map(ag -> LookupResponse.from(ag.getId(), ag.getName()))
                 .toList();
-    }
-
-    private boolean resolveStatusFilter(String status) {
-        if (status.equalsIgnoreCase("active")) return true;
-        if (status.equalsIgnoreCase("deactivated")) return false;
-        throw new ArmsAuthException("Invalid status filter. Accepted values: active, deactivated, all", 400);
     }
 
     public AgentGroupResponse getAgentGroup(String id) {

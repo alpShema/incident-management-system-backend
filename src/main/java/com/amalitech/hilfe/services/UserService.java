@@ -31,7 +31,7 @@ public class UserService {
     private final ActivityLogService activityLogService;
 
     public Page<UserRoleSummaryResponse> getUsers(
-            String query, String roleCode, String locationId, String status,
+            String query, String roleCode, String locationId, Boolean status,
             Pageable pageable
     ) {
         String queryPattern = null;
@@ -43,15 +43,7 @@ public class UserService {
             queryPattern = "%" + escaped + "%";
         }
         Pageable resolvedPageable = remapSort(pageable);
-        Boolean statusFilter = null;
-        if (status != null && !status.isBlank()) {
-            statusFilter = switch (status.trim().toLowerCase()) {
-                case "active" -> true;
-                case "inactive" -> false;
-                default -> null;
-            };
-        }
-        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, statusFilter, resolvedPageable);
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, status, resolvedPageable);
     }
 
     @Transactional
