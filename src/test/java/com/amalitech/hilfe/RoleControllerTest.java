@@ -128,6 +128,75 @@ class RoleControllerTest {
     }
 
     @Test
+    void updateRole_withAdminAndPermission_returns200() throws Exception {
+        when(roleService.updateRole(eq("CUSTOM"), any(UpdateRoleRequest.class))).thenReturn(stubRole());
+
+        mvc.perform(patch("/roles/CUSTOM")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateRoleRequest("New Name", null, null)))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Role updated successfully"))
+                .andExpect(jsonPath("$.data.roleCode").value("CUSTOM"));
+    }
+
+    @Test
+    void updateRole_withoutRoleAuthority_returns403() throws Exception {
+        mvc.perform(patch("/roles/CUSTOM")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateRoleRequest("Name", null, null)))
+                        .with(authentication(clientAuth())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateRole_serviceThrows409_returns409() throws Exception {
+        when(roleService.updateRole(eq("CUSTOM"), any(UpdateRoleRequest.class)))
+                .thenThrow(new ArmsAuthException("Role name already exists", 409));
+
+        mvc.perform(patch("/roles/CUSTOM")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateRoleRequest("Duplicate", null, null)))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void updateRole_serviceThrows404_returns404() throws Exception {
+        when(roleService.updateRole(eq("MISSING"), any(UpdateRoleRequest.class)))
+                .thenThrow(new ArmsAuthException("Role not found", 404));
+
+        mvc.perform(patch("/roles/MISSING")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateRoleRequest("Name", null, null)))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void removeUsers_withAdminAndPermission_returns200() throws Exception {
+        when(roleService.removeUsersFromRole(eq("CUSTOM"), any(BulkAssignRoleRequest.class)))
+                .thenReturn(new BulkAssignRoleResponse("CUSTOM", 1, List.of("u1")));
+
+        mvc.perform(delete("/roles/CUSTOM/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new BulkAssignRoleRequest(List.of("u1"))))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Users removed from role successfully"))
+                .andExpect(jsonPath("$.data.updatedCount").value(1));
+    }
+
+    @Test
+    void removeUsers_withoutPermission_returns403() throws Exception {
+        mvc.perform(delete("/roles/CUSTOM/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new BulkAssignRoleRequest(List.of("u1"))))
+                        .with(authentication(clientAuth())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void createRole_serviceThrows409_returns409() throws Exception {
         when(roleService.createRole(any(CreateRoleRequest.class)))
                 .thenThrow(new ArmsAuthException("Role already exists", 409));
