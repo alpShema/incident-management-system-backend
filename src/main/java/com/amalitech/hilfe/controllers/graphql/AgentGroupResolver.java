@@ -38,7 +38,7 @@ public class AgentGroupResolver {
     @QueryMapping
     @PreAuthorize("hasAuthority('agent-group.read')")
     public PageResponse<AgentGroupResponse> allAgentGroups(
-            @Argument String status,
+            @Argument Boolean status,
             @Argument String query,
             @Argument String departmentId,
             @Argument PageInput page) {
