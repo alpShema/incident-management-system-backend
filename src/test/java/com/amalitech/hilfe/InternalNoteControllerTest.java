@@ -3,7 +3,6 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.controllers.InternalNoteController;
 import com.amalitech.hilfe.dto.InternalNoteRequest;
 import com.amalitech.hilfe.dto.InternalNoteResponse;
-import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
@@ -135,9 +134,6 @@ class InternalNoteControllerTest {
 
     @Test
     void listNotes_agentAuth_returns200WithPagination() throws Exception {
-        PageResponse<InternalNoteResponse> pageResponse = new PageResponse<>(
-                List.of(stubNote()), 0, 20, 1L, 1, false, false
-        );
         when(noteService.listNotes(anyString(), eq("inc-1"), any(Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(stubNote())));
 

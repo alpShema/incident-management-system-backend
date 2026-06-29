@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityLogService {
     private static final String SUBJECT_INCIDENT = "INCIDENT";
     private static final String UNKNOWN = "Unknown";
+    private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -342,7 +343,7 @@ public class ActivityLogService {
                     .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(actorName + " added an internal note on " + incidentLabel)
-                    .metadata("{\"noteId\":\"" + noteId + "\"}")
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log internal note creation for incident {}", incidentId, ex);
@@ -361,7 +362,7 @@ public class ActivityLogService {
                     .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(actorName + " updated an internal note on " + incidentLabel)
-                    .metadata("{\"noteId\":\"" + noteId + "\"}")
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log internal note update for incident {}", incidentId, ex);
@@ -380,7 +381,7 @@ public class ActivityLogService {
                     .subjectType(SUBJECT_INCIDENT)
                     .subjectId(incidentId)
                     .description(actorName + " deleted an internal note on " + incidentLabel)
-                    .metadata("{\"noteId\":\"" + noteId + "\"}")
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log internal note deletion for incident {}", incidentId, ex);
