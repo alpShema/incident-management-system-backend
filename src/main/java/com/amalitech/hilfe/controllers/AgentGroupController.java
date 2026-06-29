@@ -5,6 +5,7 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.AgentGroupService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -73,7 +74,7 @@ public class AgentGroupController {
     @GetMapping("/all")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_GROUP_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<AgentGroupResponse>>> listAllAgentGroups(
-            @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by status. Pass `true` for active, `false` for inactive, or omit for all.") @RequestParam(required = false) Boolean status,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String departmentId,
             Pageable pageable

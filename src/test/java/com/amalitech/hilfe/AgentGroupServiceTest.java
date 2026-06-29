@@ -403,7 +403,7 @@ class AgentGroupServiceTest {
         when(agentGroupMemberRepository.countByAgentGroupId(any())).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("all", null, null, Pageable.unpaged());
+        var result = agentGroupService.listAllAgentGroups(null, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).hasSize(2);
     }
@@ -417,7 +417,7 @@ class AgentGroupServiceTest {
         when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("active", null, null, Pageable.unpaged());
+        var result = agentGroupService.listAllAgentGroups(true, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().status()).isTrue();
@@ -432,7 +432,7 @@ class AgentGroupServiceTest {
         when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("deactivated", null, null, Pageable.unpaged());
+        var result = agentGroupService.listAllAgentGroups(false, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().status()).isFalse();
@@ -445,16 +445,6 @@ class AgentGroupServiceTest {
         var result = agentGroupService.listAllAgentGroups(null, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).isEmpty();
-    }
-
-    @Test
-    void listAllAgentGroups_invalidStatus_throws400() {
-        Pageable pageable = Pageable.unpaged();
-        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null, pageable))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Invalid status filter. Accepted values: active, deactivated, all")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
     }
 
     @Test
