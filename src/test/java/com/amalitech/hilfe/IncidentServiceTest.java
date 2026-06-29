@@ -1013,7 +1013,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationSeconds()).thenReturn(259200); // window = 72h, resolved 1h ago → within window
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE); // window = 72h, resolved 1h ago → within window
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
@@ -1185,7 +1185,7 @@ class IncidentServiceTest {
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
-        when(autoCloseService.readDurationSeconds()).thenReturn(259200);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
 
         UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-reopened", "");
         assertThatThrownBy(() ->
@@ -1475,7 +1475,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationSeconds()).thenReturn(259200);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
@@ -1501,7 +1501,7 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(inactiveAgent));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationSeconds()).thenReturn(259200);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
@@ -1528,7 +1528,7 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(inactiveAgent));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationSeconds()).thenReturn(259200);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
@@ -1551,7 +1551,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationSeconds()).thenReturn(259200);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",

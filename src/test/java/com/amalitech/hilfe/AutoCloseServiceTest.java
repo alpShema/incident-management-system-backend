@@ -34,7 +34,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AutoCloseServiceTest {
 
-    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+    @SuppressWarnings("java:S8692")
+    private static final Instant FIXED_NOW = Instant.now();
 
     @Mock SystemConfigRepository systemConfigRepository;
     @Mock IncidentRepository     incidentRepository;
