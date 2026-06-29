@@ -83,6 +83,8 @@ services:
       AMALI_AI_BASE_URL: ${AMALI_AI_BASE_URL}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
       APP_BASE_URL: ${APP_BASE_URL:-https://hilfe-pro-service.amalitech-dev.net}
     depends_on:
       db:
