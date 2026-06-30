@@ -200,6 +200,7 @@ slack:
   redirect-uri: ${SLACK_REDIRECT_URI:}
   frontend-connect-url: ${SLACK_FRONTEND_CONNECT_URL:}
   frontend-success-url: ${SLACK_FRONTEND_SUCCESS_URL:http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=true}
+  frontend-error-url: ${SLACK_FRONTEND_ERROR_URL:http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=false}
   app-id: ${SLACK_APP_ID:}
   notifications-enabled: ${SLACK_NOTIFICATIONS_ENABLED:false}
   agent-features-enabled: ${SLACK_AGENT_FEATURES_ENABLED:false}

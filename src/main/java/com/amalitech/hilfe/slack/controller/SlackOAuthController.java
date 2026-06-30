@@ -56,9 +56,7 @@ public class SlackOAuthController {
     ) {
         if (!oauthService.isValidState(state)) {
             log.warn("Invalid or expired OAuth state on authorize page: {}", state);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(buildErrorPage("Invalid or expired session. Please try connecting again from Slack."));
+            return errorRedirect("session_expired");
         }
 
         return ResponseEntity.ok()
@@ -99,9 +97,7 @@ public class SlackOAuthController {
         var oauthState = oauthService.validateAndConsumeState(state);
         if (oauthState.isEmpty()) {
             log.warn("OAuth callback: invalid or expired state={}", state);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(buildErrorPage("Invalid or expired session. Please try connecting again."));
+            return errorRedirect("session_expired");
         }
 
         log.info("OAuth state valid: slackUserId={} teamId={}",
@@ -125,9 +121,7 @@ public class SlackOAuthController {
 
             if (successUrl == null || successUrl.isBlank()) {
                 log.error("SLACK_FRONTEND_SUCCESS_URL is not configured — cannot redirect");
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .contentType(MediaType.TEXT_HTML)
-                        .body(buildErrorPage("Configuration error: success redirect URL is not set. Contact your administrator."));
+                return errorRedirect("config_error");
             }
 
             log.info("OAuth complete — redirecting slackUserId={} to {}", slackUserId, successUrl);
@@ -146,9 +140,7 @@ public class SlackOAuthController {
                     Map.of(ERROR_KEY, e.getMessage())
             );
 
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .contentType(MediaType.TEXT_HTML)
-                    .body(buildErrorPage("Authentication failed: " + e.getMessage()));
+            return errorRedirect("auth_failed");
         }
     }
 
@@ -258,32 +250,18 @@ public class SlackOAuthController {
                 """.formatted(state);
     }
 
-    private String buildErrorPage(String message) {
-        return """
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Connection Failed</title>
-                    <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
-                        .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
-                        h1 { color: #e01e5a; margin-bottom: 16px; }
-                        p { color: #666; margin-bottom: 24px; }
-                        .error { background: #fef2f2; color: #dc2626; padding: 12px; border-radius: 8px; margin-bottom: 24px; }
-                        .btn { display: inline-block; background: #4a154b; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; }
-                    </style>
-                </head>
-                <body>
-                    <div class="card">
-                        <h1>Connection Failed</h1>
-                        <div class="error">%s</div>
-                        <p>Please close this window and try again from Slack.</p>
-                        <a href="slack://open" class="btn">Return to Slack</a>
-                    </div>
-                </body>
-                </html>
-                """.formatted(message);
+    private ResponseEntity<String> errorRedirect(String reasonCode) {
+        String errorUrl = slackProperties.frontendErrorUrl();
+        if (errorUrl == null || errorUrl.isBlank()) {
+            log.error("SLACK_FRONTEND_ERROR_URL is not configured — cannot redirect. Reason: {}", reasonCode);
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body("Connection failed: " + reasonCode);
+        }
+        String separator = errorUrl.contains("?") ? "&" : "?";
+        String location = errorUrl + separator + "reason=" + reasonCode;
+        log.info("Redirecting to frontend error page: {}", location);
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.LOCATION, location)
+                .build();
     }
 }
