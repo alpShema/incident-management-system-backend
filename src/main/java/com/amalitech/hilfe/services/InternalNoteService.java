@@ -81,7 +81,7 @@ public class InternalNoteService {
             throw new ArmsAuthException(NOTE_NOT_FOUND, 404);
         }
         boolean isAuthor = note.getAuthorId().equals(userId);
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role);
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(role) || "ADMIN_AGENT".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role);
         if (!isAuthor && !isAdmin) {
             throw new ArmsAuthException("You can only delete your own notes", 403);
         }

@@ -238,6 +238,21 @@ class RoleServiceTest {
     }
 
     @Test
+    void bulkAssignRole_adminAgentRole_createsAgentRecordForNewUser() {
+        Role r = role("r1", "ADMIN_AGENT", "Admin Agent");
+        User user = User.builder().id("u1").fullName("Bob").build();
+        when(roleRepository.findByCode("ADMIN_AGENT")).thenReturn(Optional.of(r));
+        when(userRepository.findAllById(anyList())).thenReturn(List.of(user));
+        when(userRepository.saveAll(anyList())).thenReturn(List.of(user));
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
+        when(agentRepository.save(any(Agent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        roleService.bulkAssignRole("ADMIN_AGENT", new BulkAssignRoleRequest(List.of("u1")));
+
+        verify(agentRepository).save(argThat(a -> "u1".equals(a.getUserId()) && Boolean.TRUE.equals(a.getStatus())));
+    }
+
+    @Test
     void bulkAssignRole_agentRoleExistingAgent_doesNotCreateDuplicate() {
         Role r = role("r1", "AGENT", "Agent");
         User user = User.builder().id("u1").fullName("Bob").build();
