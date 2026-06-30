@@ -85,6 +85,8 @@ public class AdminService {
     }
 
     private boolean isAdmin(String roleCode) {
-        return "ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
+        return "ADMIN".equalsIgnoreCase(roleCode)
+                || "ADMIN_AGENT".equalsIgnoreCase(roleCode)
+                || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
     }
 }
