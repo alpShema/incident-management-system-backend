@@ -19,9 +19,12 @@ public interface FaqRepository extends JpaRepository<Faq, String> {
     @Query("""
             SELECT f FROM Faq f
             WHERE (:active IS NULL OR f.active = :active)
+            AND (:search IS NULL OR LOWER(f.question) LIKE LOWER(CONCAT('%', :search, '%'))
+                                 OR LOWER(f.answer)   LIKE LOWER(CONCAT('%', :search, '%')))
             """)
     Page<Faq> findAllFiltered(
             @Param("active") Boolean active,
+            @Param("search") String search,
             Pageable pageable
     );
 
