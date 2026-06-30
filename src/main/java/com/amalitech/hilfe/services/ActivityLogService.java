@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityLogService {
     private static final String SUBJECT_INCIDENT = "INCIDENT";
     private static final String UNKNOWN = "Unknown";
+    private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -327,6 +328,63 @@ public class ActivityLogService {
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log status change for agent group {}", agentGroupId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logInternalNoteCreated(String actorUserId, String incidentId, String noteId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INTERNAL_NOTE_CREATED")
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " added an internal note on " + incidentLabel)
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log internal note creation for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logInternalNoteUpdated(String actorUserId, String incidentId, String noteId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INTERNAL_NOTE_UPDATED")
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " updated an internal note on " + incidentLabel)
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log internal note update for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logInternalNoteDeleted(String actorUserId, String incidentId, String noteId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INTERNAL_NOTE_DELETED")
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " deleted an internal note on " + incidentLabel)
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log internal note deletion for incident {}", incidentId, ex);
         }
     }
 

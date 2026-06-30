@@ -15,6 +15,7 @@ public interface RoleRepository extends JpaRepository<Role, String> {
     Optional<Role> findByCode(String code);
     boolean existsByCode(String code);
     boolean existsByNameIgnoreCase(String name);
+    boolean existsByNameIgnoreCaseAndCodeNot(String name, String code);
 
     @Query("""
             SELECT r FROM Role r
