@@ -134,6 +134,6 @@ public interface UserRepository extends JpaRepository<User, String> {
             @Param("locationId") String locationId
     );
 
-    @Query("SELECT u.id FROM User u WHERE u.roleCode IN ('ADMIN', 'SUPER_ADMIN') AND u.status = true")
+    @Query("SELECT u.id FROM User u WHERE u.roleCode IN ('ADMIN', 'ADMIN_AGENT', 'SUPER_ADMIN') AND u.status = true")
     java.util.List<String> findActiveAdminUserIds();
 }
