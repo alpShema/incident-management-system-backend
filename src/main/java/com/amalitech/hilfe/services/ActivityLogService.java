@@ -76,7 +76,7 @@ public class ActivityLogService {
     }
 
     private void enforceIncidentAccess(String userId, String roleCode, Incident incident) {
-        if ("ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) return;
+        if ("ADMIN".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) return;
         if (userId.equals(incident.getUserId())) return;
         if ("AGENT".equalsIgnoreCase(roleCode)) {
             boolean isAssignee = agentRepository.findByUserId(userId)

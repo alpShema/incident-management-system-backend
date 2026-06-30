@@ -516,6 +516,6 @@ public class IncidentModalService {
 
     private boolean isAgent(User user) {
         String roleCode = user.getRoleCode();
-        return "AGENT".equalsIgnoreCase(roleCode) || "ADMIN".equalsIgnoreCase(roleCode);
+        return "AGENT".equalsIgnoreCase(roleCode) || "ADMIN".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
     }
 }

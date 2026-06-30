@@ -85,7 +85,7 @@ public class UserService {
     @Transactional
     public UserRoleSummaryResponse updateUserStatus(String actorUserId, RoleCode actorRole, String targetUserId, boolean status) {
         boolean isSelf = actorUserId.equals(targetUserId);
-        boolean isAdmin = actorRole == RoleCode.ADMIN || actorRole == RoleCode.SUPER_ADMIN;
+        boolean isAdmin = actorRole == RoleCode.ADMIN || actorRole == RoleCode.ADMIN_AGENT || actorRole == RoleCode.SUPER_ADMIN;
 
         if (!isSelf && !isAdmin) {
             throw new ArmsAuthException("You can only update your own status", 403);
@@ -153,7 +153,8 @@ public class UserService {
     }
 
     private void ensureAgentRecord(User user, String roleCode) {
-        if (!"AGENT".equalsIgnoreCase(roleCode) || agentRepository.findByUserId(user.getId()).isPresent()) {
+        boolean needsAgentRecord = "AGENT".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
+        if (!needsAgentRecord || agentRepository.findByUserId(user.getId()).isPresent()) {
             return;
         }
 
