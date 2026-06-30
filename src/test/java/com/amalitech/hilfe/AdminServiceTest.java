@@ -140,6 +140,34 @@ class AdminServiceTest {
         assertThat(result).isNotNull();
     }
 
+    @Test
+    void grantAgentAccess_adminAgentRole_isAllowed() {
+        var adminAgent = User.builder().id("user-1").email("aa@test.com").fullName("Admin Agent User").roleCode(RoleCode.ADMIN_AGENT).build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(adminAgent));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+        when(agentRepository.findByUserIdWithUser("user-1")).thenReturn(Optional.of(agentWithUser(true)));
+
+        var result = adminService.grantAgentAccess("user-1");
+
+        verify(agentRepository).save(any(Agent.class));
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void revokeAgentAccess_adminAgentRole_isAllowed() {
+        var adminAgent = User.builder().id("user-1").email("aa@test.com").fullName("Admin Agent User").roleCode(RoleCode.ADMIN_AGENT).build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(adminAgent));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agentWithUser(true)));
+        when(agentRepository.findByUserIdWithUser("user-1")).thenReturn(Optional.of(agentWithUser(false)));
+
+        var result = adminService.revokeAgentAccess("user-1");
+
+        var captor = ArgumentCaptor.forClass(Agent.class);
+        verify(agentRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isFalse();
+        assertThat(result.status()).isFalse();
+    }
+
     // ── revokeAgentAccess ─────────────────────────────────────────────────────
 
     @Test

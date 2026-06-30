@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class RoleService {
-    private static final Set<String> PROTECTED_ROLES = Set.of("CLIENT", "AGENT", "ADMIN", "SUPER_ADMIN");
+    private static final Set<String> PROTECTED_ROLES = Set.of("CLIENT", "AGENT", "ADMIN", "ADMIN_AGENT", "SUPER_ADMIN");
     private static final String ROLE_NOT_FOUND = "Role not found";
 
     private final RoleRepository roleRepository;
@@ -271,7 +271,8 @@ public class RoleService {
     }
 
     private void ensureAgentRecordIfNeeded(User user, String roleCode) {
-        if (!"AGENT".equalsIgnoreCase(roleCode)) {
+        boolean needsAgentRecord = "AGENT".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
+        if (!needsAgentRecord) {
             return;
         }
         if (agentRepository.findByUserId(user.getId()).isPresent()) {

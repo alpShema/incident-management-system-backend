@@ -29,6 +29,7 @@ public class IncidentService {
     private static final String ROLE_AGENT = "AGENT";
     private static final String ROLE_CLIENT = "CLIENT";
     private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_ADMIN_AGENT = "ADMIN_AGENT";
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     private static final String SORT_CREATED_AT = "createdAt";
     private static final String SORT_UPDATED_AT = "updatedAt";
@@ -323,7 +324,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
 
         String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
-        boolean isAdmin = ROLE_ADMIN.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole);
+        boolean isAdmin = ROLE_ADMIN.equals(normalizedRole) || ROLE_ADMIN_AGENT.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole);
         if (!isAdmin) {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
             if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
@@ -414,7 +415,7 @@ public class IncidentService {
     }
 
     private void enforceAccess(String userId, String roleCode, Incident incident) {
-        if (ROLE_ADMIN.equalsIgnoreCase(roleCode) || ROLE_SUPER_ADMIN.equalsIgnoreCase(roleCode)) {
+        if (ROLE_ADMIN.equalsIgnoreCase(roleCode) || ROLE_ADMIN_AGENT.equalsIgnoreCase(roleCode) || ROLE_SUPER_ADMIN.equalsIgnoreCase(roleCode)) {
             return;
         }
         if (userId.equals(incident.getUserId())) {
@@ -661,7 +662,7 @@ public class IncidentService {
         }
 
         // Admins and super-admins may force-close any incident regardless of current status
-        if ((ROLE_ADMIN.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole)) && STATUS_CLOSED.equals(toId)) {
+        if ((ROLE_ADMIN.equals(normalizedRole) || ROLE_ADMIN_AGENT.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole)) && STATUS_CLOSED.equals(toId)) {
             return;
         }
 
@@ -669,7 +670,9 @@ public class IncidentService {
         // regardless of their base role. A creator agent loses agent-only transitions
         // (e.g. Pending, Resolved) and gains client-only transitions (e.g. Closed, Reopened).
         boolean isCreator = actorUserId != null && actorUserId.equals(incident.getUserId());
-        String effectiveRole = isCreator ? ROLE_CLIENT : normalizedRole;
+        // ADMIN_AGENT performs agent-level status transitions the same way a standard agent does
+        String normalizedForTransition = ROLE_ADMIN_AGENT.equals(normalizedRole) ? ROLE_AGENT : normalizedRole;
+        String effectiveRole = isCreator ? ROLE_CLIENT : normalizedForTransition;
 
         Map<String, Set<String>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
 
