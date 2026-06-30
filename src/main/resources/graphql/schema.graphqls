@@ -835,6 +835,9 @@ type Query {
   allAgents(departmentId: String, query: String, page: PageInput): AgentPage
   myAgentStatus: Agent
 
+  # Admins
+  adminAgentAccess(userId: ID!): Agent
+
   # Agent groups
   agentGroups(query: String, departmentId: String, page: PageInput): AgentGroupPage
   allAgentGroups(status: Boolean, query: String, departmentId: String, page: PageInput): AgentGroupPage
@@ -938,6 +941,10 @@ type Mutation {
   # Agents
   updateMyAgentStatus(input: UpdateAvailabilityInput!): Agent
   updateAgentStatus(agentId: ID!, input: UpdateAvailabilityInput!): Agent
+
+  # Admins
+  grantAdminAgentAccess(userId: ID!): Agent
+  revokeAdminAgentAccess(userId: ID!): Agent
 
   # Agent groups
   createAgentGroup(input: AgentGroupInput!): AgentGroup
