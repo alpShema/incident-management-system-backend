@@ -78,6 +78,7 @@ services:
       SLACK_REDIRECT_URI: ${SLACK_REDIRECT_URI}
       SLACK_FRONTEND_CONNECT_URL: ${SLACK_FRONTEND_CONNECT_URL}
       SLACK_FRONTEND_SUCCESS_URL: ${SLACK_FRONTEND_SUCCESS_URL:-http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=true}
+      SLACK_FRONTEND_ERROR_URL: ${SLACK_FRONTEND_ERROR_URL:-http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=false}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       AMALI_AI_API_KEY: ${AMALI_AI_API_KEY}
       AMALI_AI_BASE_URL: ${AMALI_AI_BASE_URL}
