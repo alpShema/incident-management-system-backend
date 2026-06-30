@@ -54,7 +54,7 @@ public class UserController {
 
     @Operation(
         summary = "Update a user's role",
-        description = "Assigns a new role to the specified user. Valid roles: CLIENT, AGENT, ADMIN, SUPER_ADMIN. Requires `rbac.user.role.update` permission."
+        description = "Assigns a new role to the specified user. Valid roles: CLIENT, AGENT, ADMIN, ADMIN_AGENT, SUPER_ADMIN. Requires `rbac.user.role.update` permission."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Role updated")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid role value")
