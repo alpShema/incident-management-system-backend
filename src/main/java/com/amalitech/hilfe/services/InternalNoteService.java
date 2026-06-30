@@ -20,6 +20,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InternalNoteService {
 
+    private static final String NOTE_NOT_FOUND = NOTE_NOT_FOUND;
+
     private final InternalNoteRepository noteRepository;
     private final IncidentRepository incidentRepository;
     private final ActivityLogService activityLogService;
@@ -42,7 +44,7 @@ public class InternalNoteService {
         entityManager.flush();
         entityManager.detach(saved);
         InternalNote note = noteRepository.findByIdWithAuthor(noteId)
-                .orElseThrow(() -> new ArmsAuthException("Note not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(NOTE_NOT_FOUND, 404));
         activityLogService.logInternalNoteCreated(userId, incidentId, noteId);
         return toResponse(note, userId);
     }
@@ -58,9 +60,9 @@ public class InternalNoteService {
     @Transactional
     public InternalNoteResponse updateNote(String userId, String incidentId, String noteId, InternalNoteRequest request) {
         InternalNote note = noteRepository.findByIdWithAuthor(noteId)
-                .orElseThrow(() -> new ArmsAuthException("Note not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(NOTE_NOT_FOUND, 404));
         if (!note.getIncidentId().equals(incidentId)) {
-            throw new ArmsAuthException("Note not found", 404);
+            throw new ArmsAuthException(NOTE_NOT_FOUND, 404);
         }
         if (!note.getAuthorId().equals(userId)) {
             throw new ArmsAuthException("You can only edit your own notes", 403);
@@ -74,9 +76,9 @@ public class InternalNoteService {
     @Transactional
     public void deleteNote(String userId, String role, String incidentId, String noteId) {
         InternalNote note = noteRepository.findByIdWithAuthor(noteId)
-                .orElseThrow(() -> new ArmsAuthException("Note not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(NOTE_NOT_FOUND, 404));
         if (!note.getIncidentId().equals(incidentId)) {
-            throw new ArmsAuthException("Note not found", 404);
+            throw new ArmsAuthException(NOTE_NOT_FOUND, 404);
         }
         boolean isAuthor = note.getAuthorId().equals(userId);
         boolean isAdmin = "ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role);
