@@ -7,6 +7,7 @@ import com.amalitech.hilfe.models.InternalNote;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.InternalNoteRepository;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,19 +23,27 @@ public class InternalNoteService {
     private final InternalNoteRepository noteRepository;
     private final IncidentRepository incidentRepository;
     private final ActivityLogService activityLogService;
+    private final EntityManager entityManager;
 
     @Transactional
     public InternalNoteResponse createNote(String userId, String incidentId, InternalNoteRequest request) {
         if (!incidentRepository.existsById(incidentId)) {
             throw new ArmsAuthException("Incident not found", 404);
         }
-        InternalNote note = noteRepository.save(InternalNote.builder()
-                .id(UUID.randomUUID().toString())
+        String noteId = UUID.randomUUID().toString();
+        InternalNote saved = noteRepository.save(InternalNote.builder()
+                .id(noteId)
                 .incidentId(incidentId)
                 .authorId(userId)
                 .body(request.body().trim())
                 .build());
-        activityLogService.logInternalNoteCreated(userId, incidentId, note.getId());
+        // flush + detach so the subsequent JOIN FETCH query hits the DB instead of returning
+        // the 1st-level cached entity (which has author=null on a freshly built object)
+        entityManager.flush();
+        entityManager.detach(saved);
+        InternalNote note = noteRepository.findByIdWithAuthor(noteId)
+                .orElseThrow(() -> new ArmsAuthException("Note not found", 404));
+        activityLogService.logInternalNoteCreated(userId, incidentId, noteId);
         return toResponse(note, userId);
     }
 
