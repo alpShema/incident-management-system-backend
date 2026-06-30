@@ -147,6 +147,30 @@ type MessagePage {
 }
 
 # ──────────────────────────────────────
+# INTERNAL NOTES
+# ──────────────────────────────────────
+
+type InternalNote {
+  id: ID!
+  incidentId: ID!
+  body: String!
+  author: MessageSender
+  isOwner: Boolean!
+  createdAt: Instant!
+  updatedAt: Instant!
+}
+
+type InternalNotePage {
+  items: [InternalNote!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
 # USERS
 # ──────────────────────────────────────
 
@@ -648,6 +672,16 @@ input BulkAssignRoleInput {
   userIds: [String!]!
 }
 
+input UpdateRoleInput {
+  name: String
+  description: String
+  permissionCodes: [String!]
+}
+
+input InternalNoteInput {
+  body: String!
+}
+
 input ChatbotQueryInput {
   query: String!
 }
@@ -777,6 +811,9 @@ type Query {
   # Messages
   messages(incidentId: ID!, page: PageInput): MessagePage
 
+  # Internal Notes
+  listInternalNotes(incidentId: ID!, page: PageInput): InternalNotePage
+
   # Users
   users(query: String, roleCode: String, locationId: String, status: Boolean, page: PageInput): UserPage
 
@@ -865,6 +902,11 @@ type Mutation {
   deleteMessage(incidentId: ID!, messageId: ID!): Boolean
   generateMessagePresignedUrl(incidentId: ID!, input: PresignedUrlInput!): PresignedUrl
 
+  # Internal Notes
+  createInternalNote(incidentId: ID!, input: InternalNoteInput!): InternalNote
+  updateInternalNote(incidentId: ID!, noteId: ID!, input: InternalNoteInput!): InternalNote
+  deleteInternalNote(incidentId: ID!, noteId: ID!): Boolean
+
   # Users
   updateUserRole(userId: ID!, input: UpdateUserRoleInput!): UserSummary
   updateUserStatus(userId: ID!, input: UpdateUserStatusInput!): UserSummary
@@ -872,6 +914,8 @@ type Mutation {
   # Roles
   createRole(input: CreateRoleInput!): Role
   bulkAssignRole(roleCode: String!, input: BulkAssignRoleInput!): BulkAssignResult
+  updateRole(roleCode: String!, input: UpdateRoleInput!): Role
+  removeRoleUsers(roleCode: String!, input: BulkAssignRoleInput!): BulkAssignResult
 
   # Chatbot
   chatbotQuery(input: ChatbotQueryInput!): ChatbotResult
