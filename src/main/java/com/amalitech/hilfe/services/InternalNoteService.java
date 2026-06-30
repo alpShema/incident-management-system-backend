@@ -20,7 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InternalNoteService {
 
-    private static final String NOTE_NOT_FOUND = NOTE_NOT_FOUND;
+    private static final String NOTE_NOT_FOUND = "Note not found";
 
     private final InternalNoteRepository noteRepository;
     private final IncidentRepository incidentRepository;

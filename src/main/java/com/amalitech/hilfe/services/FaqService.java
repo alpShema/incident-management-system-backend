@@ -86,9 +86,10 @@ public class FaqService {
     }
 
     public PageResponse<FaqResponse> listFaqs(Boolean active, String search, Pageable pageable) {
-        String normalizedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchPattern = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%" : null;
         return PageResponse.from(
-                faqRepository.findAllFiltered(active, normalizedSearch, pageable).map(FaqResponse::from)
+                faqRepository.findAllFiltered(active, searchPattern, pageable).map(FaqResponse::from)
         );
     }
 
