@@ -6,6 +6,8 @@ INSERT INTO role_permissions (role_code, permission_id)
 SELECT 'ADMIN_AGENT', p.id
 FROM permissions p
 WHERE p.code IN (
+    'incident.create',
+    'incident.read.own',
     'incident.read.assigned',
     'incident.assign',
     'incident.status.change',
@@ -14,6 +16,7 @@ WHERE p.code IN (
     'agent.read',
     'agent.update',
     'agent.delete',
+    'admin.availability.update',
     'agent.availability.update',
     'agent.availability.update.any',
     'agent-group.read',
@@ -33,6 +36,9 @@ WHERE p.code IN (
     'location.create',
     'location.update',
     'location.delete',
+    'incident-category.create',
+    'incident-category.update',
+    'incident-category.delete',
     'incident-type.create',
     'incident-type.update',
     'incident-type.delete',
