@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -155,8 +154,8 @@ public class JwtTokenService implements TokenService {
                 .audience().add(jwtAudience).and()
                 .claim(CLAIM_EMAIL, user.getEmail())
                 .claim(CLAIM_TYPE, type)
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(expiry));
+                .issuedAt(now)
+                .expiration(expiry);
 
         if (TOKEN_TYPE_REFRESH.equals(type)) {
             builder.id(UUID.randomUUID().toString());
