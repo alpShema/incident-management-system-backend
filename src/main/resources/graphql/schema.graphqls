@@ -851,7 +851,7 @@ type Query {
   incidentTopics(categoryId: String, departmentId: String, agentGroupId: String, status: Boolean, query: String, page: PageInput): IncidentTopicPage
 
   # FAQs
-  faqs(active: Boolean, page: PageInput): FaqPage
+  faqs(active: Boolean, search: String, page: PageInput): FaqPage
   faq(id: ID!): Faq
 
   # Severities

@@ -20,8 +20,8 @@ public class FaqResolver {
 
     @QueryMapping
     @PreAuthorize("hasAuthority('faq.read')")
-    public PageResponse<FaqResponse> faqs(@Argument Boolean active, @Argument PageInput page) {
-        return faqService.listFaqs(active, PageInput.toPageable(page));
+    public PageResponse<FaqResponse> faqs(@Argument Boolean active, @Argument String search, @Argument PageInput page) {
+        return faqService.listFaqs(active, search, PageInput.toPageable(page));
     }
 
     @QueryMapping
