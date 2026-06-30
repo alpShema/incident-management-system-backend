@@ -12,6 +12,7 @@ public final class RbacPermissions {
     public static final String AGENT_CREATE = "agent.create";
     public static final String AGENT_READ = "agent.read";
     public static final String AGENT_UPDATE = "agent.update";
+    public static final String ADMIN_AVAILABILITY_UPDATE = "admin.availability.update";
     public static final String AGENT_AVAILABILITY_UPDATE = "agent.availability.update";
     public static final String AGENT_AVAILABILITY_UPDATE_ANY = "agent.availability.update.any";
     public static final String AGENT_DELETE = "agent.delete";
@@ -119,6 +120,8 @@ public final class RbacPermissions {
     );
 
     public static final List<String> ADMIN_AGENT_DEFAULTS = List.of(
+            INCIDENT_CREATE,
+            INCIDENT_READ_OWN,
             INCIDENT_READ_ASSIGNED,
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
@@ -127,6 +130,7 @@ public final class RbacPermissions {
             AGENT_READ,
             AGENT_UPDATE,
             AGENT_DELETE,
+            ADMIN_AVAILABILITY_UPDATE,
             AGENT_AVAILABILITY_UPDATE,
             AGENT_AVAILABILITY_UPDATE_ANY,
             AGENT_GROUP_READ,
@@ -146,6 +150,9 @@ public final class RbacPermissions {
             LOCATION_CREATE,
             LOCATION_UPDATE,
             LOCATION_DELETE,
+            INCIDENT_CATEGORY_CREATE,
+            INCIDENT_CATEGORY_UPDATE,
+            INCIDENT_CATEGORY_DELETE,
             INCIDENT_TYPE_CREATE,
             INCIDENT_TYPE_UPDATE,
             INCIDENT_TYPE_DELETE,
