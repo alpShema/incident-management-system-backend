@@ -38,11 +38,12 @@ public class FaqController {
     @Operation(summary = "List FAQs", description = "Paginated, filterable list of all FAQ entries")
     public ResponseEntity<ApiResponse<PageResponse<FaqResponse>>> listFaqs(
             @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(ApiResponse.success("FAQs retrieved", faqService.listFaqs(active, pageable)));
+        return ResponseEntity.ok(ApiResponse.success("FAQs retrieved", faqService.listFaqs(active, search, pageable)));
     }
 
     @GetMapping("/{id}")
