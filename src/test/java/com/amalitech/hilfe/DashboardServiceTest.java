@@ -224,10 +224,10 @@ class DashboardServiceTest {
 
     @Test
     void getStats_adminAgentRole_callsCountByStatusGlobal() {
-        when(incidentRepository.countByStatusGlobal()).thenReturn(List.<Object[]>of(
-                new Object[]{"Open", 4L},
-                new Object[]{"Closed", 2L}
-        ));
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 4L});
+        statusData.add(new Object[]{"Closed", 2L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
 
         DashboardStats stats = dashboardService.getStats("aa-1", RoleCode.ADMIN_AGENT);
 
@@ -237,7 +237,9 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_adminAgentRole_returnsAllIncidentsTrendSeries() {
-        when(incidentRepository.countByStatusGlobal()).thenReturn(List.<Object[]>of(new Object[]{"Open", 2L}));
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 2L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
         when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
 
         DashboardCharts charts = dashboardService.getCharts("aa-1", RoleCode.ADMIN_AGENT, null);
