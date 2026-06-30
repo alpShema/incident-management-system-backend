@@ -186,7 +186,7 @@ public class MessageService {
     }
 
     private void enforceAccess(String userId, String role, Incident incident) {
-        if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
+        if ("ADMIN".equalsIgnoreCase(role) || "ADMIN_AGENT".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
         if (userId.equals(incident.getUserId())) return;
         if (ROLE_AGENT.equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
         if (ROLE_AGENT.equalsIgnoreCase(role) && isSameDepartment(userId, incident)) return;
@@ -194,7 +194,7 @@ public class MessageService {
     }
 
     private void enforceSendAccess(String userId, String role, Incident incident) {
-        if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
+        if ("ADMIN".equalsIgnoreCase(role) || "ADMIN_AGENT".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
         if (userId.equals(incident.getUserId())) return;
         if (ROLE_AGENT.equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
         throw new ArmsAuthException("You do not have access to this incident", 403);

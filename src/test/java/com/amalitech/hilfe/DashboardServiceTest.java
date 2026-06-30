@@ -222,6 +222,46 @@ class DashboardServiceTest {
         assertThat(result.getTotalElements()).isZero();
     }
 
+    @Test
+    void getStats_adminAgentRole_callsCountByStatusGlobal() {
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 4L});
+        statusData.add(new Object[]{"Closed", 2L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
+
+        DashboardStats stats = dashboardService.getStats("aa-1", RoleCode.ADMIN_AGENT);
+
+        assertThat(stats.totalIncidents()).isEqualTo(6L);
+        verify(incidentRepository).countByStatusGlobal();
+    }
+
+    @Test
+    void getCharts_adminAgentRole_returnsAllIncidentsTrendSeries() {
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 2L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
+        when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("aa-1", RoleCode.ADMIN_AGENT, null);
+
+        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends().get(0).label()).isEqualTo("All Incidents");
+    }
+
+    @Test
+    void getIncidents_adminAgentRole_callsFindAllUnified() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
+
+        Page<IncidentResponse> result = dashboardService.getIncidents(
+                "aa-1", RoleCode.ADMIN_AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
+
+        assertThat(result).isNotNull();
+        verify(incidentRepository).findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
+    }
+
     // ── getMyIncidents ────────────────────────────────────────────────────────
 
     @Test
