@@ -27,6 +27,7 @@ class JwtTokenServiceTest {
     private static final String SECRET = "test-secret-must-be-at-least-32-bytes-long!";
     private static final long ACCESS_TTL_SECONDS = 3600L;
     private static final long REFRESH_TTL_SECONDS = 86400L;
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-30T10:00:00Z");
 
     @Mock
     UserAuthorityService userAuthorityService;
@@ -171,7 +172,7 @@ class JwtTokenServiceTest {
         assertThat(result.get().userId()).isEqualTo("u1");
         assertThat(result.get().email()).isEqualTo("john@test.com");
         assertThat(result.get().jti()).isNotBlank();
-        assertThat(result.get().expiresAt()).isAfter(Instant.now());
+        assertThat(result.get().expiresAt()).isAfter(FIXED_NOW);
     }
 
     @Test

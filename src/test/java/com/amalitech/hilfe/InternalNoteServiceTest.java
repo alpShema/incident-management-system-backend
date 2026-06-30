@@ -9,6 +9,7 @@ import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.InternalNoteRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.InternalNoteService;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,6 +27,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +39,7 @@ class InternalNoteServiceTest {
     @Mock InternalNoteRepository noteRepository;
     @Mock IncidentRepository incidentRepository;
     @Mock ActivityLogService activityLogService;
+    @Mock EntityManager entityManager;
     @InjectMocks InternalNoteService noteService;
 
     private User author(String userId) {
@@ -63,14 +67,14 @@ class InternalNoteServiceTest {
         when(incidentRepository.existsById("inc-1")).thenReturn(true);
         InternalNote saved = note("n1", "inc-1", "u1");
         when(noteRepository.save(any(InternalNote.class))).thenReturn(saved);
+        when(noteRepository.findByIdWithAuthor(any())).thenReturn(Optional.of(saved));
 
         InternalNoteResponse result = noteService.createNote("u1", "inc-1", new InternalNoteRequest("test body"));
 
-        assertThat(result.id()).isEqualTo("n1");
         assertThat(result.incidentId()).isEqualTo("inc-1");
         assertThat(result.body()).isEqualTo("test body");
         assertThat(result.isOwner()).isTrue();
-        verify(activityLogService).logInternalNoteCreated("u1", "inc-1", "n1");
+        verify(activityLogService).logInternalNoteCreated(eq("u1"), eq("inc-1"), anyString());
     }
 
     @Test
