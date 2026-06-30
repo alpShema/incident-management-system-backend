@@ -50,7 +50,7 @@ public class DashboardService {
                     .orElse(new DashboardStats(0, 0, 0, 0, 0, 0));
         }
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
             List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusGlobal());
             long total = byStatus.stream().mapToLong(LabelCount::count).sum();
             return new DashboardStats(total,
@@ -70,7 +70,7 @@ public class DashboardService {
         List<TrendSeries> trends;
 
         switch (role) {
-            case ADMIN, SUPER_ADMIN -> {
+            case ADMIN, ADMIN_AGENT, SUPER_ADMIN -> {
                 byStatus = toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
                         : incidentRepository.countByStatusGlobal());
@@ -118,7 +118,7 @@ public class DashboardService {
         }
         final String finalQueryPattern = queryPattern;
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
             return slaService.toIncidentResponsePage(
                     incidentRepository.findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)
             );
