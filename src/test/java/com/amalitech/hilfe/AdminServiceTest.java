@@ -4,7 +4,6 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.repositories.AdminRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AdminService;
@@ -27,7 +26,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AdminServiceTest {
 
-    @Mock AdminRepository adminRepository;
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
     @InjectMocks AdminService adminService;
