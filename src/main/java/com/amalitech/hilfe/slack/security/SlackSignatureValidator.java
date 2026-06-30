@@ -10,7 +10,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.Instant;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Component
 @Slf4j
@@ -21,9 +23,16 @@ public class SlackSignatureValidator {
     private static final long MAX_TIMESTAMP_DIFF_SECONDS = 300; // 5 minutes
 
     private final SlackProperties slackProperties;
+    private final Clock clock;
 
+    @Autowired
     public SlackSignatureValidator(SlackProperties slackProperties) {
+        this(slackProperties, Clock.systemUTC());
+    }
+
+    public SlackSignatureValidator(SlackProperties slackProperties, Clock clock) {
         this.slackProperties = slackProperties;
+        this.clock = clock;
     }
 
     public boolean isValid(String signature, String timestamp, String body) {
@@ -58,7 +67,7 @@ public class SlackSignatureValidator {
     private boolean isTimestampValid(String timestamp) {
         try {
             long requestTime = Long.parseLong(timestamp);
-            long currentTime = Instant.now().getEpochSecond();
+            long currentTime = Instant.now(clock).getEpochSecond();
             long diff = Math.abs(currentTime - requestTime);
             return diff <= MAX_TIMESTAMP_DIFF_SECONDS;
         } catch (NumberFormatException e) {
