@@ -59,30 +59,30 @@ class FaqServiceTest {
 
     @Test
     void listFaqs_withSearch_trimmedAndPassedToRepository() {
-        when(faqRepository.findAllFiltered(isNull(), eq("shipping"), any(Pageable.class)))
+        when(faqRepository.findAllFiltered(isNull(), eq("%shipping%"), any(Pageable.class)))
                 .thenReturn(pageOf(faq("1", "Shipping policy", "We ship worldwide")));
 
         PageResponse<FaqResponse> result = faqService.listFaqs(null, "  shipping  ", Pageable.unpaged());
 
-        verify(faqRepository).findAllFiltered(null, "shipping", Pageable.unpaged());
+        verify(faqRepository).findAllFiltered(null, "%shipping%", Pageable.unpaged());
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().get(0).question()).isEqualTo("Shipping policy");
     }
 
     @Test
     void listFaqs_withSearchAndActiveFilter_bothPassedToRepository() {
-        when(faqRepository.findAllFiltered(eq(true), eq("refund"), any(Pageable.class)))
+        when(faqRepository.findAllFiltered(eq(true), eq("%refund%"), any(Pageable.class)))
                 .thenReturn(pageOf(faq("2", "Refund policy", "30 day returns")));
 
         PageResponse<FaqResponse> result = faqService.listFaqs(true, "refund", Pageable.unpaged());
 
-        verify(faqRepository).findAllFiltered(true, "refund", Pageable.unpaged());
+        verify(faqRepository).findAllFiltered(true, "%refund%", Pageable.unpaged());
         assertThat(result.items()).hasSize(1);
     }
 
     @Test
     void listFaqs_noMatchingSearch_returnsEmptyList() {
-        when(faqRepository.findAllFiltered(isNull(), eq("zzznomatch"), any(Pageable.class)))
+        when(faqRepository.findAllFiltered(isNull(), eq("%zzznomatch%"), any(Pageable.class)))
                 .thenReturn(pageOf());
 
         PageResponse<FaqResponse> result = faqService.listFaqs(null, "zzznomatch", Pageable.unpaged());
