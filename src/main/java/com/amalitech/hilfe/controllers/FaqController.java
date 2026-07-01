@@ -124,7 +124,8 @@ public class FaqController {
         FaqBulkUploadResult result = faqService.bulkImport(file);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
-                        result.created() + " FAQ(s) created, " + result.failed() + " row(s) skipped",
+                        result.created() + " FAQ(s) created, " + result.updated() + " updated, "
+                                + result.failed() + " row(s) skipped",
                         result
                 ));
     }

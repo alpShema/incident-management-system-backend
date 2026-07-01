@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -129,5 +130,46 @@ class FaqServiceTest {
         assertThat(result.failed()).isEqualTo(1);
         assertThat(result.errors()).hasSize(1);
         assertThat(result.errors().get(0).row()).isEqualTo(3);
+    }
+
+    @Test
+    void bulkImport_capitalizedHeadersWithExtraColumn_stillMapsQuestionAndAnswer() {
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(faqEmbeddingService.embedAndStore(any(Faq.class))).thenReturn(true);
+
+        // Real-world exports (e.g. from spreadsheet tools) commonly use
+        // capitalized headers and may include extra columns we don't use.
+        String csv = "Question,Answer,Status\nQ1,A1,Active\nQ2,A2,Active\n";
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "faqs.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+
+        FaqBulkUploadResult result = faqService.bulkImport(file);
+
+        assertThat(result.created()).isEqualTo(2);
+        assertThat(result.failed()).isZero();
+        assertThat(result.errors()).isEmpty();
+    }
+
+    @Test
+    void bulkImport_questionAlreadyExists_updatesExistingFaqInsteadOfDuplicating() {
+        Faq existing = faq("existing-id", "What is your name?", "Old answer");
+        when(faqRepository.findByQuestionIgnoreCase("what is your name?")).thenReturn(Optional.of(existing));
+        when(faqRepository.findByQuestionIgnoreCase("New question")).thenReturn(Optional.empty());
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(faqEmbeddingService.embedAndStore(any(Faq.class))).thenReturn(true);
+
+        // "what is your name?" (different case) should match the existing FAQ
+        // and update it in place rather than creating a duplicate.
+        String csv = "question,answer\nwhat is your name?,New answer\nNew question,New answer\n";
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "faqs.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+
+        FaqBulkUploadResult result = faqService.bulkImport(file);
+
+        assertThat(result.created()).isEqualTo(1);
+        assertThat(result.updated()).isEqualTo(1);
+        assertThat(result.failed()).isZero();
+        assertThat(existing.getAnswer()).isEqualTo("New answer");
+        verify(faqRepository).save(argThat(f -> "existing-id".equals(f.getId())));
     }
 }
