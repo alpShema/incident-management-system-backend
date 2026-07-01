@@ -1,5 +1,6 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.dto.FaqBulkUploadResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.FaqResponse;
 import com.amalitech.hilfe.models.Faq;
@@ -14,7 +15,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,5 +94,40 @@ class FaqServiceTest {
 
         assertThat(result.items()).isEmpty();
         assertThat(result.totalElements()).isZero();
+    }
+
+    @Test
+    void bulkImport_isNotTransactional() throws NoSuchMethodException {
+        // Wrapping the whole CSV loop in one @Transactional method means a single
+        // row-level DB error aborts the underlying Postgres transaction, so every
+        // later statement -- including the final commit -- fails with an unhandled
+        // exception (surfaced to clients as a generic 500). Each row must instead
+        // commit through its own independently-transactional repository call.
+        Method bulkImport = FaqService.class.getMethod("bulkImport", org.springframework.web.multipart.MultipartFile.class);
+
+        assertThat(bulkImport.getAnnotation(Transactional.class)).isNull();
+    }
+
+    @Test
+    void bulkImport_oneRowFailsToSave_othersStillCreatedAndReported() {
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> {
+            Faq faq = invocation.getArgument(0);
+            if ("Q2".equals(faq.getQuestion())) {
+                throw new org.springframework.dao.DataIntegrityViolationException("simulated row failure");
+            }
+            return faq;
+        });
+        when(faqEmbeddingService.embedAndStore(any(Faq.class))).thenReturn(true);
+
+        String csv = "question,answer\nQ1,A1\nQ2,A2\nQ3,A3\n";
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "faqs.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+
+        FaqBulkUploadResult result = faqService.bulkImport(file);
+
+        assertThat(result.created()).isEqualTo(2);
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.errors()).hasSize(1);
+        assertThat(result.errors().get(0).row()).isEqualTo(3);
     }
 }
