@@ -10,8 +10,11 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface FaqRepository extends JpaRepository<Faq, String> {
+
+    Optional<Faq> findByQuestionIgnoreCase(String question);
 
     @Query(value = "SELECT * FROM \"Faq\" WHERE embedding IS NULL", nativeQuery = true)
     List<Faq> findAllWithoutEmbedding();
