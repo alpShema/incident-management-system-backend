@@ -111,7 +111,11 @@ public class FaqService {
         return succeeded;
     }
 
-    @Transactional
+    // Intentionally not @Transactional: each row is saved and embedded through its
+    // own independently-transactional repository/service calls (like reEmbedAll()),
+    // so one bad row rolls back only itself instead of aborting the whole Postgres
+    // transaction and taking down every other row's commit (and the CSV file as a
+    // whole) with it.
     public FaqBulkUploadResult bulkImport(MultipartFile file) {
         List<FaqBulkUploadResult.RowError> errors = new ArrayList<>();
         int created = 0;
