@@ -4,6 +4,7 @@ import java.util.List;
 
 public record FaqBulkUploadResult(
         int created,
+        int updated,
         int failed,
         List<RowError> errors
 ) {

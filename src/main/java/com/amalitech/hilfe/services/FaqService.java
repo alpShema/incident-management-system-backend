@@ -119,6 +119,7 @@ public class FaqService {
     public FaqBulkUploadResult bulkImport(MultipartFile file) {
         List<FaqBulkUploadResult.RowError> errors = new ArrayList<>();
         int created = 0;
+        int updated = 0;
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
              CSVParser csvParser = CSVFormat.DEFAULT.builder()
@@ -126,6 +127,7 @@ public class FaqService {
                      .setSkipHeaderRecord(true)
                      .setTrim(true)
                      .setIgnoreEmptyLines(true)
+                     .setIgnoreHeaderCase(true)
                      .build()
                      .parse(reader)) {
 
@@ -137,15 +139,19 @@ public class FaqService {
                 String validationError = validateRow(question, answer);
                 if (validationError != null) {
                     errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
-                } else {
-                    created += saveRow(question, answer, rowNumber, errors);
+                    continue;
+                }
+                switch (saveOrUpdateRow(question, answer, rowNumber, errors)) {
+                    case CREATED -> created++;
+                    case UPDATED -> updated++;
+                    case FAILED -> { /* error already recorded */ }
                 }
             }
         } catch (Exception e) {
             throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
         }
 
-        return new FaqBulkUploadResult(created, errors.size(), errors);
+        return new FaqBulkUploadResult(created, updated, errors.size(), errors);
     }
 
     private String validateRow(String question, String answer) {
@@ -154,21 +160,36 @@ public class FaqService {
         return null;
     }
 
-    private int saveRow(String question, String answer, int rowNumber, List<FaqBulkUploadResult.RowError> errors) {
+    private enum RowOutcome { CREATED, UPDATED, FAILED }
+
+    // A row whose question already exists (case-insensitively) updates that FAQ's
+    // answer in place instead of creating a duplicate entry for the same question.
+    private RowOutcome saveOrUpdateRow(String question, String answer, int rowNumber, List<FaqBulkUploadResult.RowError> errors) {
+        String sanitizedQuestion = sanitize(question);
         try {
-            Faq faq = Faq.builder()
-                    .id(UUID.randomUUID().toString())
-                    .question(sanitize(question))
-                    .answer(sanitize(answer))
-                    .active(true)
-                    .build();
+            Faq existing = faqRepository.findByQuestionIgnoreCase(sanitizedQuestion).orElse(null);
+            RowOutcome outcome;
+            Faq faq;
+            if (existing != null) {
+                existing.setAnswer(sanitize(answer));
+                faq = existing;
+                outcome = RowOutcome.UPDATED;
+            } else {
+                faq = Faq.builder()
+                        .id(UUID.randomUUID().toString())
+                        .question(sanitizedQuestion)
+                        .answer(sanitize(answer))
+                        .active(true)
+                        .build();
+                outcome = RowOutcome.CREATED;
+            }
             faq = faqRepository.save(faq);
             faqEmbeddingService.embedAndStore(faq);
-            return 1;
+            return outcome;
         } catch (Exception e) {
-            log.warn("Failed to create FAQ at row {}: {}", rowNumber, e.getMessage());
+            log.warn("Failed to save FAQ at row {}: {}", rowNumber, e.getMessage());
             errors.add(new FaqBulkUploadResult.RowError(rowNumber, "failed to save: " + e.getMessage()));
-            return 0;
+            return RowOutcome.FAILED;
         }
     }
 
