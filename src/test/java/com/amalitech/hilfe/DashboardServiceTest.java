@@ -171,6 +171,55 @@ class DashboardServiceTest {
     }
 
     @Test
+    void getCharts_adminRole_noPeriod_trendCoversExactlySixCalendarMonths() {
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 10L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
+        org.mockito.ArgumentCaptor<Instant> sinceCaptor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        when(incidentRepository.countByMonthSince(sinceCaptor.capture())).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, null);
+
+        java.time.YearMonth currentMonth = java.time.YearMonth.now(java.time.ZoneOffset.UTC);
+        java.time.YearMonth expectedStartMonth = currentMonth.minusMonths(5);
+        java.time.format.DateTimeFormatter fmt =
+                java.time.format.DateTimeFormatter.ofPattern("MMM yyyy", java.util.Locale.ENGLISH);
+
+        java.time.YearMonth capturedStartMonth =
+                java.time.YearMonth.from(sinceCaptor.getValue().atZone(java.time.ZoneOffset.UTC));
+        assertThat(capturedStartMonth).isEqualTo(expectedStartMonth);
+
+        List<com.amalitech.hilfe.dto.dashboard.MonthlyCount> data = charts.trends().get(0).data();
+        assertThat(data).hasSize(6);
+        assertThat(data.get(0).month()).isEqualTo(expectedStartMonth.format(fmt));
+        assertThat(data.get(5).month()).isEqualTo(currentMonth.format(fmt));
+    }
+
+    @Test
+    void getCharts_agentRole_noPeriod_bothTrendsCoverExactlySixCalendarMonths() {
+        Agent agent = buildAgent("agent-1");
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
+        org.mockito.ArgumentCaptor<Instant> userSinceCaptor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        org.mockito.ArgumentCaptor<Instant> agentSinceCaptor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        when(incidentRepository.countByMonthForUser(eq("user-1"), userSinceCaptor.capture())).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgent(eq("agent-1"), agentSinceCaptor.capture())).thenReturn(List.of());
+
+        DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
+
+        java.time.YearMonth currentMonth = java.time.YearMonth.now(java.time.ZoneOffset.UTC);
+        java.time.YearMonth expectedStartMonth = currentMonth.minusMonths(5);
+
+        assertThat(java.time.YearMonth.from(userSinceCaptor.getValue().atZone(java.time.ZoneOffset.UTC)))
+                .isEqualTo(expectedStartMonth);
+        assertThat(java.time.YearMonth.from(agentSinceCaptor.getValue().atZone(java.time.ZoneOffset.UTC)))
+                .isEqualTo(expectedStartMonth);
+
+        assertThat(charts.trends().get(0).data()).hasSize(6);
+        assertThat(charts.trends().get(1).data()).hasSize(6);
+    }
+
+    @Test
     void getCharts_unsupportedPeriod_throws400() {
         assertThatThrownBy(() -> dashboardService.getCharts("admin-1", RoleCode.ADMIN, "60d"))
                 .isInstanceOf(ArmsAuthException.class)
