@@ -7,12 +7,15 @@ import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
+import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +43,7 @@ public class ActivityLogService {
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupRepository agentGroupRepository;
+    private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final RoleRepository roleRepository;
 
     public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
@@ -83,8 +87,28 @@ public class ActivityLogService {
                     .map(a -> a.getId().equals(incident.getAssignedToId()))
                     .orElse(false);
             if (isAssignee) return;
+            if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
         throw new ArmsAuthException("You do not have access to this incident's activity log", 403);
+    }
+
+    private Optional<List<String>> findAgentGroupIds(String userId) {
+        return agentRepository.findByUserId(userId)
+                .map(agent -> agentGroupMemberRepository.findAgentGroupIdsByAgentId(agent.getId()));
+    }
+
+    private boolean isSameDepartmentAsAssignedAgent(String userId, Incident incident) {
+        if (incident.getAssignedToId() == null) return false;
+        List<String> actorGroupIds = findAgentGroupIds(userId).orElse(List.of());
+        if (actorGroupIds.isEmpty()) return false;
+        List<String> assignedGroupIds = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
+        if (assignedGroupIds.isEmpty()) return false;
+        List<String> actorDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(actorGroupIds);
+        if (actorDeptIds.isEmpty()) {
+            return assignedGroupIds.stream().anyMatch(actorGroupIds::contains);
+        }
+        List<String> assignedDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(assignedGroupIds);
+        return assignedDeptIds.stream().anyMatch(actorDeptIds::contains);
     }
 
     private boolean hasAuthority(String permission) {

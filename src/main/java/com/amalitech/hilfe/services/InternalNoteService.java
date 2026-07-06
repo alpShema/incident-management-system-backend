@@ -36,6 +36,7 @@ public class InternalNoteService {
         InternalNote saved = noteRepository.save(InternalNote.builder()
                 .id(noteId)
                 .incidentId(incidentId)
+
                 .authorId(userId)
                 .body(request.body().trim())
                 .build());
