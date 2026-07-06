@@ -64,7 +64,7 @@ public class DashboardService {
 
     public DashboardCharts getCharts(String userId, RoleCode role, String period) {
         Instant since      = resolvePeriod(period);
-        Instant trendSince = since != null ? since : Instant.now().minus(180, ChronoUnit.DAYS);
+        Instant trendSince = since != null ? since : sixMonthWindowStart();
 
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
@@ -164,6 +164,10 @@ public class DashboardService {
             default    -> throw new ArmsAuthException(
                     "Unsupported period '" + period + "'. Accepted values: 7d, 30d, 90d.", 400);
         };
+    }
+
+    private Instant sixMonthWindowStart() {
+        return YearMonth.now(ZoneOffset.UTC).minusMonths(5).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
     private long countFor(List<LabelCount> list, String statusName) {
