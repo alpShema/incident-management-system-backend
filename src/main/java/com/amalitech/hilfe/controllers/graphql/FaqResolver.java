@@ -33,7 +33,7 @@ public class FaqResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.create')")
     public FaqResponse createFaq(@Argument CreateFaqRequest input) {
-        return faqService.createFaq(input);
+        return faqService.createFaq(input).faq();
     }
 
     @MutationMapping
