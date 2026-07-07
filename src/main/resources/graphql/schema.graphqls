@@ -415,6 +415,11 @@ type Faq {
   updatedAt: Instant
 }
 
+type FaqUpsertResult {
+  faq: Faq!
+  created: Boolean!
+}
+
 type FaqPage {
   items: [Faq!]!
   page: Int!
@@ -965,7 +970,7 @@ type Mutation {
   updateTopicStatus(id: ID!, input: UpdateTopicStatusInput!): IncidentTopic
 
   # FAQs
-  createFaq(input: CreateFaqInput!): Faq
+  createFaq(input: CreateFaqInput!): FaqUpsertResult
   updateFaq(id: ID!, input: UpdateFaqInput!): Faq
   toggleFaqActive(id: ID!, active: Boolean!): Faq
   deleteFaq(id: ID!): Boolean
