@@ -1,12 +1,16 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqBulkUploadResult;
+import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.FaqResponse;
 import com.amalitech.hilfe.models.Faq;
 import com.amalitech.hilfe.repositories.FaqRepository;
 import com.amalitech.hilfe.services.FaqEmbeddingService;
 import com.amalitech.hilfe.services.FaqService;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,6 +21,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +46,49 @@ class FaqServiceTest {
 
     private Page<Faq> pageOf(Faq... faqs) {
         return new PageImpl<>(List.of(faqs));
+    }
+
+    @BeforeEach
+    void initTransactionSynchronization() {
+        // createFaq() registers a post-commit embed callback via
+        // TransactionSynchronizationManager, which requires an active synchronization
+        // even outside a real Spring transaction.
+        TransactionSynchronizationManager.initSynchronization();
+    }
+
+    @AfterEach
+    void clearTransactionSynchronization() {
+        TransactionSynchronizationManager.clearSynchronization();
+    }
+
+    @Test
+    void createFaq_questionDoesNotExist_createsNewFaqAndReturnsCreatedTrue() {
+        when(faqRepository.findByQuestionIgnoreCase("New question")).thenReturn(Optional.empty());
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        FaqUpsertResult result = faqService.createFaq(new CreateFaqRequest("New question", "New answer"));
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.faq().question()).isEqualTo("New question");
+        assertThat(result.faq().answer()).isEqualTo("New answer");
+        verify(faqRepository).save(any(Faq.class));
+    }
+
+    @Test
+    void createFaq_questionAlreadyExists_updatesExistingFaqAndReturnsCreatedFalse() {
+        Faq existing = faq("existing-id", "What is your name?", "Old answer");
+        when(faqRepository.findByQuestionIgnoreCase("what is your name?")).thenReturn(Optional.of(existing));
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Different casing of the same question should still match the existing FAQ
+        // and update it in place instead of creating a duplicate.
+        FaqUpsertResult result = faqService.createFaq(new CreateFaqRequest("what is your name?", "New answer"));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.faq().id()).isEqualTo("existing-id");
+        assertThat(result.faq().answer()).isEqualTo("New answer");
+        assertThat(existing.getAnswer()).isEqualTo("New answer");
+        verify(faqRepository).save(argThat(f -> "existing-id".equals(f.getId())));
     }
 
     @Test
