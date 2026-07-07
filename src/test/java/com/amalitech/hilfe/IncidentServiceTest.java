@@ -626,7 +626,22 @@ class IncidentServiceTest {
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("dept-1"));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_assignedAgent_noGroup_canAccess() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-row-1");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
         when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
         when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
 
