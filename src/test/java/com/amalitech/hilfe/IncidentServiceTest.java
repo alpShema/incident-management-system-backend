@@ -648,6 +648,8 @@ class IncidentServiceTest {
         IncidentResponse response = incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
 
         assertThat(response.id()).isEqualTo("inc-1");
+        // assignee check short-circuits before any group lookup
+        verify(agentGroupMemberRepository, never()).findAgentGroupIdsByAgentId(any());
     }
 
     @Test
