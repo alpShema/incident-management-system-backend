@@ -30,6 +30,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,21 +64,21 @@ class FaqServiceTest {
 
     @Test
     void createFaq_questionDoesNotExist_createsNewFaqAndReturnsCreatedTrue() {
-        when(faqRepository.findByQuestionIgnoreCase("New question")).thenReturn(Optional.empty());
-        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(faqRepository.findByNormalizedQuestion("New question")).thenReturn(Optional.empty());
+        when(faqRepository.saveAndFlush(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         FaqUpsertResult result = faqService.createFaq(new CreateFaqRequest("New question", "New answer"));
 
         assertThat(result.created()).isTrue();
         assertThat(result.faq().question()).isEqualTo("New question");
         assertThat(result.faq().answer()).isEqualTo("New answer");
-        verify(faqRepository).save(any(Faq.class));
+        verify(faqRepository).saveAndFlush(any(Faq.class));
     }
 
     @Test
     void createFaq_questionAlreadyExists_updatesExistingFaqAndReturnsCreatedFalse() {
         Faq existing = faq("existing-id", "What is your name?", "Old answer");
-        when(faqRepository.findByQuestionIgnoreCase("what is your name?")).thenReturn(Optional.of(existing));
+        when(faqRepository.findByNormalizedQuestion("what is your name?")).thenReturn(Optional.of(existing));
         when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Different casing of the same question should still match the existing FAQ
@@ -89,6 +90,25 @@ class FaqServiceTest {
         assertThat(result.faq().answer()).isEqualTo("New answer");
         assertThat(existing.getAnswer()).isEqualTo("New answer");
         verify(faqRepository).save(argThat(f -> "existing-id".equals(f.getId())));
+    }
+
+    @Test
+    void createFaq_matchIsDrivenByNormalizedQuestionLookup_notRawQuestionText() {
+        // The DB-level match (and its backing unique index, see
+        // V61__add_faq_question_unique_index.sql) is punctuation- and
+        // whitespace-insensitive, so a question missing its trailing "?" or with
+        // extra spacing still resolves to the same FAQ. The native query owns that
+        // normalization; here we only confirm the service defers the "is this a
+        // duplicate" decision to it rather than comparing raw question strings itself.
+        Faq existing = faq("existing-id", "What is your name?", "Old answer");
+        when(faqRepository.findByNormalizedQuestion("What   is your name")).thenReturn(Optional.of(existing));
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        FaqUpsertResult result = faqService.createFaq(new CreateFaqRequest("What   is your name", "New answer"));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.faq().id()).isEqualTo("existing-id");
+        verify(faqRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -159,7 +179,7 @@ class FaqServiceTest {
 
     @Test
     void bulkImport_oneRowFailsToSave_othersStillCreatedAndReported() {
-        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> {
+        when(faqRepository.saveAndFlush(any(Faq.class))).thenAnswer(invocation -> {
             Faq faq = invocation.getArgument(0);
             if ("Q2".equals(faq.getQuestion())) {
                 throw new org.springframework.dao.DataIntegrityViolationException("simulated row failure");
@@ -182,7 +202,7 @@ class FaqServiceTest {
 
     @Test
     void bulkImport_capitalizedHeadersWithExtraColumn_stillMapsQuestionAndAnswer() {
-        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(faqRepository.saveAndFlush(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(faqEmbeddingService.embedAndStore(any(Faq.class))).thenReturn(true);
 
         // Real-world exports (e.g. from spreadsheet tools) commonly use
@@ -201,9 +221,10 @@ class FaqServiceTest {
     @Test
     void bulkImport_questionAlreadyExists_updatesExistingFaqInsteadOfDuplicating() {
         Faq existing = faq("existing-id", "What is your name?", "Old answer");
-        when(faqRepository.findByQuestionIgnoreCase("what is your name?")).thenReturn(Optional.of(existing));
-        when(faqRepository.findByQuestionIgnoreCase("New question")).thenReturn(Optional.empty());
+        when(faqRepository.findByNormalizedQuestion("what is your name?")).thenReturn(Optional.of(existing));
+        when(faqRepository.findByNormalizedQuestion("New question")).thenReturn(Optional.empty());
         when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(faqRepository.saveAndFlush(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(faqEmbeddingService.embedAndStore(any(Faq.class))).thenReturn(true);
 
         // "what is your name?" (different case) should match the existing FAQ

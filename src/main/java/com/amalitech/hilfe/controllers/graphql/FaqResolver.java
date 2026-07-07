@@ -2,6 +2,7 @@ package com.amalitech.hilfe.controllers.graphql;
 
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
 import com.amalitech.hilfe.services.FaqService;
@@ -32,8 +33,8 @@ public class FaqResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.create')")
-    public FaqResponse createFaq(@Argument CreateFaqRequest input) {
-        return faqService.createFaq(input).faq();
+    public FaqUpsertResult createFaq(@Argument CreateFaqRequest input) {
+        return faqService.createFaq(input);
     }
 
     @MutationMapping

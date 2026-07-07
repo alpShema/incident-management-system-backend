@@ -37,8 +37,8 @@ public class FaqService {
     private final FaqRepository faqRepository;
     private final FaqEmbeddingService faqEmbeddingService;
 
-    // A submitted question that matches an existing FAQ (case-insensitively) updates
-    // that FAQ in place instead of creating a duplicate entry for the same question.
+    // A submitted question that matches an existing FAQ (see findByNormalizedQuestion)
+    // updates that FAQ in place instead of creating a duplicate entry for the question.
     @Transactional
     public FaqUpsertResult createFaq(CreateFaqRequest request) {
         UpsertOutcome outcome = upsertByQuestion(request.question(), request.answer());
@@ -173,26 +173,28 @@ public class FaqService {
     private record UpsertOutcome(Faq faq, boolean created) {}
 
     // Shared by single-FAQ creation and bulk CSV import: a question that matches an
-    // existing FAQ (case-insensitively) is updated in place rather than duplicated.
+    // existing FAQ (case- and punctuation-insensitively, see findByNormalizedQuestion)
+    // is updated in place rather than duplicated. If two requests for the same new
+    // question race past the lookup at once, the unique index from
+    // V61__add_faq_question_unique_index.sql rejects the loser's insert (surfaced via
+    // the flush below) instead of allowing a duplicate row; that failure is already
+    // translated into a 409 by GlobalExceptionHandler/GraphQlExceptionResolver.
     private UpsertOutcome upsertByQuestion(String question, String answer) {
         String sanitizedQuestion = sanitize(question);
-        Faq existing = faqRepository.findByQuestionIgnoreCase(sanitizedQuestion).orElse(null);
+        Faq existing = faqRepository.findByNormalizedQuestion(sanitizedQuestion).orElse(null);
 
-        boolean created = existing == null;
-        Faq faq = created
-                ? Faq.builder()
-                        .id(UUID.randomUUID().toString())
-                        .question(sanitizedQuestion)
-                        .answer(sanitize(answer))
-                        .active(true)
-                        .build()
-                : existing;
-        if (!created) {
-            faq.setAnswer(sanitize(answer));
+        if (existing != null) {
+            existing.setAnswer(sanitize(answer));
+            return new UpsertOutcome(faqRepository.save(existing), false);
         }
 
-        faq = faqRepository.save(faq);
-        return new UpsertOutcome(faq, created);
+        Faq faq = Faq.builder()
+                .id(UUID.randomUUID().toString())
+                .question(sanitizedQuestion)
+                .answer(sanitize(answer))
+                .active(true)
+                .build();
+        return new UpsertOutcome(faqRepository.saveAndFlush(faq), true);
     }
 
     // Registers the embedding update to run after the current transaction commits,

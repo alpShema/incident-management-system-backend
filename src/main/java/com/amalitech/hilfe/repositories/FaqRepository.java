@@ -14,7 +14,17 @@ import java.util.Optional;
 
 public interface FaqRepository extends JpaRepository<Faq, String> {
 
-    Optional<Faq> findByQuestionIgnoreCase(String question);
+    // Matches case-insensitively, ignoring surrounding/collapsed whitespace and a
+    // trailing "?", "!" or "." — mirrors the unique index added in
+    // V61__add_faq_question_unique_index.sql so app-level duplicate detection and
+    // the DB-level constraint agree on what counts as "the same question".
+    @Query(value = """
+            SELECT * FROM "Faq"
+            WHERE LOWER(TRIM(TRAILING '?!.' FROM REGEXP_REPLACE(TRIM(question), '\\s+', ' ', 'g')))
+                = LOWER(TRIM(TRAILING '?!.' FROM REGEXP_REPLACE(TRIM(:question), '\\s+', ' ', 'g')))
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Faq> findByNormalizedQuestion(@Param("question") String question);
 
     @Query(value = "SELECT * FROM \"Faq\" WHERE embedding IS NULL", nativeQuery = true)
     List<Faq> findAllWithoutEmbedding();
