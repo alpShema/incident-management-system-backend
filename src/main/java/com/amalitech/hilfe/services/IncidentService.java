@@ -421,8 +421,12 @@ public class IncidentService {
         if (userId.equals(incident.getUserId())) {
             return;
         }
-        if (ROLE_AGENT.equalsIgnoreCase(roleCode) && isSameDepartmentAsAssignedAgent(userId, incident)) {
-            return;
+        if (ROLE_AGENT.equalsIgnoreCase(roleCode)) {
+            boolean isAssignee = agentRepository.findByUserId(userId)
+                    .map(a -> a.getId().equals(incident.getAssignedToId()))
+                    .orElse(false);
+            if (isAssignee) return;
+            if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
         throw new ArmsAuthException("You do not have access to this incident", 403);
     }
