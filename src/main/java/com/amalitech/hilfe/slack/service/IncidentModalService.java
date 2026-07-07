@@ -55,7 +55,8 @@ public class IncidentModalService {
     private static final String MODAL             = "modal";
     private static final String PLAIN_TEXT        = "plain_text";
 
-    private static final String HILFE_WEB_URL = "https://hilfe-pro-frontend.amalitech-dev.net";
+    private static final String HILFE_WEB_URL     = "https://hilfe-pro-frontend.amalitech-dev.net";
+    private static final String EMOJI_NONE_CIRCLE = ":white_circle:";
 
     private record ModalState(
             String title,
@@ -379,12 +380,13 @@ public class IncidentModalService {
             blocks.add(section(s -> s.text(markdownText(
                     "_You haven't created any incidents yet._\n\nUse `/hilfe new` to create one."))));
         } else {
+            blocks.add(context(c -> c.elements(List.of(markdownText(buildStatusSummary(incidents, totalElements, totalPages))))));
             for (IncidentResponse incident : incidents) {
-                blocks.add(buildIncidentBlock(incident));
+                blocks.addAll(buildIncidentBlock(incident));
             }
         }
 
-        addPaginationBlocks(blocks, page, totalPages, "my_incidents_prev", "my_incidents_next");
+        addPaginationBlocks(blocks, page, totalPages, totalElements, "my_incidents_prev", "my_incidents_next");
 
         return View.builder()
                 .type(MODAL)
@@ -404,12 +406,13 @@ public class IncidentModalService {
         if (incidents.isEmpty()) {
             blocks.add(section(s -> s.text(markdownText("_You don't have any assigned incidents._"))));
         } else {
+            blocks.add(context(c -> c.elements(List.of(markdownText(buildStatusSummary(incidents, totalElements, totalPages))))));
             for (IncidentResponse incident : incidents) {
-                blocks.add(buildIncidentBlock(incident));
+                blocks.addAll(buildIncidentBlock(incident));
             }
         }
 
-        addPaginationBlocks(blocks, page, totalPages, "assigned_incidents_prev", "assigned_incidents_next");
+        addPaginationBlocks(blocks, page, totalPages, totalElements, "assigned_incidents_prev", "assigned_incidents_next");
 
         return View.builder()
                 .type(MODAL)
@@ -421,38 +424,92 @@ public class IncidentModalService {
     }
 
     private void addPaginationBlocks(List<LayoutBlock> blocks, int page, int totalPages,
-                                     String prevActionId, String nextActionId) {
-        if (totalPages <= 1) return;
+                                     long totalElements, String prevActionId, String nextActionId) {
+        if (totalElements == 0) return;
 
-        List<com.slack.api.model.block.element.BlockElement> navButtons = new ArrayList<>();
-        if (page > 0) {
-            int prevPage = page - 1;
-            navButtons.add(button(b -> b.text(plainText("← Previous"))
-                    .actionId(prevActionId)
-                    .value(String.valueOf(prevPage))));
+        if (totalPages > 1) {
+            List<com.slack.api.model.block.element.BlockElement> navButtons = new ArrayList<>();
+            if (page > 0) {
+                int prevPage = page - 1;
+                navButtons.add(button(b -> b.text(plainText("← Previous"))
+                        .actionId(prevActionId)
+                        .value(String.valueOf(prevPage))));
+            }
+            if (page < totalPages - 1) {
+                int nextPage = page + 1;
+                navButtons.add(button(b -> b.text(plainText("Next →"))
+                        .actionId(nextActionId)
+                        .value(String.valueOf(nextPage))));
+            }
+            if (!navButtons.isEmpty()) {
+                blocks.add(actions(a -> a.elements(navButtons)));
+            }
+            long from = (long) page * 10 + 1;
+            long to   = Math.min((long)(page + 1) * 10, totalElements);
+            String pageInfo = "Showing *" + from + "–" + to + "* of *" + totalElements
+                    + "* incidents  ·  Page *" + (page + 1) + "* of *" + totalPages + "*";
+            blocks.add(context(c -> c.elements(List.of(markdownText(pageInfo)))));
         }
-        if (page < totalPages - 1) {
-            int nextPage = page + 1;
-            navButtons.add(button(b -> b.text(plainText("Next →"))
-                    .actionId(nextActionId)
-                    .value(String.valueOf(nextPage))));
-        }
-        if (!navButtons.isEmpty()) {
-            blocks.add(actions(a -> a.elements(navButtons)));
-        }
-        blocks.add(section(s -> s.text(markdownText("_Page " + (page + 1) + " of " + totalPages + "_"))));
     }
 
-    private LayoutBlock buildIncidentBlock(IncidentResponse incident) {
-        String statusName  = incident.status() != null ? incident.status().name() : "Unknown";
-        String statusEmoji = getStatusEmoji(statusName);
-        String priority    = incident.priority() != null ? incident.priority().name() : "N/A";
+    private List<LayoutBlock> buildIncidentBlock(IncidentResponse incident) {
+        String statusName   = incident.status()   != null ? incident.status().name()   : "Unknown";
+        String priorityName = incident.priority() != null ? incident.priority().name() : "N/A";
+        String url          = HILFE_WEB_URL + "/incidents/" + incident.id();
 
-        return section(s -> s.text(markdownText(
-                "*#" + incident.incidentNo() + "* — " + incident.title() + "\n" +
-                statusEmoji + " " + statusName + "  ·  Priority: " + priority + "\n" +
-                "<" + HILFE_WEB_URL + "/incidents/" + incident.id() + "|View in HILFE>"
-        )));
+        LayoutBlock titleSection = section(s -> s
+                .text(markdownText("*#" + incident.incidentNo() + "  " + incident.title() + "*"))
+                .accessory(button(b -> b
+                        .text(plainText("Open ↗"))
+                        .url(url)
+                        .actionId("open_incident_" + incident.id()))));
+
+        StringBuilder meta = new StringBuilder();
+        meta.append(getStatusEmoji(statusName)).append("  ").append(statusName);
+        meta.append("    ").append(getPriorityEmoji(priorityName)).append("  ").append(priorityName).append(" priority");
+        if (incident.assignedTo() != null && incident.assignedTo().fullName() != null) {
+            meta.append("    :bust_in_silhouette:  ").append(incident.assignedTo().fullName());
+        }
+        String metaStr = meta.toString();
+        LayoutBlock metaContext = context(c -> c.elements(List.of(markdownText(metaStr))));
+
+        return List.of(titleSection, metaContext, divider());
+    }
+
+    private String buildStatusSummary(List<IncidentResponse> incidents, long totalElements, int totalPages) {
+        StringBuilder sb = new StringBuilder("Showing *" + totalElements + "* incident" + (totalElements == 1 ? "" : "s"));
+        if (totalPages == 1) {
+            Map<String, Long> countByStatus = new LinkedHashMap<>();
+            for (IncidentResponse i : incidents) {
+                if (i.status() != null) {
+                    countByStatus.merge(i.status().name(), 1L, Long::sum);
+                }
+            }
+            countByStatus.forEach((status, count) ->
+                    sb.append("  ·  ").append(getStatusEmoji(status)).append("  ").append(count).append(" ").append(status));
+        }
+        return sb.toString();
+    }
+
+    private String getStatusEmoji(String statusName) {
+        return switch (statusName.toLowerCase()) {
+            case "open"        -> ":large_green_circle:";
+            case "in progress" -> ":large_yellow_circle:";
+            case "resolved"    -> ":large_blue_circle:";
+            case "closed"      -> EMOJI_NONE_CIRCLE;
+            default            -> EMOJI_NONE_CIRCLE;
+        };
+    }
+
+    private String getPriorityEmoji(String priority) {
+        if (priority == null) return EMOJI_NONE_CIRCLE;
+        return switch (priority.toLowerCase()) {
+            case "critical"            -> ":red_circle:";
+            case "high"                -> ":large_orange_circle:";
+            case "medium", "moderate"  -> ":large_yellow_circle:";
+            case "low"                 -> ":large_blue_circle:";
+            default                    -> EMOJI_NONE_CIRCLE;
+        };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -502,16 +559,6 @@ public class IncidentModalService {
 
     private String extractSelectValue(JsonNode stateValues, String blockId, String actionId) {
         return stateValues.path(blockId).path(actionId).path(SELECTED_OPTION).path(VALUE_FIELD).asText(null);
-    }
-
-    private String getStatusEmoji(String statusName) {
-        return switch (statusName.toLowerCase()) {
-            case "open"        -> ":red_circle:";
-            case "in progress" -> ":large_yellow_circle:";
-            case "resolved"    -> ":large_green_circle:";
-            case "closed"      -> ":black_circle:";
-            default            -> ":white_circle:";
-        };
     }
 
     private boolean isAgent(User user) {
