@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqBulkUploadResult;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
@@ -55,10 +56,15 @@ public class FaqController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
-    @Operation(summary = "Create FAQ", description = "Add a new FAQ entry. Triggers embedding generation.")
+    @Operation(summary = "Create or update FAQ",
+            description = "Add a new FAQ entry, or update the existing FAQ with a matching question. "
+                    + "Returns 201 when a new FAQ is created, 200 when an existing one is updated. "
+                    + "Triggers embedding generation.")
     public ResponseEntity<ApiResponse<FaqResponse>> createFaq(@Valid @RequestBody CreateFaqRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("FAQ created", faqService.createFaq(request)));
+        FaqUpsertResult result = faqService.createFaq(request);
+        HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
+        String message = result.created() ? "FAQ created" : "FAQ updated";
+        return ResponseEntity.status(status).body(ApiResponse.success(message, result.faq()));
     }
 
     @PatchMapping("/{id}")
