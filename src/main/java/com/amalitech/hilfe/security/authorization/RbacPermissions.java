@@ -6,6 +6,8 @@ public final class RbacPermissions {
     public static final String INCIDENT_CREATE = "incident.create";
     public static final String INCIDENT_READ_OWN = "incident.read.own";
     public static final String INCIDENT_READ_ASSIGNED = "incident.read.assigned";
+    public static final String INCIDENT_READ_ALL = "incident.read.all";
+    public static final String INCIDENT_READ_DEPARTMENT = "incident.read.department";
     public static final String INCIDENT_ASSIGN = "incident.assign";
     public static final String INCIDENT_STATUS_CHANGE = "incident.status.change";
     public static final String INCIDENT_SEVERITY_CHANGE = "incident.severity.change";
@@ -64,6 +66,7 @@ public final class RbacPermissions {
 
     public static final List<String> AGENT_DEFAULTS = List.of(
             INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_DEPARTMENT,
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
@@ -76,6 +79,7 @@ public final class RbacPermissions {
 
     public static final List<String> ADMIN_DEFAULTS = List.of(
             INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_ALL,
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
@@ -123,6 +127,8 @@ public final class RbacPermissions {
             INCIDENT_CREATE,
             INCIDENT_READ_OWN,
             INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_ALL,
+            INCIDENT_READ_DEPARTMENT,
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
@@ -173,6 +179,7 @@ public final class RbacPermissions {
 
     public static final List<String> SUPER_ADMIN_DEFAULTS = List.of(
             INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_ALL,
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
