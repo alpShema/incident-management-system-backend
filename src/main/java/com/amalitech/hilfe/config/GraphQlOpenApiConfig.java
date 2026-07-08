@@ -554,7 +554,7 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
         ex.put("[faqs] create", ex(
                 "Create a FAQ — requires: faq.create",
                 null,
-                q("mutation CreateFaq($input: CreateFaqInput!) {\n  createFaq(input: $input) {\n    id question answer active createdAt\n  }\n}",
+                q("mutation CreateFaq($input: CreateFaqInput!) {\n  createFaq(input: $input) {\n    created\n    faq { id question answer active createdAt }\n  }\n}",
                         vars(K_INPUT, vars("question", "How do I reset my password?", "answer", "Contact the IT helpdesk to request a password reset.")))));
 
         ex.put("[faqs] toggleActive", ex(
