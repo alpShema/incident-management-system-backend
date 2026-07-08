@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -39,20 +38,18 @@ public class GraphQlWebSocketHandshakeInterceptor implements HandshakeIntercepto
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                     WebSocketHandler wsHandler, Map<String, Object> attributes) {
-        if (!(request instanceof ServletServerHttpRequest servletRequest)) {
-            return true;
+        if (request instanceof ServletServerHttpRequest servletRequest) {
+            String token = CookieUtils.getCookieValue(servletRequest.getServletRequest(), CookieUtils.ACCESS_TOKEN_COOKIE);
+            if (token != null) {
+                tokenService.authenticateAccessToken(token).ifPresent(authentication -> {
+                    SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+                    securityContext.setAuthentication(authentication);
+                    attributes.put(SECURITY_CONTEXT_ATTRIBUTE, securityContext);
+                });
+            }
         }
-
-        String token = CookieUtils.getCookieValue(servletRequest.getServletRequest(), CookieUtils.ACCESS_TOKEN_COOKIE);
-        if (token == null) {
-            return true;
-        }
-
-        tokenService.authenticateAccessToken(token).ifPresent(authentication -> {
-            SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-            securityContext.setAuthentication(authentication);
-            attributes.put(SECURITY_CONTEXT_ATTRIBUTE, securityContext);
-        });
+        // Always allow the handshake through, even without a valid cookie — mirrors plain
+        // HTTP /graphql being permitAll; @PreAuthorize enforces auth per-operation instead.
         return true;
     }
 

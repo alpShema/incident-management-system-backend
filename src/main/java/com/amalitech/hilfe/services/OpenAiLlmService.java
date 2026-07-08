@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 @Service
@@ -28,6 +29,10 @@ public class OpenAiLlmService implements LlmService {
 
     private static final String ROLE    = "role";
     private static final String CONTENT = "content";
+    private static final String ROLE_SYSTEM = "system";
+    private static final String ROLE_USER   = "user";
+    private static final String SSE_DATA_PREFIX = "data:";
+    private static final String SSE_DONE_MARKER = "[DONE]";
 
     private static final String REWRITE_SYSTEM_PROMPT = """
             You are a query rewriter for a support FAQ chatbot.
@@ -69,14 +74,14 @@ public class OpenAiLlmService implements LlmService {
     public String rewriteQuery(String userQuery, List<String> recentTurns) {
         log.debug("LLM rewrite | query=\"{}\" | historyTurns={}", userQuery, recentTurns.size());
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of(ROLE, "system", CONTENT, REWRITE_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, REWRITE_SYSTEM_PROMPT));
 
         if (!recentTurns.isEmpty()) {
             String history = String.join("\n", recentTurns);
-            messages.add(Map.of(ROLE, "user", CONTENT,
+            messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
                     "Conversation so far:\n" + history + "\n\nLatest message: " + userQuery));
         } else {
-            messages.add(Map.of(ROLE, "user", CONTENT, userQuery));
+            messages.add(Map.of(ROLE, ROLE_USER, CONTENT, userQuery));
         }
 
         return callChatCompletion("rewrite", messages);
@@ -87,7 +92,7 @@ public class OpenAiLlmService implements LlmService {
         log.debug("LLM answer | query=\"{}\" | faqQuestion=\"{}\" | hasSummary={}",
                 userQuery, faqQuestion, conversationSummary != null && !conversationSummary.isBlank());
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of(ROLE, "system", CONTENT, ANSWER_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, ANSWER_SYSTEM_PROMPT));
 
         StringBuilder userContent = new StringBuilder();
         if (conversationSummary != null && !conversationSummary.isBlank()) {
@@ -98,7 +103,7 @@ public class OpenAiLlmService implements LlmService {
                 .append("A: ").append(faqAnswer).append("\n\n")
                 .append("User's question: ").append(userQuery);
 
-        messages.add(Map.of(ROLE, "user", CONTENT, userContent.toString()));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT, userContent.toString()));
 
         return callChatCompletion("answer", messages);
     }
@@ -109,7 +114,7 @@ public class OpenAiLlmService implements LlmService {
         log.debug("LLM stream answer | query=\"{}\" | faqQuestion=\"{}\" | hasSummary={}",
                 userQuery, faqQuestion, conversationSummary != null && !conversationSummary.isBlank());
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of(ROLE, "system", CONTENT, ANSWER_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, ANSWER_SYSTEM_PROMPT));
 
         StringBuilder userContent = new StringBuilder();
         if (conversationSummary != null && !conversationSummary.isBlank()) {
@@ -120,7 +125,7 @@ public class OpenAiLlmService implements LlmService {
                 .append("A: ").append(faqAnswer).append("\n\n")
                 .append("User's question: ").append(userQuery);
 
-        messages.add(Map.of(ROLE, "user", CONTENT, userContent.toString()));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT, userContent.toString()));
 
         streamChatCompletion("answer-stream", messages, onChunk);
     }
@@ -149,28 +154,35 @@ public class OpenAiLlmService implements LlmService {
 
     private void readSseStream(java.io.InputStream body, Consumer<String> onChunk) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (!line.startsWith("data:")) {
-                    continue;
+            String line = reader.readLine();
+            while (line != null) {
+                String data = sseDataOf(line);
+                if (SSE_DONE_MARKER.equals(data)) {
+                    return;
                 }
-                String data = line.substring(5).trim();
-                if (data.isEmpty()) {
-                    continue;
+                if (data != null) {
+                    extractDelta(data).ifPresent(onChunk);
                 }
-                if ("[DONE]".equals(data)) {
-                    break;
-                }
-                StreamChunk chunk = objectMapper.readValue(data, StreamChunk.class);
-                if (chunk.choices() == null || chunk.choices().isEmpty()) {
-                    continue;
-                }
-                String content = chunk.choices().getFirst().delta().content();
-                if (content != null && !content.isEmpty()) {
-                    onChunk.accept(content);
-                }
+                line = reader.readLine();
             }
         }
+    }
+
+    private static String sseDataOf(String line) {
+        if (!line.startsWith(SSE_DATA_PREFIX)) {
+            return null;
+        }
+        String data = line.substring(SSE_DATA_PREFIX.length()).trim();
+        return data.isEmpty() ? null : data;
+    }
+
+    private Optional<String> extractDelta(String data) throws IOException {
+        StreamChunk chunk = objectMapper.readValue(data, StreamChunk.class);
+        if (chunk.choices() == null || chunk.choices().isEmpty()) {
+            return Optional.empty();
+        }
+        String content = chunk.choices().getFirst().delta().content();
+        return (content != null && !content.isEmpty()) ? Optional.of(content) : Optional.empty();
     }
 
     private String callChatCompletion(String operation, List<Map<String, String>> messages) {

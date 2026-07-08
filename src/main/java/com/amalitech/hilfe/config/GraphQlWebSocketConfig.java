@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.graphql.server.WebGraphQlHandler;
 import org.springframework.graphql.server.webmvc.GraphQlWebSocketHandler;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
@@ -39,7 +39,7 @@ public class GraphQlWebSocketConfig {
     public HandlerMapping graphQlWebSocketMapping() {
         GraphQlWebSocketHandler handler = new GraphQlWebSocketHandler(
                 webGraphQlHandler,
-                new MappingJackson2HttpMessageConverter(),
+                new JacksonJsonHttpMessageConverter(),
                 Duration.ofSeconds(60)
         );
 
