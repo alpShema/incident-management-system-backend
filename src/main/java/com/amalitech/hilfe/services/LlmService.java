@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.services;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 public interface LlmService {
 
@@ -19,5 +20,18 @@ public interface LlmService {
             String faqQuestion,
             String faqAnswer,
             String conversationSummary
+    );
+
+    /**
+     * Same as {@link #generateAnswer} but streams the completion, invoking {@code onChunk}
+     * with each text delta as it arrives. In stub mode, invokes {@code onChunk} once with
+     * the full FAQ answer.
+     */
+    void streamAnswer(
+            String userQuery,
+            String faqQuestion,
+            String faqAnswer,
+            String conversationSummary,
+            Consumer<String> onChunk
     );
 }

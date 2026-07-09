@@ -51,6 +51,9 @@ spring:
     graphiql:
       enabled: true
     path: /graphql
+    # WebSocket subscriptions are wired manually in GraphQlWebSocketConfig instead of via
+    # spring.graphql.websocket.path, so a HandshakeInterceptor can be attached for cookie-based
+    # auth (see GraphQlWebSocketHandshakeInterceptor for why).
 
 # ──────────────────────────────────────────
 # Server
