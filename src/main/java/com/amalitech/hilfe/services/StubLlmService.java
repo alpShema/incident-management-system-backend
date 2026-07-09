@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 @Service
 @Slf4j
@@ -26,5 +27,12 @@ public class StubLlmService implements LlmService {
     public String generateAnswer(String userQuery, String faqQuestion, String faqAnswer, String conversationSummary) {
         log.debug("StubLlmService: returning FAQ answer verbatim");
         return faqAnswer;
+    }
+
+    @Override
+    public void streamAnswer(String userQuery, String faqQuestion, String faqAnswer,
+                              String conversationSummary, Consumer<String> onChunk) {
+        log.debug("StubLlmService: streaming FAQ answer verbatim as a single chunk");
+        onChunk.accept(faqAnswer);
     }
 }

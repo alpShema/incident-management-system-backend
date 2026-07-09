@@ -566,6 +566,13 @@ type ChatbotResult {
   outcome: String
 }
 
+type ChatbotAnswerChunk {
+  delta: String
+  done: Boolean!
+  confidence: Float
+  outcome: String
+}
+
 type ChatbotInteraction {
   id: ID!
   userId: ID
@@ -990,4 +997,13 @@ type Mutation {
   # System config
   updateAutoCloseConfig(input: UpdateAutoCloseConfigInput!): AutoCloseConfig
   updateSlaConfig(input: UpdateSlaConfigInput!): SlaConfig
+}
+
+# ══════════════════════════════════════
+# SUBSCRIPTION TYPE
+# ══════════════════════════════════════
+
+type Subscription {
+  # Chatbot
+  chatbotAnswerStream(input: ChatbotQueryInput!): ChatbotAnswerChunk!
 }
