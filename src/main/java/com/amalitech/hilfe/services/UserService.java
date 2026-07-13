@@ -8,6 +8,7 @@ import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AdminRepository;
+import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -29,6 +30,7 @@ public class UserService {
     private final IncidentRepository incidentRepository;
     private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
+    private final AgentGroupMemberRepository agentGroupMemberRepository;
 
     public Page<UserRoleSummaryResponse> getUsers(
             String query, String roleCode, String locationId, Boolean status,
@@ -142,27 +144,61 @@ public class UserService {
 
     private void ensureAdminRecord(User user, String roleCode) {
         boolean isAdminRole = "ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
-        if (!isAdminRole || adminRepository.findByUserIdWithUser(user.getId()).isPresent()) {
+        var existingAdmin = adminRepository.findByUserIdWithUser(user.getId());
+
+        if (isAdminRole) {
+            if (existingAdmin.isPresent()) {
+                Admin admin = existingAdmin.get();
+                if (!admin.isStatus()) {
+                    admin.setStatus(true);
+                    adminRepository.save(admin);
+                }
+                return;
+            }
+            adminRepository.save(Admin.builder()
+                    .id(java.util.UUID.randomUUID().toString())
+                    .userId(user.getId())
+                    .status(true)
+                    .build());
             return;
         }
-        adminRepository.save(Admin.builder()
-                .id(java.util.UUID.randomUUID().toString())
-                .userId(user.getId())
-                .status(true)
-                .build());
+
+        existingAdmin.ifPresent(admin -> {
+            if (admin.isStatus()) {
+                admin.setStatus(false);
+                adminRepository.save(admin);
+            }
+        });
     }
 
     private void ensureAgentRecord(User user, String roleCode) {
         boolean needsAgentRecord = "AGENT".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
-        if (!needsAgentRecord || agentRepository.findByUserId(user.getId()).isPresent()) {
+        var existingAgent = agentRepository.findByUserId(user.getId());
+
+        if (needsAgentRecord) {
+            if (existingAgent.isPresent()) {
+                Agent agent = existingAgent.get();
+                if (!Boolean.TRUE.equals(agent.getStatus())) {
+                    agent.setStatus(true);
+                    agentRepository.save(agent);
+                }
+                return;
+            }
+            agentRepository.save(Agent.builder()
+                    .id(java.util.UUID.randomUUID().toString())
+                    .userId(user.getId())
+                    .status(true)
+                    .build());
             return;
         }
 
-        agentRepository.save(Agent.builder()
-                .id(java.util.UUID.randomUUID().toString())
-                .userId(user.getId())
-                .status(true)
-                .build());
+        existingAgent.ifPresent(agent -> {
+            if (Boolean.TRUE.equals(agent.getStatus())) {
+                agent.setStatus(false);
+                agentRepository.save(agent);
+            }
+            agentGroupMemberRepository.deleteByAgentId(agent.getId());
+        });
     }
 
     private String normalizeRoleCode(String roleCode) {
