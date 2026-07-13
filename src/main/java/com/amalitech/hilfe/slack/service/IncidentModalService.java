@@ -56,7 +56,6 @@ public class IncidentModalService {
     private static final String PLAIN_TEXT        = "plain_text";
 
     private static final String HILFE_WEB_URL     = "https://hilfe-pro-frontend.amalitech-dev.net";
-    private static final String EMOJI_NONE_CIRCLE = ":white_circle:";
 
     private record ModalState(
             String title,
@@ -429,13 +428,13 @@ public class IncidentModalService {
             List<com.slack.api.model.block.element.BlockElement> navButtons = new ArrayList<>();
             if (page > 0) {
                 int prevPage = page - 1;
-                navButtons.add(button(b -> b.text(plainText("← Previous"))
+                navButtons.add(button(b -> b.text(plainText("Previous"))
                         .actionId(prevActionId)
                         .value(String.valueOf(prevPage))));
             }
             if (page < totalPages - 1) {
                 int nextPage = page + 1;
-                navButtons.add(button(b -> b.text(plainText("Next →"))
+                navButtons.add(button(b -> b.text(plainText("Next"))
                         .actionId(nextActionId)
                         .value(String.valueOf(nextPage))));
             }
@@ -455,42 +454,17 @@ public class IncidentModalService {
         String url          = HILFE_WEB_URL + "/incidents/" + incident.id();
 
         StringBuilder text = new StringBuilder();
-        text.append("*#").append(incident.incidentNo()).append("  ").append(incident.title()).append("*\n");
-        text.append(getStatusEmoji(statusName)).append(" ").append(statusName);
-        text.append("   ").append(getPriorityEmoji(priorityName)).append(" ").append(priorityName);
+        text.append("*<").append(url).append("|#").append(incident.incidentNo()).append("  ")
+                .append(incident.title()).append(">*\n");
+        text.append("Status: *").append(statusName).append("*");
+        text.append("   Priority: *").append(priorityName).append("*");
         if (incident.assignedTo() != null && incident.assignedTo().fullName() != null) {
-            text.append("   ·   Assigned to ").append(incident.assignedTo().fullName());
+            text.append("   Assigned to: *").append(incident.assignedTo().fullName()).append("*");
         }
 
-        LayoutBlock incidentSection = section(s -> s
-                .text(markdownText(text.toString()))
-                .accessory(button(b -> b
-                        .text(plainText("Open"))
-                        .url(url)
-                        .actionId("open_incident_" + incident.id()))));
+        LayoutBlock incidentSection = section(s -> s.text(markdownText(text.toString())));
 
-        return List.of(incidentSection);
-    }
-
-    private String getStatusEmoji(String statusName) {
-        return switch (statusName.toLowerCase()) {
-            case "open"        -> ":large_green_circle:";
-            case "in progress" -> ":large_yellow_circle:";
-            case "resolved"    -> ":large_blue_circle:";
-            case "closed"      -> EMOJI_NONE_CIRCLE;
-            default            -> EMOJI_NONE_CIRCLE;
-        };
-    }
-
-    private String getPriorityEmoji(String priority) {
-        if (priority == null) return EMOJI_NONE_CIRCLE;
-        return switch (priority.toLowerCase()) {
-            case "critical"            -> ":red_circle:";
-            case "high"                -> ":large_orange_circle:";
-            case "medium", "moderate"  -> ":large_yellow_circle:";
-            case "low"                 -> ":large_blue_circle:";
-            default                    -> EMOJI_NONE_CIRCLE;
-        };
+        return List.of(incidentSection, divider());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
