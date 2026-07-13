@@ -471,4 +471,18 @@ class AgentGroupServiceTest {
                 .isEqualTo(404);
     }
 
+    @Test
+    void addMember_activeAgent_succeeds() {
+        Agent agent = memberAgent();
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(true)));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.existsByAgentIdAndAgentGroupId("agent-1", "group-1")).thenReturn(false);
+
+        var response = agentGroupService.addMember("group-1", "agent-1");
+
+        assertThat(response.agentId()).isEqualTo("agent-1");
+        verify(agentGroupMemberRepository).save(any());
+    }
+
 }
