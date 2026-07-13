@@ -11,7 +11,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @ConfigurationPropertiesScan
 @EnableAsync
 @EnableScheduling
-//main hilfe
 public class HilfeApplication {
 
     public static void main(String[] args) {
