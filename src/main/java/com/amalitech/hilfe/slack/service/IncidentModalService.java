@@ -380,7 +380,6 @@ public class IncidentModalService {
             blocks.add(section(s -> s.text(markdownText(
                     "_You haven't created any incidents yet._\n\nUse `/hilfe new` to create one."))));
         } else {
-            blocks.add(context(c -> c.elements(List.of(markdownText(buildStatusSummary(incidents, totalElements, totalPages))))));
             for (IncidentResponse incident : incidents) {
                 blocks.addAll(buildIncidentBlock(incident));
             }
@@ -406,7 +405,6 @@ public class IncidentModalService {
         if (incidents.isEmpty()) {
             blocks.add(section(s -> s.text(markdownText("_You don't have any assigned incidents._"))));
         } else {
-            blocks.add(context(c -> c.elements(List.of(markdownText(buildStatusSummary(incidents, totalElements, totalPages))))));
             for (IncidentResponse incident : incidents) {
                 blocks.addAll(buildIncidentBlock(incident));
             }
@@ -446,8 +444,7 @@ public class IncidentModalService {
             }
             long from = (long) page * 10 + 1;
             long to   = Math.min((long)(page + 1) * 10, totalElements);
-            String pageInfo = "Showing *" + from + "–" + to + "* of *" + totalElements
-                    + "* incidents  ·  Page *" + (page + 1) + "* of *" + totalPages + "*";
+            String pageInfo = "Showing *" + from + "* to *" + to + "* of *" + totalElements + "* Incidents";
             blocks.add(context(c -> c.elements(List.of(markdownText(pageInfo)))));
         }
     }
@@ -457,38 +454,22 @@ public class IncidentModalService {
         String priorityName = incident.priority() != null ? incident.priority().name() : "N/A";
         String url          = HILFE_WEB_URL + "/incidents/" + incident.id();
 
-        LayoutBlock titleSection = section(s -> s
-                .text(markdownText("*#" + incident.incidentNo() + "  " + incident.title() + "*"))
+        StringBuilder text = new StringBuilder();
+        text.append("*#").append(incident.incidentNo()).append("  ").append(incident.title()).append("*\n");
+        text.append(getStatusEmoji(statusName)).append(" ").append(statusName);
+        text.append("   ").append(getPriorityEmoji(priorityName)).append(" ").append(priorityName);
+        if (incident.assignedTo() != null && incident.assignedTo().fullName() != null) {
+            text.append("   ·   Assigned to ").append(incident.assignedTo().fullName());
+        }
+
+        LayoutBlock incidentSection = section(s -> s
+                .text(markdownText(text.toString()))
                 .accessory(button(b -> b
-                        .text(plainText("Open ↗"))
+                        .text(plainText("Open"))
                         .url(url)
                         .actionId("open_incident_" + incident.id()))));
 
-        StringBuilder meta = new StringBuilder();
-        meta.append(getStatusEmoji(statusName)).append("  ").append(statusName);
-        meta.append("    ").append(getPriorityEmoji(priorityName)).append("  ").append(priorityName).append(" priority");
-        if (incident.assignedTo() != null && incident.assignedTo().fullName() != null) {
-            meta.append("    :bust_in_silhouette:  ").append(incident.assignedTo().fullName());
-        }
-        String metaStr = meta.toString();
-        LayoutBlock metaContext = context(c -> c.elements(List.of(markdownText(metaStr))));
-
-        return List.of(titleSection, metaContext, divider());
-    }
-
-    private String buildStatusSummary(List<IncidentResponse> incidents, long totalElements, int totalPages) {
-        StringBuilder sb = new StringBuilder("Showing *" + totalElements + "* incident" + (totalElements == 1 ? "" : "s"));
-        if (totalPages == 1) {
-            Map<String, Long> countByStatus = new LinkedHashMap<>();
-            for (IncidentResponse i : incidents) {
-                if (i.status() != null) {
-                    countByStatus.merge(i.status().name(), 1L, Long::sum);
-                }
-            }
-            countByStatus.forEach((status, count) ->
-                    sb.append("  ·  ").append(getStatusEmoji(status)).append("  ").append(count).append(" ").append(status));
-        }
-        return sb.toString();
+        return List.of(incidentSection);
     }
 
     private String getStatusEmoji(String statusName) {
