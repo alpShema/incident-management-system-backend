@@ -195,6 +195,9 @@ public class AgentGroupService {
     public AgentGroupMemberResponse addMember(String agentGroupId, String agentId) {
         ensureActiveAgentGroupExists(agentGroupId);
         Agent agent = findAgentWithUser(agentId);
+        if (!Boolean.TRUE.equals(agent.getStatus())) {
+            throw new ArmsAuthException("Cannot add an inactive agent to a group", 400);
+        }
         addMembership(agentId, agentGroupId);
         return AgentGroupMemberResponse.from(agent);
     }
