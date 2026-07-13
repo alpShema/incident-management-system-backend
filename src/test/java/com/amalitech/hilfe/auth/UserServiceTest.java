@@ -6,14 +6,12 @@ import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.models.Admin;
-import com.amalitech.hilfe.repositories.AdminRepository;
-import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.services.RoleAccessSyncService;
 import com.amalitech.hilfe.services.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +27,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -38,11 +35,10 @@ class UserServiceTest {
 
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
-    @Mock AdminRepository adminRepository;
     @Mock IncidentRepository incidentRepository;
     @Mock RoleRepository roleRepository;
     @Mock ActivityLogService activityLogService;
-    @Mock AgentGroupMemberRepository agentGroupMemberRepository;
+    @Mock RoleAccessSyncService roleAccessSyncService;
     @InjectMocks UserService userService;
 
     private Role role(String code, String name) {
@@ -224,12 +220,11 @@ class UserServiceTest {
         assertThat(result.userId()).isEqualTo("u1");
         assertThat(result.roleCode()).isEqualTo("ADMIN");
         assertThat(result.roleName()).isEqualTo("Admin");
-        verify(agentRepository, never()).save(any(Agent.class));
         verify(activityLogService).logUserRoleChange("admin-1", "u1", "CLIENT", "ADMIN");
     }
 
     @Test
-    void assignUserRole_toAgent_createsAgentRecordWhenMissing() {
+    void assignUserRole_delegatesAgentAndAdminSyncToRoleAccessSyncService() {
         User user = User.builder()
                 .id("u1")
                 .email("john@test.com")
@@ -245,32 +240,29 @@ class UserServiceTest {
         UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
 
         assertThat(result.roleCode()).isEqualTo("AGENT");
-        var agentCaptor = forClass(Agent.class);
-        verify(agentRepository).save(agentCaptor.capture());
-        assertThat(agentCaptor.getValue().getUserId()).isEqualTo("u1");
-        assertThat(agentCaptor.getValue().getStatus()).isTrue();
+        verify(roleAccessSyncService).syncAgentRecord(user, "AGENT");
+        verify(roleAccessSyncService).syncAdminRecord(user, "AGENT");
     }
 
     @Test
-    void assignUserRole_toAgentWithExistingAgentRecord_doesNotCreateDuplicate() {
+    void assignUserRole_demoteFromAgent_delegatesDemotionToRoleAccessSyncService() {
         User user = User.builder()
                 .id("u1")
                 .email("john@test.com")
                 .fullName("John Doe")
-                .roleCode(RoleCode.CLIENT)
+                .roleCode(RoleCode.AGENT)
                 .build();
 
         when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(
-                Agent.builder().id("agent-1").userId("u1").status(true).build()));
-        when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(role("AGENT", "Agent")));
-        when(incidentRepository.countByUserId("u1")).thenReturn(4L);
-        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(5L);
+        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
+        when(roleRepository.findByCode("CLIENT")).thenReturn(Optional.of(role("CLIENT", "Client")));
+        when(incidentRepository.countByUserId("u1")).thenReturn(0L);
 
-        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
+        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.CLIENT);
 
-        assertThat(result.roleCode()).isEqualTo("AGENT");
-        verify(agentRepository, never()).save(any(Agent.class));
+        assertThat(result.roleCode()).isEqualTo("CLIENT");
+        verify(roleAccessSyncService).syncAgentRecord(user, "CLIENT");
+        verify(roleAccessSyncService).syncAdminRecord(user, "CLIENT");
     }
 
     @Test
@@ -304,119 +296,4 @@ class UserServiceTest {
                 .logUserRoleChange(anyString(), anyString(), anyString(), anyString());
     }
 
-    @Test
-    void assignUserRole_demoteFromAgent_deactivatesAgentAndRemovesGroupMemberships() {
-        User user = User.builder()
-                .id("u1")
-                .email("john@test.com")
-                .fullName("John Doe")
-                .roleCode(RoleCode.AGENT)
-                .build();
-        Agent agent = Agent.builder().id("agent-1").userId("u1").status(true).build();
-
-        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(agent));
-        when(roleRepository.findByCode("CLIENT")).thenReturn(Optional.of(role("CLIENT", "Client")));
-        when(incidentRepository.countByUserId("u1")).thenReturn(0L);
-        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(0L);
-
-        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.CLIENT);
-
-        assertThat(result.roleCode()).isEqualTo("CLIENT");
-        assertThat(agent.getStatus()).isFalse();
-        verify(agentRepository).save(agent);
-        verify(agentGroupMemberRepository).deleteByAgentId("agent-1");
-    }
-
-    @Test
-    void assignUserRole_repromoteToAgent_reactivatesExistingInactiveAgentRecord() {
-        User user = User.builder()
-                .id("u1")
-                .email("john@test.com")
-                .fullName("John Doe")
-                .roleCode(RoleCode.CLIENT)
-                .build();
-        Agent agent = Agent.builder().id("agent-1").userId("u1").status(false).build();
-
-        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(agent));
-        when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(role("AGENT", "Agent")));
-        when(incidentRepository.countByUserId("u1")).thenReturn(0L);
-        when(incidentRepository.countByAssignedToId("agent-1")).thenReturn(0L);
-
-        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.AGENT);
-
-        assertThat(result.roleCode()).isEqualTo("AGENT");
-        assertThat(agent.getStatus()).isTrue();
-        verify(agentRepository).save(agent);
-        verify(agentGroupMemberRepository, never()).deleteByAgentId(any());
-    }
-
-    @Test
-    void assignUserRole_demoteFromAdmin_deactivatesAdminRecord() {
-        User user = User.builder()
-                .id("u1")
-                .email("admin@test.com")
-                .fullName("Admin One")
-                .roleCode(RoleCode.ADMIN)
-                .build();
-        Admin admin = Admin.builder().id("admin-rec-1").userId("u1").status(true).build();
-
-        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(adminRepository.findByUserIdWithUser("u1")).thenReturn(Optional.of(admin));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
-        when(roleRepository.findByCode("CLIENT")).thenReturn(Optional.of(role("CLIENT", "Client")));
-        when(incidentRepository.countByUserId("u1")).thenReturn(0L);
-
-        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.CLIENT);
-
-        assertThat(result.roleCode()).isEqualTo("CLIENT");
-        assertThat(admin.isStatus()).isFalse();
-        verify(adminRepository).save(admin);
-    }
-
-    @Test
-    void assignUserRole_repromoteToAdmin_reactivatesExistingInactiveAdminRecord() {
-        User user = User.builder()
-                .id("u1")
-                .email("admin@test.com")
-                .fullName("Admin One")
-                .roleCode(RoleCode.CLIENT)
-                .build();
-        Admin admin = Admin.builder().id("admin-rec-1").userId("u1").status(false).build();
-
-        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(adminRepository.findByUserIdWithUser("u1")).thenReturn(Optional.of(admin));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
-        when(roleRepository.findByCode("ADMIN")).thenReturn(Optional.of(role("ADMIN", "Admin")));
-        when(incidentRepository.countByUserId("u1")).thenReturn(0L);
-
-        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.ADMIN);
-
-        assertThat(result.roleCode()).isEqualTo("ADMIN");
-        assertThat(admin.isStatus()).isTrue();
-        verify(adminRepository).save(admin);
-    }
-
-    @Test
-    void assignUserRole_demoteWithNoExistingAgentOrAdminRecord_noSavesOrDeletes() {
-        User user = User.builder()
-                .id("u1")
-                .email("john@test.com")
-                .fullName("John Doe")
-                .roleCode(RoleCode.AGENT)
-                .build();
-
-        when(userRepository.findById("u1")).thenReturn(Optional.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
-        when(roleRepository.findByCode("CLIENT")).thenReturn(Optional.of(role("CLIENT", "Client")));
-        when(incidentRepository.countByUserId("u1")).thenReturn(0L);
-
-        UserRoleSummaryResponse result = userService.assignUserRole("admin-1", "u1", RoleCode.CLIENT);
-
-        assertThat(result.roleCode()).isEqualTo("CLIENT");
-        verify(agentRepository, never()).save(any(Agent.class));
-        verify(agentGroupMemberRepository, never()).deleteByAgentId(any());
-        verify(adminRepository, never()).save(any(Admin.class));
-    }
 }

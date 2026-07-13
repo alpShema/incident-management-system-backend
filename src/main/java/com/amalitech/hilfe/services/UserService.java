@@ -2,13 +2,9 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.models.Admin;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.repositories.AdminRepository;
-import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -26,11 +22,10 @@ import org.springframework.stereotype.Service;
 public class UserService {
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
-    private final AdminRepository adminRepository;
     private final IncidentRepository incidentRepository;
     private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
-    private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final RoleAccessSyncService roleAccessSyncService;
 
     public Page<UserRoleSummaryResponse> getUsers(
             String query, String roleCode, String locationId, Boolean status,
@@ -59,8 +54,8 @@ public class UserService {
 
         String previousRoleCode = user.getRoleCode();
         user.setRoleCode(normalizedRoleCode);
-        ensureAgentRecord(user, normalizedRoleCode);
-        ensureAdminRecord(user, normalizedRoleCode);
+        roleAccessSyncService.syncAgentRecord(user, normalizedRoleCode);
+        roleAccessSyncService.syncAdminRecord(user, normalizedRoleCode);
 
         if (previousRoleCode == null || !previousRoleCode.equals(normalizedRoleCode)) {
             activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, normalizedRoleCode);
@@ -140,65 +135,6 @@ public class UserService {
                 })
                 .toList());
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), remapped);
-    }
-
-    private void ensureAdminRecord(User user, String roleCode) {
-        boolean isAdminRole = "ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
-        var existingAdmin = adminRepository.findByUserIdWithUser(user.getId());
-
-        if (isAdminRole) {
-            if (existingAdmin.isPresent()) {
-                Admin admin = existingAdmin.get();
-                if (!admin.isStatus()) {
-                    admin.setStatus(true);
-                    adminRepository.save(admin);
-                }
-                return;
-            }
-            adminRepository.save(Admin.builder()
-                    .id(java.util.UUID.randomUUID().toString())
-                    .userId(user.getId())
-                    .status(true)
-                    .build());
-            return;
-        }
-
-        existingAdmin.ifPresent(admin -> {
-            if (admin.isStatus()) {
-                admin.setStatus(false);
-                adminRepository.save(admin);
-            }
-        });
-    }
-
-    private void ensureAgentRecord(User user, String roleCode) {
-        boolean needsAgentRecord = "AGENT".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
-        var existingAgent = agentRepository.findByUserId(user.getId());
-
-        if (needsAgentRecord) {
-            if (existingAgent.isPresent()) {
-                Agent agent = existingAgent.get();
-                if (!Boolean.TRUE.equals(agent.getStatus())) {
-                    agent.setStatus(true);
-                    agentRepository.save(agent);
-                }
-                return;
-            }
-            agentRepository.save(Agent.builder()
-                    .id(java.util.UUID.randomUUID().toString())
-                    .userId(user.getId())
-                    .status(true)
-                    .build());
-            return;
-        }
-
-        existingAgent.ifPresent(agent -> {
-            if (Boolean.TRUE.equals(agent.getStatus())) {
-                agent.setStatus(false);
-                agentRepository.save(agent);
-            }
-            agentGroupMemberRepository.deleteByAgentId(agent.getId());
-        });
     }
 
     private String normalizeRoleCode(String roleCode) {
