@@ -2,7 +2,11 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqBulkUploadResult;
+import com.amalitech.hilfe.dto.FaqInspectionResult;
+import com.amalitech.hilfe.dto.FaqInspectionRow;
+import com.amalitech.hilfe.dto.FaqInspectionSummary;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.FaqRowStatus;
 import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
@@ -14,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -130,8 +136,8 @@ public class FaqService {
             int rowNumber = 1;
             for (CSVRecord csvRecord : csvParser) {
                 rowNumber++;
-                String question = csvRecord.isMapped("question") ? csvRecord.get("question") : "";
-                String answer = csvRecord.isMapped("answer") ? csvRecord.get("answer") : "";
+                String question = extractField(csvRecord, "question");
+                String answer = extractField(csvRecord, "answer");
                 String validationError = validateRow(question, answer);
                 if (validationError != null) {
                     errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
@@ -148,6 +154,69 @@ public class FaqService {
         }
 
         return new FaqBulkUploadResult(created, updated, errors.size(), errors);
+    }
+
+    // Parses the same CSV shape as bulkImport() but only previews it: every row is
+    // reported back with its own missing-question/missing-answer flags instead of
+    // being saved, so the caller can show a "ready vs. needs attention" preview
+    // before committing to the actual import.
+    public FaqInspectionResult inspectBulkImport(MultipartFile file, FaqRowStatus statusFilter, Pageable pageable) {
+        List<FaqInspectionRow> allRows = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+             CSVParser csvParser = CSVFormat.DEFAULT.builder()
+                     .setHeader()
+                     .setSkipHeaderRecord(true)
+                     .setTrim(true)
+                     .setIgnoreEmptyLines(true)
+                     .setIgnoreHeaderCase(true)
+                     .build()
+                     .parse(reader)) {
+
+            int rowNumber = 1;
+            for (CSVRecord csvRecord : csvParser) {
+                rowNumber++;
+                String question = extractField(csvRecord, "question");
+                String answer = extractField(csvRecord, "answer");
+                boolean questionMissing = !StringUtils.hasText(question);
+                boolean answerMissing = !StringUtils.hasText(answer);
+                FaqRowStatus status = (questionMissing || answerMissing) ? FaqRowStatus.NEEDS_ATTENTION : FaqRowStatus.READY;
+                allRows.add(new FaqInspectionRow(
+                        rowNumber, blankToNull(question), blankToNull(answer), questionMissing, answerMissing, status));
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
+        }
+
+        int needsAttentionCount = (int) allRows.stream().filter(row -> row.status() == FaqRowStatus.NEEDS_ATTENTION).count();
+        FaqInspectionSummary summary = new FaqInspectionSummary(
+                allRows.size(), allRows.size() - needsAttentionCount, needsAttentionCount);
+
+        List<FaqInspectionRow> filteredRows = statusFilter == null
+                ? allRows
+                : allRows.stream().filter(row -> row.status() == statusFilter).toList();
+
+        return new FaqInspectionResult(summary, PageResponse.from(paginate(filteredRows, pageable)));
+    }
+
+    private String extractField(CSVRecord csvRecord, String column) {
+        return csvRecord.isMapped(column) ? csvRecord.get(column) : "";
+    }
+
+    private String blankToNull(String value) {
+        return StringUtils.hasText(value) ? value : null;
+    }
+
+    private Page<FaqInspectionRow> paginate(List<FaqInspectionRow> items, Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return new PageImpl<>(items, pageable, items.size());
+        }
+        int start = (int) pageable.getOffset();
+        if (start >= items.size()) {
+            return new PageImpl<>(List.of(), pageable, items.size());
+        }
+        int end = Math.min(start + pageable.getPageSize(), items.size());
+        return new PageImpl<>(items.subList(start, end), pageable, items.size());
     }
 
     private String validateRow(String question, String answer) {

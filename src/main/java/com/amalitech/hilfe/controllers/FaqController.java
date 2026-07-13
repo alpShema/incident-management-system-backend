@@ -3,7 +3,9 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqBulkUploadResult;
+import com.amalitech.hilfe.dto.FaqInspectionResult;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.FaqRowStatus;
 import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
@@ -118,14 +120,9 @@ public class FaqController {
     public ResponseEntity<ApiResponse<FaqBulkUploadResult>> bulkUpload(
             @RequestParam("file") MultipartFile file
     ) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.success("Uploaded file is empty", null));
-        }
-        String filename = file.getOriginalFilename();
-        if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.success("Only CSV files are accepted", null));
+        String fileError = validateCsvFile(file);
+        if (fileError != null) {
+            return ResponseEntity.badRequest().body(ApiResponse.success(fileError, null));
         }
         FaqBulkUploadResult result = faqService.bulkImport(file);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -134,5 +131,38 @@ public class FaqController {
                                 + result.failed() + " row(s) skipped",
                         result
                 ));
+    }
+
+    @PostMapping("/inspect")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
+    @Operation(summary = "Inspect a bulk FAQ CSV",
+            description = "Parses a CSV file and previews every row without creating or modifying any FAQs. "
+                    + "Returns a summary of rows ready to import vs. rows needing attention (missing question "
+                    + "and/or answer), plus the paginated rows themselves. Pass `status=NEEDS_ATTENTION` to "
+                    + "return only the rows with issues, or `status=READY` for only the importable ones.")
+    public ResponseEntity<ApiResponse<FaqInspectionResult>> inspect(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) FaqRowStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        String fileError = validateCsvFile(file);
+        if (fileError != null) {
+            return ResponseEntity.badRequest().body(ApiResponse.success(fileError, null));
+        }
+        var pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(ApiResponse.success(
+                "CSV inspected", faqService.inspectBulkImport(file, status, pageable)));
+    }
+
+    private String validateCsvFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            return "Uploaded file is empty";
+        }
+        String filename = file.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
+            return "Only CSV files are accepted";
+        }
+        return null;
     }
 }

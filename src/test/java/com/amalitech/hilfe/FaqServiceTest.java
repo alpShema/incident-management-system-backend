@@ -2,6 +2,8 @@ package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqBulkUploadResult;
+import com.amalitech.hilfe.dto.FaqInspectionResult;
+import com.amalitech.hilfe.dto.FaqRowStatus;
 import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.FaqResponse;
@@ -18,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
@@ -240,5 +243,108 @@ class FaqServiceTest {
         assertThat(result.failed()).isZero();
         assertThat(existing.getAnswer()).isEqualTo("New answer");
         verify(faqRepository).save(argThat(f -> "existing-id".equals(f.getId())));
+    }
+
+    private MockMultipartFile csvFile(String csv) {
+        return new MockMultipartFile("file", "faqs.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void inspectBulkImport_mixedRows_summaryCountsReadyAndNeedsAttention() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,A1\n,A2\nQ3,\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        assertThat(result.summary().totalRows()).isEqualTo(3);
+        assertThat(result.summary().readyCount()).isEqualTo(1);
+        assertThat(result.summary().needsAttentionCount()).isEqualTo(2);
+        assertThat(result.rows().totalElements()).isEqualTo(3);
+    }
+
+    @Test
+    void inspectBulkImport_missingQuestion_flagsQuestionMissingAndNullsIt() {
+        MockMultipartFile file = csvFile("question,answer\n,A2\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        var row = result.rows().items().get(0);
+        assertThat(row.row()).isEqualTo(2);
+        assertThat(row.question()).isNull();
+        assertThat(row.answer()).isEqualTo("A2");
+        assertThat(row.questionMissing()).isTrue();
+        assertThat(row.answerMissing()).isFalse();
+        assertThat(row.status()).isEqualTo(FaqRowStatus.NEEDS_ATTENTION);
+    }
+
+    @Test
+    void inspectBulkImport_missingAnswer_flagsAnswerMissingAndNullsIt() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        var row = result.rows().items().get(0);
+        assertThat(row.question()).isEqualTo("Q1");
+        assertThat(row.answer()).isNull();
+        assertThat(row.questionMissing()).isFalse();
+        assertThat(row.answerMissing()).isTrue();
+        assertThat(row.status()).isEqualTo(FaqRowStatus.NEEDS_ATTENTION);
+    }
+
+    @Test
+    void inspectBulkImport_completeRow_isReady() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,A1\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        var row = result.rows().items().get(0);
+        assertThat(row.questionMissing()).isFalse();
+        assertThat(row.answerMissing()).isFalse();
+        assertThat(row.status()).isEqualTo(FaqRowStatus.READY);
+    }
+
+    @Test
+    void inspectBulkImport_filterNeedsAttention_returnsOnlyProblemRowsButSummaryCoversWholeFile() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,A1\n,A2\nQ3,\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, FaqRowStatus.NEEDS_ATTENTION, Pageable.unpaged());
+
+        assertThat(result.rows().items()).hasSize(2);
+        assertThat(result.rows().items()).allMatch(r -> r.status() == FaqRowStatus.NEEDS_ATTENTION);
+        assertThat(result.rows().totalElements()).isEqualTo(2);
+        // Summary always reflects the whole file, regardless of the filter applied to `rows`.
+        assertThat(result.summary().totalRows()).isEqualTo(3);
+    }
+
+    @Test
+    void inspectBulkImport_filterReady_returnsOnlyCleanRows() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,A1\n,A2\nQ3,\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, FaqRowStatus.READY, Pageable.unpaged());
+
+        assertThat(result.rows().items()).hasSize(1);
+        assertThat(result.rows().items().get(0).question()).isEqualTo("Q1");
+    }
+
+    @Test
+    void inspectBulkImport_pagination_returnsRequestedPageOfRows() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,A1\nQ2,A2\nQ3,A3\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, PageRequest.of(1, 2));
+
+        assertThat(result.rows().items()).hasSize(1);
+        assertThat(result.rows().items().get(0).question()).isEqualTo("Q3");
+        assertThat(result.rows().totalElements()).isEqualTo(3);
+        assertThat(result.rows().totalPages()).isEqualTo(2);
+    }
+
+    @Test
+    void inspectBulkImport_neverPersistsAnything() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,A1\n,A2\n");
+
+        faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        verify(faqRepository, never()).save(any());
+        verify(faqRepository, never()).saveAndFlush(any());
+        verify(faqEmbeddingService, never()).embedAndStore(any());
     }
 }
