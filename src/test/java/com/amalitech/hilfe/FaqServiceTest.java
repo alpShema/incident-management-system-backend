@@ -354,8 +354,9 @@ class FaqServiceTest {
         // No "question,answer" header line -- the first data row must not be
         // silently consumed as the header by the CSV parser.
         MockMultipartFile file = csvFile("How do I reset my password?,Click the forgot password link\n");
+        Pageable unpaged = Pageable.unpaged();
 
-        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("missing required headers")
                 .hasMessageContaining("question, answer");
@@ -364,8 +365,9 @@ class FaqServiceTest {
     @Test
     void inspectBulkImport_missingAnswerHeaderOnly_rejected() {
         MockMultipartFile file = csvFile("question,notes\nQ1,some note\n");
+        Pageable unpaged = Pageable.unpaged();
 
-        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("missing required headers");
     }
@@ -373,8 +375,9 @@ class FaqServiceTest {
     @Test
     void inspectBulkImport_headersOnlyNoDataRows_rejectedWithDescriptiveError() {
         MockMultipartFile file = csvFile("question,answer\n");
+        Pageable unpaged = Pageable.unpaged();
 
-        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no data rows");
     }
@@ -385,8 +388,9 @@ class FaqServiceTest {
         // establishes a real header row, so it must fail the header check
         // rather than silently returning an empty "all good" result.
         MockMultipartFile file = csvFile("\n");
+        Pageable unpaged = Pageable.unpaged();
 
-        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("missing required headers");
     }
