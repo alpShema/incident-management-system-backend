@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -346,5 +347,92 @@ class FaqServiceTest {
         verify(faqRepository, never()).save(any());
         verify(faqRepository, never()).saveAndFlush(any());
         verify(faqEmbeddingService, never()).embedAndStore(any());
+    }
+
+    @Test
+    void inspectBulkImport_headerlessCsv_rejectedInsteadOfTreatingFirstRowAsHeader() {
+        // No "question,answer" header line -- the first data row must not be
+        // silently consumed as the header by the CSV parser.
+        MockMultipartFile file = csvFile("How do I reset my password?,Click the forgot password link\n");
+
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing required headers")
+                .hasMessageContaining("question, answer");
+    }
+
+    @Test
+    void inspectBulkImport_missingAnswerHeaderOnly_rejected() {
+        MockMultipartFile file = csvFile("question,notes\nQ1,some note\n");
+
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing required headers");
+    }
+
+    @Test
+    void inspectBulkImport_headersOnlyNoDataRows_rejectedWithDescriptiveError() {
+        MockMultipartFile file = csvFile("question,answer\n");
+
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no data rows");
+    }
+
+    @Test
+    void inspectBulkImport_blankContent_rejectedAsMissingHeaders() {
+        // Non-zero-byte but content-free CSV (e.g. a stray newline) never
+        // establishes a real header row, so it must fail the header check
+        // rather than silently returning an empty "all good" result.
+        MockMultipartFile file = csvFile("\n");
+
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, Pageable.unpaged()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing required headers");
+    }
+
+    @Test
+    void inspectBulkImport_utf8BomBeforeHeader_stillRecognizesHeaders() {
+        // Excel/Sheets CSV exports commonly prepend a UTF-8 BOM before the header
+        // row; it must be stripped so "question" isn't seen as "<BOM>question".
+        String csv = "﻿question,answer\nQ1,A1\n";
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "faqs.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        assertThat(result.summary().totalRows()).isEqualTo(1);
+        assertThat(result.rows().items().get(0).question()).isEqualTo("Q1");
+    }
+
+    @Test
+    void inspectBulkImport_headerCaseAndWhitespaceVariants_stillRecognized() {
+        MockMultipartFile file = csvFile(" Question , Answer \nQ1,A1\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        assertThat(result.summary().totalRows()).isEqualTo(1);
+        assertThat(result.rows().items().get(0).question()).isEqualTo("Q1");
+    }
+
+    @Test
+    void bulkImport_headerlessCsv_rejectedInsteadOfTreatingFirstRowAsHeader() {
+        MockMultipartFile file = csvFile("How do I reset my password?,Click the forgot password link\n");
+
+        assertThatThrownBy(() -> faqService.bulkImport(file))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing required headers");
+
+        verify(faqRepository, never()).save(any());
+        verify(faqRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void bulkImport_headersOnlyNoDataRows_rejectedWithDescriptiveError() {
+        MockMultipartFile file = csvFile("question,answer\n");
+
+        assertThatThrownBy(() -> faqService.bulkImport(file))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no data rows");
     }
 }
