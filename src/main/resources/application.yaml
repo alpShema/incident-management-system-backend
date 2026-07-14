@@ -2,6 +2,11 @@ spring:
   application:
     name: hilfe
 
+  # Fallback profile when nothing else (env var, command-line arg) specifies one.
+  # SPRING_PROFILES_ACTIVE still overrides this if/when it's set on a deployed host.
+  profiles:
+    default: dev
+
   # ──────────────────────────────────────────
   # Database
   # ──────────────────────────────────────────
@@ -136,37 +141,6 @@ logging:
 embedding:
   model: ${EMBEDDING_MODEL:text-embedding-3-small}
 
----
-spring:
-  config:
-    activate:
-      on-profile: dev
-logging:
-  level:
-    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
-
-# ──────────────────────────────────────────
-# ARMS SSO Integration
-# ──────────────────────────────────────────
-arms:
-  sso-url: ${ARMS_SSO_URL:http://localhost}
-
-# ──────────────────────────────────────────
-# Cookie
-# ──────────────────────────────────────────
-cookie:
-  secure: ${COOKIE_SECURE:false}
-  same-site: ${COOKIE_SAME_SITE:None}
-
-# ──────────────────────────────────────────
-# CORS
-# ──────────────────────────────────────────
-cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
-  # Extra origins always added on top of allowed-origins (e.g. local dev ports).
-  # Override via CORS_EXTRA_ALLOWED_ORIGINS if needed; set to empty string to disable.
-  extra-allowed-origins: ${CORS_EXTRA_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:3000}
-
 # ──────────────────────────────────────────
 # AWS S3
 # ──────────────────────────────────────────
@@ -192,26 +166,6 @@ media:
   allowed-content-types: image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,text/plain
 
 # ──────────────────────────────────────────
-# Slack Bot Integration
-# ──────────────────────────────────────────
-slack:
-  enabled: ${SLACK_ENABLED:false}
-  signing-secret: ${SLACK_SIGNING_SECRET:}
-  bot-token: ${SLACK_BOT_TOKEN:}
-  client-id: ${SLACK_CLIENT_ID:}
-  client-secret: ${SLACK_CLIENT_SECRET:}
-  redirect-uri: ${SLACK_REDIRECT_URI:}
-  frontend-connect-url: ${SLACK_FRONTEND_CONNECT_URL:}
-  frontend-success-url: ${SLACK_FRONTEND_SUCCESS_URL:http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=true}
-  frontend-error-url: ${SLACK_FRONTEND_ERROR_URL:http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=false}
-  app-id: ${SLACK_APP_ID:}
-  notifications-enabled: ${SLACK_NOTIFICATIONS_ENABLED:false}
-  agent-features-enabled: ${SLACK_AGENT_FEATURES_ENABLED:false}
-  rate-limit:
-    requests-per-minute: ${SLACK_RATE_LIMIT_RPM:60}
-    burst-size: ${SLACK_RATE_LIMIT_BURST:10}
-
-# ──────────────────────────────────────────
 # Encryption (for Slack tokens at rest)
 # ──────────────────────────────────────────
 encryption:
@@ -233,12 +187,6 @@ amali-ai:
   api-key: ${AMALI_AI_API_KEY:}
   base-url: ${AMALI_AI_BASE_URL:}
   provider: openai
-
-# ──────────────────────────────────────────
-# AI Embedding
-# ──────────────────────────────────────────
-embedding:
-  model: ${EMBEDDING_MODEL:text-embedding-3-small}
 
 # ──────────────────────────────────────────
 # AI LLM
