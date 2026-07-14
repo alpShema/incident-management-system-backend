@@ -144,4 +144,22 @@ class FaqControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Only CSV files are accepted. Please upload a file with a .csv extension."));
     }
+
+    // The header-mismatch/no-data-rows validation itself lives in FaqServiceTest
+    // (real CSV parsing); this only confirms the IllegalArgumentException the
+    // service throws for those cases is wired through GlobalExceptionHandler
+    // into a 400 with its message, rather than surfacing as a generic 500.
+    @Test
+    void inspect_serviceRejectsHeaderlessCsv_returns400WithServiceMessage() throws Exception {
+        when(faqService.inspectBulkImport(any(), isNull(), any()))
+                .thenThrow(new IllegalArgumentException(
+                        "The provided CSV is missing required headers. Expected columns: question, answer."));
+
+        mvc.perform(multipart("/faqs/inspect").file(csvFile())
+                        .with(authentication(adminAuth()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "The provided CSV is missing required headers. Expected columns: question, answer."));
+    }
 }
