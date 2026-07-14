@@ -8,11 +8,15 @@ import jakarta.validation.constraints.Positive;
 @Schema(description = "Request body for generating an S3 presigned upload URL")
 public record PresignedUrlRequest(
         @Schema(description = "Original file name", example = "screenshot.png")
-        @NotBlank String fileName,
+        @NotBlank(message = "File name is required and cannot be blank.")
+        String fileName,
 
         @Schema(description = "MIME content type of the file", example = "image/png")
-        @NotBlank String contentType,
+        @NotBlank(message = "File type is required and cannot be blank.")
+        String contentType,
 
         @Schema(description = "File size in bytes", example = "2048576")
-        @NotNull @Positive Long fileSize
+        @NotNull(message = "File size is required.")
+        @Positive(message = "File size must be greater than zero.")
+        Long fileSize
 ) {}

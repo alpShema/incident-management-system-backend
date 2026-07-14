@@ -53,7 +53,7 @@ public class DepartmentService {
         String description = request.description() == null ? null : request.description().trim();
 
         if (departmentRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("Department with this name already exists", 409);
+            throw new ArmsAuthException("A department with this name already exists. Please choose a different name.", 409);
         }
 
         Department department = Department.builder()
@@ -73,7 +73,7 @@ public class DepartmentService {
         Department department = findDepartmentByIdOrThrow(id);
         if (name != null && !department.getName().equalsIgnoreCase(name)
                 && departmentRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("Department with this name already exists", 409);
+            throw new ArmsAuthException("A department with this name already exists. Please choose a different name.", 409);
         }
 
         if (name != null) {

@@ -6,6 +6,6 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "Request body for activating or deactivating an incident topic")
 public record UpdateIncidentTypeStatusRequest(
         @Schema(description = "Target topic status. true = active, false = inactive", example = "false")
-        @NotNull(message = "status is required")
+        @NotNull(message = "Please specify whether the incident topic should be active or inactive.")
         Boolean status
 ) {}

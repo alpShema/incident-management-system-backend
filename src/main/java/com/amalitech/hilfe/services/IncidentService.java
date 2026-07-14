@@ -218,7 +218,7 @@ public class IncidentService {
 
     public Page<IncidentResponse> searchIncidents(String userId, String query, Instant fromDate, Instant toDate, Pageable pageable) {
         if (query == null || query.isBlank()) {
-            throw new ArmsAuthException("Search query must not be blank", 400);
+            throw new ArmsAuthException("Please enter a search term.", 400);
         }
 
         Pageable sortedPageable = pageable.isUnpaged()
@@ -328,17 +328,17 @@ public class IncidentService {
         if (!isAdmin) {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
             if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
-                throw new ArmsAuthException("You can only reassign incidents that are assigned to you", 403);
+                throw new ArmsAuthException("You do not have permission to reassign this incident.", 403);
             }
         }
 
         Agent agent = agentRepository.findById(request.agentId())
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
         if (!Boolean.TRUE.equals(agent.getStatus())) {
-            throw new ArmsAuthException("Cannot assign incident to an unavailable agent", 400);
+            throw new ArmsAuthException("This incident cannot be assigned to an unavailable agent.", 400);
         }
         if (agent.getAgentGroupId() != null && !agentRepository.hasActiveGroup(agent.getAgentGroupId(), agent.getId())) {
-            throw new ArmsAuthException("Cannot assign incident to an agent in a deactivated group", 400);
+            throw new ArmsAuthException("This incident cannot be assigned to an agent in a deactivated group.", 400);
         }
 
         agent.setLastAssignedAt(Instant.now());
@@ -428,7 +428,7 @@ public class IncidentService {
             if (isAssignee) return;
             if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
-        throw new ArmsAuthException("You do not have access to this incident", 403);
+        throw new ArmsAuthException("You do not have permission to access this incident.", 403);
     }
 
     private void applyTopicAssignment(Incident incident, IncidentType incidentType, String creatorAgentId) {
@@ -545,7 +545,7 @@ public class IncidentService {
     private String resolvePriorityId(String requestedSeverityId) {
         if (requestedSeverityId != null && !requestedSeverityId.isBlank()) {
             if (!severityRepository.existsById(requestedSeverityId)) {
-                throw new ArmsAuthException("Severity not found", 404);
+                throw new ArmsAuthException("The requested severity level was not found.", 404);
             }
             return requestedSeverityId;
         }
@@ -662,7 +662,7 @@ public class IncidentService {
         String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
 
         if (fromId == null) {
-            throw new ArmsAuthException("Cannot transition an incident with no current status", 422);
+            throw new ArmsAuthException("This incident does not have a current status to transition from.", 422);
         }
 
         // Admins and super-admins may force-close any incident regardless of current status
@@ -682,15 +682,15 @@ public class IncidentService {
 
         if (!toMap.containsKey(toId)) {
             throw new ArmsAuthException(
-                    "Invalid status transition from '" + incident.getStatus().getName()
-                    + "' to '" + newStatus.getName() + "'",
+                    "This incident cannot be moved from '" + incident.getStatus().getName()
+                    + "' to '" + newStatus.getName() + "'.",
                     422
             );
         }
 
         if (!toMap.get(toId).contains(effectiveRole)) {
             throw new ArmsAuthException(
-                    "You do not have permission to move an incident to '" + newStatus.getName() + "'",
+                    "You do not have permission to move this incident to '" + newStatus.getName() + "'.",
                     403
             );
         }
@@ -701,7 +701,7 @@ public class IncidentService {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
             if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
                 throw new ArmsAuthException(
-                        "You are not the assigned agent for this incident",
+                        "You do not have permission to update this incident because you are not the assigned agent.",
                         403
                 );
             }

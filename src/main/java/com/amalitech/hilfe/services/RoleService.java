@@ -35,10 +35,10 @@ public class RoleService {
     public RoleResponse createRole(CreateRoleRequest request) {
         String code = generateRoleCode(request.name());
         if (PROTECTED_ROLES.contains(code) || roleRepository.existsByCode(code)) {
-            throw new ArmsAuthException("Role already exists", 409);
+            throw new ArmsAuthException("A role with this name already exists. Please choose a different name.", 409);
         }
         if (roleRepository.existsByNameIgnoreCase(request.name())) {
-            throw new ArmsAuthException("Role name already exists", 409);
+            throw new ArmsAuthException("A role with this name already exists. Please choose a different name.", 409);
         }
 
         List<String> normalizedPermissionCodes = request.permissionCodes().stream()
@@ -48,7 +48,7 @@ public class RoleService {
                 .toList();
         List<Permission> permissions = permissionRepository.findByCodeIn(normalizedPermissionCodes);
         if (permissions.size() != normalizedPermissionCodes.size()) {
-            throw new ArmsAuthException("One or more permission codes are invalid", 400);
+            throw new ArmsAuthException("One or more of the selected permissions are invalid.", 400);
         }
 
         Role role = roleRepository.save(Role.builder()
@@ -94,14 +94,14 @@ public class RoleService {
                 .distinct()
                 .toList();
         if (userIds.isEmpty()) {
-            throw new ArmsAuthException("userIds must not be empty", 400);
+            throw new ArmsAuthException("At least one user must be selected.", 400);
         }
 
         List<User> users = userRepository.findAllById(userIds);
         if (users.size() != userIds.size()) {
             Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
             List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
-            throw new ArmsAuthException("Users not found: " + String.join(", ", missing), 404);
+            throw new ArmsAuthException("One or more selected users could not be found.", 404);
         }
 
         users.forEach(user -> {
@@ -120,16 +120,16 @@ public class RoleService {
                 .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
 
         if (Boolean.TRUE.equals(role.getSystemDefined())) {
-            throw new ArmsAuthException("System-defined roles cannot be modified", 403);
+            throw new ArmsAuthException("System-defined roles cannot be modified.", 403);
         }
 
         if (request.name() != null) {
             String trimmedName = request.name().trim();
             if (trimmedName.isBlank()) {
-                throw new ArmsAuthException("Role name must not be blank", 400);
+                throw new ArmsAuthException("Role name must not be blank.", 400);
             }
             if (roleRepository.existsByNameIgnoreCaseAndCodeNot(trimmedName, normalizedCode)) {
-                throw new ArmsAuthException("Role name already exists", 409);
+                throw new ArmsAuthException("A role with this name already exists. Please choose a different name.", 409);
             }
             role.setName(trimmedName);
         }
@@ -146,7 +146,7 @@ public class RoleService {
                     .toList();
             List<Permission> permissions = permissionRepository.findByCodeIn(normalizedCodes);
             if (permissions.size() != normalizedCodes.size()) {
-                throw new ArmsAuthException("One or more permission codes are invalid", 400);
+                throw new ArmsAuthException("One or more of the selected permissions are invalid.", 400);
             }
             rolePermissionRepository.deleteByRoleCode(normalizedCode);
             List<RolePermission> links = permissions.stream()
@@ -177,14 +177,14 @@ public class RoleService {
                 .distinct()
                 .toList();
         if (userIds.isEmpty()) {
-            throw new ArmsAuthException("userIds must not be empty", 400);
+            throw new ArmsAuthException("At least one user must be selected.", 400);
         }
 
         List<User> users = userRepository.findAllById(userIds);
         if (users.size() != userIds.size()) {
             Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
             List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
-            throw new ArmsAuthException("Users not found: " + String.join(", ", missing), 404);
+            throw new ArmsAuthException("One or more selected users could not be found.", 404);
         }
 
         List<User> toUpdate = users.stream()
@@ -268,7 +268,7 @@ public class RoleService {
 
     private String normalizeRoleCode(String roleCode) {
         if (roleCode == null || roleCode.isBlank()) {
-            throw new ArmsAuthException("roleCode is required", 400);
+            throw new ArmsAuthException("A role must be selected.", 400);
         }
         return roleCode.trim().toUpperCase();
     }

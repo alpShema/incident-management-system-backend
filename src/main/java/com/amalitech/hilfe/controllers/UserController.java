@@ -84,7 +84,7 @@ public class UserController {
             @Valid @RequestBody UpdateUserStatusRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "User status updated",
+                "User status updated successfully",
                 userService.updateUserStatus(principal.userId(), parseRoleCode(principal.roleCode()), userId, request.status())
         ));
     }

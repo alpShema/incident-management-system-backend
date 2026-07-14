@@ -14,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -61,7 +62,7 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("Unsupported media type: {}", ex.getContentType());
         return buildResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-                "Unsupported Media Type. Please submit the request body as application/json.", request);
+                "This request format is not supported. Please submit the request as JSON.", request);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -93,8 +94,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(e -> e.getField() + ": " + e.getDefaultMessage())
-                .collect(Collectors.joining(", "));
+                .map(FieldError::getDefaultMessage)
+                .distinct()
+                .collect(Collectors.joining(" "));
         return buildResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
@@ -102,8 +104,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
         log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
         String message = ex.getMostSpecificCause().getMessage().contains("duplicate key")
-                ? "A record with this value already exists"
-                : "Data integrity constraint violated";
+                ? "A record with this value already exists. Please use a different value."
+                : "This action could not be completed because it conflicts with existing data.";
         return buildResponse(HttpStatus.CONFLICT, message, request);
     }
 
@@ -118,7 +120,7 @@ public class GlobalExceptionHandler {
             return buildResponse(HttpStatus.UNAUTHORIZED, "Authentication required. Please log in to access this resource.", request);
         }
         log.warn("Access denied: {}", ex.getMessage());
-        return buildResponse(HttpStatus.FORBIDDEN, "Access denied", request);
+        return buildResponse(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.", request);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

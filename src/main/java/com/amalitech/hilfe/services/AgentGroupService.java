@@ -72,10 +72,10 @@ public class AgentGroupService {
             throw new ArmsAuthException("Agent group name is required", 400);
         }
         if (isBlank(request.departmentId())) {
-            throw new ArmsAuthException("departmentId is required", 400);
+            throw new ArmsAuthException("A department must be selected for this agent group.", 400);
         }
         if (agentGroupRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("Agent group with this name already exists", 409);
+            throw new ArmsAuthException("An agent group with this name already exists. Please choose a different name.", 409);
         }
         if (request.agentIds() == null || request.agentIds().isEmpty()) {
             throw new ArmsAuthException("At least one agent is required", 400);
@@ -127,7 +127,7 @@ public class AgentGroupService {
         if (!isBlank(name)) {
             if (!group.getName().equalsIgnoreCase(name)
                     && agentGroupRepository.existsByNameIgnoreCase(name)) {
-                throw new ArmsAuthException("Agent group with this name already exists", 409);
+                throw new ArmsAuthException("An agent group with this name already exists. Please choose a different name.", 409);
             }
             group.setName(name);
         }

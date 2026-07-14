@@ -10,20 +10,22 @@ import java.util.List;
 @Schema(description = "Request body for creating a new incident")
 public record CreateIncidentRequest(
         @Schema(description = "Short summary of the incident", example = "Projector not working in Room 3B", maxLength = 100)
-        @NotBlank
-        @Size(max = 100, message = "title must not exceed 100 characters")
+        @NotBlank(message = "Incident title is required and cannot be blank.")
+        @Size(max = 100, message = "Incident title must not exceed 100 characters.")
         String title,
 
         @Schema(description = "Detailed description of the issue", example = "The ceiling projector in Room 3B fails to power on after pressing the remote button.", maxLength = 1000)
-        @NotBlank
-        @Size(max = 1000, message = "description must not exceed 1000 characters")
+        @NotBlank(message = "Incident description is required and cannot be blank.")
+        @Size(max = 1000, message = "Incident description must not exceed 1000 characters.")
         String description,
 
         @Schema(description = "Stable ID of the incident topic (type) selected during reporting", example = "type-account-issues")
-        @NotBlank String incidentTypeId,
+        @NotBlank(message = "Please select an incident type.")
+        String incidentTypeId,
 
         @Schema(description = "Stable ID of the location where the incident occurred", example = "loc-accra")
-        @NotBlank String locationId,
+        @NotBlank(message = "Please select a location.")
+        String locationId,
 
         @Schema(description = "Stable ID of the severity level (optional - defaults to system default if omitted)", example = "sev-low", nullable = true)
         String severityId,
