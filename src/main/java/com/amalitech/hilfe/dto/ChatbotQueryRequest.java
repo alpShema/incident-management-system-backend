@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "A question submitted by the user to the FAQ chatbot")
 public record ChatbotQueryRequest(
         @Schema(description = "The user's question or message", example = "How do I reset my password?")
-        @NotBlank
-        @Size(max = 1000, message = "query must not exceed 1000 characters")
+        @NotBlank(message = "Please enter a message before sending.")
+        @Size(max = 1000, message = "Your message must not exceed 1000 characters.")
         String query
 ) {}

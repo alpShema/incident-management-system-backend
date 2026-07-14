@@ -88,7 +88,7 @@ public class AgentController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status retrieved",
+                "Agent status retrieved successfully",
                 agentService.getStatus(principal.userId())
         ));
     }
@@ -109,7 +109,7 @@ public class AgentController {
             @Valid @RequestBody UpdateAvailabilityRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status updated",
+                "Agent status updated successfully",
                 agentService.updateAvailability(principal.userId(), request.available())
         ));
     }
@@ -130,7 +130,7 @@ public class AgentController {
             @Valid @RequestBody UpdateAvailabilityRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status updated",
+                "Agent status updated successfully",
                 agentService.updateAvailabilityById(agentId, request.available())
         ));
     }

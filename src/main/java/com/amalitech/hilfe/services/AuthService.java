@@ -69,10 +69,10 @@ public class AuthService {
     @Transactional
     public AuthResult refresh(String refreshToken, String armsToken) {
         TokenService.RefreshPrincipal refreshPrincipal = tokenService.authenticateRefreshToken(refreshToken)
-                .orElseThrow(() -> new ArmsAuthException("Invalid refresh token", 401));
+                .orElseThrow(() -> new ArmsAuthException("Your session has expired. Please log in again.", 401));
 
         if (tokenRevocationService.isRevoked(refreshPrincipal.jti())) {
-            throw new ArmsAuthException("Refresh token has been revoked", 401);
+            throw new ArmsAuthException("Your session has expired. Please log in again.", 401);
         }
 
         long refreshTokenTtlSeconds = armsTokenExpiryService.getRemainingLifetimeSeconds(armsToken);
@@ -133,7 +133,7 @@ public class AuthService {
 
     public UserPermissionsResponse getUserPermissions(String userId) {
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolveByUserId(userId)
-                .orElseThrow(() -> new ArmsAuthException("Authenticated user not found", 401));
+                .orElseThrow(() -> new ArmsAuthException("We could not find your account. Please log in again.", 401));
 
         List<String> permissions = resolvedAuthorities.authorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -150,7 +150,7 @@ public class AuthService {
     private void validateRefreshPrincipal(TokenService.RefreshPrincipal refreshPrincipal, ArmsUserInfo armsUser) {
         if (!refreshPrincipal.userId().equals(armsUser.userId())
                 || !refreshPrincipal.email().equals(armsUser.email())) {
-            throw new ArmsAuthException("Refresh token does not match the authenticated ARMS user", 401);
+            throw new ArmsAuthException("Your session could not be verified. Please log in again.", 401);
         }
     }
 

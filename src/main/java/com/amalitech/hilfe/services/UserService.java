@@ -85,7 +85,7 @@ public class UserService {
         boolean isAdmin = actorRole == RoleCode.ADMIN || actorRole == RoleCode.ADMIN_AGENT || actorRole == RoleCode.SUPER_ADMIN;
 
         if (!isSelf && !isAdmin) {
-            throw new ArmsAuthException("You can only update your own status", 403);
+            throw new ArmsAuthException("You do not have permission to update this user's status.", 403);
         }
 
         User user = userRepository.findById(targetUserId)
@@ -139,7 +139,7 @@ public class UserService {
 
     private String normalizeRoleCode(String roleCode) {
         if (roleCode == null || roleCode.isBlank()) {
-            throw new ArmsAuthException("roleCode is required", 400);
+            throw new ArmsAuthException("A role must be selected.", 400);
         }
         return roleCode.trim().toUpperCase();
     }

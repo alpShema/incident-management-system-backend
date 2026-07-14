@@ -4,5 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record InternalNoteRequest(
-        @NotBlank @Size(max = 5000) String body
+        @NotBlank(message = "Note text is required and cannot be blank.")
+        @Size(max = 5000, message = "Note text must not exceed 5000 characters.")
+        String body
 ) {}

@@ -191,11 +191,11 @@ public class ArmsClientImpl implements ArmsClient {
     private EmployeeActiveInfo requireEmployeeActiveInfo(EmployeeActiveInfoResponse response, String userId) {
         if (response != null && response.errors() != null && !response.errors().isEmpty()) {
             log.warn("ARMS rejected token for user {}: {}", userId, response.errors().get(0).message());
-            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
+            throw new ArmsAuthException("Your session has expired. Please log in again.", 401);
         }
         if (response == null || response.data() == null || response.data().activeInfo() == null) {
             log.warn("ARMS returned no employee data for user {}", userId);
-            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
+            throw new ArmsAuthException("Your session has expired. Please log in again.", 401);
         }
         return response.data().activeInfo();
     }
@@ -205,14 +205,14 @@ public class ArmsClientImpl implements ArmsClient {
             || response.data() == null
             || response.data().listEmployeeInfosWithFilters() == null
             || response.data().listEmployeeInfosWithFilters().employeeInfo() == null) {
-            throw new ArmsAuthException("ARMS returned empty employee list");
+            throw new ArmsAuthException("Unable to retrieve the employee list at this time. Please try again later.");
         }
         return response.data().listEmployeeInfosWithFilters().employeeInfo();
     }
 
     private UserByIdRaw requireUserById(UserByIdResponse response, String userId) {
         if (response == null || response.data() == null || response.data().user() == null) {
-            throw new ArmsAuthException("User not found in ARMS: " + userId);
+            throw new ArmsAuthException("The requested user could not be found.");
         }
         return response.data().user();
     }
@@ -264,7 +264,7 @@ public class ArmsClientImpl implements ArmsClient {
         try {
             String[] parts = token.split("\\.");
             if (parts.length < 2) {
-                throw new ArmsAuthException("Invalid ARMS token: expected JWT format", 401);
+                throw new ArmsAuthException("Your session could not be verified. Please log in again.", 401);
             }
 
             byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]); // NOSONAR java:S5659 - reading user_id from ARMS token only; signature verification is the ARMS server's responsibility
@@ -272,44 +272,44 @@ public class ArmsClientImpl implements ArmsClient {
             String userId = claims.path("user_id").asText(null);
 
             if (userId == null || userId.isBlank()) {
-                throw new ArmsAuthException("ARMS token is missing user_id claim", 401);
+                throw new ArmsAuthException("Your session could not be verified. Please log in again.", 401);
             }
             return userId;
         } catch (ArmsAuthException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new ArmsAuthException("Failed to decode ARMS token", 401, exception);
+            throw new ArmsAuthException("Your session could not be verified. Please log in again.", 401, exception);
         }
     }
 
     private ArmsAuthException handleTokenRequestFailure(String userId, RuntimeException exception) {
         if (exception instanceof HttpClientErrorException clientErrorException) {
             log.error("ARMS rejected request for user {}: {}", userId, clientErrorException.getMessage());
-            return new ArmsAuthException("Invalid or expired ARMS token", 401, clientErrorException);
+            return new ArmsAuthException("Your session has expired. Please log in again.", 401, clientErrorException);
         }
         if (exception instanceof HttpServerErrorException serverErrorException) {
             log.error("ARMS service error: {}", serverErrorException.getMessage());
-            return new ArmsAuthException("ARMS service is unavailable", serverErrorException);
+            return new ArmsAuthException("The authentication service is temporarily unavailable. Please try again shortly.", serverErrorException);
         }
 
         ResourceAccessException resourceAccessException = (ResourceAccessException) exception;
         log.error("ARMS service unreachable: {}", resourceAccessException.getMessage());
-        return new ArmsAuthException("ARMS service is unreachable", resourceAccessException);
+        return new ArmsAuthException("The authentication service is temporarily unavailable. Please try again shortly.", resourceAccessException);
     }
 
     private ArmsAuthException handleApiKeyRequestFailure(String requestName, RuntimeException exception) {
         if (exception instanceof HttpClientErrorException clientErrorException) {
             log.error("ARMS rejected {}: {}", requestName, clientErrorException.getMessage());
-            return new ArmsAuthException("ARMS rejected the " + requestName, clientErrorException);
+            return new ArmsAuthException("The request could not be completed. Please try again later.", clientErrorException);
         }
         if (exception instanceof HttpServerErrorException serverErrorException) {
             log.error("ARMS service error: {}", serverErrorException.getMessage());
-            return new ArmsAuthException("ARMS service is unavailable", serverErrorException);
+            return new ArmsAuthException("The authentication service is temporarily unavailable. Please try again shortly.", serverErrorException);
         }
 
         ResourceAccessException resourceAccessException = (ResourceAccessException) exception;
         log.error("ARMS service unreachable: {}", resourceAccessException.getMessage());
-        return new ArmsAuthException("ARMS service is unreachable", resourceAccessException);
+        return new ArmsAuthException("The authentication service is temporarily unavailable. Please try again shortly.", resourceAccessException);
     }
 
     private record GraphQlRequest(String query, Object variables) {
