@@ -261,7 +261,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Refresh token has been revoked");
+                .hasMessage("Your session has expired. Please log in again.");
     }
 
     @Test
@@ -272,7 +272,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Refresh token has been revoked");
+                .hasMessage("Your session has expired. Please log in again.");
     }
 
     @Test
@@ -281,7 +281,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Invalid refresh token");
+                .hasMessage("Your session has expired. Please log in again.");
     }
 
     @Test
@@ -295,7 +295,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Refresh token does not match the authenticated ARMS user");
+                .hasMessage("Your session could not be verified. Please log in again.");
     }
 
     @Test

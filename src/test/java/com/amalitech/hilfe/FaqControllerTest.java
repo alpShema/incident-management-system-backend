@@ -128,7 +128,7 @@ class FaqControllerTest {
                         .with(authentication(adminAuth()))
                         .with(csrf()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Uploaded file is empty"));
+                .andExpect(jsonPath("$.message").value("The uploaded file is empty. Please choose a file and try again."));
 
         verify(faqService, never()).inspectBulkImport(any(), any(), any());
     }
@@ -142,6 +142,6 @@ class FaqControllerTest {
                         .with(authentication(adminAuth()))
                         .with(csrf()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Only CSV files are accepted"));
+                .andExpect(jsonPath("$.message").value("Only CSV files are accepted. Please upload a file with a .csv extension."));
     }
 }

@@ -63,7 +63,7 @@ class AdminControllerTest {
                         .with(authentication(auth))
                         .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Agent access granted"))
+                .andExpect(jsonPath("$.message").value("Agent access granted successfully"))
                 .andExpect(jsonPath("$.data.agentId").value("agent-1"))
                 .andExpect(jsonPath("$.data.userId").value("user-1"))
                 .andExpect(jsonPath("$.data.status").value(true));
@@ -130,7 +130,7 @@ class AdminControllerTest {
                         .with(authentication(auth))
                         .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Agent access revoked"))
+                .andExpect(jsonPath("$.message").value("Agent access revoked successfully"))
                 .andExpect(jsonPath("$.data.agentId").value("agent-1"))
                 .andExpect(jsonPath("$.data.status").value(false));
     }
@@ -180,7 +180,7 @@ class AdminControllerTest {
         mvc.perform(get("/admins/user-1/agent-access")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Agent access retrieved"))
+                .andExpect(jsonPath("$.message").value("Agent access retrieved successfully"))
                 .andExpect(jsonPath("$.data.agentId").value("agent-1"))
                 .andExpect(jsonPath("$.data.userId").value("user-1"))
                 .andExpect(jsonPath("$.data.status").value(true));

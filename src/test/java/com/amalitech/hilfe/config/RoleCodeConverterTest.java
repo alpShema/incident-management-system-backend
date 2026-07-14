@@ -28,6 +28,6 @@ class RoleCodeConverterTest {
     void convert_invalidCode_throwsIllegalArgumentExceptionWithMessage() {
         assertThatThrownBy(() -> converter.convert("INVALID"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid role code: 'INVALID'");
+                .hasMessageContaining("'INVALID' is not a valid role");
     }
 }
