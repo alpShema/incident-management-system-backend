@@ -6,8 +6,6 @@ import com.amalitech.hilfe.models.Permission;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RolePermission;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.PermissionRepository;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -31,7 +29,7 @@ public class RoleService {
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final UserRepository userRepository;
-    private final AgentRepository agentRepository;
+    private final RoleAccessSyncService roleAccessSyncService;
 
     @Transactional
     public RoleResponse createRole(CreateRoleRequest request) {
@@ -108,7 +106,8 @@ public class RoleService {
 
         users.forEach(user -> {
             user.setRoleCode(role.getCode());
-            ensureAgentRecordIfNeeded(user, role.getCode());
+            roleAccessSyncService.syncAgentRecord(user, role.getCode());
+            roleAccessSyncService.syncAdminRecord(user, role.getCode());
         });
         userRepository.saveAll(users);
         return new BulkAssignRoleResponse(role.getCode(), users.size(), users.stream().map(User::getId).toList());
@@ -192,6 +191,10 @@ public class RoleService {
                 .filter(u -> normalizedCode.equals(u.getRoleCode()))
                 .map(u -> { u.setRoleCode(null); return u; })
                 .toList();
+        toUpdate.forEach(user -> {
+            roleAccessSyncService.syncAgentRecord(user, null);
+            roleAccessSyncService.syncAdminRecord(user, null);
+        });
         userRepository.saveAll(toUpdate);
         return new BulkAssignRoleResponse(normalizedCode, toUpdate.size(), toUpdate.stream().map(User::getId).toList());
     }
@@ -270,18 +273,4 @@ public class RoleService {
         return roleCode.trim().toUpperCase();
     }
 
-    private void ensureAgentRecordIfNeeded(User user, String roleCode) {
-        boolean needsAgentRecord = "AGENT".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
-        if (!needsAgentRecord) {
-            return;
-        }
-        if (agentRepository.findByUserId(user.getId()).isPresent()) {
-            return;
-        }
-        agentRepository.save(Agent.builder()
-                .id(UUID.randomUUID().toString())
-                .userId(user.getId())
-                .status(true)
-                .build());
-    }
 }
