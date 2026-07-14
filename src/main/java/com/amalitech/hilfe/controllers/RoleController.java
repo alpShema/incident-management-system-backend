@@ -41,6 +41,26 @@ public class RoleController {
         ));
     }
 
+    @Operation(summary = "Update role", description = "Updates a custom role's name, description, and/or permission set. System-defined roles cannot be modified.")
+    @PatchMapping("/{roleCode}")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') and hasAuthority('" + RbacPermissions.RBAC_ROLE_UPDATE + "')")
+    public ResponseEntity<ApiResponse<RoleResponse>> updateRole(
+            @PathVariable String roleCode,
+            @Valid @RequestBody UpdateRoleRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Role updated successfully", roleService.updateRole(roleCode, request)));
+    }
+
+    @Operation(summary = "Remove users from role", description = "Clears role assignment for specified users. Users not in this role are silently skipped.")
+    @DeleteMapping("/{roleCode}/users")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') and hasAuthority('" + RbacPermissions.RBAC_USER_ROLE_UPDATE + "')")
+    public ResponseEntity<ApiResponse<BulkAssignRoleResponse>> removeUsers(
+            @PathVariable String roleCode,
+            @Valid @RequestBody BulkAssignRoleRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Users removed from role successfully", roleService.removeUsersFromRole(roleCode, request)));
+    }
+
     @Operation(summary = "Bulk assign role to users", description = "Assigns one role code to multiple users in a single transaction.")
     @PatchMapping("/{roleCode}/users")
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') and hasAuthority('" + RbacPermissions.RBAC_USER_ROLE_UPDATE + "')")

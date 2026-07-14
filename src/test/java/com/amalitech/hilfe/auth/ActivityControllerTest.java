@@ -43,6 +43,7 @@ class ActivityControllerTest {
                         new ActivityLogResponse(
                                 1L,
                                 "Jane Admin",
+                                null,
                                 "John Doe",
                                 "ROLE_CHANGED",
                                 "USER",

@@ -1,0 +1,1009 @@
+scalar Instant
+scalar Long
+
+# ──────────────────────────────────────
+# SHARED TYPES
+# ──────────────────────────────────────
+
+type PageInfo {
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+type Lookup {
+  id: ID!
+  name: String!
+}
+
+type Creator {
+  id: ID!
+  fullName: String
+  profileImage: String
+}
+
+type AssignedAgent {
+  agentId: ID!
+  fullName: String
+  email: String
+  profileImg: String
+  locationId: ID
+  locationName: String
+}
+
+type MediaFile {
+  id: ID!
+  originalName: String!
+  contentType: String!
+  fileSize: Long
+  url: String
+}
+
+type PresignedUrl {
+  uploadUrl: String!
+  fileKey: String!
+  expiresInSeconds: Long!
+}
+
+# ──────────────────────────────────────
+# AUTH
+# ──────────────────────────────────────
+
+type AuthSession {
+  userId: ID!
+  email: String!
+  fullName: String
+  profileImg: String
+  role: String!
+  permissions: [String!]
+}
+
+type UserPermissions {
+  userId: ID!
+  permissions: [String!]
+}
+
+# ──────────────────────────────────────
+# INCIDENTS
+# ──────────────────────────────────────
+
+type IncidentSla {
+  responseThresholdMinutes: Int
+  resolutionThresholdMinutes: Int
+  responseThresholdSeconds: Long
+  resolutionThresholdSeconds: Long
+  responseDueAt: Instant
+  resolutionDueAt: Instant
+  firstResponseAt: Instant
+  responseBreachedAt: Instant
+  resolutionBreachedAt: Instant
+  responseStatus: String
+  resolutionStatus: String
+  paused: Boolean!
+}
+
+type Incident {
+  id: ID!
+  incidentNo: Int!
+  title: String!
+  description: String!
+  incidentTopic: IncidentTopic
+  location: Location
+  priority: Lookup
+  status: Lookup
+  createdBy: Creator
+  assignedTo: AssignedAgent
+  read: Boolean!
+  statusReason: String
+  resolvedAt: Instant
+  closedAt: Instant
+  createdAt: Instant!
+  updatedAt: Instant!
+  sla: IncidentSla
+  attachments: [MediaFile!]
+}
+
+type IncidentPage {
+  items: [Incident!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# MESSAGES
+# ──────────────────────────────────────
+
+type MessageSender {
+  userId: ID!
+  fullName: String
+  profileImg: String
+}
+
+type Message {
+  id: ID!
+  incidentId: ID!
+  sender: MessageSender
+  content: String
+  attachments: [MediaFile!]
+  createdAt: Instant!
+  updatedAt: Instant!
+}
+
+type MessagePage {
+  items: [Message!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# INTERNAL NOTES
+# ──────────────────────────────────────
+
+type InternalNote {
+  id: ID!
+  incidentId: ID!
+  body: String!
+  author: MessageSender
+  isOwner: Boolean!
+  createdAt: Instant!
+  updatedAt: Instant!
+}
+
+type InternalNotePage {
+  items: [InternalNote!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# USERS
+# ──────────────────────────────────────
+
+type UserSummary {
+  userId: ID!
+  email: String!
+  fullName: String
+  profileImg: String
+  roleCode: String
+  roleName: String
+  status: Boolean
+  officeLocation: String
+  submittedIncidentsCount: Long
+  assignedIncidentsCount: Long
+}
+
+type UserPage {
+  items: [UserSummary!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# ROLES & PERMISSIONS
+# ──────────────────────────────────────
+
+type PermissionItem {
+  code: String!
+  name: String!
+  description: String
+}
+
+type Role {
+  id: ID!
+  roleCode: String!
+  name: String!
+  description: String
+  systemDefined: Boolean
+  permissions: [PermissionItem!]
+}
+
+type RolePage {
+  items: [Role!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+type BulkAssignResult {
+  roleCode: String!
+  updatedCount: Int!
+  updatedUserIds: [String!]
+}
+
+type PermissionCatalog {
+  incidentPermissions: [PermissionItem!]!
+  agentAndGroupPermissions: [PermissionItem!]!
+  settingsPermissions: [PermissionItem!]!
+  userPermissions: [PermissionItem!]!
+  reportPermissions: [PermissionItem!]!
+}
+
+# ──────────────────────────────────────
+# DEPARTMENTS
+# ──────────────────────────────────────
+
+type Department {
+  id: ID!
+  name: String!
+  description: String
+  status: Boolean
+  categoryCount: Long
+}
+
+type DepartmentPage {
+  items: [Department!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# LOCATIONS
+# ──────────────────────────────────────
+
+type Location {
+  id: ID!
+  name: String!
+  description: String
+  status: Boolean
+  updatedAt: Instant
+}
+
+type LocationPage {
+  items: [Location!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# AGENTS
+# ──────────────────────────────────────
+
+type Agent {
+  agentId: ID!
+  userId: ID!
+  fullName: String
+  email: String
+  profileImg: String
+  officeLocation: String
+  status: Boolean
+  updatedAt: Instant
+}
+
+type AgentPage {
+  items: [Agent!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# AGENT GROUPS
+# ──────────────────────────────────────
+
+type AgentGroup {
+  id: ID!
+  name: String!
+  description: String
+  department: Lookup
+  status: Boolean
+  memberCount: Long
+  updatedAt: Instant
+  topics: [Lookup!]
+}
+
+type AgentGroupPage {
+  items: [AgentGroup!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+type AgentGroupMember {
+  agentId: ID!
+  userId: ID!
+  fullName: String
+  profileImage: String
+  status: Boolean
+  locationId: ID
+  locationName: String
+}
+
+# ──────────────────────────────────────
+# INCIDENT CATEGORIES & TOPICS
+# ──────────────────────────────────────
+
+type IncidentCategory {
+  id: ID!
+  name: String!
+  description: String
+  department: Lookup
+  status: Boolean
+  updatedAt: Instant
+}
+
+type IncidentCategoryPage {
+  items: [IncidentCategory!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+type IncidentTopic {
+  id: ID!
+  name: String!
+  description: String
+  visibleToGroup: Boolean!
+  status: Boolean
+  category: Lookup
+  updatedAt: Instant
+}
+
+type AgentGroupSummary {
+  id: ID!
+  name: String!
+}
+
+type IncidentTopicWithGroup {
+  id: ID!
+  name: String!
+  description: String
+  visibleToGroup: Boolean!
+  status: Boolean
+  category: Lookup
+  agentGroup: AgentGroupSummary
+}
+
+type IncidentTopicPage {
+  items: [IncidentTopicWithGroup!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# FAQS
+# ──────────────────────────────────────
+
+type Faq {
+  id: ID!
+  question: String!
+  answer: String!
+  active: Boolean!
+  createdAt: Instant
+  updatedAt: Instant
+}
+
+type FaqUpsertResult {
+  faq: Faq!
+  created: Boolean!
+}
+
+type FaqPage {
+  items: [Faq!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# SEVERITIES & STATUSES
+# ──────────────────────────────────────
+
+type Severity {
+  id: ID!
+  name: String!
+  description: String
+  status: Boolean
+  responseTimeMinutes: Int
+  resolutionTimeMinutes: Int
+  responseTimeSeconds: Long
+  resolutionTimeSeconds: Long
+  createdAt: Instant
+  updatedAt: Instant
+}
+
+type Status {
+  id: ID!
+  name: String!
+  description: String
+}
+
+# ──────────────────────────────────────
+# DASHBOARD
+# ──────────────────────────────────────
+
+type LabelCount {
+  label: String!
+  count: Int!
+}
+
+type MonthlyCount {
+  month: String!
+  count: Int!
+}
+
+type TrendSeries {
+  label: String!
+  data: [MonthlyCount!]
+}
+
+type DashboardStats {
+  totalIncidents: Long!
+  openCount: Long!
+  pendingCount: Long!
+  inProgressCount: Long!
+  closedCount: Long!
+  resolvedCount: Long!
+}
+
+type DashboardCharts {
+  byStatus: [LabelCount!]
+  trends: [TrendSeries!]
+}
+
+type SlaSeverityBreakdown {
+  severityId: ID!
+  severityName: String!
+  trackedIncidents: Long!
+  responseBreachCount: Long!
+  resolutionBreachCount: Long!
+  averageResponseMinutes: Float
+  averageResolutionMinutes: Float
+}
+
+type SlaReport {
+  trackedIncidents: Long!
+  responseBreachCount: Long!
+  resolutionBreachCount: Long!
+  averageResponseMinutes: Float
+  averageResolutionMinutes: Float
+  bySeverity: [SlaSeverityBreakdown!]
+}
+
+# ──────────────────────────────────────
+# NOTIFICATIONS
+# ──────────────────────────────────────
+
+type Notification {
+  id: ID!
+  incidentId: ID
+  type: String!
+  title: String!
+  message: String!
+  read: Boolean!
+  createdAt: Instant!
+}
+
+type NotificationPage {
+  items: [Notification!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# ACTIVITY LOGS
+# ──────────────────────────────────────
+
+type ActivityLog {
+  id: Long
+  actorName: String
+  actorProfileUrl: String
+  targetName: String
+  action: String
+  subjectType: String
+  subjectNo: Int
+  description: String
+  metadata: String
+  createdAt: Instant
+}
+
+type ActivityPage {
+  items: [ActivityLog!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# CHATBOT
+# ──────────────────────────────────────
+
+type ChatbotResult {
+  answer: String
+  confidence: Float!
+  outcome: String
+}
+
+type ChatbotAnswerChunk {
+  delta: String
+  done: Boolean!
+  confidence: Float
+  outcome: String
+}
+
+type ChatbotInteraction {
+  id: ID!
+  userId: ID
+  query: String
+  faqId: ID
+  confidence: Float
+  outcome: String
+  createdAt: Instant
+}
+
+type ChatbotInteractionPage {
+  items: [ChatbotInteraction!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+# ──────────────────────────────────────
+# SYSTEM CONFIG
+# ──────────────────────────────────────
+
+type AutoCloseConfig {
+  durationSeconds: Int!
+}
+
+type SlaConfig {
+  atRiskPct: Int!
+}
+
+# ══════════════════════════════════════
+# INPUT TYPES
+# ══════════════════════════════════════
+
+input PageInput {
+  page: Int = 0
+  size: Int = 20
+}
+
+input LoginInput {
+  armsToken: String!
+}
+
+input IncidentFilterInput {
+  statusId: String
+  severityId: String
+  incidentTypeId: String
+  categoryId: String
+  locationId: String
+}
+
+input AttachmentInput {
+  fileKey: String!
+  originalName: String!
+  contentType: String!
+  fileSize: Long!
+}
+
+input CreateIncidentInput {
+  title: String!
+  description: String!
+  incidentTypeId: String!
+  locationId: String!
+  severityId: String
+  attachments: [AttachmentInput!]
+}
+
+input UpdateIncidentStatusInput {
+  statusId: String!
+  reason: String
+}
+
+input UpdateIncidentSeverityInput {
+  severityId: String!
+}
+
+input AssignIncidentInput {
+  agentId: String!
+}
+
+input SendMessageInput {
+  content: String
+  attachments: [AttachmentInput!]
+}
+
+input PresignedUrlInput {
+  fileName: String!
+  contentType: String!
+  fileSize: Long!
+}
+
+input UpdateUserRoleInput {
+  roleCode: String!
+}
+
+input UpdateUserStatusInput {
+  status: Boolean!
+}
+
+input CreateRoleInput {
+  name: String!
+  description: String!
+  permissionCodes: [String!]!
+}
+
+input BulkAssignRoleInput {
+  userIds: [String!]!
+}
+
+input UpdateRoleInput {
+  name: String
+  description: String
+  permissionCodes: [String!]
+}
+
+input InternalNoteInput {
+  body: String!
+}
+
+input ChatbotQueryInput {
+  query: String!
+}
+
+input DepartmentInput {
+  name: String!
+  description: String
+}
+
+input UpdateDepartmentStatusInput {
+  status: Boolean!
+}
+
+input CreateLocationInput {
+  name: String!
+  description: String
+}
+
+input UpdateLocationInput {
+  name: String
+  description: String
+}
+
+input UpdateLocationStatusInput {
+  status: Boolean!
+}
+
+input UpdateAvailabilityInput {
+  available: Boolean!
+}
+
+input AgentGroupInput {
+  name: String!
+  description: String
+  departmentId: String
+  agentIds: [String!]
+  topicIds: [String!]
+}
+
+input AddAgentGroupMemberInput {
+  agentId: String!
+}
+
+input UpdateAgentGroupStatusInput {
+  status: Boolean!
+}
+
+input IncidentCategoryInput {
+  name: String!
+  description: String
+  departmentId: String!
+}
+
+input UpdateIncidentCategoryInput {
+  name: String
+  description: String
+  departmentId: String
+}
+
+input UpdateIncidentCategoryStatusInput {
+  status: Boolean!
+}
+
+input CreateTopicInput {
+  name: String!
+  description: String
+  agentGroupId: String
+  visibleToGroup: Boolean
+}
+
+input UpdateTopicInput {
+  name: String
+  description: String
+  agentGroupId: String
+  visibleToGroup: Boolean
+}
+
+input UpdateTopicStatusInput {
+  status: Boolean!
+}
+
+input CreateFaqInput {
+  question: String!
+  answer: String!
+}
+
+input UpdateFaqInput {
+  question: String
+  answer: String
+}
+
+input SeverityInput {
+  name: String!
+  description: String
+}
+
+input UpdateSeveritySlaInput {
+  responseTimeSeconds: Long
+  resolutionTimeSeconds: Long
+}
+
+input UpdateAutoCloseConfigInput {
+  durationSeconds: Int!
+}
+
+input UpdateSlaConfigInput {
+  atRiskPct: Int!
+}
+
+# ══════════════════════════════════════
+# QUERY TYPE
+# ══════════════════════════════════════
+
+type Query {
+  # Auth
+  myPermissions: UserPermissions
+
+  # Incidents
+  incidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  myIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  deptIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  assignedIncidents(filter: IncidentFilterInput, fromDate: Instant, toDate: Instant, query: String, page: PageInput): IncidentPage
+  searchIncidents(query: String!, fromDate: Instant, toDate: Instant, page: PageInput): IncidentPage
+  incident(id: ID!): Incident
+  incidentHistory(id: ID!, page: PageInput): ActivityPage
+
+  # Messages
+  messages(incidentId: ID!, page: PageInput): MessagePage
+
+  # Internal Notes
+  listInternalNotes(incidentId: ID!, page: PageInput): InternalNotePage
+
+  # Users
+  users(query: String, roleCode: String, locationId: String, status: Boolean, page: PageInput): UserPage
+
+  # Roles & permissions
+  roles(query: String, page: PageInput): RolePage
+  permissionCatalog: PermissionCatalog
+
+  # Departments
+  departments(query: String, status: Boolean, page: PageInput): DepartmentPage
+  department(id: ID!): Department
+  departmentCategories(departmentId: ID!): [IncidentCategory!]
+
+  # Locations
+  locations(query: String, status: Boolean, page: PageInput): LocationPage
+  location(id: ID!): Location
+
+  # Agents
+  agents(departmentId: String, query: String, page: PageInput): AgentPage
+  allAgents(departmentId: String, query: String, page: PageInput): AgentPage
+  myAgentStatus: Agent
+
+  # Admins
+  adminAgentAccess(userId: ID!): Agent
+
+  # Agent groups
+  agentGroups(query: String, departmentId: String, page: PageInput): AgentGroupPage
+  allAgentGroups(status: Boolean, query: String, departmentId: String, page: PageInput): AgentGroupPage
+  agentGroup(id: ID!): AgentGroup
+  agentGroupMembers(id: ID!): [AgentGroupMember!]
+  agentGroupsByCategory(categoryId: ID!): [Lookup!]
+
+  # Incident categories
+  incidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  allIncidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  categoryTopics(categoryId: ID!, status: Boolean): [IncidentTopic!]
+
+  # Incident topics
+  incidentTopics(categoryId: String, departmentId: String, agentGroupId: String, status: Boolean, query: String, page: PageInput): IncidentTopicPage
+
+  # FAQs
+  faqs(active: Boolean, search: String, page: PageInput): FaqPage
+  faq(id: ID!): Faq
+
+  # Severities
+  severities: [Severity!]
+  severity(id: ID!): Severity
+
+  # Statuses
+  statuses: [Status!]
+
+  # Dashboard
+  dashboardStats: DashboardStats
+  dashboardCharts(period: String): DashboardCharts
+  slaReport(from: Instant, to: Instant, severityId: String): SlaReport
+
+  # Notifications
+  notifications(page: PageInput): NotificationPage
+  unreadNotificationCount: Long
+
+  # Activities
+  activities(incidentId: ID, page: PageInput): ActivityPage
+
+  # Chatbot
+  chatbotInteractions(userId: String, outcome: String, from: Instant, to: Instant, page: PageInput): ChatbotInteractionPage
+
+  # System config
+  autoCloseConfig: AutoCloseConfig
+  slaConfig: SlaConfig
+}
+
+# ══════════════════════════════════════
+# MUTATION TYPE
+# ══════════════════════════════════════
+
+type Mutation {
+  # Auth
+  login(input: LoginInput!): AuthSession
+  refreshToken: AuthSession
+  logout: Boolean
+
+  # Incidents
+  createIncident(input: CreateIncidentInput!): Incident
+  updateIncidentStatus(id: ID!, input: UpdateIncidentStatusInput!): Incident
+  updateIncidentSeverity(id: ID!, input: UpdateIncidentSeverityInput!): Incident
+  assignIncident(id: ID!, input: AssignIncidentInput!): Incident
+
+  # Messages
+  sendMessage(incidentId: ID!, input: SendMessageInput!): Message
+  deleteMessage(incidentId: ID!, messageId: ID!): Boolean
+  generateMessagePresignedUrl(incidentId: ID!, input: PresignedUrlInput!): PresignedUrl
+
+  # Internal Notes
+  createInternalNote(incidentId: ID!, input: InternalNoteInput!): InternalNote
+  updateInternalNote(incidentId: ID!, noteId: ID!, input: InternalNoteInput!): InternalNote
+  deleteInternalNote(incidentId: ID!, noteId: ID!): Boolean
+
+  # Users
+  updateUserRole(userId: ID!, input: UpdateUserRoleInput!): UserSummary
+  updateUserStatus(userId: ID!, input: UpdateUserStatusInput!): UserSummary
+
+  # Roles
+  createRole(input: CreateRoleInput!): Role
+  bulkAssignRole(roleCode: String!, input: BulkAssignRoleInput!): BulkAssignResult
+  updateRole(roleCode: String!, input: UpdateRoleInput!): Role
+  removeRoleUsers(roleCode: String!, input: BulkAssignRoleInput!): BulkAssignResult
+
+  # Chatbot
+  chatbotQuery(input: ChatbotQueryInput!): ChatbotResult
+
+  # Media
+  generateMediaPresignedUrl(input: PresignedUrlInput!): PresignedUrl
+
+  # Departments
+  createDepartment(input: DepartmentInput!): Department
+  updateDepartment(id: ID!, input: DepartmentInput!): Department
+  updateDepartmentStatus(id: ID!, input: UpdateDepartmentStatusInput!): Department
+  linkCategoryToDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
+  unlinkCategoryFromDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
+
+  # Locations
+  createLocation(input: CreateLocationInput!): Location
+  updateLocation(id: ID!, input: UpdateLocationInput!): Location
+  updateLocationStatus(id: ID!, input: UpdateLocationStatusInput!): Location
+
+  # Agents
+  updateMyAgentStatus(input: UpdateAvailabilityInput!): Agent
+  updateAgentStatus(agentId: ID!, input: UpdateAvailabilityInput!): Agent
+
+  # Admins
+  grantAdminAgentAccess(userId: ID!): Agent
+  revokeAdminAgentAccess(userId: ID!): Agent
+
+  # Agent groups
+  createAgentGroup(input: AgentGroupInput!): AgentGroup
+  updateAgentGroup(id: ID!, input: AgentGroupInput!): AgentGroup
+  updateAgentGroupStatus(id: ID!, input: UpdateAgentGroupStatusInput!): AgentGroup
+  addAgentGroupMember(id: ID!, input: AddAgentGroupMemberInput!): AgentGroupMember
+
+  # Incident categories
+  createIncidentCategory(input: IncidentCategoryInput!): IncidentCategory
+  updateIncidentCategory(id: ID!, input: UpdateIncidentCategoryInput!): IncidentCategory
+  updateIncidentCategoryStatus(id: ID!, input: UpdateIncidentCategoryStatusInput!): IncidentCategory
+  createCategoryTopic(categoryId: ID!, input: CreateTopicInput!): IncidentTopic
+  updateCategoryTopic(categoryId: ID!, topicId: ID!, input: UpdateTopicInput!): IncidentTopic
+  deleteCategoryTopic(categoryId: ID!, topicId: ID!): Boolean
+
+  # Incident topics (global, by topic ID only)
+  updateTopicById(id: ID!, input: UpdateTopicInput!): IncidentTopic
+  updateTopicStatus(id: ID!, input: UpdateTopicStatusInput!): IncidentTopic
+
+  # FAQs
+  createFaq(input: CreateFaqInput!): FaqUpsertResult
+  updateFaq(id: ID!, input: UpdateFaqInput!): Faq
+  toggleFaqActive(id: ID!, active: Boolean!): Faq
+  deleteFaq(id: ID!): Boolean
+  reEmbedFaqs: Int!
+
+  # Severities
+  createSeverity(input: SeverityInput!): Severity
+  updateSeverity(id: ID!, input: SeverityInput!): Severity
+  updateSeveritySla(id: ID!, input: UpdateSeveritySlaInput!): Severity
+  deactivateSeverity(id: ID!): Severity
+  deleteSeverity(id: ID!): Boolean
+
+  # Notifications
+  markNotificationRead(id: ID!): Notification
+  markAllNotificationsRead: Boolean
+
+  # System config
+  updateAutoCloseConfig(input: UpdateAutoCloseConfigInput!): AutoCloseConfig
+  updateSlaConfig(input: UpdateSlaConfigInput!): SlaConfig
+}
+
+# ══════════════════════════════════════
+# SUBSCRIPTION TYPE
+# ══════════════════════════════════════
+
+type Subscription {
+  # Chatbot
+  chatbotAnswerStream(input: ChatbotQueryInput!): ChatbotAnswerChunk!
+}

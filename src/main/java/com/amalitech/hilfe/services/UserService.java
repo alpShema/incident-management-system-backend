@@ -2,12 +2,9 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
-import com.amalitech.hilfe.models.Admin;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.repositories.AdminRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -25,13 +22,13 @@ import org.springframework.stereotype.Service;
 public class UserService {
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
-    private final AdminRepository adminRepository;
     private final IncidentRepository incidentRepository;
     private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
+    private final RoleAccessSyncService roleAccessSyncService;
 
     public Page<UserRoleSummaryResponse> getUsers(
-            String query, RoleCode roleCode, String locationId, String status,
+            String query, String roleCode, String locationId, Boolean status,
             Pageable pageable
     ) {
         String queryPattern = null;
@@ -43,15 +40,7 @@ public class UserService {
             queryPattern = "%" + escaped + "%";
         }
         Pageable resolvedPageable = remapSort(pageable);
-        Boolean statusFilter = null;
-        if (status != null && !status.isBlank()) {
-            statusFilter = switch (status.trim().toLowerCase()) {
-                case "active" -> true;
-                case "inactive" -> false;
-                default -> null;
-            };
-        }
-        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode == null ? null : roleCode.name(), locationId, statusFilter, resolvedPageable);
+        return userRepository.findUserRoleSummariesUnified(queryPattern, roleCode, locationId, status, resolvedPageable);
     }
 
     @Transactional
@@ -65,8 +54,8 @@ public class UserService {
 
         String previousRoleCode = user.getRoleCode();
         user.setRoleCode(normalizedRoleCode);
-        ensureAgentRecord(user, normalizedRoleCode);
-        ensureAdminRecord(user, normalizedRoleCode);
+        roleAccessSyncService.syncAgentRecord(user, normalizedRoleCode);
+        roleAccessSyncService.syncAdminRecord(user, normalizedRoleCode);
 
         if (previousRoleCode == null || !previousRoleCode.equals(normalizedRoleCode)) {
             activityLogService.logUserRoleChange(actorUserId, userId, previousRoleCode, normalizedRoleCode);
@@ -93,7 +82,7 @@ public class UserService {
     @Transactional
     public UserRoleSummaryResponse updateUserStatus(String actorUserId, RoleCode actorRole, String targetUserId, boolean status) {
         boolean isSelf = actorUserId.equals(targetUserId);
-        boolean isAdmin = actorRole == RoleCode.ADMIN || actorRole == RoleCode.SUPER_ADMIN;
+        boolean isAdmin = actorRole == RoleCode.ADMIN || actorRole == RoleCode.ADMIN_AGENT || actorRole == RoleCode.SUPER_ADMIN;
 
         if (!isSelf && !isAdmin) {
             throw new ArmsAuthException("You can only update your own status", 403);
@@ -146,30 +135,6 @@ public class UserService {
                 })
                 .toList());
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), remapped);
-    }
-
-    private void ensureAdminRecord(User user, String roleCode) {
-        boolean isAdminRole = "ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
-        if (!isAdminRole || adminRepository.findByUserIdWithUser(user.getId()).isPresent()) {
-            return;
-        }
-        adminRepository.save(Admin.builder()
-                .id(java.util.UUID.randomUUID().toString())
-                .userId(user.getId())
-                .status(true)
-                .build());
-    }
-
-    private void ensureAgentRecord(User user, String roleCode) {
-        if (!"AGENT".equalsIgnoreCase(roleCode) || agentRepository.findByUserId(user.getId()).isPresent()) {
-            return;
-        }
-
-        agentRepository.save(Agent.builder()
-                .id(java.util.UUID.randomUUID().toString())
-                .userId(user.getId())
-                .status(true)
-                .build());
     }
 
     private String normalizeRoleCode(String roleCode) {

@@ -1,6 +1,7 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.dto.NotificationResponse;
+import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Notification;
 import com.amalitech.hilfe.repositories.NotificationRepository;
@@ -10,6 +11,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,6 +28,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Mock NotificationRepository notificationRepository;
     @InjectMocks NotificationService notificationService;
 
@@ -30,18 +37,21 @@ class NotificationServiceTest {
         return Notification.builder()
                 .id(id).userId(userId).incidentId("inc-1")
                 .type("INCIDENT_ASSIGNED").title("Title").message("Msg")
-                .read(read).createdAt(Instant.now()).build();
+                .read(read).createdAt(FIXED_NOW).build();
     }
 
     @Test
     void getNotifications_delegatesToRepository() {
         Notification n = notification("n1", "u1", false);
-        when(notificationRepository.findByUserIdOrderByCreatedAtDesc("u1")).thenReturn(List.of(n));
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        when(notificationRepository.findByUserIdOrderByCreatedAtDesc("u1", pageable))
+                .thenReturn(new PageImpl<>(List.of(n), pageable, 1));
 
-        List<NotificationResponse> result = notificationService.getNotifications("u1");
+        PageResponse<NotificationResponse> result = notificationService.getNotifications("u1", pageable);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().id()).isEqualTo("n1");
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.items().getFirst().id()).isEqualTo("n1");
+        assertThat(result.totalElements()).isEqualTo(1);
     }
 
     @Test
@@ -87,5 +97,11 @@ class NotificationServiceTest {
     void markAllAsRead_delegatesToRepository() {
         notificationService.markAllAsRead("u1");
         verify(notificationRepository).markAllReadByUserId("u1");
+    }
+
+    @Test
+    void clearAll_delegatesToRepository() {
+        notificationService.clearAll("u1");
+        verify(notificationRepository).deleteAllByUserId("u1");
     }
 }

@@ -134,6 +134,38 @@
 			<artifactId>s3</artifactId>
 		</dependency>
 
+		<!-- ===== Slack API Client ===== -->
+		<dependency>
+			<groupId>com.slack.api</groupId>
+			<artifactId>slack-api-client</artifactId>
+			<version>1.39.0</version>
+		</dependency>
+
+		<!-- ===== CSV Parsing ===== -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-csv</artifactId>
+			<version>1.11.0</version>
+		</dependency>
+
+		<!-- ===== Rate Limiting (Bucket4j) ===== -->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j-core</artifactId>
+			<version>8.7.0</version>
+		</dependency>
+
+		<!-- ===== GraphQL ===== -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-graphql</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.graphql-java</groupId>
+			<artifactId>graphql-java-extended-scalars</artifactId>
+			<version>22.0</version>
+		</dependency>
+
 		<!-- ===== Test ===== -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

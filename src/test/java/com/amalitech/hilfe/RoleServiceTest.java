@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
+import com.amalitech.hilfe.services.RoleAccessSyncService;
 import com.amalitech.hilfe.services.RoleService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +29,7 @@ class RoleServiceTest {
     @Mock PermissionRepository permissionRepository;
     @Mock RolePermissionRepository rolePermissionRepository;
     @Mock UserRepository userRepository;
-    @Mock AgentRepository agentRepository;
+    @Mock RoleAccessSyncService roleAccessSyncService;
     @InjectMocks RoleService roleService;
 
     private Permission perm(String code) {
@@ -181,7 +182,8 @@ class RoleServiceTest {
         assertThat(response.roleCode()).isEqualTo("CUSTOM");
         assertThat(response.updatedCount()).isEqualTo(1);
         assertThat(user.getRoleCode()).isEqualTo("CUSTOM");
-        verify(agentRepository, never()).findByUserId(any());
+        verify(roleAccessSyncService).syncAgentRecord(user, "CUSTOM");
+        verify(roleAccessSyncService).syncAdminRecord(user, "CUSTOM");
     }
 
     @Test
@@ -223,32 +225,31 @@ class RoleServiceTest {
     }
 
     @Test
-    void bulkAssignRole_agentRole_createsAgentRecordForNewAgent() {
+    void bulkAssignRole_agentRole_delegatesToRoleAccessSyncService() {
         Role r = role("r1", "AGENT", "Agent");
         User user = User.builder().id("u1").fullName("Bob").build();
         when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(r));
         when(userRepository.findAllById(anyList())).thenReturn(List.of(user));
         when(userRepository.saveAll(anyList())).thenReturn(List.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
-        when(agentRepository.save(any(Agent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         roleService.bulkAssignRole("AGENT", new BulkAssignRoleRequest(List.of("u1")));
 
-        verify(agentRepository).save(argThat(a -> "u1".equals(a.getUserId()) && Boolean.TRUE.equals(a.getStatus())));
+        verify(roleAccessSyncService).syncAgentRecord(user, "AGENT");
+        verify(roleAccessSyncService).syncAdminRecord(user, "AGENT");
     }
 
     @Test
-    void bulkAssignRole_agentRoleExistingAgent_doesNotCreateDuplicate() {
-        Role r = role("r1", "AGENT", "Agent");
+    void bulkAssignRole_adminAgentRole_delegatesToRoleAccessSyncService() {
+        Role r = role("r1", "ADMIN_AGENT", "Admin Agent");
         User user = User.builder().id("u1").fullName("Bob").build();
-        when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(r));
+        when(roleRepository.findByCode("ADMIN_AGENT")).thenReturn(Optional.of(r));
         when(userRepository.findAllById(anyList())).thenReturn(List.of(user));
         when(userRepository.saveAll(anyList())).thenReturn(List.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(Agent.builder().id("a1").build()));
 
-        roleService.bulkAssignRole("AGENT", new BulkAssignRoleRequest(List.of("u1")));
+        roleService.bulkAssignRole("ADMIN_AGENT", new BulkAssignRoleRequest(List.of("u1")));
 
-        verify(agentRepository, never()).save(any(Agent.class));
+        verify(roleAccessSyncService).syncAgentRecord(user, "ADMIN_AGENT");
+        verify(roleAccessSyncService).syncAdminRecord(user, "ADMIN_AGENT");
     }
 
     @Test
@@ -262,6 +263,225 @@ class RoleServiceTest {
         roleService.bulkAssignRole("custom", new BulkAssignRoleRequest(List.of("u1")));
 
         verify(roleRepository).findByCode("CUSTOM");
+    }
+
+    // ── updateRole ────────────────────────────────────────────────────────────
+
+    @Test
+    void updateRole_name_updatesName() {
+        Role r = role("r1", "CUSTOM", "Old Name");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(roleRepository.existsByNameIgnoreCaseAndCodeNot("New Name", "CUSTOM")).thenReturn(false);
+        when(roleRepository.save(any(Role.class))).thenReturn(r);
+        when(rolePermissionRepository.findByRoleCodeWithPermission("CUSTOM")).thenReturn(List.of());
+
+        RoleResponse response = roleService.updateRole("CUSTOM", new UpdateRoleRequest("New Name", null, null));
+
+        assertThat(response.name()).isEqualTo("New Name");
+        verify(roleRepository).save(r);
+    }
+
+    @Test
+    void updateRole_blankName_throws400() {
+        Role r = role("r1", "CUSTOM", "Old Name");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        var request = new UpdateRoleRequest("   ", null, null);
+
+        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("must not be blank")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void updateRole_duplicateName_throws409() {
+        Role r = role("r1", "CUSTOM", "Old Name");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(roleRepository.existsByNameIgnoreCaseAndCodeNot("Existing Name", "CUSTOM")).thenReturn(true);
+        var request = new UpdateRoleRequest("Existing Name", null, null);
+
+        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("Role name already exists")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
+    void updateRole_clearDescription_setsNull() {
+        Role r = role("r1", "CUSTOM", "Name");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(roleRepository.save(any(Role.class))).thenReturn(r);
+        when(rolePermissionRepository.findByRoleCodeWithPermission("CUSTOM")).thenReturn(List.of());
+
+        roleService.updateRole("CUSTOM", new UpdateRoleRequest(null, "", null));
+
+        assertThat(r.getDescription()).isNull();
+    }
+
+    @Test
+    void updateRole_replacePermissions_replacesLinks() {
+        Role r = role("r1", "CUSTOM", "Name");
+        Permission p = perm("incident.create");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(permissionRepository.findByCodeIn(List.of("incident.create"))).thenReturn(List.of(p));
+        when(rolePermissionRepository.saveAll(anyList())).thenReturn(List.of());
+        when(roleRepository.save(any(Role.class))).thenReturn(r);
+
+        RoleResponse response = roleService.updateRole("CUSTOM", new UpdateRoleRequest(null, null, List.of("incident.create")));
+
+        verify(rolePermissionRepository).deleteByRoleCode("CUSTOM");
+        verify(rolePermissionRepository).saveAll(anyList());
+        assertThat(response.permissions()).hasSize(1);
+    }
+
+    @Test
+    void updateRole_emptyPermissionList_removesAllPermissions() {
+        Role r = role("r1", "CUSTOM", "Name");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(permissionRepository.findByCodeIn(List.of())).thenReturn(List.of());
+        when(rolePermissionRepository.saveAll(anyList())).thenReturn(List.of());
+        when(roleRepository.save(any(Role.class))).thenReturn(r);
+
+        RoleResponse response = roleService.updateRole("CUSTOM", new UpdateRoleRequest(null, null, List.of()));
+
+        verify(rolePermissionRepository).deleteByRoleCode("CUSTOM");
+        assertThat(response.permissions()).isEmpty();
+    }
+
+    @Test
+    void updateRole_invalidPermissionCode_throws400AndRollsBack() {
+        Role r = role("r1", "CUSTOM", "Name");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(permissionRepository.findByCodeIn(anyList())).thenReturn(List.of());
+        var request = new UpdateRoleRequest(null, null, List.of("bad.code"));
+
+        assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("invalid")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+        verify(rolePermissionRepository, never()).deleteByRoleCode(any());
+    }
+
+    @Test
+    void updateRole_roleNotFound_throws404() {
+        when(roleRepository.findByCode("MISSING")).thenReturn(Optional.empty());
+        var request = new UpdateRoleRequest("Name", null, null);
+
+        assertThatThrownBy(() -> roleService.updateRole("MISSING", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void updateRole_systemDefinedRole_throws403() {
+        Role r = Role.builder().id("r1").code("ADMIN").name("Admin").systemDefined(true).build();
+        when(roleRepository.findByCode("ADMIN")).thenReturn(Optional.of(r));
+        var request = new UpdateRoleRequest("New Admin", null, null);
+
+        assertThatThrownBy(() -> roleService.updateRole("ADMIN", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("System-defined roles cannot be modified")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void updateRole_allFieldsNull_noChange() {
+        Role r = role("r1", "CUSTOM", "Original");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(roleRepository.save(any(Role.class))).thenReturn(r);
+        when(rolePermissionRepository.findByRoleCodeWithPermission("CUSTOM")).thenReturn(List.of());
+
+        RoleResponse response = roleService.updateRole("CUSTOM", new UpdateRoleRequest(null, null, null));
+
+        assertThat(response.name()).isEqualTo("Original");
+        verify(roleRepository, never()).existsByNameIgnoreCaseAndCodeNot(any(), any());
+        verify(rolePermissionRepository, never()).deleteByRoleCode(any());
+    }
+
+    // ── removeUsersFromRole ───────────────────────────────────────────────────
+
+    @Test
+    void removeUsersFromRole_success_clearsRoleCode() {
+        Role r = role("r1", "CUSTOM", "Custom");
+        User user = User.builder().id("u1").build();
+        user.setRoleCode("CUSTOM");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(userRepository.findAllById(List.of("u1"))).thenReturn(List.of(user));
+        when(userRepository.saveAll(anyList())).thenReturn(List.of(user));
+
+        BulkAssignRoleResponse response = roleService.removeUsersFromRole("CUSTOM", new BulkAssignRoleRequest(List.of("u1")));
+
+        assertThat(user.getRoleCode()).isNull();
+        assertThat(response.roleCode()).isEqualTo("CUSTOM");
+        assertThat(response.updatedCount()).isEqualTo(1);
+        assertThat(response.updatedUserIds()).containsExactly("u1");
+        verify(roleAccessSyncService).syncAgentRecord(user, null);
+        verify(roleAccessSyncService).syncAdminRecord(user, null);
+    }
+
+    @Test
+    void removeUsersFromRole_roleNotFound_throws404() {
+        when(roleRepository.findByCode("MISSING")).thenReturn(Optional.empty());
+        var request = new BulkAssignRoleRequest(List.of("u1"));
+
+        assertThatThrownBy(() -> roleService.removeUsersFromRole("MISSING", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void removeUsersFromRole_missingUsers_throws404AndRollsBack() {
+        Role r = role("r1", "CUSTOM", "Custom");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(userRepository.findAllById(anyList())).thenReturn(List.of());
+        var request = new BulkAssignRoleRequest(List.of("u1", "u2"));
+
+        assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("u1")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+        verify(userRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void removeUsersFromRole_emptyUserIds_throws400() {
+        Role r = role("r1", "CUSTOM", "Custom");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        var request = new BulkAssignRoleRequest(List.of("  "));
+
+        assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("must not be empty")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void removeUsersFromRole_usersNotInRole_areSkipped() {
+        Role r = role("r1", "CUSTOM", "Custom");
+        User userInRole = User.builder().id("u1").build();
+        userInRole.setRoleCode("CUSTOM");
+        User userInOtherRole = User.builder().id("u2").build();
+        userInOtherRole.setRoleCode("OTHER");
+        when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
+        when(userRepository.findAllById(List.of("u1", "u2"))).thenReturn(List.of(userInRole, userInOtherRole));
+        when(userRepository.saveAll(anyList())).thenReturn(List.of(userInRole));
+
+        BulkAssignRoleResponse response = roleService.removeUsersFromRole("CUSTOM", new BulkAssignRoleRequest(List.of("u1", "u2")));
+
+        assertThat(userInRole.getRoleCode()).isNull();
+        assertThat(userInOtherRole.getRoleCode()).isEqualTo("OTHER");
+        assertThat(response.updatedCount()).isEqualTo(1);
+        assertThat(response.updatedUserIds()).containsExactly("u1");
+        verify(roleAccessSyncService).syncAgentRecord(userInRole, null);
+        verify(roleAccessSyncService, never()).syncAgentRecord(userInOtherRole, null);
     }
 
     // ── permissionCatalog ─────────────────────────────────────────────────────

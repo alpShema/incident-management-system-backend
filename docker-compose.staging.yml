@@ -42,6 +42,26 @@ services:
       MEDIA_MAX_FILE_SIZE:         ${MEDIA_MAX_FILE_SIZE:-10485760}
       MEDIA_MAX_ATTACHMENTS:       ${MEDIA_MAX_ATTACHMENTS:-5}
       MEDIA_ALLOWED_CONTENT_TYPES: ${MEDIA_ALLOWED_CONTENT_TYPES:-image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain}
+      SLACK_ENABLED: ${SLACK_ENABLED}
+      SLACK_NOTIFICATIONS_ENABLED: ${SLACK_NOTIFICATIONS_ENABLED}
+      SLACK_AGENT_FEATURES_ENABLED: ${SLACK_AGENT_FEATURES_ENABLED}
+      SLACK_APP_ID: ${SLACK_APP_ID}
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      SLACK_REDIRECT_URI: ${SLACK_REDIRECT_URI}
+      SLACK_FRONTEND_CONNECT_URL: ${SLACK_FRONTEND_CONNECT_URL}
+      SLACK_FRONTEND_SUCCESS_URL: ${SLACK_FRONTEND_SUCCESS_URL:-http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=true}
+      SLACK_FRONTEND_ERROR_URL: ${SLACK_FRONTEND_ERROR_URL:-http://hilfe-pro-frontend.amalitech-dev.net/slack/connect?success=false}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      AMALI_AI_API_KEY: ${AMALI_AI_API_KEY}
+      AMALI_AI_BASE_URL: ${AMALI_AI_BASE_URL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      APP_BASE_URL: ${APP_BASE_URL:-https://hilfe-pro-service.amalitech-dev.net}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 30s

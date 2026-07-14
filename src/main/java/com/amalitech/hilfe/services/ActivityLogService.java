@@ -7,12 +7,15 @@ import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
+import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
@@ -33,12 +36,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityLogService {
     private static final String SUBJECT_INCIDENT = "INCIDENT";
     private static final String UNKNOWN = "Unknown";
+    private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupRepository agentGroupRepository;
+    private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final RoleRepository roleRepository;
 
     public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
@@ -75,15 +80,35 @@ public class ActivityLogService {
     }
 
     private void enforceIncidentAccess(String userId, String roleCode, Incident incident) {
-        if ("ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) return;
+        if ("ADMIN".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) return;
         if (userId.equals(incident.getUserId())) return;
         if ("AGENT".equalsIgnoreCase(roleCode)) {
             boolean isAssignee = agentRepository.findByUserId(userId)
                     .map(a -> a.getId().equals(incident.getAssignedToId()))
                     .orElse(false);
             if (isAssignee) return;
+            if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
         throw new ArmsAuthException("You do not have access to this incident's activity log", 403);
+    }
+
+    private Optional<List<String>> findAgentGroupIds(String userId) {
+        return agentRepository.findByUserId(userId)
+                .map(agent -> agentGroupMemberRepository.findAgentGroupIdsByAgentId(agent.getId()));
+    }
+
+    private boolean isSameDepartmentAsAssignedAgent(String userId, Incident incident) {
+        if (incident.getAssignedToId() == null) return false;
+        List<String> actorGroupIds = findAgentGroupIds(userId).orElse(List.of());
+        if (actorGroupIds.isEmpty()) return false;
+        List<String> assignedGroupIds = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
+        if (assignedGroupIds.isEmpty()) return false;
+        List<String> actorDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(actorGroupIds);
+        if (actorDeptIds.isEmpty()) {
+            return assignedGroupIds.stream().anyMatch(actorGroupIds::contains);
+        }
+        List<String> assignedDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(assignedGroupIds);
+        return assignedDeptIds.stream().anyMatch(actorDeptIds::contains);
     }
 
     private boolean hasAuthority(String permission) {
@@ -327,6 +352,63 @@ public class ActivityLogService {
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log status change for agent group {}", agentGroupId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logInternalNoteCreated(String actorUserId, String incidentId, String noteId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INTERNAL_NOTE_CREATED")
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " added an internal note on " + incidentLabel)
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log internal note creation for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logInternalNoteUpdated(String actorUserId, String incidentId, String noteId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INTERNAL_NOTE_UPDATED")
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " updated an internal note on " + incidentLabel)
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log internal note update for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logInternalNoteDeleted(String actorUserId, String incidentId, String noteId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("INTERNAL_NOTE_DELETED")
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " deleted an internal note on " + incidentLabel)
+                    .metadata(NOTE_ID_META_PREFIX + noteId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log internal note deletion for incident {}", incidentId, ex);
         }
     }
 

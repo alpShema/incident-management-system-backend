@@ -34,6 +34,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AutoCloseServiceTest {
 
+    @SuppressWarnings("java:S8692")
+    private static final Instant FIXED_NOW = Instant.now();
+
     @Mock SystemConfigRepository systemConfigRepository;
     @Mock IncidentRepository     incidentRepository;
     @Mock StatusRepository       statusRepository;
@@ -47,40 +50,40 @@ class AutoCloseServiceTest {
 
     @Test
     void getConfig_configExists_returnsStoredValue() {
-        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_HOURS_KEY))
+        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_SECONDS_KEY))
                 .thenReturn(Optional.of(config("48")));
 
         AutoCloseConfigResponse response = autoCloseService.getConfig();
 
-        assertThat(response.durationHours()).isEqualTo(48);
+        assertThat(response.durationSeconds()).isEqualTo(48);
     }
 
     @Test
     void getConfig_configMissing_returnsDefault() {
-        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_HOURS_KEY))
+        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_SECONDS_KEY))
                 .thenReturn(Optional.empty());
 
         AutoCloseConfigResponse response = autoCloseService.getConfig();
 
-        assertThat(response.durationHours()).isEqualTo(AutoCloseService.DEFAULT_AUTO_CLOSE_HOURS);
+        assertThat(response.durationSeconds()).isEqualTo(AutoCloseService.DEFAULT_AUTO_CLOSE_SECONDS);
     }
 
     // ── updateConfig ──────────────────────────────────────────────────────────
 
     @Test
     void updateConfig_savesAndReturnsNewValue() {
-        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_HOURS_KEY))
+        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_SECONDS_KEY))
                 .thenReturn(Optional.of(config("72")));
 
         AutoCloseConfigResponse response = autoCloseService.updateConfig(48);
 
-        assertThat(response.durationHours()).isEqualTo(48);
+        assertThat(response.durationSeconds()).isEqualTo(48);
         verify(systemConfigRepository).save(any(SystemConfig.class));
     }
 
     @Test
     void updateConfig_noExistingRow_createsNewEntry() {
-        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_HOURS_KEY))
+        when(systemConfigRepository.findById(AutoCloseService.AUTO_CLOSE_SECONDS_KEY))
                 .thenReturn(Optional.empty());
 
         autoCloseService.updateConfig(24);
@@ -108,9 +111,9 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident i1 = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300)).build();
+                .resolvedAt(FIXED_NOW.minusSeconds(300)).build();
         Incident i2 = Incident.builder().id("inc-2").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300)).build();
+                .resolvedAt(FIXED_NOW.minusSeconds(300)).build();
 
         when(incidentRepository.findOverdueResolved(any(Instant.class))).thenReturn(List.of(i1, i2));
         when(statusRepository.findByNameIgnoreCase("Closed"))
@@ -147,7 +150,8 @@ class AutoCloseServiceTest {
 
     @Test
     void autoClose_usesConfiguredDurationForCutoffCalculation() {
-        when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("24")));
+        int durationSeconds = 86400; // 24 hours in seconds
+        when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config(String.valueOf(durationSeconds))));
         when(incidentRepository.findOverdueResolved(any(Instant.class))).thenReturn(List.of());
 
         autoCloseService.autoCloseResolvedIncidents();
@@ -156,7 +160,7 @@ class AutoCloseServiceTest {
         verify(incidentRepository).findOverdueResolved(cutoffCaptor.capture());
 
         Instant cutoff = cutoffCaptor.getValue();
-        Instant expectedCutoff = Instant.now().minusSeconds(24 * 3600);
+        Instant expectedCutoff = FIXED_NOW.minusSeconds(durationSeconds);
         // allow 5 seconds of test execution drift
         assertThat(cutoff).isBetween(expectedCutoff.minusSeconds(5), expectedCutoff.plusSeconds(5));
     }
@@ -168,7 +172,7 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300))
+                .resolvedAt(FIXED_NOW.minusSeconds(300))
                 .assignedToId("agent-1")
                 .userId("client-1")
                 .build();
@@ -191,7 +195,7 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300))
+                .resolvedAt(FIXED_NOW.minusSeconds(300))
                 .userId("client-user-1")
                 .build();
         incident.setIncidentNo(7);
@@ -210,7 +214,7 @@ class AutoCloseServiceTest {
         when(systemConfigRepository.findById(any())).thenReturn(Optional.of(config("72")));
 
         Incident incident = Incident.builder().id("inc-1").statusId("status-resolved")
-                .resolvedAt(Instant.now().minusSeconds(300))
+                .resolvedAt(FIXED_NOW.minusSeconds(300))
                 .userId("client-user-1")
                 .build(); // no assignedToId
 
@@ -228,7 +232,7 @@ class AutoCloseServiceTest {
 
     private SystemConfig config(String value) {
         return SystemConfig.builder()
-                .key(AutoCloseService.AUTO_CLOSE_HOURS_KEY)
+                .key(AutoCloseService.AUTO_CLOSE_SECONDS_KEY)
                 .value(value)
                 .build();
     }

@@ -8,11 +8,13 @@ import com.amalitech.hilfe.notifications.events.IncidentAssignedEvent;
 import com.amalitech.hilfe.notifications.events.IncidentSlaAtRiskEvent;
 import com.amalitech.hilfe.notifications.listener.NotificationEventListener;
 import com.amalitech.hilfe.notifications.persistence.NotificationPersistenceService;
+import com.amalitech.hilfe.slack.service.SlackNotificationBroadcaster;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import static org.mockito.Mockito.*;
 
@@ -23,7 +25,15 @@ class NotificationEventListenerTest {
     @Mock NotificationPersistenceService persistenceService;
     @Mock NotificationBroadcaster broadcaster;
 
-    @InjectMocks NotificationEventListener listener;
+    NotificationEventListener listener;
+
+    @SuppressWarnings("unchecked")
+    @BeforeEach
+    void setUp() {
+        ObjectProvider<SlackNotificationBroadcaster> slackProvider = mock(ObjectProvider.class);
+        when(slackProvider.getIfAvailable()).thenReturn(null);
+        listener = new NotificationEventListener(contentFactory, persistenceService, broadcaster, slackProvider);
+    }
 
     @Test
     void assignedEvent_persistsAndBroadcasts() {
