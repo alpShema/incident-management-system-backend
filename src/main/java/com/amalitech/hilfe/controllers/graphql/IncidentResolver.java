@@ -9,6 +9,8 @@ import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentSeverityRequest;
 import com.amalitech.hilfe.dto.UpdateIncidentStatusRequest;
+import com.amalitech.hilfe.security.authorization.CurrentUserAuthority;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -131,7 +133,8 @@ public class IncidentResolver {
             @Argument String id,
             @Argument UpdateIncidentStatusRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
-        return incidentService.updateStatus(principal.userId(), principal.roleCode(), id, input);
+        boolean hasForceClose = CurrentUserAuthority.has(RbacPermissions.INCIDENT_FORCECLOSE);
+        return incidentService.updateStatus(principal.userId(), principal.roleCode(), hasForceClose, id, input);
     }
 
     @MutationMapping
@@ -140,7 +143,8 @@ public class IncidentResolver {
             @Argument String id,
             @Argument UpdateIncidentSeverityRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
-        return incidentService.updateSeverity(principal.userId(), id, input);
+        boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
+        return incidentService.updateSeverity(principal.userId(), hasUpdateAny, id, input);
     }
 
     @MutationMapping
@@ -149,7 +153,8 @@ public class IncidentResolver {
             @Argument String id,
             @Argument AssignIncidentRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
-        return incidentService.assignIncident(principal.userId(), principal.roleCode(), id, input);
+        boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
+        return incidentService.assignIncident(principal.userId(), hasUpdateAny, id, input);
     }
 
     private static IncidentFilterParams orEmpty(IncidentFilterParams f) {

@@ -193,7 +193,7 @@ class IncidentControllerTest {
 
     @Test
     void updateStatus_validRequest_returns200() throws Exception {
-        when(incidentService.updateStatus(anyString(), any(RoleCode.class), eq("inc-1"), any(UpdateIncidentStatusRequest.class))).thenReturn(stubResponse());
+        when(incidentService.updateStatus(anyString(), any(RoleCode.class), anyBoolean(), eq("inc-1"), any(UpdateIncidentStatusRequest.class))).thenReturn(stubResponse());
 
         mvc.perform(patch("/incidents/inc-1/status")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -201,13 +201,29 @@ class IncidentControllerTest {
                         .with(authentication(new UsernamePasswordAuthenticationToken(agentPrincipal(), null, List.of(() -> "incident.status.change")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident status updated successfully"));
+
+        verify(incidentService).updateStatus(eq("agent-user-1"), eq(RoleCode.AGENT), eq(false), eq("inc-1"), any());
+    }
+
+    @Test
+    void updateStatus_withForceClosePermission_passesTrueToService() throws Exception {
+        when(incidentService.updateStatus(anyString(), any(RoleCode.class), anyBoolean(), eq("inc-1"), any(UpdateIncidentStatusRequest.class))).thenReturn(stubResponse());
+
+        mvc.perform(patch("/incidents/inc-1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentStatusRequest("status-closed", null)))
+                        .with(authentication(new UsernamePasswordAuthenticationToken(adminPrincipal(), null,
+                                List.of(() -> "incident.status.change", () -> "incident.forceclose")))))
+                .andExpect(status().isOk());
+
+        verify(incidentService).updateStatus(eq("admin-1"), eq(RoleCode.ADMIN), eq(true), eq("inc-1"), any());
     }
 
     // ── PATCH /incidents/{id}/severity ────────────────────────────────────────
 
     @Test
     void updateSeverity_validRequest_returns200() throws Exception {
-        when(incidentService.updateSeverity(anyString(), eq("inc-1"), any(UpdateIncidentSeverityRequest.class))).thenReturn(stubResponse());
+        when(incidentService.updateSeverity(anyString(), anyBoolean(), eq("inc-1"), any(UpdateIncidentSeverityRequest.class))).thenReturn(stubResponse());
 
         mvc.perform(patch("/incidents/inc-1/severity")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -215,13 +231,29 @@ class IncidentControllerTest {
                         .with(authentication(new UsernamePasswordAuthenticationToken(agentPrincipal(), null, List.of(() -> "incident.severity.change")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident severity updated successfully"));
+
+        verify(incidentService).updateSeverity(eq("agent-user-1"), eq(false), eq("inc-1"), any());
+    }
+
+    @Test
+    void updateSeverity_withUpdateAnyPermission_passesTrueToService() throws Exception {
+        when(incidentService.updateSeverity(anyString(), anyBoolean(), eq("inc-1"), any(UpdateIncidentSeverityRequest.class))).thenReturn(stubResponse());
+
+        mvc.perform(patch("/incidents/inc-1/severity")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentSeverityRequest("sev-high")))
+                        .with(authentication(new UsernamePasswordAuthenticationToken(adminPrincipal(), null,
+                                List.of(() -> "incident.severity.change", () -> "incident.update.any")))))
+                .andExpect(status().isOk());
+
+        verify(incidentService).updateSeverity(eq("admin-1"), eq(true), eq("inc-1"), any());
     }
 
     // ── PATCH /incidents/{id}/assign ──────────────────────────────────────────
 
     @Test
     void assignIncident_validRequest_returns200() throws Exception {
-        when(incidentService.assignIncident(anyString(), anyString(), eq("inc-1"), any(AssignIncidentRequest.class))).thenReturn(stubResponse());
+        when(incidentService.assignIncident(anyString(), anyBoolean(), eq("inc-1"), any(AssignIncidentRequest.class))).thenReturn(stubResponse());
 
         mvc.perform(patch("/incidents/inc-1/assign")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -229,6 +261,22 @@ class IncidentControllerTest {
                         .with(authentication(new UsernamePasswordAuthenticationToken(adminPrincipal(), null, List.of(() -> "incident.assign")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident assigned successfully"));
+
+        verify(incidentService).assignIncident(eq("admin-1"), eq(false), eq("inc-1"), any());
+    }
+
+    @Test
+    void assignIncident_withUpdateAnyPermission_passesTrueToService() throws Exception {
+        when(incidentService.assignIncident(anyString(), anyBoolean(), eq("inc-1"), any(AssignIncidentRequest.class))).thenReturn(stubResponse());
+
+        mvc.perform(patch("/incidents/inc-1/assign")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AssignIncidentRequest("agent-1")))
+                        .with(authentication(new UsernamePasswordAuthenticationToken(adminPrincipal(), null,
+                                List.of(() -> "incident.assign", () -> "incident.update.any")))))
+                .andExpect(status().isOk());
+
+        verify(incidentService).assignIncident(eq("admin-1"), eq(true), eq("inc-1"), any());
     }
 
     // ── GET /incidents (admin all) ────────────────────────────────────────────
