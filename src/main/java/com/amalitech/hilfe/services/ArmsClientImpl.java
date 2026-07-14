@@ -156,7 +156,7 @@ public class ArmsClientImpl implements ArmsClient {
                 UserByIdResponse.class
             );
             log.debug("ARMS getUserById response for user {}: {}", userId, response);
-            return toArmsUserInfo(requireUserById(response, userId));
+            return toArmsUserInfo(requireUserById(response));
         } catch (HttpClientErrorException | HttpServerErrorException | ResourceAccessException exception) {
             throw handleApiKeyRequestFailure("user lookup request", exception);
         }
@@ -214,7 +214,7 @@ public class ArmsClientImpl implements ArmsClient {
         return response.data().listEmployeeInfosWithFilters().employeeInfo();
     }
 
-    private UserByIdRaw requireUserById(UserByIdResponse response, String userId) {
+    private UserByIdRaw requireUserById(UserByIdResponse response) {
         if (response == null || response.data() == null || response.data().user() == null) {
             throw new ArmsAuthException("The requested user could not be found.");
         }

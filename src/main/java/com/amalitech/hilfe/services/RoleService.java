@@ -18,7 +18,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -104,8 +103,6 @@ public class RoleService {
 
         List<User> users = userRepository.findAllById(userIds);
         if (users.size() != userIds.size()) {
-            Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
-            List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
             throw new ArmsAuthException(USERS_NOT_FOUND_MESSAGE, 404);
         }
 
@@ -187,8 +184,6 @@ public class RoleService {
 
         List<User> users = userRepository.findAllById(userIds);
         if (users.size() != userIds.size()) {
-            Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
-            List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
             throw new ArmsAuthException(USERS_NOT_FOUND_MESSAGE, 404);
         }
 
