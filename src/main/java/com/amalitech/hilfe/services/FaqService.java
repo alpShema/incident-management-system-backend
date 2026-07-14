@@ -41,6 +41,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FaqService {
 
+    private static final String QUESTION_COLUMN = "question";
+    private static final String ANSWER_COLUMN = "answer";
+
     private final FaqRepository faqRepository;
     private final FaqEmbeddingService faqEmbeddingService;
 
@@ -141,8 +144,8 @@ public class FaqService {
             for (CSVRecord csvRecord : csvParser) {
                 anyRows = true;
                 rowNumber++;
-                String question = extractField(csvRecord, "question");
-                String answer = extractField(csvRecord, "answer");
+                String question = extractField(csvRecord, QUESTION_COLUMN);
+                String answer = extractField(csvRecord, ANSWER_COLUMN);
                 String validationError = validateRow(question, answer);
                 if (validationError != null) {
                     errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
@@ -189,8 +192,8 @@ public class FaqService {
             int rowNumber = 1;
             for (CSVRecord csvRecord : csvParser) {
                 rowNumber++;
-                String question = extractField(csvRecord, "question");
-                String answer = extractField(csvRecord, "answer");
+                String question = extractField(csvRecord, QUESTION_COLUMN);
+                String answer = extractField(csvRecord, ANSWER_COLUMN);
                 boolean questionMissing = !StringUtils.hasText(question);
                 boolean answerMissing = !StringUtils.hasText(answer);
                 FaqRowStatus status = (questionMissing || answerMissing) ? FaqRowStatus.NEEDS_ATTENTION : FaqRowStatus.READY;
@@ -218,7 +221,7 @@ public class FaqService {
         return new FaqInspectionResult(summary, PageResponse.from(paginate(filteredRows, pageable)));
     }
 
-    private static final List<String> REQUIRED_CSV_HEADERS = List.of("question", "answer");
+    private static final List<String> REQUIRED_CSV_HEADERS = List.of(QUESTION_COLUMN, ANSWER_COLUMN);
 
     // Excel/Sheets CSV exports commonly prepend a UTF-8 BOM, which decodes to a
     // leading U+FEFF character that would otherwise glue itself onto the first
