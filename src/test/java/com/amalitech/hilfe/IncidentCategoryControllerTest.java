@@ -48,7 +48,7 @@ class IncidentCategoryControllerTest {
     }
 
     private IncidentCategoryResponse stubCategory() {
-        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", null, "active", null);
+        return new IncidentCategoryResponse("cat-1", "Facility", "Facility incidents", null, true, null);
     }
 
     private IncidentTopicResponse stubTopic() {
@@ -57,7 +57,7 @@ class IncidentCategoryControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
-                "active",
+                true,
                 null,
                 null);
     }
@@ -83,7 +83,7 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listAllCategories_adminWithNoFilter_returns200WithAllCategories() throws Exception {
-        IncidentCategoryResponse inactive = new IncidentCategoryResponse("cat-2", "Old", "desc", null, "inactive", null);
+        IncidentCategoryResponse inactive = new IncidentCategoryResponse("cat-2", "Old", "desc", null, false, null);
         when(categoryService.listAllCategories(any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubCategory(), inactive), PageRequest.of(0, 20), 2));
 
@@ -93,22 +93,22 @@ class IncidentCategoryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident categories retrieved successfully"))
                 .andExpect(jsonPath("$.data.totalElements").value(2))
-                .andExpect(jsonPath("$.data.items[0].status").value("active"))
-                .andExpect(jsonPath("$.data.items[1].status").value("inactive"));
+                .andExpect(jsonPath("$.data.items[0].status").value(true))
+                .andExpect(jsonPath("$.data.items[1].status").value(false));
     }
 
     @Test
-    void listAllCategories_withStateFilter_passesStateToService() throws Exception {
-        when(categoryService.listAllCategories(eq("inactive"), any(), any()))
+    void listAllCategories_withStatusFilter_passesStatusToService() throws Exception {
+        when(categoryService.listAllCategories(eq(false), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        mvc.perform(get("/incident-categories/all?state=inactive")
+        mvc.perform(get("/incident-categories/all?status=false")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(0));
 
-        verify(categoryService).listAllCategories(eq("inactive"), any(), any());
+        verify(categoryService).listAllCategories(eq(false), any(), any());
     }
 
     // ── POST /incident-categories ─────────────────────────────────────────────
@@ -234,7 +234,7 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listTopics_returns200WithAllTopics() throws Exception {
-        IncidentTopicResponse inactiveTopic = new IncidentTopicResponse("type-2", "Old Topic", "Deprecated", true, "inactive", null, null);
+        IncidentTopicResponse inactiveTopic = new IncidentTopicResponse("type-2", "Old Topic", "Deprecated", true, false, null, null);
         when(categoryService.listTopicsByCategory("cat-1", null))
                 .thenReturn(List.of(stubTopic(), inactiveTopic));
 
@@ -246,24 +246,24 @@ class IncidentCategoryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident topics retrieved successfully"))
                 .andExpect(jsonPath("$.data[0].id").value("type-1"))
-                .andExpect(jsonPath("$.data[0].status").value("active"))
-                .andExpect(jsonPath("$.data[1].status").value("inactive"));
+                .andExpect(jsonPath("$.data[0].status").value(true))
+                .andExpect(jsonPath("$.data[1].status").value(false));
     }
 
     @Test
     void listTopics_withStatusFilter_passesStatusToService() throws Exception {
-        when(categoryService.listTopicsByCategory("cat-1", "inactive"))
+        when(categoryService.listTopicsByCategory("cat-1", false))
                 .thenReturn(List.of());
 
         var auth = new UsernamePasswordAuthenticationToken(
                 adminPrincipal(), null, List.of(() -> "ROLE_ADMIN"));
 
         mvc.perform(get("/incident-categories/cat-1/topics")
-                        .param("status", "inactive")
+                        .param("status", "false")
                         .with(authentication(auth)))
                 .andExpect(status().isOk());
 
-        verify(categoryService).listTopicsByCategory("cat-1", "inactive");
+        verify(categoryService).listTopicsByCategory("cat-1", false);
     }
 
     // ── POST /incident-categories/{id}/topics ─────────────────────────────────

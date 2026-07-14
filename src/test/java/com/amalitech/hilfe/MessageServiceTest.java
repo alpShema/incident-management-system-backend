@@ -17,6 +17,7 @@ import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.MessageMediaRepository;
 import com.amalitech.hilfe.repositories.MessageRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.notifications.NotificationEventPublisher;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.MessageService;
 import com.amalitech.hilfe.services.SlaService;
@@ -41,6 +42,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MessageServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Mock MessageRepository messageRepository;
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
@@ -50,6 +53,7 @@ class MessageServiceTest {
     @Mock MediaService mediaService;
     @Mock SlaService slaService;
     @Mock SimpMessagingTemplate messagingTemplate;
+    @Mock NotificationEventPublisher notificationEventPublisher;
     @InjectMocks MessageService messageService;
 
     @Test
@@ -116,8 +120,8 @@ class MessageServiceTest {
                 .incidentId("inc-1")
                 .senderId("u1")
                 .content(null)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .createdAt(FIXED_NOW)
+                .updatedAt(FIXED_NOW)
                 .build();
         AttachmentRef attachment = new AttachmentRef("messages/a/img.png", "img.png", "image/png", 1024L);
         MessageMedia messageMedia = MessageMedia.builder()
@@ -182,7 +186,7 @@ class MessageServiceTest {
         User sender = User.builder().id("u-assignee").fullName("Assignee").email("a@test.com").build();
         Message saved = Message.builder()
                 .id("msg-1").incidentId("inc-1").senderId("u-assignee").content("hi")
-                .createdAt(Instant.now()).updatedAt(Instant.now()).build();
+                .createdAt(FIXED_NOW).updatedAt(FIXED_NOW).build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findByUserId("u-assignee")).thenReturn(Optional.of(assigneeAgent));
@@ -272,8 +276,8 @@ class MessageServiceTest {
                 .senderId("u1")
                 .content("hello")
                 .sender(User.builder().id("u1").fullName("Jane").build())
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .createdAt(FIXED_NOW)
+                .updatedAt(FIXED_NOW)
                 .build();
         MessageMedia messageMedia = MessageMedia.builder()
                 .id("mm-1")

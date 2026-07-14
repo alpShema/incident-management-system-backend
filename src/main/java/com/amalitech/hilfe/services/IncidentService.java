@@ -29,20 +29,29 @@ public class IncidentService {
     private static final String ROLE_AGENT = "AGENT";
     private static final String ROLE_CLIENT = "CLIENT";
     private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_ADMIN_AGENT = "ADMIN_AGENT";
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     private static final String SORT_CREATED_AT = "createdAt";
+    private static final String SORT_UPDATED_AT = "updatedAt";
+    private static final String SORT_TITLE = "title";
+    private static final String SORT_INCIDENT_NO = "incidentNo";
+    private static final String SORT_CATEGORY_NAME = "incidentType.category.name";
+    private static final String SORT_SEVERITY_NAME = "severity.name";
+    private static final String SORT_STATUS_NAME = "status.name";
     private static final String STATUS_NAME_IN_PROGRESS = "In Progress";
     private static final String IN_PROGRESS_NOT_CONFIGURED = "Default 'In Progress' status not configured";
 
     // Frontend sort alias → JPA field path
     private static final Map<String, String> SORT_FIELD_ALIASES = Map.of(
-            "category", "incidentType.category.name",
-            "priority", "severity.name"
+            "category", SORT_CATEGORY_NAME,
+            "priority", SORT_SEVERITY_NAME,
+            "priority.name", SORT_SEVERITY_NAME,
+            "status", SORT_STATUS_NAME
     );
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            SORT_CREATED_AT, "updatedAt", "title", "incidentNo",
-            "incidentType.category.name", "severity.name"
+            SORT_CREATED_AT, SORT_UPDATED_AT, SORT_TITLE, SORT_INCIDENT_NO,
+            SORT_CATEGORY_NAME, SORT_SEVERITY_NAME, SORT_STATUS_NAME
     );
 
     // from-status-id → to-status-id → roles permitted to make that transition
@@ -315,7 +324,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
 
         String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
-        boolean isAdmin = ROLE_ADMIN.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole);
+        boolean isAdmin = ROLE_ADMIN.equals(normalizedRole) || ROLE_ADMIN_AGENT.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole);
         if (!isAdmin) {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
             if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
@@ -406,14 +415,18 @@ public class IncidentService {
     }
 
     private void enforceAccess(String userId, String roleCode, Incident incident) {
-        if (ROLE_ADMIN.equalsIgnoreCase(roleCode) || ROLE_SUPER_ADMIN.equalsIgnoreCase(roleCode)) {
+        if (ROLE_ADMIN.equalsIgnoreCase(roleCode) || ROLE_ADMIN_AGENT.equalsIgnoreCase(roleCode) || ROLE_SUPER_ADMIN.equalsIgnoreCase(roleCode)) {
             return;
         }
         if (userId.equals(incident.getUserId())) {
             return;
         }
-        if (ROLE_AGENT.equalsIgnoreCase(roleCode) && isSameDepartmentAsAssignedAgent(userId, incident)) {
-            return;
+        if (ROLE_AGENT.equalsIgnoreCase(roleCode)) {
+            boolean isAssignee = agentRepository.findByUserId(userId)
+                    .map(a -> a.getId().equals(incident.getAssignedToId()))
+                    .orElse(false);
+            if (isAssignee) return;
+            if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
         throw new ArmsAuthException("You do not have access to this incident", 403);
     }
@@ -503,12 +516,25 @@ public class IncidentService {
         if (incident.getAssignedToId() == null) {
             return false;
         }
-        List<String> actorDepartments = findAgentGroupIds(userId).orElse(List.of());
-        if (actorDepartments.isEmpty()) {
+        List<String> actorGroupIds = findAgentGroupIds(userId).orElse(List.of());
+        if (actorGroupIds.isEmpty()) {
             return false;
         }
-        List<String> assignedDepartments = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
-        return assignedDepartments.stream().anyMatch(actorDepartments::contains);
+        List<String> assignedGroupIds = agentGroupMemberRepository.findAgentGroupIdsByAgentId(incident.getAssignedToId());
+        if (assignedGroupIds.isEmpty()) {
+            return false;
+        }
+
+        // Compare by department rather than by group so that agents in different
+        // groups within the same department can access each other's incidents,
+        // consistent with the department-incidents listing query.
+        List<String> actorDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(actorGroupIds);
+        if (actorDeptIds.isEmpty()) {
+            // No department hierarchy — fall back to direct group overlap
+            return assignedGroupIds.stream().anyMatch(actorGroupIds::contains);
+        }
+        List<String> assignedDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(assignedGroupIds);
+        return assignedDeptIds.stream().anyMatch(actorDeptIds::contains);
     }
 
     private Incident findIncident(String incidentId) {
@@ -621,11 +647,11 @@ public class IncidentService {
         if (!STATUS_REOPENED.equals(newStatus.getId())) return;
         if (incident.getResolvedAt() == null) return;
 
-        int windowHours = autoCloseService.readDurationHours();
-        Instant deadline = incident.getResolvedAt().plus(windowHours, java.time.temporal.ChronoUnit.HOURS);
+        int windowSeconds = autoCloseService.readDurationSeconds();
+        Instant deadline = incident.getResolvedAt().plusSeconds(windowSeconds);
         if (Instant.now().isAfter(deadline)) {
             throw new ArmsAuthException(
-                    "Reopen window has expired. Incidents must be reopened within " + windowHours + " hours of resolution.",
+                    "Reopen window has expired. Incidents must be reopened within " + windowSeconds + " seconds of resolution.",
                     403);
         }
     }
@@ -640,7 +666,7 @@ public class IncidentService {
         }
 
         // Admins and super-admins may force-close any incident regardless of current status
-        if ((ROLE_ADMIN.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole)) && STATUS_CLOSED.equals(toId)) {
+        if ((ROLE_ADMIN.equals(normalizedRole) || ROLE_ADMIN_AGENT.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole)) && STATUS_CLOSED.equals(toId)) {
             return;
         }
 
@@ -648,7 +674,9 @@ public class IncidentService {
         // regardless of their base role. A creator agent loses agent-only transitions
         // (e.g. Pending, Resolved) and gains client-only transitions (e.g. Closed, Reopened).
         boolean isCreator = actorUserId != null && actorUserId.equals(incident.getUserId());
-        String effectiveRole = isCreator ? ROLE_CLIENT : normalizedRole;
+        // ADMIN_AGENT performs agent-level status transitions the same way a standard agent does
+        String normalizedForTransition = ROLE_ADMIN_AGENT.equals(normalizedRole) ? ROLE_AGENT : normalizedRole;
+        String effectiveRole = isCreator ? ROLE_CLIENT : normalizedForTransition;
 
         Map<String, Set<String>> toMap = VALID_TRANSITIONS.getOrDefault(fromId, Map.of());
 

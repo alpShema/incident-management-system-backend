@@ -39,6 +39,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class IncidentServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-01-15T10:30:00Z");
+
     @Mock IncidentRepository incidentRepository;
     @Mock IncidentTypeRepository incidentTypeRepository;
     @Mock LocationRepository locationRepository;
@@ -624,13 +626,30 @@ class IncidentServiceTest {
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("dept-1"));
         when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
         when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
 
         IncidentResponse response = incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
 
         assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_assignedAgent_noGroup_canAccess() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-row-1");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+        // assignee check short-circuits before any group lookup
+        verify(agentGroupMemberRepository, never()).findAgentGroupIdsByAgentId(any());
     }
 
     @Test
@@ -654,6 +673,48 @@ class IncidentServiceTest {
         when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
 
         assertThatThrownBy(() -> incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void getIncident_agentInSameDepartmentDifferentGroup_canAccess() {
+        // Agent A (group-x, dept-d) views incident assigned to Agent B (group-y, dept-d).
+        // The dept-incidents view shows this incident to Agent A, so the detail endpoint
+        // must also allow access — comparing departments, not raw groups.
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-b");
+        Agent agentA = Agent.builder().id("agent-a").userId("agent-user-a").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-a")).thenReturn(Optional.of(agentA));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-a")).thenReturn(List.of("group-x"));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-b")).thenReturn(List.of("group-y"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-x"))).thenReturn(List.of("dept-d"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-y"))).thenReturn(List.of("dept-d"));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("agent-user-a", RoleCode.AGENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_agentInDifferentDepartment_throws403() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-b");
+        Agent agentA = Agent.builder().id("agent-a").userId("agent-user-a").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-a")).thenReturn(Optional.of(agentA));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-a")).thenReturn(List.of("group-x"));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-b")).thenReturn(List.of("group-y"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-x"))).thenReturn(List.of("dept-1"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-y"))).thenReturn(List.of("dept-2"));
+
+        assertThatThrownBy(() -> incidentService.getIncident("agent-user-a", RoleCode.AGENT, "inc-1"))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
@@ -943,7 +1004,7 @@ class IncidentServiceTest {
         Incident incident = buildIncident();
         incident.setUserId("actor-1"); // creator
         incident.setStatus(resolvedStatus);
-        incident.setResolvedAt(Instant.now().minusSeconds(3600)); // resolved 1 hour ago
+        incident.setResolvedAt(FIXED_NOW.minusSeconds(3600)); // resolved 1 hour ago
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-closed")).thenReturn(Optional.of(closedStatus));
@@ -964,12 +1025,12 @@ class IncidentServiceTest {
         Incident incident = buildIncident();
         incident.setUserId("actor-1"); // creator
         incident.setStatus(resolvedStatus);
-        incident.setResolvedAt(Instant.now().minusSeconds(3600)); // resolved 1 hour ago
+        incident.setResolvedAt(FIXED_NOW.minusSeconds(3600)); // resolved 1 hour ago
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationHours()).thenReturn(72); // window = 72h, resolved 1h ago → within window
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE); // window = 72h, resolved 1h ago → within window
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
@@ -1137,11 +1198,11 @@ class IncidentServiceTest {
 
         Incident incident = buildIncident();
         incident.setStatus(resolvedStatus);
-        incident.setResolvedAt(java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.HOURS));
+        incident.setResolvedAt(FIXED_NOW.minus(1, java.time.temporal.ChronoUnit.HOURS));
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
-        when(autoCloseService.readDurationHours()).thenReturn(72);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
 
         UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-reopened", "");
         assertThatThrownBy(() ->
@@ -1424,14 +1485,14 @@ class IncidentServiceTest {
 
         Incident incident = buildAssignedIncident(); // assignedToId="agent-1"
         incident.setStatus(resolvedStatus);
-        incident.setResolvedAt(Instant.now().minusSeconds(3600));
+        incident.setResolvedAt(FIXED_NOW.minusSeconds(3600));
         stubAssignedAgent(); // agent-1 → userId "actor-1"
 
         // The client (user-1) is the creator and triggers the reopen
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationHours()).thenReturn(72);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
@@ -1451,13 +1512,13 @@ class IncidentServiceTest {
 
         Incident incident = buildAssignedIncident(); // assignedToId="agent-1"
         incident.setStatus(resolvedStatus);
-        incident.setResolvedAt(Instant.now().minusSeconds(3600));
+        incident.setResolvedAt(FIXED_NOW.minusSeconds(3600));
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(inactiveAgent));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationHours()).thenReturn(72);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
@@ -1478,13 +1539,13 @@ class IncidentServiceTest {
 
         Incident incident = buildAssignedIncident(); // assignedToId="agent-1"
         incident.setStatus(resolvedStatus);
-        incident.setResolvedAt(Instant.now().minusSeconds(3600));
+        incident.setResolvedAt(FIXED_NOW.minusSeconds(3600));
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(inactiveAgent));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationHours()).thenReturn(72);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
@@ -1501,13 +1562,13 @@ class IncidentServiceTest {
 
         Incident incident = buildAssignedIncident(); // assignedToId="agent-1"
         incident.setStatus(resolvedStatus);
-        incident.setResolvedAt(Instant.now().minusSeconds(3600));
+        incident.setResolvedAt(FIXED_NOW.minusSeconds(3600));
         stubAssignedAgent(); // agent-1 is active
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
-        when(autoCloseService.readDurationHours()).thenReturn(72);
+        when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE);
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("user-1", RoleCode.CLIENT, "inc-1",
@@ -1851,5 +1912,52 @@ class IncidentServiceTest {
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
+    }
+
+    @Test
+    void queryIncidents_sortByStatus_translatesToStatusPath() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findByUserIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+
+        Pageable statusSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "status"));
+        incidentService.queryIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), statusSort);
+
+        var captor = forClass(Pageable.class);
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("status.name")).isNotNull();
+        assertThat(captured.getOrderFor("status")).isNull();
+    }
+
+    @Test
+    void queryIncidents_sortByPriority_translatesToSeverityPath() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findByUserIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+
+        Pageable prioritySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "priority"));
+        incidentService.queryIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), prioritySort);
+
+        var captor = forClass(Pageable.class);
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("severity.name")).isNotNull();
+        assertThat(captured.getOrderFor("priority")).isNull();
+    }
+
+    @Test
+    void queryIncidents_sortByUnknownField_fallsBackToDefault() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findByUserIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+
+        Pageable unknownSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "invalidField"));
+        incidentService.queryIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), unknownSort);
+
+        var captor = forClass(Pageable.class);
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("createdAt")).isNotNull();
     }
 }

@@ -31,7 +31,7 @@ public class UserController {
         summary = "List users",
         description = "Returns a paginated list of all users showing their ID, name, email, role, status, and office location. "
                     + "Accepts an optional `query` keyword that searches across full name and email. "
-                    + "Optionally filter by role (`roleCode`), office location (`locationId`), or account status (`status`). Both `locationId` and `status` filters are case-insensitive. "
+                    + "Optionally filter by role code (`roleCode`) — accepts any role code from the database (e.g., CLIENT, AGENT, ADMIN, or custom roles). Also filter by office location (`locationId`) or account status (`status`). Both `locationId` and `status` filters are case-insensitive. "
                     + "All filters are independent and can be combined with each other or with `query` to narrow results. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=fullName,asc`). "
                     + "Requires `rbac.role.read` permission."
@@ -43,9 +43,9 @@ public class UserController {
     @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_ROLE_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<UserRoleSummaryResponse>>> listUsers(
             @Parameter(description = "Keyword search across full name and email") @RequestParam(required = false) String query,
-            @Parameter(description = "Filter by role code") @RequestParam(required = false) RoleCode roleCode,
+            @Parameter(description = "Filter by role code (e.g., CLIENT, AGENT, ADMIN, or custom roles)") @RequestParam(required = false) String roleCode,
             @Parameter(description = "Filter by office location ID (case-insensitive)") @RequestParam(required = false) String locationId,
-            @Parameter(description = "Filter by account status. Pass `active` for active users, `inactive` for inactive users (case-insensitive)") @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by account status. Pass `true` for active users, `false` for inactive users, or omit for all.") @RequestParam(required = false) Boolean status,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully",
@@ -54,7 +54,7 @@ public class UserController {
 
     @Operation(
         summary = "Update a user's role",
-        description = "Assigns a new role to the specified user. Valid roles: CLIENT, AGENT, ADMIN, SUPER_ADMIN. Requires `rbac.user.role.update` permission."
+        description = "Assigns a new role to the specified user. Valid roles: CLIENT, AGENT, ADMIN, ADMIN_AGENT, SUPER_ADMIN. Requires `rbac.user.role.update` permission."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Role updated")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid role value")

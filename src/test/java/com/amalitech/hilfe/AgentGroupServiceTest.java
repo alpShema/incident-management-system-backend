@@ -403,7 +403,7 @@ class AgentGroupServiceTest {
         when(agentGroupMemberRepository.countByAgentGroupId(any())).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("all", null, null, Pageable.unpaged());
+        var result = agentGroupService.listAllAgentGroups(null, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).hasSize(2);
     }
@@ -417,7 +417,7 @@ class AgentGroupServiceTest {
         when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("active", null, null, Pageable.unpaged());
+        var result = agentGroupService.listAllAgentGroups(true, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().status()).isTrue();
@@ -432,7 +432,7 @@ class AgentGroupServiceTest {
         when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
 
-        var result = agentGroupService.listAllAgentGroups("deactivated", null, null, Pageable.unpaged());
+        var result = agentGroupService.listAllAgentGroups(false, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().status()).isFalse();
@@ -445,16 +445,6 @@ class AgentGroupServiceTest {
         var result = agentGroupService.listAllAgentGroups(null, null, null, Pageable.unpaged());
 
         assertThat(result.getContent()).isEmpty();
-    }
-
-    @Test
-    void listAllAgentGroups_invalidStatus_throws400() {
-        Pageable pageable = Pageable.unpaged();
-        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups("unknown", null, null, pageable))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Invalid status filter. Accepted values: active, deactivated, all")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(400);
     }
 
     @Test
@@ -479,6 +469,37 @@ class AgentGroupServiceTest {
                 .hasMessage("Agent group not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    @Test
+    void addMember_activeAgent_succeeds() {
+        Agent agent = memberAgent();
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(true)));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.existsByAgentIdAndAgentGroupId("agent-1", "group-1")).thenReturn(false);
+
+        var response = agentGroupService.addMember("group-1", "agent-1");
+
+        assertThat(response.agentId()).isEqualTo("agent-1");
+        verify(agentGroupMemberRepository).save(any());
+    }
+
+    @Test
+    void addMember_inactiveAgent_throws400() {
+        Agent inactiveAgent = Agent.builder().id("agent-1").userId("user-1").status(false).build();
+        inactiveAgent.setUser(User.builder().id("user-1").fullName("Agent One").status(true).build());
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(true)));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(inactiveAgent));
+
+        assertThatThrownBy(() -> agentGroupService.addMember("group-1", "agent-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Cannot add an inactive agent to a group")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupMemberRepository, never()).save(any());
     }
 
 }

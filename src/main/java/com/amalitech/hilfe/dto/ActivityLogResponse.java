@@ -8,6 +8,7 @@ import java.time.Instant;
 public record ActivityLogResponse(
         @Schema(description = "Auto-incremented log entry ID") Long id,
         @Schema(description = "Full name of the person who performed the action") String actorName,
+        @Schema(description = "Profile image URL of the person who performed the action", nullable = true) String actorProfileUrl,
         @Schema(description = "Full name of the person affected by the action, if applicable", nullable = true) String targetName,
         @Schema(description = "Action code describing what happened (e.g. INCIDENT_STATUS_CHANGED, ROLE_UPDATED)") String action,
         @Schema(description = "Type of the subject entity (e.g. INCIDENT, USER)", nullable = true) String subjectType,

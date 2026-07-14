@@ -6,8 +6,6 @@ import com.amalitech.hilfe.models.Permission;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RolePermission;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.PermissionRepository;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -24,13 +22,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class RoleService {
-    private static final Set<String> PROTECTED_ROLES = Set.of("CLIENT", "AGENT", "ADMIN", "SUPER_ADMIN");
+    private static final Set<String> PROTECTED_ROLES = Set.of("CLIENT", "AGENT", "ADMIN", "ADMIN_AGENT", "SUPER_ADMIN");
+    private static final String ROLE_NOT_FOUND = "Role not found";
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final UserRepository userRepository;
-    private final AgentRepository agentRepository;
+    private final RoleAccessSyncService roleAccessSyncService;
 
     @Transactional
     public RoleResponse createRole(CreateRoleRequest request) {
@@ -86,7 +85,7 @@ public class RoleService {
     public BulkAssignRoleResponse bulkAssignRole(String roleCode, BulkAssignRoleRequest request) {
         String normalizedCode = normalizeRoleCode(roleCode);
         Role role = roleRepository.findByCode(normalizedCode)
-                .orElseThrow(() -> new ArmsAuthException("Role not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
 
         List<String> userIds = request.userIds().stream()
                 .filter(Objects::nonNull)
@@ -107,10 +106,97 @@ public class RoleService {
 
         users.forEach(user -> {
             user.setRoleCode(role.getCode());
-            ensureAgentRecordIfNeeded(user, role.getCode());
+            roleAccessSyncService.syncAgentRecord(user, role.getCode());
+            roleAccessSyncService.syncAdminRecord(user, role.getCode());
         });
         userRepository.saveAll(users);
         return new BulkAssignRoleResponse(role.getCode(), users.size(), users.stream().map(User::getId).toList());
+    }
+
+    @Transactional
+    public RoleResponse updateRole(String roleCode, UpdateRoleRequest request) {
+        String normalizedCode = normalizeRoleCode(roleCode);
+        Role role = roleRepository.findByCode(normalizedCode)
+                .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
+
+        if (Boolean.TRUE.equals(role.getSystemDefined())) {
+            throw new ArmsAuthException("System-defined roles cannot be modified", 403);
+        }
+
+        if (request.name() != null) {
+            String trimmedName = request.name().trim();
+            if (trimmedName.isBlank()) {
+                throw new ArmsAuthException("Role name must not be blank", 400);
+            }
+            if (roleRepository.existsByNameIgnoreCaseAndCodeNot(trimmedName, normalizedCode)) {
+                throw new ArmsAuthException("Role name already exists", 409);
+            }
+            role.setName(trimmedName);
+        }
+
+        if (request.description() != null) {
+            role.setDescription(request.description().isBlank() ? null : request.description().trim());
+        }
+
+        if (request.permissionCodes() != null) {
+            List<String> normalizedCodes = request.permissionCodes().stream()
+                    .map(String::trim)
+                    .map(String::toLowerCase)
+                    .distinct()
+                    .toList();
+            List<Permission> permissions = permissionRepository.findByCodeIn(normalizedCodes);
+            if (permissions.size() != normalizedCodes.size()) {
+                throw new ArmsAuthException("One or more permission codes are invalid", 400);
+            }
+            rolePermissionRepository.deleteByRoleCode(normalizedCode);
+            List<RolePermission> links = permissions.stream()
+                    .map(p -> RolePermission.builder()
+                            .roleCode(normalizedCode)
+                            .permission(p)
+                            .build())
+                    .toList();
+            rolePermissionRepository.saveAll(links);
+            roleRepository.save(role);
+            return toResponse(role, links);
+        }
+
+        roleRepository.save(role);
+        return toResponse(role);
+    }
+
+    @Transactional
+    public BulkAssignRoleResponse removeUsersFromRole(String roleCode, BulkAssignRoleRequest request) {
+        String normalizedCode = normalizeRoleCode(roleCode);
+        roleRepository.findByCode(normalizedCode)
+                .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
+
+        List<String> userIds = request.userIds().stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(id -> !id.isBlank())
+                .distinct()
+                .toList();
+        if (userIds.isEmpty()) {
+            throw new ArmsAuthException("userIds must not be empty", 400);
+        }
+
+        List<User> users = userRepository.findAllById(userIds);
+        if (users.size() != userIds.size()) {
+            Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
+            List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
+            throw new ArmsAuthException("Users not found: " + String.join(", ", missing), 404);
+        }
+
+        List<User> toUpdate = users.stream()
+                .filter(u -> normalizedCode.equals(u.getRoleCode()))
+                .map(u -> { u.setRoleCode(null); return u; })
+                .toList();
+        toUpdate.forEach(user -> {
+            roleAccessSyncService.syncAgentRecord(user, null);
+            roleAccessSyncService.syncAdminRecord(user, null);
+        });
+        userRepository.saveAll(toUpdate);
+        return new BulkAssignRoleResponse(normalizedCode, toUpdate.size(), toUpdate.stream().map(User::getId).toList());
     }
 
     public PermissionCatalogResponse permissionCatalog() {
@@ -187,17 +273,4 @@ public class RoleService {
         return roleCode.trim().toUpperCase();
     }
 
-    private void ensureAgentRecordIfNeeded(User user, String roleCode) {
-        if (!"AGENT".equalsIgnoreCase(roleCode)) {
-            return;
-        }
-        if (agentRepository.findByUserId(user.getId()).isPresent()) {
-            return;
-        }
-        agentRepository.save(Agent.builder()
-                .id(UUID.randomUUID().toString())
-                .userId(user.getId())
-                .status(true)
-                .build());
-    }
 }

@@ -20,6 +20,8 @@ public interface AgentGroupMemberRepository extends JpaRepository<AgentGroupMemb
 
     void deleteByAgentGroupId(String agentGroupId);
 
+    void deleteByAgentId(String agentId);
+
     @Query("""
             SELECT m.agentGroupId FROM AgentGroupMember m
             WHERE m.agentId = :agentId

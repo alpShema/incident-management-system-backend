@@ -2,6 +2,11 @@ spring:
   application:
     name: hilfe
 
+  # Fallback profile when nothing else (env var, command-line arg) specifies one.
+  # SPRING_PROFILES_ACTIVE still overrides this if/when it's set on a deployed host.
+  profiles:
+    default: dev
+
   # ──────────────────────────────────────────
   # Database
   # ──────────────────────────────────────────
@@ -42,6 +47,18 @@ spring:
     enabled: true
     baseline-on-migrate: true
     repair-on-migrate: true
+    validate-on-migrate: false
+
+  # ──────────────────────────────────────────
+  # GraphQL
+  # ──────────────────────────────────────────
+  graphql:
+    graphiql:
+      enabled: true
+    path: /graphql
+    # WebSocket subscriptions are wired manually in GraphQlWebSocketConfig instead of via
+    # spring.graphql.websocket.path, so a HandshakeInterceptor can be attached for cookie-based
+    # auth (see GraphQlWebSocketHandshakeInterceptor for why).
 
 # ──────────────────────────────────────────
 # Server
@@ -96,6 +113,9 @@ info:
 # Auth / JWT
 # ──────────────────────────────────────────
 app:
+  base-url: ${APP_BASE_URL:https://hilfe.amalitech.net}
+  slack-image-report-url: ${SLACK_IMAGE_REPORT_URL:${app.base-url}/images/slack-report.jpg}
+  slack-image-updates-url: ${SLACK_IMAGE_UPDATES_URL:${app.base-url}/images/slack-updates.jpg}
   jwt:
     issuer: ${JWT_ISSUER:hilfe}
     audience: ${JWT_AUDIENCE:hilfe-web}
@@ -115,36 +135,11 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
----
-spring:
-  config:
-    activate:
-      on-profile: dev
-logging:
-  level:
-    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
-
 # ──────────────────────────────────────────
-# ARMS SSO Integration
+# AI Embedding
 # ──────────────────────────────────────────
-arms:
-  sso-url: ${ARMS_SSO_URL}
-
-# ──────────────────────────────────────────
-# Cookie
-# ──────────────────────────────────────────
-cookie:
-  secure: ${COOKIE_SECURE:false}
-  same-site: ${COOKIE_SAME_SITE:None}
-
-# ──────────────────────────────────────────
-# CORS
-# ──────────────────────────────────────────
-cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
-  # Extra origins always added on top of allowed-origins (e.g. local dev ports).
-  # Override via CORS_EXTRA_ALLOWED_ORIGINS if needed; set to empty string to disable.
-  extra-allowed-origins: ${CORS_EXTRA_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:3000}
+embedding:
+  model: ${EMBEDDING_MODEL:text-embedding-3-small}
 
 # ──────────────────────────────────────────
 # AWS S3
@@ -169,3 +164,34 @@ media:
   max-file-size: ${MEDIA_MAX_FILE_SIZE:10485760}
   max-attachments: ${MEDIA_MAX_ATTACHMENTS:5}
   allowed-content-types: image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,text/plain
+
+# ──────────────────────────────────────────
+# Encryption (for Slack tokens at rest)
+# ──────────────────────────────────────────
+encryption:
+  key: ${ENCRYPTION_KEY:}
+
+# ──────────────────────────────────────────
+# FAQ Chatbot
+# ──────────────────────────────────────────
+chatbot:
+  confidence-threshold: ${CHATBOT_CONFIDENCE_THRESHOLD:0.25}
+  rate-limit: ${CHATBOT_RATE_LIMIT:30}
+  conversation-window-size: ${CHATBOT_CONVERSATION_WINDOW_SIZE:10}
+  summary-trigger-interval: ${CHATBOT_SUMMARY_TRIGGER_INTERVAL:5}
+
+# ──────────────────────────────────────────
+# AmaliAI Proxy (shared key for both LLM and embeddings)
+# ──────────────────────────────────────────
+amali-ai:
+  api-key: ${AMALI_AI_API_KEY:}
+  base-url: ${AMALI_AI_BASE_URL:}
+  provider: openai
+
+# ──────────────────────────────────────────
+# AI LLM
+# ──────────────────────────────────────────
+llm:
+  model: ${LLM_MODEL:gpt-4o-mini}
+  temperature: ${LLM_TEMPERATURE:0.2}
+  max-tokens: ${LLM_MAX_TOKENS:512}

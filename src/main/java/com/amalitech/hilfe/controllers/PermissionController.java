@@ -26,4 +26,10 @@ public class PermissionController {
     public ResponseEntity<ApiResponse<PermissionCatalogResponse>> catalog() {
         return ResponseEntity.ok(ApiResponse.success("Permission catalog retrieved successfully", roleService.permissionCatalog()));
     }
+
+    @Operation(summary = "Get all permissions (public)", description = "Returns the full permission catalog. Does not require authentication.")
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<PermissionCatalogResponse>> all() {
+        return ResponseEntity.ok(ApiResponse.success("Permission catalog retrieved successfully", roleService.permissionCatalog()));
+    }
 }

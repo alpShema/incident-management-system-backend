@@ -50,7 +50,7 @@ public class DashboardService {
                     .orElse(new DashboardStats(0, 0, 0, 0, 0, 0));
         }
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
             List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusGlobal());
             long total = byStatus.stream().mapToLong(LabelCount::count).sum();
             return new DashboardStats(total,
@@ -64,13 +64,13 @@ public class DashboardService {
 
     public DashboardCharts getCharts(String userId, RoleCode role, String period) {
         Instant since      = resolvePeriod(period);
-        Instant trendSince = since != null ? since : Instant.now().minus(180, ChronoUnit.DAYS);
+        Instant trendSince = since != null ? since : sixMonthWindowStart();
 
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
 
         switch (role) {
-            case ADMIN, SUPER_ADMIN -> {
+            case ADMIN, ADMIN_AGENT, SUPER_ADMIN -> {
                 byStatus = toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
                         : incidentRepository.countByStatusGlobal());
@@ -118,7 +118,7 @@ public class DashboardService {
         }
         final String finalQueryPattern = queryPattern;
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
             return slaService.toIncidentResponsePage(
                     incidentRepository.findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)
             );
@@ -164,6 +164,10 @@ public class DashboardService {
             default    -> throw new ArmsAuthException(
                     "Unsupported period '" + period + "'. Accepted values: 7d, 30d, 90d.", 400);
         };
+    }
+
+    private Instant sixMonthWindowStart() {
+        return YearMonth.now(ZoneOffset.UTC).minusMonths(5).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
     private long countFor(List<LabelCount> list, String statusName) {

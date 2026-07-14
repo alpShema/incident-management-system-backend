@@ -88,7 +88,7 @@ class UserControllerTest {
 
     @Test
     void listUsers_filterByRole_returnsCountsFields() throws Exception {
-        when(userService.getUsers(isNull(), eq(RoleCode.AGENT), isNull(), isNull(), any()))
+        when(userService.getUsers(isNull(), eq("AGENT"), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(
                         List.of(new UserRoleSummaryResponse("u2", "agent@test.com", "Agent One", null, RoleCode.AGENT, "Agent", true, "Accra", 1L, 7L)),
                         PageRequest.of(0, 20), 1));
@@ -112,11 +112,11 @@ class UserControllerTest {
     }
 
     @Test
-    void listUsers_filterByStatusActive_passesStringToService() throws Exception {
-        when(userService.getUsers(isNull(), isNull(), isNull(), eq("Active"), any()))
+    void listUsers_filterByStatusActive_passesTrueToService() throws Exception {
+        when(userService.getUsers(isNull(), isNull(), isNull(), eq(true), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        mvc.perform(get("/users").param("status", "Active").with(authentication(adminAuth())))
+        mvc.perform(get("/users").param("status", "true").with(authentication(adminAuth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isEmpty());
     }

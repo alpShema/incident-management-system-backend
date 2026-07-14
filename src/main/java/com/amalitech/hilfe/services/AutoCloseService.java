@@ -26,8 +26,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AutoCloseService {
 
-    public static final String AUTO_CLOSE_HOURS_KEY     = "auto_close_hours";
-    public static final int    DEFAULT_AUTO_CLOSE_HOURS = 72;
+    public static final String AUTO_CLOSE_SECONDS_KEY     = "auto_close_seconds";
+    public static final int    DEFAULT_AUTO_CLOSE_SECONDS = 72 * 3600;
 
     private final SystemConfigRepository systemConfigRepository;
     private final IncidentRepository incidentRepository;
@@ -37,22 +37,22 @@ public class AutoCloseService {
     private final NotificationEventPublisher notificationEventPublisher;
 
     public AutoCloseConfigResponse getConfig() {
-        return new AutoCloseConfigResponse(readDurationHours());
+        return new AutoCloseConfigResponse(readDurationSeconds());
     }
 
     @Transactional
-    public AutoCloseConfigResponse updateConfig(int durationHours) {
-        SystemConfig config = systemConfigRepository.findById(AUTO_CLOSE_HOURS_KEY)
-                .orElse(SystemConfig.builder().key(AUTO_CLOSE_HOURS_KEY).build());
-        config.setValue(String.valueOf(durationHours));
+    public AutoCloseConfigResponse updateConfig(int durationSeconds) {
+        SystemConfig config = systemConfigRepository.findById(AUTO_CLOSE_SECONDS_KEY)
+                .orElse(SystemConfig.builder().key(AUTO_CLOSE_SECONDS_KEY).build());
+        config.setValue(String.valueOf(durationSeconds));
         systemConfigRepository.save(config);
-        return new AutoCloseConfigResponse(durationHours);
+        return new AutoCloseConfigResponse(durationSeconds);
     }
 
     @Transactional
     public void autoCloseResolvedIncidents() {
-        int hours = readDurationHours();
-        Instant cutoff = Instant.now().minus(hours, ChronoUnit.HOURS);
+        int seconds = readDurationSeconds();
+        Instant cutoff = Instant.now().minus(seconds, ChronoUnit.SECONDS);
 
         List<Incident> overdue = incidentRepository.findOverdueResolved(cutoff);
         if (overdue.isEmpty()) return;
@@ -85,18 +85,18 @@ public class AutoCloseService {
             }
         }
 
-        log.info("Auto-closed {} resolved incident(s) after {} hours", overdue.size(), hours);
+        log.info("Auto-closed {} resolved incident(s) after {} seconds", overdue.size(), seconds);
     }
 
-    public int readDurationHours() {
-        return systemConfigRepository.findById(AUTO_CLOSE_HOURS_KEY)
+    public int readDurationSeconds() {
+        return systemConfigRepository.findById(AUTO_CLOSE_SECONDS_KEY)
                 .map(c -> {
                     try {
                         return Integer.parseInt(c.getValue());
                     } catch (NumberFormatException e) {
-                        return DEFAULT_AUTO_CLOSE_HOURS;
+                        return DEFAULT_AUTO_CLOSE_SECONDS;
                     }
                 })
-                .orElse(DEFAULT_AUTO_CLOSE_HOURS);
+                .orElse(DEFAULT_AUTO_CLOSE_SECONDS);
     }
 }

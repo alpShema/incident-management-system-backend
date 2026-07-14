@@ -30,6 +30,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
+    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
+
     @Mock ArmsClient armsClient;
     @Mock ArmsTokenExpiryService armsTokenExpiryService;
     @Mock TokenService tokenService;
@@ -40,7 +42,7 @@ class AuthServiceTest {
     @InjectMocks AuthService authService;
 
     private static final String TEST_JTI = "test-jti-1";
-    private static final Instant TEST_EXPIRY = Instant.now().plusSeconds(3600);
+    private static final Instant TEST_EXPIRY = FIXED_NOW.plusSeconds(3600);
 
     @Test
     void login_happyPath_upsertsUserAndReturnsTokens() {
