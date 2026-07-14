@@ -485,4 +485,21 @@ class AgentGroupServiceTest {
         verify(agentGroupMemberRepository).save(any());
     }
 
+    @Test
+    void addMember_inactiveAgent_throws400() {
+        Agent inactiveAgent = Agent.builder().id("agent-1").userId("user-1").status(false).build();
+        inactiveAgent.setUser(User.builder().id("user-1").fullName("Agent One").status(true).build());
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group(true)));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(inactiveAgent));
+
+        assertThatThrownBy(() -> agentGroupService.addMember("group-1", "agent-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Cannot add an inactive agent to a group")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentGroupMemberRepository, never()).save(any());
+    }
+
 }
