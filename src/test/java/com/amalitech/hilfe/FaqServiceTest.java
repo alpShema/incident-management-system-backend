@@ -15,6 +15,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -30,6 +33,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -362,37 +366,27 @@ class FaqServiceTest {
                 .hasMessageContaining("question, answer");
     }
 
-    @Test
-    void inspectBulkImport_missingAnswerHeaderOnly_rejected() {
-        MockMultipartFile file = csvFile("question,notes\nQ1,some note\n");
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("inspectRejectionCases")
+    void inspectBulkImport_invalidCsvShapes_rejectedWithDescriptiveError(
+            String scenario, String csvContent, String expectedMessageFragment) {
+        MockMultipartFile file = csvFile(csvContent);
         Pageable unpaged = Pageable.unpaged();
 
         assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("missing required headers");
+                .hasMessageContaining(expectedMessageFragment);
     }
 
-    @Test
-    void inspectBulkImport_headersOnlyNoDataRows_rejectedWithDescriptiveError() {
-        MockMultipartFile file = csvFile("question,answer\n");
-        Pageable unpaged = Pageable.unpaged();
-
-        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("no data rows");
-    }
-
-    @Test
-    void inspectBulkImport_blankContent_rejectedAsMissingHeaders() {
-        // Non-zero-byte but content-free CSV (e.g. a stray newline) never
-        // establishes a real header row, so it must fail the header check
-        // rather than silently returning an empty "all good" result.
-        MockMultipartFile file = csvFile("\n");
-        Pageable unpaged = Pageable.unpaged();
-
-        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("missing required headers");
+    private static Stream<Arguments> inspectRejectionCases() {
+        return Stream.of(
+                Arguments.of("answer header missing", "question,notes\nQ1,some note\n", "missing required headers"),
+                Arguments.of("headers only, no data rows", "question,answer\n", "no data rows"),
+                // Non-zero-byte but content-free CSV (e.g. a stray newline) never
+                // establishes a real header row, so it must fail the header check
+                // rather than silently returning an empty "all good" result.
+                Arguments.of("blank content", "\n", "missing required headers")
+        );
     }
 
     @Test
