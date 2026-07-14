@@ -37,6 +37,7 @@ public class AgentGroupService {
     private final ActivityLogService activityLogService;
 
     private static final String TOPIC_NOT_FOUND_PREFIX = "Topic not found: ";
+    private static final String GROUP_ALREADY_EXISTS_MESSAGE = "An agent group with this name already exists. Please choose a different name.";
 
     public Page<AgentGroupResponse> listAgentGroups(String query, String departmentId, Pageable pageable) {
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
@@ -75,7 +76,7 @@ public class AgentGroupService {
             throw new ArmsAuthException("A department must be selected for this agent group.", 400);
         }
         if (agentGroupRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("An agent group with this name already exists. Please choose a different name.", 409);
+            throw new ArmsAuthException(GROUP_ALREADY_EXISTS_MESSAGE, 409);
         }
         if (request.agentIds() == null || request.agentIds().isEmpty()) {
             throw new ArmsAuthException("At least one agent is required", 400);
@@ -127,7 +128,7 @@ public class AgentGroupService {
         if (!isBlank(name)) {
             if (!group.getName().equalsIgnoreCase(name)
                     && agentGroupRepository.existsByNameIgnoreCase(name)) {
-                throw new ArmsAuthException("An agent group with this name already exists. Please choose a different name.", 409);
+                throw new ArmsAuthException(GROUP_ALREADY_EXISTS_MESSAGE, 409);
             }
             group.setName(name);
         }

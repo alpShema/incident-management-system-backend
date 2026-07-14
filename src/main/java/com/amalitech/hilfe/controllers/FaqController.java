@@ -34,6 +34,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Tag(name = "FAQs", description = "Admin FAQ management")
 public class FaqController {
 
+    private static final String FAQ_UPDATED_MESSAGE = "FAQ updated successfully";
+
     private final FaqService faqService;
 
     @GetMapping
@@ -65,7 +67,7 @@ public class FaqController {
     public ResponseEntity<ApiResponse<FaqResponse>> createFaq(@Valid @RequestBody CreateFaqRequest request) {
         FaqUpsertResult result = faqService.createFaq(request);
         HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
-        String message = result.created() ? "FAQ created successfully" : "FAQ updated successfully";
+        String message = result.created() ? "FAQ created successfully" : FAQ_UPDATED_MESSAGE;
         return ResponseEntity.status(status).body(ApiResponse.success(message, result.faq()));
     }
 
@@ -76,7 +78,7 @@ public class FaqController {
             @PathVariable String id,
             @Valid @RequestBody UpdateFaqRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success("FAQ updated successfully", faqService.updateFaq(id, request)));
+        return ResponseEntity.ok(ApiResponse.success(FAQ_UPDATED_MESSAGE, faqService.updateFaq(id, request)));
     }
 
     @PatchMapping("/{id}/active")

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.ChatbotAnswerChunk;
 import com.amalitech.hilfe.dto.ChatbotInteractionResponse;
 import com.amalitech.hilfe.dto.ChatbotQueryRequest;
@@ -42,7 +43,7 @@ public class ChatbotResolver {
             @Argument ChatbotQueryRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         if (!rateLimiter.tryAcquire(principal.userId())) {
-            throw new ArmsAuthException("Rate limit exceeded. Please wait before sending another query.", 429);
+            throw new ArmsAuthException(ApiMessages.RATE_LIMIT_EXCEEDED, 429);
         }
         return chatbotService.queryStream(principal.userId(), input.query());
     }

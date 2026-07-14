@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.exceptions;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -117,7 +118,7 @@ public class GlobalExceptionHandler {
                 || auth instanceof AnonymousAuthenticationToken;
         if (isAnonymous) {
             log.warn("Unauthenticated access attempt: {}", request.getRequestURI());
-            return buildResponse(HttpStatus.UNAUTHORIZED, "Authentication required. Please log in to access this resource.", request);
+            return buildResponse(HttpStatus.UNAUTHORIZED, ApiMessages.AUTHENTICATION_REQUIRED, request);
         }
         log.warn("Access denied: {}", ex.getMessage());
         return buildResponse(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.", request);
