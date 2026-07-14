@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.config;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.ServiceUnavailableException;
 import graphql.GraphQLError;
@@ -70,7 +71,7 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
     private GraphQLError handleAuthorizationError(Throwable ex) {
         if (isAnonymous()) {
             log.warn("GraphQL unauthenticated access attempt");
-            return buildError("Authentication required. Please log in to access this resource.", 401, "Unauthorized");
+            return buildError(ApiMessages.AUTHENTICATION_REQUIRED, 401, "Unauthorized");
         }
         log.warn("GraphQL access denied: {}", ex.getMessage());
         return buildError("Access denied", 403, "Forbidden");
@@ -79,7 +80,7 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
     private GraphQLError handleNullPointerError(NullPointerException npe) {
         if (isAnonymous()) {
             log.warn("GraphQL unauthenticated request — @AuthenticationPrincipal was null");
-            return buildError("Authentication required. Please log in to access this resource.", 401, "Unauthorized");
+            return buildError(ApiMessages.AUTHENTICATION_REQUIRED, 401, "Unauthorized");
         }
         log.warn("GraphQL null pointer: {}", npe.getMessage());
         return buildError("An unexpected error occurred", 500, "Internal Server Error");

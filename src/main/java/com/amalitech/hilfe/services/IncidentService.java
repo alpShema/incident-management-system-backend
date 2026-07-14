@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
@@ -545,7 +546,7 @@ public class IncidentService {
     private String resolvePriorityId(String requestedSeverityId) {
         if (requestedSeverityId != null && !requestedSeverityId.isBlank()) {
             if (!severityRepository.existsById(requestedSeverityId)) {
-                throw new ArmsAuthException("The requested severity level was not found.", 404);
+                throw new ArmsAuthException(ApiMessages.SEVERITY_NOT_FOUND, 404);
             }
             return requestedSeverityId;
         }

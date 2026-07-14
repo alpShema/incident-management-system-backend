@@ -30,6 +30,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class MediaService {
+    private static final String FILE_NOT_FOUND_MESSAGE = "One of the uploaded files could not be found.";
+    private static final String FILE_VERIFICATION_FAILED_MESSAGE = "The uploaded file could not be verified. Please try again.";
     private static final Map<String, Set<String>> ALLOWED_EXTENSIONS_BY_CONTENT_TYPE = Map.of(
             "image/jpeg", Set.of("jpg", "jpeg"),
             "image/png", Set.of("png"),
@@ -226,19 +228,19 @@ public class MediaService {
 
             validateUploadedMetadata(ref, object);
         } catch (NoSuchKeyException e) {
-            throw new ArmsAuthException("One of the uploaded files could not be found.", 400);
+            throw new ArmsAuthException(FILE_NOT_FOUND_MESSAGE, 400);
         } catch (ArmsAuthException e) {
             throw e;
         } catch (S3Exception e) {
             if (e.statusCode() == 404) {
-                throw new ArmsAuthException("One of the uploaded files could not be found.", 400);
+                throw new ArmsAuthException(FILE_NOT_FOUND_MESSAGE, 400);
             }
 
             log.error("Failed to verify file in S3: {}", ref.fileKey(), e);
-            throw new ArmsAuthException("The uploaded file could not be verified. Please try again.", 502);
+            throw new ArmsAuthException(FILE_VERIFICATION_FAILED_MESSAGE, 502);
         } catch (Exception e) {
             log.error("Failed to verify file in S3: {}", ref.fileKey(), e);
-            throw new ArmsAuthException("The uploaded file could not be verified. Please try again.", 502);
+            throw new ArmsAuthException(FILE_VERIFICATION_FAILED_MESSAGE, 502);
         }
     }
 

@@ -28,6 +28,8 @@ public class IncidentCategoryService {
     private static final String CATEGORY_NOT_FOUND = "Incident category not found";
     private static final String TOPIC_NOT_FOUND = "Incident topic not found";
     private static final String TOPIC_NOT_FOUND_AFTER_UPDATE = "Incident topic not found after update";
+    private static final String TOPIC_ALREADY_EXISTS_MESSAGE = "A topic with this name already exists. Please choose a different name.";
+    private static final String CATEGORY_ALREADY_EXISTS_MESSAGE = "An incident category with this name already exists. Please choose a different name.";
 
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
@@ -62,7 +64,7 @@ public class IncidentCategoryService {
         String description = request.description() == null ? null : request.description().trim();
 
         if (categoryRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("An incident category with this name already exists. Please choose a different name.", 409);
+            throw new ArmsAuthException(CATEGORY_ALREADY_EXISTS_MESSAGE, 409);
         }
         validateDepartment(request.departmentId());
         IncidentCategory category = IncidentCategory.builder()
@@ -88,7 +90,7 @@ public class IncidentCategoryService {
         if (name != null && !name.isBlank()) {
             if (!category.getName().equalsIgnoreCase(name)
                     && categoryRepository.existsByNameIgnoreCase(name)) {
-                throw new ArmsAuthException("An incident category with this name already exists. Please choose a different name.", 409);
+                throw new ArmsAuthException(CATEGORY_ALREADY_EXISTS_MESSAGE, 409);
             }
             category.setName(name);
         }
@@ -151,7 +153,7 @@ public class IncidentCategoryService {
 
         IncidentCategory category = findActiveCategory(categoryId);
         if (typeRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("A topic with this name already exists. Please choose a different name.", 409);
+            throw new ArmsAuthException(TOPIC_ALREADY_EXISTS_MESSAGE, 409);
         }
         AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
         IncidentType topic = IncidentType.builder()
@@ -185,7 +187,7 @@ public class IncidentCategoryService {
         if (name != null && !name.isBlank()) {
             if (!topic.getName().equalsIgnoreCase(name)
                     && typeRepository.existsByNameIgnoreCase(name)) {
-                throw new ArmsAuthException("A topic with this name already exists. Please choose a different name.", 409);
+                throw new ArmsAuthException(TOPIC_ALREADY_EXISTS_MESSAGE, 409);
             }
             topic.setName(name);
         }
@@ -225,7 +227,7 @@ public class IncidentCategoryService {
             boolean isDuplicate = !topic.getName().equalsIgnoreCase(name)
                     && typeRepository.existsByNameIgnoreCase(name);
             if (isDuplicate) {
-                throw new ArmsAuthException("A topic with this name already exists. Please choose a different name.", 409);
+                throw new ArmsAuthException(TOPIC_ALREADY_EXISTS_MESSAGE, 409);
             }
             topic.setName(name);
         }

@@ -41,6 +41,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FaqService {
 
+    private static final String CSV_READ_ERROR_MESSAGE =
+            "The uploaded CSV file could not be read. Please check the file format and try again.";
     private static final String QUESTION_COLUMN = "question";
     private static final String ANSWER_COLUMN = "answer";
 
@@ -160,7 +162,7 @@ public class FaqService {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("The uploaded CSV file could not be read. Please check the file format and try again.");
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
         }
 
         if (!anyRows) {
@@ -203,7 +205,7 @@ public class FaqService {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("The uploaded CSV file could not be read. Please check the file format and try again.");
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
         }
 
         if (allRows.isEmpty()) {

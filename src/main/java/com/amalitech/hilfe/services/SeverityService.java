@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.SeverityRequest;
 import com.amalitech.hilfe.dto.SeverityResponse;
 import com.amalitech.hilfe.dto.UpdateSeveritySlaRequest;
@@ -17,7 +18,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class SeverityService {
-    private static final String MSG_SEVERITY_NOT_FOUND = "The requested severity level was not found.";
+    private static final String MSG_SEVERITY_NOT_FOUND = ApiMessages.SEVERITY_NOT_FOUND;
+    private static final String SEVERITY_ALREADY_EXISTS_MESSAGE = "A severity with this name already exists. Please choose a different name.";
 
     private final SeverityRepository severityRepository;
     private final IncidentRepository incidentRepository;
@@ -46,7 +48,7 @@ public class SeverityService {
         String description = request.description() == null ? null : request.description().trim();
 
         if (severityRepository.findByNameIgnoreCase(name).isPresent()) {
-            throw new ArmsAuthException("A severity with this name already exists. Please choose a different name.", 409);
+            throw new ArmsAuthException(SEVERITY_ALREADY_EXISTS_MESSAGE, 409);
         }
         Severity severity = Severity.builder()
                 .id(UUID.randomUUID().toString())
@@ -67,7 +69,7 @@ public class SeverityService {
         severityRepository.findByNameIgnoreCase(name)
                 .filter(existing -> !existing.getId().equals(id))
                 .ifPresent(existing -> {
-                    throw new ArmsAuthException("A severity with this name already exists. Please choose a different name.", 409);
+                    throw new ArmsAuthException(SEVERITY_ALREADY_EXISTS_MESSAGE, 409);
                 });
         severity.setName(name);
         severity.setDescription(description);

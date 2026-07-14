@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.UserRoleSummaryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.RoleCode;
@@ -139,7 +140,7 @@ public class UserService {
 
     private String normalizeRoleCode(String roleCode) {
         if (roleCode == null || roleCode.isBlank()) {
-            throw new ArmsAuthException("A role must be selected.", 400);
+            throw new ArmsAuthException(ApiMessages.ROLE_REQUIRED, 400);
         }
         return roleCode.trim().toUpperCase();
     }
