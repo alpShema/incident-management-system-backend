@@ -119,7 +119,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("not allowed")
+                .hasMessageContaining("not supported")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -147,7 +147,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("File extension")
+                .hasMessageContaining("are not supported for this file type")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -161,7 +161,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("not allowed for content type")
+                .hasMessageContaining("are not supported for this file type")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -204,7 +204,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Maximum 2 attachments")
+                .hasMessageContaining("maximum of 2 files")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -223,7 +223,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("File not found in storage")
+                .hasMessageContaining("could not be found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -237,7 +237,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Invalid attachment file key")
+                .hasMessageContaining("could not be identified")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -252,7 +252,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Duplicate attachment file key")
+                .hasMessageContaining("already been attached")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -294,7 +294,7 @@ class MediaServiceTest {
 
         assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("content type")
+                .hasMessageContaining("file type")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }

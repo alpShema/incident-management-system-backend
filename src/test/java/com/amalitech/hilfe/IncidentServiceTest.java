@@ -377,7 +377,7 @@ class IncidentServiceTest {
 
         assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Severity not found")
+                .hasMessage("The requested severity level was not found.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
 
@@ -544,7 +544,7 @@ class IncidentServiceTest {
         Pageable pageable = Pageable.unpaged();
         assertThatThrownBy(() -> incidentService.searchIncidents("user-1", "  ", null, null, pageable))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Search query must not be blank")
+                .hasMessage("Please enter a search term.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -554,7 +554,7 @@ class IncidentServiceTest {
         Pageable pageable = Pageable.unpaged();
         assertThatThrownBy(() -> incidentService.searchIncidents("user-1", null, null, null, pageable))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Search query must not be blank")
+                .hasMessage("Please enter a search term.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -947,7 +947,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() ->
                 incidentService.updateStatus("actor-1", RoleCode.CLIENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
+                .hasMessageContaining("You do not have permission to move this incident to 'Pending'")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
     }
@@ -970,7 +970,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() ->
                 incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("You do not have permission to move an incident to 'Pending'")
+                .hasMessageContaining("You do not have permission to move this incident to 'Pending'")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
     }
@@ -991,7 +991,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() ->
                 incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("You do not have permission to move an incident to 'Resolved'")
+                .hasMessageContaining("You do not have permission to move this incident to 'Resolved'")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
     }
@@ -1094,7 +1094,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() ->
                 incidentService.updateStatus("actor-1", RoleCode.AGENT, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("You are not the assigned agent for this incident")
+                .hasMessage("You do not have permission to update this incident because you are not the assigned agent.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
     }
@@ -1419,7 +1419,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() ->
                 incidentService.assignIncident("actor-1", "ADMIN", "inc-1", unavailableRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Cannot assign incident to an unavailable agent")
+                .hasMessage("This incident cannot be assigned to an unavailable agent.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -1436,7 +1436,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() ->
                 incidentService.assignIncident("actor-1", "ADMIN", "inc-1", deactivatedGroupRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Cannot assign incident to an agent in a deactivated group")
+                .hasMessage("This incident cannot be assigned to an agent in a deactivated group.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -1451,7 +1451,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() ->
                 incidentService.assignIncident("other-agent-user", "AGENT", "inc-1", reassignRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("You can only reassign incidents that are assigned to you")
+                .hasMessage("You do not have permission to reassign this incident.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
     }

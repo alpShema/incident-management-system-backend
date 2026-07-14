@@ -88,6 +88,6 @@ class SeverityControllerTest {
                         .with(authentication(new UsernamePasswordAuthenticationToken(
                                 "user", null, List.of(() -> "severity.update")))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Severity SLA updated"));
+                .andExpect(jsonPath("$.message").value("Severity SLA updated successfully"));
     }
 }
