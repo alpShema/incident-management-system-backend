@@ -18,6 +18,8 @@ public class EmailContentFactory {
     private static final String VIEW_INCIDENT_LINE = "You can view the incident in HILFE below.";
     private static final String RESPONSE_LABEL = "Response";
     private static final String RESOLUTION_LABEL = "Resolution";
+    private static final String FOOTER_TEXT = "If you have any questions or need additional guidance, please don't "
+            + "hesitate to reach out to the ARMS Team. We're here to support you throughout the process.";
 
     private static String ref(IncidentResponse incident) {
         return "#" + incident.incidentNo() + " — " + incident.title();
@@ -65,7 +67,8 @@ public class EmailContentFactory {
                         "Topic: " + topicName(incident),
                         PRIORITY_LABEL + priorityName(incident),
                         "Please review the details and respond. You can open the incident directly in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -78,7 +81,8 @@ public class EmailContentFactory {
                         ref(incident),
                         "Now assigned to: " + event.newAssigneeName(),
                         "There's nothing further you need to do on this incident. You can view it in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -91,7 +95,8 @@ public class EmailContentFactory {
                         ref(incident),
                         "Now assigned to: " + event.newAssigneeName(),
                         "There's nothing you need to do. You can follow the progress of your incident in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -104,7 +109,8 @@ public class EmailContentFactory {
                         ref(incident),
                         "Assigned to: " + event.assigneeName(),
                         "You'll be notified as your incident progresses. You can view it in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -120,7 +126,8 @@ public class EmailContentFactory {
                         ref(incident),
                         PRIORITY_LABEL + priorityName(incident),
                         VIEW_INCIDENT_LINE),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -133,7 +140,8 @@ public class EmailContentFactory {
                         ref(incident),
                         "Status: " + event.previousStatus() + " → " + event.newStatus(),
                         "You can view the incident and its full history in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -147,7 +155,8 @@ public class EmailContentFactory {
                         ref(incident),
                         "Reason: " + reason,
                         "Once this is resolved, your agent will continue working on it. You can respond or view in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -164,7 +173,8 @@ public class EmailContentFactory {
                         "Reopened by: " + reopenedBy,
                         "Reason: " + reason,
                         "Please take another look and follow up. You can open it in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -177,7 +187,8 @@ public class EmailContentFactory {
                         ref(incident),
                         PRIORITY_LABEL + event.previousSeverity() + " → " + event.newSeverity(),
                         VIEW_INCIDENT_LINE),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -192,7 +203,8 @@ public class EmailContentFactory {
                         PRIORITY_LABEL + priorityName(incident),
                         event.senderName() + ": \"" + preview + "\"",
                         "You can read the full conversation and reply in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -207,7 +219,8 @@ public class EmailContentFactory {
                         "Your resolved incident has been closed automatically, as the reopen window has now passed.",
                         ref(incident),
                         "If you have further issues, you're welcome to raise a new incident. You can view the closed incident in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -222,7 +235,8 @@ public class EmailContentFactory {
                         "A resolved incident has been closed automatically, as the reopen window has now passed.",
                         ref(incident),
                         VIEW_INCIDENT_LINE),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -239,7 +253,8 @@ public class EmailContentFactory {
                         PRIORITY_LABEL + priorityName(incident),
                         (isResponse ? RESPONSE_LABEL : RESOLUTION_LABEL) + " due: in " + formatMinutes(event.minutesRemaining()),
                         "Please " + action + " soon to keep it on track. Open it in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 
@@ -256,7 +271,8 @@ public class EmailContentFactory {
                         PRIORITY_LABEL + priorityName(incident),
                         (isResponse ? RESPONSE_LABEL : RESOLUTION_LABEL) + " was due: " + formatMinutes(event.minutesOverdue()) + " ago",
                         "Please " + action + ". The breach has been recorded for reporting. Open it in HILFE below."),
-                CTA_TEXT
+                CTA_TEXT,
+                FOOTER_TEXT
         );
     }
 }
