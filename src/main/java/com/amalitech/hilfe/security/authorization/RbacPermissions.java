@@ -136,6 +136,8 @@ public final class RbacPermissions {
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
+            INCIDENT_UPDATE_ANY,
+            INCIDENT_FORCECLOSE,
             AGENT_CREATE,
             AGENT_READ,
             AGENT_UPDATE,
