@@ -188,6 +188,7 @@ public class FaqService {
                      .parse(reader)) {
 
             validateHeaders(csvParser.getHeaderNames());
+            validateNoExtraHeaders(csvParser.getHeaderNames());
 
             int rowNumber = 1;
             for (CSVRecord csvRecord : csvParser) {
@@ -245,6 +246,20 @@ public class FaqService {
         if (missingAny) {
             throw new IllegalArgumentException(
                     "The provided CSV is missing required headers. Expected columns: question, answer.");
+        }
+    }
+
+    // Only enforced by inspectBulkImport(): unlike bulkImport(), which deliberately
+    // tolerates real-world spreadsheet exports with extra columns (see
+    // bulkImport_capitalizedHeadersWithExtraColumn_stillMapsQuestionAndAnswer), the
+    // inspect endpoint exists specifically to validate a CSV's shape before import, so a
+    // column beyond question/answer must be rejected rather than silently ignored.
+    private void validateNoExtraHeaders(List<String> headerNames) {
+        boolean hasUnexpectedHeader = headerNames.stream()
+                .anyMatch(h -> h == null || REQUIRED_CSV_HEADERS.stream().noneMatch(required -> h.trim().equalsIgnoreCase(required)));
+        if (hasUnexpectedHeader || headerNames.size() != REQUIRED_CSV_HEADERS.size()) {
+            throw new IllegalArgumentException(
+                    "Invalid CSV format. The file must contain only the following columns: question, answer.");
         }
     }
 
