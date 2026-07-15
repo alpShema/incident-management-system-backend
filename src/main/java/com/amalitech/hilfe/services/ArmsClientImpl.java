@@ -224,8 +224,8 @@ public class ArmsClientImpl implements ArmsClient {
     private ArmsUserInfo toArmsUserInfo(EmployeeActiveInfo activeInfo, EmployeeContact contact) {
         EmployeeActiveUser user = activeInfo.user();
         String email = firstNonBlank(
-                contact != null ? contact.personalEmail() : null,
                 contact != null ? contact.workEmail() : null,
+                contact != null ? contact.personalEmail() : null,
                 user != null ? user.email() : null
         );
         return new ArmsUserInfo(
