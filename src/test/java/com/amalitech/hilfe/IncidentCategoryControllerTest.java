@@ -5,6 +5,9 @@ import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
+import com.amalitech.hilfe.security.JwtAuthenticationFilter;
+import com.amalitech.hilfe.security.SecurityConfig;
 import com.amalitech.hilfe.services.IncidentCategoryService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
@@ -34,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(IncidentCategoryController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class, Http401AuthenticationEntryPoint.class})
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class IncidentCategoryControllerTest {
 
@@ -45,6 +48,10 @@ class IncidentCategoryControllerTest {
 
     private JwtTokenService.AuthPrincipal adminPrincipal() {
         return new JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
+    }
+
+    private JwtTokenService.AuthPrincipal adminAgentPrincipal() {
+        return new JwtTokenService.AuthPrincipal("admin-agent-1", "admin-agent@test.com", RoleCode.ADMIN_AGENT);
     }
 
     private IncidentCategoryResponse stubCategory() {
@@ -109,6 +116,26 @@ class IncidentCategoryControllerTest {
                 .andExpect(jsonPath("$.data.totalElements").value(0));
 
         verify(categoryService).listAllCategories(eq(false), any(), any());
+    }
+
+    @Test
+    void listAllCategories_adminAgent_returns200WithAllCategories() throws Exception {
+        when(categoryService.listAllCategories(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-categories/all")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminAgentPrincipal(), null, List.of(() -> "ROLE_ADMIN_AGENT")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void listAllCategories_agentRole_returns403() throws Exception {
+        mvc.perform(get("/incident-categories/all")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_AGENT")))))
+                .andExpect(status().isForbidden());
     }
 
     // ── POST /incident-categories ─────────────────────────────────────────────
