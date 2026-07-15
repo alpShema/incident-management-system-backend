@@ -66,7 +66,7 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<Long>> getUnreadCount(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Unread count retrieved",
+        return ResponseEntity.ok(ApiResponse.success("Unread notification count retrieved successfully",
                 notificationService.getUnreadCount(principal.userId())));
     }
 

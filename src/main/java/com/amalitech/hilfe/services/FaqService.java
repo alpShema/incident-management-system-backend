@@ -41,6 +41,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FaqService {
 
+    private static final String CSV_READ_ERROR_MESSAGE =
+            "The uploaded CSV file could not be read. Please check the file format and try again.";
     private static final String QUESTION_COLUMN = "question";
     private static final String ANSWER_COLUMN = "answer";
 
@@ -160,7 +162,7 @@ public class FaqService {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
         }
 
         if (!anyRows) {
@@ -204,7 +206,7 @@ public class FaqService {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
         }
 
         if (allRows.isEmpty()) {
@@ -284,8 +286,8 @@ public class FaqService {
     }
 
     private String validateRow(String question, String answer) {
-        if (!StringUtils.hasText(question)) return "question is blank";
-        if (!StringUtils.hasText(answer)) return "answer is blank";
+        if (!StringUtils.hasText(question)) return "Question is required.";
+        if (!StringUtils.hasText(answer)) return "Answer is required.";
         return null;
     }
 
@@ -298,7 +300,7 @@ public class FaqService {
             return outcome.created() ? RowOutcome.CREATED : RowOutcome.UPDATED;
         } catch (Exception e) {
             log.warn("Failed to save FAQ at row {}: {}", rowNumber, e.getMessage());
-            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "failed to save: " + e.getMessage()));
+            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "This row could not be saved. Please check the data and try again."));
             return RowOutcome.FAILED;
         }
     }
@@ -350,7 +352,7 @@ public class FaqService {
 
     private Faq findOrThrow(String id) {
         return faqRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("FAQ not found: " + id, 404));
+                .orElseThrow(() -> new ArmsAuthException("FAQ not found.", 404));
     }
 
     private String sanitize(String input) {

@@ -6,6 +6,6 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "Request to update agent availability status")
 public record UpdateAvailabilityRequest(
         @Schema(description = "Whether the agent is available", example = "true")
-        @NotNull(message = "available is required")
+        @NotNull(message = "Please specify your availability status.")
         Boolean available
 ) {}

@@ -115,7 +115,7 @@ class MessageControllerTest {
                                 """)
                         .with(authentication(auth())))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message").value("Message sent"))
+                .andExpect(jsonPath("$.message").value("Message sent successfully"))
                 .andExpect(jsonPath("$.data.id").value("msg-1"))
                 .andExpect(jsonPath("$.data.attachments[0].originalName").value("img.png"));
     }

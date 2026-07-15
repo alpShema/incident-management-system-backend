@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.ChatbotInteractionResponse;
 import com.amalitech.hilfe.dto.ChatbotQueryRequest;
@@ -44,9 +45,9 @@ public class ChatbotController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         if (!rateLimiter.tryAcquire(principal.userId()))
-            throw new ArmsAuthException("Rate limit exceeded. Please wait before sending another query.", 429);
+            throw new ArmsAuthException(ApiMessages.RATE_LIMIT_EXCEEDED, 429);
         ChatbotQueryResponse response = chatbotService.query(principal.userId(), request.query());
-        return ResponseEntity.ok(ApiResponse.success("Query processed", response));
+        return ResponseEntity.ok(ApiResponse.success("Chatbot query processed successfully", response));
     }
 
     @GetMapping("/interactions")
@@ -65,7 +66,7 @@ public class ChatbotController {
     ) {
         var pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(ApiResponse.success(
-                "Interactions retrieved",
+                "Chatbot interactions retrieved successfully",
                 chatbotService.listInteractions(userId, outcome, from, to, pageable)
         ));
     }

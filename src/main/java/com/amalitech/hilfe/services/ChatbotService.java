@@ -32,6 +32,7 @@ public class ChatbotService {
     private static final String OUTCOME_ANSWERED  = "ANSWERED";
     private static final String OUTCOME_ESCALATED = "ESCALATED";
     private static final String OUTCOME_ERROR     = "ERROR";
+    private static final String CHATBOT_UNAVAILABLE_MESSAGE = "Chatbot service is temporarily unavailable. Please try again shortly.";
 
     private static final String ESCALATION_HINT =
             "I couldn't find a clear answer to your question. "
@@ -86,7 +87,7 @@ public class ChatbotService {
         } catch (Exception e) {
             log.error("Chatbot query failed for user {}: {}", userId, e.getMessage(), e);
             interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
-            throw new ServiceUnavailableException("Chatbot service is temporarily unavailable. Please try again shortly.", e);
+            throw new ServiceUnavailableException(CHATBOT_UNAVAILABLE_MESSAGE, e);
         }
     }
 
@@ -211,7 +212,7 @@ public class ChatbotService {
             } catch (Exception e) {
                 log.error("Chatbot stream failed for user {}: {}", userId, e.getMessage(), e);
                 interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
-                sink.error(new ServiceUnavailableException("Chatbot service is temporarily unavailable. Please try again shortly.", e));
+                sink.error(new ServiceUnavailableException(CHATBOT_UNAVAILABLE_MESSAGE, e));
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
