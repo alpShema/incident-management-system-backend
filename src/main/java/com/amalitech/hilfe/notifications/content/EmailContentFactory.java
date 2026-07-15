@@ -14,6 +14,10 @@ import org.springframework.stereotype.Component;
 public class EmailContentFactory {
 
     private static final String CTA_TEXT = "View Incident";
+    private static final String PRIORITY_LABEL = "Priority: ";
+    private static final String VIEW_INCIDENT_LINE = "You can view the incident in HILFE below.";
+    private static final String RESPONSE_LABEL = "Response";
+    private static final String RESOLUTION_LABEL = "Resolution";
 
     private static String ref(IncidentResponse incident) {
         return "#" + incident.incidentNo() + " — " + incident.title();
@@ -25,10 +29,6 @@ public class EmailContentFactory {
 
     private static String topicName(IncidentResponse incident) {
         return incident.incidentTopic() != null ? incident.incidentTopic().name() : "General";
-    }
-
-    private static String assigneeName(IncidentResponse incident) {
-        return incident.assignedTo() != null ? incident.assignedTo().fullName() : "Unassigned";
     }
 
     private static String greeting(String recipientName) {
@@ -63,7 +63,7 @@ public class EmailContentFactory {
                         "A new incident has been assigned to you.",
                         ref(incident),
                         "Topic: " + topicName(incident),
-                        "Priority: " + priorityName(incident),
+                        PRIORITY_LABEL + priorityName(incident),
                         "Please review the details and respond. You can open the incident directly in HILFE below."),
                 CTA_TEXT
         );
@@ -118,8 +118,8 @@ public class EmailContentFactory {
                 body(recipientName,
                         "An incident has been raised but there's no available agent to handle it. It needs to be assigned to an available agent.",
                         ref(incident),
-                        "Priority: " + priorityName(incident),
-                        "You can view the incident in HILFE below."),
+                        PRIORITY_LABEL + priorityName(incident),
+                        VIEW_INCIDENT_LINE),
                 CTA_TEXT
         );
     }
@@ -175,8 +175,8 @@ public class EmailContentFactory {
                 body(recipientName,
                         "The priority of an incident has been changed.",
                         ref(incident),
-                        "Priority: " + event.previousSeverity() + " → " + event.newSeverity(),
-                        "You can view the incident in HILFE below."),
+                        PRIORITY_LABEL + event.previousSeverity() + " → " + event.newSeverity(),
+                        VIEW_INCIDENT_LINE),
                 CTA_TEXT
         );
     }
@@ -189,7 +189,7 @@ public class EmailContentFactory {
                 body(recipientName,
                         "You have a new reply on an incident.",
                         ref(incident),
-                        "Priority: " + priorityName(incident),
+                        PRIORITY_LABEL + priorityName(incident),
                         event.senderName() + ": \"" + preview + "\"",
                         "You can read the full conversation and reply in HILFE below."),
                 CTA_TEXT
@@ -221,7 +221,7 @@ public class EmailContentFactory {
                 body(recipientName,
                         "A resolved incident has been closed automatically, as the reopen window has now passed.",
                         ref(incident),
-                        "You can view the incident in HILFE below."),
+                        VIEW_INCIDENT_LINE),
                 CTA_TEXT
         );
     }
@@ -231,13 +231,13 @@ public class EmailContentFactory {
         String metric = isResponse ? "response" : "resolution";
         String action = isResponse ? "respond" : "work to resolve it";
         return new EmailContent(
-                (isResponse ? "Response" : "Resolution") + " time warning — " + ref(incident),
+                (isResponse ? RESPONSE_LABEL : RESOLUTION_LABEL) + " time warning — " + ref(incident),
                 "An incident is approaching its " + metric + " deadline",
                 body(recipientName,
                         "An incident is approaching its " + metric + " deadline and is now at risk of breaching its SLA (Service Level Agreement).",
                         ref(incident),
-                        "Priority: " + priorityName(incident),
-                        (isResponse ? "Response" : "Resolution") + " due: in " + formatMinutes(event.minutesRemaining()),
+                        PRIORITY_LABEL + priorityName(incident),
+                        (isResponse ? RESPONSE_LABEL : RESOLUTION_LABEL) + " due: in " + formatMinutes(event.minutesRemaining()),
                         "Please " + action + " soon to keep it on track. Open it in HILFE below."),
                 CTA_TEXT
         );
@@ -248,13 +248,13 @@ public class EmailContentFactory {
         String metric = isResponse ? "response" : "resolution";
         String action = isResponse ? "respond as soon as possible" : "prioritise resolving this";
         return new EmailContent(
-                (isResponse ? "Response" : "Resolution") + " deadline missed — " + ref(incident),
+                (isResponse ? RESPONSE_LABEL : RESOLUTION_LABEL) + " deadline missed — " + ref(incident),
                 "An incident has breached its " + metric + " SLA",
                 body(recipientName,
                         "The " + metric + " deadline for an incident has passed, and its " + metric + " SLA (Service Level Agreement) has been breached.",
                         ref(incident),
-                        "Priority: " + priorityName(incident),
-                        (isResponse ? "Response" : "Resolution") + " was due: " + formatMinutes(event.minutesOverdue()) + " ago",
+                        PRIORITY_LABEL + priorityName(incident),
+                        (isResponse ? RESPONSE_LABEL : RESOLUTION_LABEL) + " was due: " + formatMinutes(event.minutesOverdue()) + " ago",
                         "Please " + action + ". The breach has been recorded for reporting. Open it in HILFE below."),
                 CTA_TEXT
         );

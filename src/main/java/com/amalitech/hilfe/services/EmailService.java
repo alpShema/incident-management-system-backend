@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Year;
+import java.time.ZoneOffset;
 
 @Service
 @RequiredArgsConstructor
@@ -57,7 +58,7 @@ public class EmailService {
                 .replace("{{content}}", content.contentHtml())
                 .replace("{{cta_href}}", ctaHref)
                 .replace("{{cta_text}}", content.ctaText())
-                .replace("{{footer_text}}", "© " + Year.now().getValue() + " HILFE. All rights reserved.");
+                .replace("{{footer_text}}", "© " + Year.now(ZoneOffset.UTC).getValue() + " HILFE. All rights reserved.");
     }
 
     private String loadTemplate() throws IOException {
