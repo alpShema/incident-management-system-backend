@@ -124,7 +124,7 @@ public class AgentGroupService {
         String name = trimOrNull(request.name());
         String description = trimOrNull(request.description());
 
-        AgentGroup group = findActiveAgentGroupOrThrow(id);
+        AgentGroup group = findAgentGroupByIdOrThrow(id);
         if (!isBlank(name)) {
             if (!group.getName().equalsIgnoreCase(name)
                     && agentGroupRepository.existsByNameIgnoreCase(name)) {
