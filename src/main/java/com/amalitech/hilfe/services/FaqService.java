@@ -29,6 +29,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -39,6 +40,11 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 public class FaqService {
+
+    private static final String CSV_READ_ERROR_MESSAGE =
+            "The uploaded CSV file could not be read. Please check the file format and try again.";
+    private static final String QUESTION_COLUMN = "question";
+    private static final String ANSWER_COLUMN = "answer";
 
     private final FaqRepository faqRepository;
     private final FaqEmbeddingService faqEmbeddingService;
@@ -122,8 +128,9 @@ public class FaqService {
         List<FaqBulkUploadResult.RowError> errors = new ArrayList<>();
         int created = 0;
         int updated = 0;
+        boolean anyRows = false;
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+        try (BufferedReader reader = openCsvReader(file);
              CSVParser csvParser = CSVFormat.DEFAULT.builder()
                      .setHeader()
                      .setSkipHeaderRecord(true)
@@ -133,11 +140,14 @@ public class FaqService {
                      .build()
                      .parse(reader)) {
 
+            validateHeaders(csvParser.getHeaderNames());
+
             int rowNumber = 1;
             for (CSVRecord csvRecord : csvParser) {
+                anyRows = true;
                 rowNumber++;
-                String question = extractField(csvRecord, "question");
-                String answer = extractField(csvRecord, "answer");
+                String question = extractField(csvRecord, QUESTION_COLUMN);
+                String answer = extractField(csvRecord, ANSWER_COLUMN);
                 String validationError = validateRow(question, answer);
                 if (validationError != null) {
                     errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
@@ -149,8 +159,14 @@ public class FaqService {
                     case FAILED -> { /* error already recorded */ }
                 }
             }
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
+        }
+
+        if (!anyRows) {
+            throw new IllegalArgumentException("The provided CSV has no data rows to import.");
         }
 
         return new FaqBulkUploadResult(created, updated, errors.size(), errors);
@@ -163,7 +179,7 @@ public class FaqService {
     public FaqInspectionResult inspectBulkImport(MultipartFile file, FaqRowStatus statusFilter, Pageable pageable) {
         List<FaqInspectionRow> allRows = new ArrayList<>();
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+        try (BufferedReader reader = openCsvReader(file);
              CSVParser csvParser = CSVFormat.DEFAULT.builder()
                      .setHeader()
                      .setSkipHeaderRecord(true)
@@ -173,19 +189,28 @@ public class FaqService {
                      .build()
                      .parse(reader)) {
 
+            validateHeaders(csvParser.getHeaderNames());
+            validateNoExtraHeaders(csvParser.getHeaderNames());
+
             int rowNumber = 1;
             for (CSVRecord csvRecord : csvParser) {
                 rowNumber++;
-                String question = extractField(csvRecord, "question");
-                String answer = extractField(csvRecord, "answer");
+                String question = extractField(csvRecord, QUESTION_COLUMN);
+                String answer = extractField(csvRecord, ANSWER_COLUMN);
                 boolean questionMissing = !StringUtils.hasText(question);
                 boolean answerMissing = !StringUtils.hasText(answer);
                 FaqRowStatus status = (questionMissing || answerMissing) ? FaqRowStatus.NEEDS_ATTENTION : FaqRowStatus.READY;
                 allRows.add(new FaqInspectionRow(
                         rowNumber, blankToNull(question), blankToNull(answer), questionMissing, answerMissing, status));
             }
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
+        }
+
+        if (allRows.isEmpty()) {
+            throw new IllegalArgumentException("The provided CSV has no data rows to inspect.");
         }
 
         int needsAttentionCount = (int) allRows.stream().filter(row -> row.status() == FaqRowStatus.NEEDS_ATTENTION).count();
@@ -197,6 +222,47 @@ public class FaqService {
                 : allRows.stream().filter(row -> row.status() == statusFilter).toList();
 
         return new FaqInspectionResult(summary, PageResponse.from(paginate(filteredRows, pageable)));
+    }
+
+    private static final List<String> REQUIRED_CSV_HEADERS = List.of(QUESTION_COLUMN, ANSWER_COLUMN);
+
+    // Excel/Sheets CSV exports commonly prepend a UTF-8 BOM, which decodes to a
+    // leading U+FEFF character that would otherwise glue itself onto the first
+    // header name (e.g. "question" becoming "<BOM>question") and make a
+    // legitimately-headed file look headerless to validateHeaders().
+    private BufferedReader openCsvReader(MultipartFile file) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+        reader.mark(1);
+        if (reader.read() != 0xFEFF) {
+            reader.reset();
+        }
+        return reader;
+    }
+
+    // Without this check, a CSV missing its header row (or with unrecognized column
+    // names) has its first data row silently consumed as the header by the CSV
+    // parser, producing a bogus column mapping instead of a clear error.
+    private void validateHeaders(List<String> headerNames) {
+        boolean missingAny = REQUIRED_CSV_HEADERS.stream()
+                .anyMatch(required -> headerNames.stream().noneMatch(h -> h != null && h.trim().equalsIgnoreCase(required)));
+        if (missingAny) {
+            throw new IllegalArgumentException(
+                    "The provided CSV is missing required headers. Expected columns: question, answer.");
+        }
+    }
+
+    // Only enforced by inspectBulkImport(): unlike bulkImport(), which deliberately
+    // tolerates real-world spreadsheet exports with extra columns (see
+    // bulkImport_capitalizedHeadersWithExtraColumn_stillMapsQuestionAndAnswer), the
+    // inspect endpoint exists specifically to validate a CSV's shape before import, so a
+    // column beyond question/answer must be rejected rather than silently ignored.
+    private void validateNoExtraHeaders(List<String> headerNames) {
+        boolean hasUnexpectedHeader = headerNames.stream()
+                .anyMatch(h -> h == null || REQUIRED_CSV_HEADERS.stream().noneMatch(required -> h.trim().equalsIgnoreCase(required)));
+        if (hasUnexpectedHeader || headerNames.size() != REQUIRED_CSV_HEADERS.size()) {
+            throw new IllegalArgumentException(
+                    "Invalid CSV format. The file must contain only the following columns: question, answer.");
+        }
     }
 
     private String extractField(CSVRecord csvRecord, String column) {
@@ -220,8 +286,8 @@ public class FaqService {
     }
 
     private String validateRow(String question, String answer) {
-        if (!StringUtils.hasText(question)) return "question is blank";
-        if (!StringUtils.hasText(answer)) return "answer is blank";
+        if (!StringUtils.hasText(question)) return "Question is required.";
+        if (!StringUtils.hasText(answer)) return "Answer is required.";
         return null;
     }
 
@@ -234,7 +300,7 @@ public class FaqService {
             return outcome.created() ? RowOutcome.CREATED : RowOutcome.UPDATED;
         } catch (Exception e) {
             log.warn("Failed to save FAQ at row {}: {}", rowNumber, e.getMessage());
-            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "failed to save: " + e.getMessage()));
+            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "This row could not be saved. Please check the data and try again."));
             return RowOutcome.FAILED;
         }
     }
@@ -286,7 +352,7 @@ public class FaqService {
 
     private Faq findOrThrow(String id) {
         return faqRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("FAQ not found: " + id, 404));
+                .orElseThrow(() -> new ArmsAuthException("FAQ not found.", 404));
     }
 
     private String sanitize(String input) {

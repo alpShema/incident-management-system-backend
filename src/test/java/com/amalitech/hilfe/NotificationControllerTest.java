@@ -76,7 +76,7 @@ class NotificationControllerTest {
 
         mvc.perform(get("/notifications/unread-count").with(authentication(auth())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Unread count retrieved"))
+                .andExpect(jsonPath("$.message").value("Unread notification count retrieved successfully"))
                 .andExpect(jsonPath("$.data").value(3));
     }
 

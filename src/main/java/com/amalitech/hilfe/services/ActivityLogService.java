@@ -13,11 +13,10 @@ import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.security.authorization.CurrentUserAuthority;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -112,9 +111,7 @@ public class ActivityLogService {
     }
 
     private boolean hasAuthority(String permission) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth != null && auth.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals(permission));
+        return CurrentUserAuthority.has(permission);
     }
 
     @Async("applicationTaskExecutor")

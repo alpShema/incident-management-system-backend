@@ -77,7 +77,7 @@ class RoleServiceTest {
         var request = new CreateRoleRequest("Sales", "d", List.of("incident.create"));
         assertThatThrownBy(() -> roleService.createRole(request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Role already exists")
+                .hasMessageContaining("A role with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -90,7 +90,7 @@ class RoleServiceTest {
         var request = new CreateRoleRequest("Sales Team", "d", List.of("incident.create"));
         assertThatThrownBy(() -> roleService.createRole(request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Role name already exists")
+                .hasMessageContaining("A role with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -205,13 +205,13 @@ class RoleServiceTest {
         var request = new BulkAssignRoleRequest(List.of("  "));
         assertThatThrownBy(() -> roleService.bulkAssignRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("must not be empty")
+                .hasMessageContaining("At least one user must be selected")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
 
     @Test
-    void bulkAssignRole_missingUsers_throws404ListingIds() {
+    void bulkAssignRole_missingUsers_throws404() {
         Role r = role("r1", "CUSTOM", "Custom");
         when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
         when(userRepository.findAllById(anyList())).thenReturn(List.of()); // none found
@@ -219,7 +219,7 @@ class RoleServiceTest {
         var request = new BulkAssignRoleRequest(List.of("u1", "u2"));
         assertThatThrownBy(() -> roleService.bulkAssignRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("u1")
+                .hasMessageContaining("could not be found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }
@@ -303,7 +303,7 @@ class RoleServiceTest {
 
         assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Role name already exists")
+                .hasMessageContaining("A role with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -444,7 +444,7 @@ class RoleServiceTest {
 
         assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("u1")
+                .hasMessageContaining("could not be found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
         verify(userRepository, never()).saveAll(anyList());
@@ -458,7 +458,7 @@ class RoleServiceTest {
 
         assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("must not be empty")
+                .hasMessageContaining("At least one user must be selected")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }

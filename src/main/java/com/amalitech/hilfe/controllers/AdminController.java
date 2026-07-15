@@ -34,7 +34,7 @@ public class AdminController {
     @PostMapping("/{userId}/agent-access")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_CREATE + "')")
     public ResponseEntity<ApiResponse<AgentResponse>> grantAgentAccess(@PathVariable String userId) {
-        return ResponseEntity.ok(ApiResponse.success("Agent access granted", adminService.grantAgentAccess(userId)));
+        return ResponseEntity.ok(ApiResponse.success("Agent access granted successfully", adminService.grantAgentAccess(userId)));
     }
 
     @Operation(
@@ -52,7 +52,7 @@ public class AdminController {
     @DeleteMapping("/{userId}/agent-access")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_CREATE + "')")
     public ResponseEntity<ApiResponse<AgentResponse>> revokeAgentAccess(@PathVariable String userId) {
-        return ResponseEntity.ok(ApiResponse.success("Agent access revoked", adminService.revokeAgentAccess(userId)));
+        return ResponseEntity.ok(ApiResponse.success("Agent access revoked successfully", adminService.revokeAgentAccess(userId)));
     }
 
     @Operation(
@@ -69,6 +69,6 @@ public class AdminController {
     @GetMapping("/{userId}/agent-access")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_READ + "')")
     public ResponseEntity<ApiResponse<AgentResponse>> getAgentAccess(@PathVariable String userId) {
-        return ResponseEntity.ok(ApiResponse.success("Agent access retrieved", adminService.getAgentAccess(userId)));
+        return ResponseEntity.ok(ApiResponse.success("Agent access retrieved successfully", adminService.getAgentAccess(userId)));
     }
 }

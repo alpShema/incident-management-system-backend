@@ -4,6 +4,7 @@
 # connects to AWS RDS PostgreSQL via DB_HOST.
 #
 # Required in /home/ubuntu/app/.env (written by bootstrap-staging.sh):
+#   SPRING_PROFILES_ACTIVE — staging
 #   BACKEND_IMAGE   — ECR image URL (updated by Jenkins on each deploy)
 #   DB_HOST         — RDS endpoint
 #   DB_PORT         — 5432
@@ -26,6 +27,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       DB_URL:      jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}
       DB_USERNAME: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}

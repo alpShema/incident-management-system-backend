@@ -30,6 +30,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class MediaService {
+    private static final String FILE_NOT_FOUND_MESSAGE = "One of the uploaded files could not be found.";
+    private static final String FILE_VERIFICATION_FAILED_MESSAGE = "The uploaded file could not be verified. Please try again.";
     private static final Map<String, Set<String>> ALLOWED_EXTENSIONS_BY_CONTENT_TYPE = Map.of(
             "image/jpeg", Set.of("jpg", "jpeg"),
             "image/png", Set.of("png"),
@@ -168,28 +170,28 @@ public class MediaService {
     private void validateAttachments(List<AttachmentRef> attachments) {
         if (attachments.size() > mediaProperties.maxAttachments()) {
             throw new ArmsAuthException(
-                    "Maximum " + mediaProperties.maxAttachments() + " attachments allowed", 400);
+                    "You can attach a maximum of " + mediaProperties.maxAttachments() + " files.", 400);
         }
 
         Set<String> fileKeys = new HashSet<>();
         for (AttachmentRef attachment : attachments) {
             if (!fileKeys.add(attachment.fileKey())) {
-                throw new ArmsAuthException("Duplicate attachment file key: " + attachment.fileKey(), 400);
+                throw new ArmsAuthException("This file has already been attached.", 400);
             }
         }
     }
 
     private void validateFileKey(String fileKey, String prefix) {
         if (!fileKey.startsWith(prefix)) {
-            throw new ArmsAuthException("Invalid attachment file key", 400);
+            throw new ArmsAuthException("One of the uploaded files could not be identified. Please try uploading it again.", 400);
         }
     }
 
     private void validateContentType(String contentType) {
         if (!mediaProperties.allowedContentTypes().contains(contentType)) {
             throw new ArmsAuthException(
-                    "Content type '" + contentType + "' is not allowed. Allowed types: "
-                            + String.join(", ", mediaProperties.allowedContentTypes()),
+                    "This file type is not supported. Allowed file types: "
+                            + String.join(", ", mediaProperties.allowedContentTypes()) + ".",
                     400);
         }
     }
@@ -197,8 +199,8 @@ public class MediaService {
     private void validateFileSize(long fileSize) {
         if (fileSize > mediaProperties.maxFileSize()) {
             throw new ArmsAuthException(
-                    "File size " + fileSize + " bytes exceeds the maximum of "
-                            + mediaProperties.maxFileSize() + " bytes",
+                    "This file exceeds the maximum allowed size of "
+                            + mediaProperties.maxFileSize() + " bytes.",
                     400);
         }
     }
@@ -206,13 +208,13 @@ public class MediaService {
     private void validateFileNameAndExtension(String fileName, String contentType) {
         String extension = extractFileExtension(fileName);
         if (extension == null) {
-            throw new ArmsAuthException("File name must include a valid extension", 400);
+            throw new ArmsAuthException("The file name must include a valid extension.", 400);
         }
 
         Set<String> allowedExtensions = ALLOWED_EXTENSIONS_BY_CONTENT_TYPE.get(contentType);
         if (allowedExtensions == null || !allowedExtensions.contains(extension)) {
             throw new ArmsAuthException(
-                    "File extension '." + extension + "' is not allowed for content type '" + contentType + "'",
+                    "Files with the '." + extension + "' extension are not supported for this file type.",
                     400);
         }
     }
@@ -226,29 +228,29 @@ public class MediaService {
 
             validateUploadedMetadata(ref, object);
         } catch (NoSuchKeyException e) {
-            throw new ArmsAuthException("File not found in storage: " + ref.fileKey(), 400);
+            throw new ArmsAuthException(FILE_NOT_FOUND_MESSAGE, 400);
         } catch (ArmsAuthException e) {
             throw e;
         } catch (S3Exception e) {
             if (e.statusCode() == 404) {
-                throw new ArmsAuthException("File not found in storage: " + ref.fileKey(), 400);
+                throw new ArmsAuthException(FILE_NOT_FOUND_MESSAGE, 400);
             }
 
             log.error("Failed to verify file in S3: {}", ref.fileKey(), e);
-            throw new ArmsAuthException("Unable to verify uploaded file", 502);
+            throw new ArmsAuthException(FILE_VERIFICATION_FAILED_MESSAGE, 502);
         } catch (Exception e) {
             log.error("Failed to verify file in S3: {}", ref.fileKey(), e);
-            throw new ArmsAuthException("Unable to verify uploaded file", 502);
+            throw new ArmsAuthException(FILE_VERIFICATION_FAILED_MESSAGE, 502);
         }
     }
 
     private void validateUploadedMetadata(AttachmentRef ref, HeadObjectResponse object) {
         if (!ref.fileSize().equals(object.contentLength())) {
-            throw new ArmsAuthException("Uploaded file size does not match the declared file size", 400);
+            throw new ArmsAuthException("The uploaded file size does not match what was expected. Please try uploading it again.", 400);
         }
 
         if (!ref.contentType().equals(object.contentType())) {
-            throw new ArmsAuthException("Uploaded file content type does not match the declared content type", 400);
+            throw new ArmsAuthException("The uploaded file type does not match what was expected. Please try uploading it again.", 400);
         }
     }
 

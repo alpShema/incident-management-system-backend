@@ -1,4 +1,5 @@
 package com.amalitech.hilfe.security;
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -17,5 +18,5 @@ public class Http401AuthenticationEntryPoint implements AuthenticationEntryPoint
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         MAPPER.writeValue(response.getWriter(),
-                Map.of("error", "Authentication required. Please log in to access this resource."));
+                Map.of("error", ApiMessages.AUTHENTICATION_REQUIRED));
     }}

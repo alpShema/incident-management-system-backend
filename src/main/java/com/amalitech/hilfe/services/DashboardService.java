@@ -31,6 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DashboardService {
 
+    private static final String NO_DASHBOARD_PERMISSION_MESSAGE = "You do not have permission to view this dashboard.";
+
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
@@ -59,7 +61,7 @@ public class DashboardService {
                     countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
         }
 
-        throw new ArmsAuthException("Dashboard not available for this role", 403);
+        throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
     }
 
     public DashboardCharts getCharts(String userId, RoleCode role, String period) {
@@ -96,7 +98,7 @@ public class DashboardService {
                         new TrendSeries("My Incidents", myTrend),
                         new TrendSeries("My Assigned Incidents", assignedTrend));
             }
-            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
+            default -> throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
         }
 
         return new DashboardCharts(byStatus, trends);
@@ -130,7 +132,7 @@ public class DashboardService {
                             .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
-        throw new ArmsAuthException("Dashboard not available for this role", 403);
+        throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
     }
 
 

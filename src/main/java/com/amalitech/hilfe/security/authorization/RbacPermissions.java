@@ -11,6 +11,8 @@ public final class RbacPermissions {
     public static final String INCIDENT_ASSIGN = "incident.assign";
     public static final String INCIDENT_STATUS_CHANGE = "incident.status.change";
     public static final String INCIDENT_SEVERITY_CHANGE = "incident.severity.change";
+    public static final String INCIDENT_UPDATE_ANY = "incident.update.any";
+    public static final String INCIDENT_FORCECLOSE = "incident.forceclose";
     public static final String AGENT_CREATE = "agent.create";
     public static final String AGENT_READ = "agent.read";
     public static final String AGENT_UPDATE = "agent.update";
@@ -83,6 +85,8 @@ public final class RbacPermissions {
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
+            INCIDENT_UPDATE_ANY,
+            INCIDENT_FORCECLOSE,
             AGENT_CREATE,
             AGENT_READ,
             AGENT_UPDATE,
@@ -183,6 +187,8 @@ public final class RbacPermissions {
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
+            INCIDENT_UPDATE_ANY,
+            INCIDENT_FORCECLOSE,
             AGENT_CREATE,
             AGENT_READ,
             AGENT_UPDATE,

@@ -2,6 +2,7 @@ package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.security.authorization.CurrentUserAuthority;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
@@ -264,7 +265,7 @@ public class IncidentController {
         description = "Changes the incident status following the role-based lifecycle. "
                     + "Agents: In Progress → Pending/Resolved, Pending → In Progress. "
                     + "Clients: Resolved → Closed/Reopened. "
-                    + "Admins: any → Closed (override). "
+                    + "Holders of `incident.forceclose`: any → Closed (override). "
                     + "Invalid transitions are rejected with HTTP 422. Requires `incident.status.change` permission."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated")
@@ -278,13 +279,15 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id,
             @Valid @RequestBody UpdateIncidentStatusRequest request
     ) {
+        boolean hasForceClose = CurrentUserAuthority.has(RbacPermissions.INCIDENT_FORCECLOSE);
         return ResponseEntity.ok(ApiResponse.success("Incident status updated successfully",
-                incidentService.updateStatus(principal.userId(), parseRoleCode(principal.roleCode()), id, request)));
+                incidentService.updateStatus(principal.userId(), parseRoleCode(principal.roleCode()), hasForceClose, id, request)));
     }
 
     @Operation(
         summary = "Update incident severity",
-        description = "Sets the priority/severity level of an incident. Requires `incident.severity.change` permission."
+        description = "Sets the priority/severity level of an incident. Requires `incident.severity.change` permission. "
+                    + "Callers without `incident.update.any` may only update incidents assigned to them."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Severity updated")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
@@ -296,13 +299,15 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id,
             @Valid @RequestBody UpdateIncidentSeverityRequest request
     ) {
+        boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
         return ResponseEntity.ok(ApiResponse.success("Incident severity updated successfully",
-                incidentService.updateSeverity(principal.userId(), id, request)));
+                incidentService.updateSeverity(principal.userId(), hasUpdateAny, id, request)));
     }
 
     @Operation(
         summary = "Assign incident to an agent",
-        description = "Assigns the incident to a specific agent by their agent ID. Requires `incident.assign` permission."
+        description = "Assigns the incident to a specific agent by their agent ID. Requires `incident.assign` permission. "
+                    + "Callers without `incident.update.any` may only reassign incidents already assigned to them."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident assigned")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
@@ -314,8 +319,9 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id,
             @Valid @RequestBody AssignIncidentRequest request
     ) {
+        boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
         return ResponseEntity.ok(ApiResponse.success("Incident assigned successfully",
-                incidentService.assignIncident(principal.userId(), principal.roleCode(), id, request)));
+                incidentService.assignIncident(principal.userId(), hasUpdateAny, id, request)));
     }
 
     @Operation(

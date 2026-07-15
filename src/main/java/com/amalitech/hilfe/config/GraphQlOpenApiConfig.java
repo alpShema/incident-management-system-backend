@@ -233,19 +233,19 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
                                 K_SEVERITY_ID, SEVERITY_UUID)))));
 
         ex.put("[incidents] updateIncidentStatus", ex(
-                "Update incident status — requires: incident.status.change",
+                "Update incident status — requires: incident.status.change (force-closing an incident out of its normal lifecycle requires incident.forceclose)",
                 "Transitions an incident to a new lifecycle status.",
                 q("mutation UpdateStatus($id: ID!, $input: UpdateIncidentStatusInput!) {\n  updateIncidentStatus(id: $id, input: $input) {\n    id incidentNo status { name } statusReason updatedAt\n  }\n}",
                         vars(K_ID, INCIDENT_UUID, K_INPUT, vars("statusId", "status-resolved", "reason", "Issue resolved by replacing the projector bulb.")))));
 
         ex.put("[incidents] updateIncidentSeverity", ex(
-                "Update incident severity — requires: incident.severity.change",
+                "Update incident severity — requires: incident.severity.change (cross-incident updates also require incident.update.any)",
                 null,
                 q("mutation UpdateSeverity($id: ID!, $input: UpdateIncidentSeverityInput!) {\n  updateIncidentSeverity(id: $id, input: $input) {\n    id incidentNo priority { name } updatedAt\n  }\n}",
                         vars(K_ID, INCIDENT_UUID, K_INPUT, vars(K_SEVERITY_ID, SEVERITY_UUID)))));
 
         ex.put("[incidents] assignIncident", ex(
-                "Assign incident to agent — requires: incident.assign",
+                "Assign incident to agent — requires: incident.assign (reassigning incidents not already assigned to you also requires incident.update.any)",
                 null,
                 q("mutation AssignIncident($id: ID!, $input: AssignIncidentInput!) {\n  assignIncident(id: $id, input: $input) {\n    id incidentNo assignedTo { fullName email } updatedAt\n  }\n}",
                         vars(K_ID, INCIDENT_UUID, K_INPUT, vars(K_AGENT_ID, AGENT_UUID)))));
