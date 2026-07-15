@@ -414,6 +414,79 @@ class FaqServiceTest {
     }
 
     @Test
+    void inspectBulkImport_extraColumnBeyondQuestionAndAnswer_rejectedAsInvalidFormat() {
+        // The inspect endpoint exists specifically to validate CSV shape before import,
+        // so unlike bulkImport() it must not silently tolerate/ignore extra columns.
+        MockMultipartFile file = csvFile("question,answer,category,author\nQ1,A1,General,Jane\n");
+        Pageable unpaged = Pageable.unpaged();
+
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid CSV format")
+                .hasMessageContaining("question, answer");
+    }
+
+    @Test
+    void inspectBulkImport_singleExtraColumn_rejectedAsInvalidFormat() {
+        MockMultipartFile file = csvFile("question,answer,ghana\nQ1,A1,\n");
+        Pageable unpaged = Pageable.unpaged();
+
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid CSV format");
+    }
+
+    @Test
+    void inspectBulkImport_duplicateRequiredHeader_rejectedAsInvalidFormat() {
+        // Same header repeated twice still leaves the header set equal to
+        // {question, answer}, so the extra-column check must also catch a header
+        // *count* mismatch, not just unrecognized header names.
+        MockMultipartFile file = csvFile("question,answer,question\nQ1,A1,Q1\n");
+        Pageable unpaged = Pageable.unpaged();
+
+        assertThatThrownBy(() -> faqService.inspectBulkImport(file, null, unpaged))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid CSV format");
+    }
+
+    @Test
+    void inspectBulkImport_exactlyQuestionAndAnswer_stillAccepted() {
+        MockMultipartFile file = csvFile("question,answer\nQ1,A1\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        assertThat(result.summary().totalRows()).isEqualTo(1);
+        assertThat(result.summary().readyCount()).isEqualTo(1);
+    }
+
+    @Test
+    void inspectBulkImport_reorderedRequiredHeaders_stillAccepted() {
+        // Column order shouldn't matter -- only which column names are present.
+        MockMultipartFile file = csvFile("answer,question\nA1,Q1\n");
+
+        FaqInspectionResult result = faqService.inspectBulkImport(file, null, Pageable.unpaged());
+
+        assertThat(result.rows().items().get(0).question()).isEqualTo("Q1");
+        assertThat(result.rows().items().get(0).answer()).isEqualTo("A1");
+    }
+
+    @Test
+    void bulkImport_extraColumn_stillToleratedUnlikeInspect() {
+        // Confirms the new inspect-only strictness didn't leak into bulkImport(), which
+        // intentionally still tolerates extra columns (see
+        // bulkImport_capitalizedHeadersWithExtraColumn_stillMapsQuestionAndAnswer above).
+        when(faqRepository.saveAndFlush(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(faqEmbeddingService.embedAndStore(any(Faq.class))).thenReturn(true);
+
+        MockMultipartFile file = csvFile("question,answer,category,author\nQ1,A1,General,Jane\n");
+
+        FaqBulkUploadResult result = faqService.bulkImport(file);
+
+        assertThat(result.created()).isEqualTo(1);
+        assertThat(result.failed()).isZero();
+    }
+
+    @Test
     void bulkImport_headerlessCsv_rejectedInsteadOfTreatingFirstRowAsHeader() {
         MockMultipartFile file = csvFile("How do I reset my password?,Click the forgot password link\n");
 

@@ -100,7 +100,7 @@ class IncidentControllerTest {
                         .content("title=Test&description=Desc")
                         .with(authentication(new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.create")))))
                 .andExpect(status().isUnsupportedMediaType())
-                .andExpect(jsonPath("$.message").value("Unsupported Media Type. Please submit the request body as application/json."));
+                .andExpect(jsonPath("$.message").value("This request format is not supported. Please submit the request as JSON."));
     }
 
     @Test
@@ -121,7 +121,7 @@ class IncidentControllerTest {
                                 new CreateIncidentRequest("a".repeat(101), "Description", "type-1", "loc-1", null, null)))
                         .with(authentication(new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.create")))))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("title: title must not exceed 100 characters"));
+                .andExpect(jsonPath("$.message").value("Incident title must not exceed 100 characters."));
 
         verify(incidentService, never()).createIncident(anyString(), any(CreateIncidentRequest.class));
     }
@@ -134,7 +134,7 @@ class IncidentControllerTest {
                                 new CreateIncidentRequest("Title", "a".repeat(1001), "type-1", "loc-1", null, null)))
                         .with(authentication(new UsernamePasswordAuthenticationToken(clientPrincipal(), null, List.of(() -> "incident.create")))))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("description: description must not exceed 1000 characters"));
+                .andExpect(jsonPath("$.message").value("Incident description must not exceed 1000 characters."));
 
         verify(incidentService, never()).createIncident(anyString(), any(CreateIncidentRequest.class));
     }

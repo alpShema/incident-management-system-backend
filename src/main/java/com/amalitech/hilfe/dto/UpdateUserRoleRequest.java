@@ -7,7 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 @Schema(description = "Request body for updating a user's role")
 public record UpdateUserRoleRequest(
         @Schema(description = "New role code to assign", example = "AGENT")
-        @NotBlank String roleCode
+        @NotBlank(message = "Please select a role.")
+        String roleCode
 ) {
     public UpdateUserRoleRequest(RoleCode roleCode) {
         this(roleCode == null ? null : roleCode.name());

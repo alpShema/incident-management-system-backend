@@ -187,7 +187,7 @@ class AgentControllerTest {
         mvc.perform(get("/agents/status")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Status retrieved"))
+                .andExpect(jsonPath("$.message").value("Agent status retrieved successfully"))
                 .andExpect(jsonPath("$.data.status").value(true));
     }
 
@@ -230,7 +230,7 @@ class AgentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"available\": false}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Status updated"))
+                .andExpect(jsonPath("$.message").value("Agent status updated successfully"))
                 .andExpect(jsonPath("$.data.status").value(false));
     }
 

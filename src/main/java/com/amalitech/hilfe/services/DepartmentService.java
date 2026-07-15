@@ -24,6 +24,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DepartmentService {
 
+    private static final String DEPARTMENT_ALREADY_EXISTS_MESSAGE = "A department with this name already exists. Please choose a different name.";
+
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
@@ -53,7 +55,7 @@ public class DepartmentService {
         String description = request.description() == null ? null : request.description().trim();
 
         if (departmentRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("Department with this name already exists", 409);
+            throw new ArmsAuthException(DEPARTMENT_ALREADY_EXISTS_MESSAGE, 409);
         }
 
         Department department = Department.builder()
@@ -73,7 +75,7 @@ public class DepartmentService {
         Department department = findDepartmentByIdOrThrow(id);
         if (name != null && !department.getName().equalsIgnoreCase(name)
                 && departmentRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("Department with this name already exists", 409);
+            throw new ArmsAuthException(DEPARTMENT_ALREADY_EXISTS_MESSAGE, 409);
         }
 
         if (name != null) {
