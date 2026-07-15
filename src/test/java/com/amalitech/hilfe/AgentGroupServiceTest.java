@@ -174,6 +174,21 @@ class AgentGroupServiceTest {
     }
 
     @Test
+    void updateAgentGroup_inactiveGroup_succeeds() {
+        AgentGroup group = group(false);  // name = "IT Support"
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+        when(agentGroupRepository.existsByNameIgnoreCase("New Name")).thenReturn(false);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest("New Name", null, null, null, null);
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        assertThat(group.getName()).isEqualTo("New Name");
+        assertThat(group.getStatus()).isFalse();
+        verify(agentGroupRepository).save(group);
+    }
+
+    @Test
     void updateAgentGroup_syncsMembership() {
         AgentGroup group = group(true);
         Agent agentB = Agent.builder().id("agent-B").userId("user-B").status(true).build();
