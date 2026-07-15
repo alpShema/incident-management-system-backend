@@ -36,7 +36,7 @@ public class IncidentCategoryResolver {
     }
 
     @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_AGENT', 'SUPER_ADMIN')")
     public PageResponse<IncidentCategoryResponse> allIncidentCategories(
             @Argument Boolean status,
             @Argument String query,

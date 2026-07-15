@@ -46,12 +46,12 @@ public class IncidentCategoryController {
                     + "Supports an optional `state` filter: `active` returns only active categories, `inactive` returns only inactive categories, "
                     + "`all` (default when omitted) returns both. "
                     + "Supports an optional `query` parameter to search by category name, description, or department name. "
-                    + "Results are paginated. Requires `ADMIN` or `SUPER_ADMIN` role.")
+                    + "Results are paginated. Requires `ADMIN`, `ADMIN_AGENT`, or `SUPER_ADMIN` role.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid state filter value")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_AGENT', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listAllCategories(
             @Parameter(description = "Filter by status: true for active, false for inactive, omit for all") @RequestParam(required = false) Boolean status,
             @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
