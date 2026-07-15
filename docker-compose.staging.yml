@@ -64,6 +64,9 @@ services:
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
       APP_BASE_URL: ${APP_BASE_URL:-https://hilfe-pro-service.amalitech-dev.net}
+      MAIL_ENABLED: ${MAIL_ENABLED}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 30s
