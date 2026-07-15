@@ -3,6 +3,7 @@
 # Runs the Spring Boot backend and PostgreSQL database.
 #
 # Required environment variables (set by Jenkins or in .env):
+#   SPRING_PROFILES_ACTIVE — active Spring profile, e.g. dev or prod
 #   BACKEND_IMAGE   — full ECR image URL for the backend
 #   DB_NAME         — PostgreSQL database name
 #   DB_USER         — PostgreSQL username
@@ -47,6 +48,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       DB_URL:      jdbc:postgresql://db:5432/${DB_NAME}
       DB_USERNAME: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -87,6 +89,9 @@ services:
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
       APP_BASE_URL: ${APP_BASE_URL:-https://hilfe-pro-service.amalitech-dev.net}
+      MAIL_ENABLED: ${MAIL_ENABLED}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
