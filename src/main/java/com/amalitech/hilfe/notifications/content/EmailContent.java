@@ -4,6 +4,7 @@ public record EmailContent(
         String subject,
         String preheader,
         String contentHtml,
-        String ctaText
+        String ctaText,
+        String footerText
 ) {
 }
