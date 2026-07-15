@@ -49,3 +49,27 @@ slack:
   rate-limit:
     requests-per-minute: ${SLACK_RATE_LIMIT_RPM:60}
     burst-size: ${SLACK_RATE_LIMIT_BURST:10}
+
+# ──────────────────────────────────────────
+# Email (SMTP) — Mailtrap sandbox for dev/testing
+# ──────────────────────────────────────────
+spring:
+  mail:
+    host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}
+    port: ${MAIL_PORT:2525}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+mail:
+  enabled: ${MAIL_ENABLED:false}
+  from-address: ${MAIL_FROM_ADDRESS:no-reply@hilfe.amalitech.net}
+  from-name: ${MAIL_FROM_NAME:HILFE}
+  # Mailtrap's free Testing plan enforces a strict emails/second cap — keep this conservative.
+  rate-limit:
+    emails-per-second: ${MAIL_RATE_LIMIT_PER_SECOND:2}
