@@ -162,4 +162,23 @@ class FaqControllerTest {
                 .andExpect(jsonPath("$.message").value(
                         "The provided CSV is missing required headers. Expected columns: question, answer."));
     }
+
+    // Reproduces the reported bug: a CSV with columns beyond question/answer
+    // (e.g. question,answer,category,author) must 400 with a descriptive message,
+    // not 200 with inspection results as though the file were correctly shaped.
+    @Test
+    void inspect_serviceRejectsExtraColumnCsv_returns400WithServiceMessage() throws Exception {
+        MockMultipartFile fileWithExtraColumns = new MockMultipartFile("file", "faqs.csv", "text/csv",
+                "question,answer,category,author\nQ1,A1,General,Jane\n".getBytes(StandardCharsets.UTF_8));
+        when(faqService.inspectBulkImport(any(), isNull(), any()))
+                .thenThrow(new IllegalArgumentException(
+                        "Invalid CSV format. The file must contain only the following columns: question, answer."));
+
+        mvc.perform(multipart("/faqs/inspect").file(fileWithExtraColumns)
+                        .with(authentication(adminAuth()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Invalid CSV format. The file must contain only the following columns: question, answer."));
+    }
 }
