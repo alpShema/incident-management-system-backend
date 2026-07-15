@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.mappers.ArmsUserMapper;
@@ -21,6 +22,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+    private static final String ACCOUNT_DEACTIVATED_MESSAGE = "Your account has been deactivated. Please contact your administrator.";
+
     private final ArmsClient armsClient;
     private final ArmsTokenExpiryService armsTokenExpiryService;
     private final TokenService tokenService;
@@ -48,7 +51,7 @@ public class AuthService {
                         "User not found after upsert for id=" + armsUser.userId()));
 
         if (Boolean.FALSE.equals(user.getStatus())) {
-            throw new ArmsAuthException("Your account has been deactivated. Please contact your administrator.", 403);
+            throw new ArmsAuthException(ACCOUNT_DEACTIVATED_MESSAGE, 403);
         }
 
         long refreshTokenTtlSeconds = armsTokenExpiryService.getRemainingLifetimeSeconds(request.armsToken());
@@ -69,10 +72,10 @@ public class AuthService {
     @Transactional
     public AuthResult refresh(String refreshToken, String armsToken) {
         TokenService.RefreshPrincipal refreshPrincipal = tokenService.authenticateRefreshToken(refreshToken)
-                .orElseThrow(() -> new ArmsAuthException("Invalid refresh token", 401));
+                .orElseThrow(() -> new ArmsAuthException(ApiMessages.SESSION_EXPIRED, 401));
 
         if (tokenRevocationService.isRevoked(refreshPrincipal.jti())) {
-            throw new ArmsAuthException("Refresh token has been revoked", 401);
+            throw new ArmsAuthException(ApiMessages.SESSION_EXPIRED, 401);
         }
 
         long refreshTokenTtlSeconds = armsTokenExpiryService.getRemainingLifetimeSeconds(armsToken);
@@ -95,7 +98,7 @@ public class AuthService {
                         "User not found after upsert for id=" + armsUser.userId()));
 
         if (Boolean.FALSE.equals(user.getStatus())) {
-            throw new ArmsAuthException("Your account has been deactivated. Please contact your administrator.", 403);
+            throw new ArmsAuthException(ACCOUNT_DEACTIVATED_MESSAGE, 403);
         }
 
         tokenRevocationService.revoke(
@@ -133,7 +136,7 @@ public class AuthService {
 
     public UserPermissionsResponse getUserPermissions(String userId) {
         UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolveByUserId(userId)
-                .orElseThrow(() -> new ArmsAuthException("Authenticated user not found", 401));
+                .orElseThrow(() -> new ArmsAuthException("We could not find your account. Please log in again.", 401));
 
         List<String> permissions = resolvedAuthorities.authorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -150,7 +153,7 @@ public class AuthService {
     private void validateRefreshPrincipal(TokenService.RefreshPrincipal refreshPrincipal, ArmsUserInfo armsUser) {
         if (!refreshPrincipal.userId().equals(armsUser.userId())
                 || !refreshPrincipal.email().equals(armsUser.email())) {
-            throw new ArmsAuthException("Refresh token does not match the authenticated ARMS user", 401);
+            throw new ArmsAuthException(ApiMessages.SESSION_UNVERIFIABLE, 401);
         }
     }
 

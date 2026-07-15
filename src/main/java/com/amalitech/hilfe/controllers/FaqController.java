@@ -34,6 +34,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Tag(name = "FAQs", description = "Admin FAQ management")
 public class FaqController {
 
+    private static final String FAQ_UPDATED_MESSAGE = "FAQ updated successfully";
+
     private final FaqService faqService;
 
     @GetMapping
@@ -46,14 +48,14 @@ public class FaqController {
             @RequestParam(defaultValue = "20") int size
     ) {
         var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(ApiResponse.success("FAQs retrieved", faqService.listFaqs(active, search, pageable)));
+        return ResponseEntity.ok(ApiResponse.success("FAQs retrieved successfully", faqService.listFaqs(active, search, pageable)));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_READ + "')")
     @Operation(summary = "Get FAQ", description = "Retrieve a single FAQ by ID")
     public ResponseEntity<ApiResponse<FaqResponse>> getFaq(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success("FAQ retrieved", faqService.getFaq(id)));
+        return ResponseEntity.ok(ApiResponse.success("FAQ retrieved successfully", faqService.getFaq(id)));
     }
 
     @PostMapping
@@ -65,7 +67,7 @@ public class FaqController {
     public ResponseEntity<ApiResponse<FaqResponse>> createFaq(@Valid @RequestBody CreateFaqRequest request) {
         FaqUpsertResult result = faqService.createFaq(request);
         HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
-        String message = result.created() ? "FAQ created" : "FAQ updated";
+        String message = result.created() ? "FAQ created successfully" : FAQ_UPDATED_MESSAGE;
         return ResponseEntity.status(status).body(ApiResponse.success(message, result.faq()));
     }
 
@@ -76,7 +78,7 @@ public class FaqController {
             @PathVariable String id,
             @Valid @RequestBody UpdateFaqRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success("FAQ updated", faqService.updateFaq(id, request)));
+        return ResponseEntity.ok(ApiResponse.success(FAQ_UPDATED_MESSAGE, faqService.updateFaq(id, request)));
     }
 
     @PatchMapping("/{id}/active")
@@ -87,7 +89,7 @@ public class FaqController {
             @RequestParam boolean active
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                active ? "FAQ activated" : "FAQ deactivated",
+                active ? "FAQ activated successfully" : "FAQ deactivated successfully",
                 faqService.toggleActive(id, active)
         ));
     }
@@ -97,7 +99,7 @@ public class FaqController {
     @Operation(summary = "Delete FAQ", description = "Permanently remove a FAQ entry")
     public ResponseEntity<ApiResponse<Void>> deleteFaq(@PathVariable String id) {
         faqService.deleteFaq(id);
-        return ResponseEntity.ok(ApiResponse.success("FAQ deleted", null));
+        return ResponseEntity.ok(ApiResponse.success("FAQ deleted successfully", null));
     }
 
     @GetMapping("/template")
@@ -128,7 +130,7 @@ public class FaqController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
                         result.created() + " FAQ(s) created, " + result.updated() + " updated, "
-                                + result.failed() + " row(s) skipped",
+                                + result.failed() + " row(s) skipped.",
                         result
                 ));
     }
@@ -152,16 +154,16 @@ public class FaqController {
         }
         var pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(ApiResponse.success(
-                "CSV inspected", faqService.inspectBulkImport(file, status, pageable)));
+                "CSV file inspected successfully", faqService.inspectBulkImport(file, status, pageable)));
     }
 
     private String validateCsvFile(MultipartFile file) {
         if (file.isEmpty()) {
-            return "Uploaded file is empty";
+            return "The uploaded file is empty. Please choose a file and try again.";
         }
         String filename = file.getOriginalFilename();
         if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
-            return "Only CSV files are accepted";
+            return "Only CSV files are accepted. Please upload a file with a .csv extension.";
         }
         return null;
     }

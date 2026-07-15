@@ -221,7 +221,7 @@ class IncidentCategoryServiceTest {
         IncidentCategoryRequest createRequest = new IncidentCategoryRequest("Facility", "Description", "dept-1");
         assertThatThrownBy(() -> categoryService.createCategory(createRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Incident category with this name already exists")
+                .hasMessage("An incident category with this name already exists. Please choose a different name.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -285,7 +285,7 @@ class IncidentCategoryServiceTest {
         UpdateIncidentCategoryRequest updateRequest = new UpdateIncidentCategoryRequest("Other Name", "Desc", "dept-1");
         assertThatThrownBy(() -> categoryService.updateCategory("cat-1", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Incident category with this name already exists")
+                .hasMessage("An incident category with this name already exists. Please choose a different name.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -455,7 +455,7 @@ class IncidentCategoryServiceTest {
         CreateTopicRequest dupTopicRequest = new CreateTopicRequest("Projector", "Projector issues", "group-1", true);
         assertThatThrownBy(() -> categoryService.createTopic("cat-1", "admin-1", dupTopicRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("A topic with this name already exists")
+                .hasMessage("A topic with this name already exists. Please choose a different name.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }

@@ -6,6 +6,6 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "Payload for updating a location's active status")
 public record UpdateLocationStatusRequest(
         @Schema(description = "true to activate, false to deactivate", example = "false")
-        @NotNull(message = "Status is required")
+        @NotNull(message = "Please specify whether the location should be active or inactive.")
         Boolean status
 ) {}

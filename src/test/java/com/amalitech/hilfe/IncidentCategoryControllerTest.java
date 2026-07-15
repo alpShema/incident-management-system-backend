@@ -193,7 +193,7 @@ class IncidentCategoryControllerTest {
                                 new UpdateIncidentCategoryRequest("Facility", "Updated description", "dept-1")))
                         .with(authentication(auth)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("A record with this value already exists"));
+                .andExpect(jsonPath("$.message").value("A record with this value already exists. Please use a different value."));
     }
 
     // ── PATCH /incident-categories/{id}/status ─────────────────────────────

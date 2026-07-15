@@ -106,7 +106,7 @@ public class MessageController {
         MessageResponse response = messageService.sendMessage(
                 principal.userId(), principal.roleCode(), incidentId, request.content(), request.attachments());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Message sent", response));
+                .body(ApiResponse.success("Message sent successfully", response));
     }
 
     @Operation(
@@ -134,7 +134,7 @@ public class MessageController {
         Sort.Direction direction = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("asc")
                 ? Sort.Direction.ASC : Sort.Direction.DESC;
 
-        return ResponseEntity.ok(ApiResponse.success("Messages retrieved",
+        return ResponseEntity.ok(ApiResponse.success("Messages retrieved successfully",
                 PageResponse.from(messageService.listMessages(
                         principal.userId(), principal.roleCode(), incidentId,
                         PageRequest.of(page, size, Sort.by(direction, sortField))))));

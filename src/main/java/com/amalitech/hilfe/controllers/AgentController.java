@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/agents")
 @RequiredArgsConstructor
 public class AgentController {
+    private static final String STATUS_UPDATED_MESSAGE = "Agent status updated successfully";
+
     private final AgentService agentService;
 
     @Operation(
@@ -88,7 +90,7 @@ public class AgentController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status retrieved",
+                "Agent status retrieved successfully",
                 agentService.getStatus(principal.userId())
         ));
     }
@@ -109,7 +111,7 @@ public class AgentController {
             @Valid @RequestBody UpdateAvailabilityRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status updated",
+                STATUS_UPDATED_MESSAGE,
                 agentService.updateAvailability(principal.userId(), request.available())
         ));
     }
@@ -130,7 +132,7 @@ public class AgentController {
             @Valid @RequestBody UpdateAvailabilityRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status updated",
+                STATUS_UPDATED_MESSAGE,
                 agentService.updateAvailabilityById(agentId, request.available())
         ));
     }
