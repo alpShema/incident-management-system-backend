@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
@@ -218,7 +219,7 @@ public class IncidentService {
 
     public Page<IncidentResponse> searchIncidents(String userId, String query, Instant fromDate, Instant toDate, Pageable pageable) {
         if (query == null || query.isBlank()) {
-            throw new ArmsAuthException("Search query must not be blank", 400);
+            throw new ArmsAuthException("Please enter a search term.", 400);
         }
 
         Pageable sortedPageable = pageable.isUnpaged()
@@ -246,22 +247,22 @@ public class IncidentService {
     }
 
     @Transactional
-    public IncidentResponse updateStatus(String actorUserId, String roleCode, boolean hasForceClose, String incidentId, UpdateIncidentStatusRequest request) {
-        return doUpdateStatus(actorUserId, roleCode, hasForceClose, incidentId, request);
+    public IncidentResponse updateStatus(String actorUserId, String roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+        return doUpdateStatus(actorUserId, roleCode, incidentId, request);
     }
 
     @Transactional
-    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, boolean hasForceClose, String incidentId, UpdateIncidentStatusRequest request) {
-        return doUpdateStatus(actorUserId, roleCode == null ? null : roleCode.name(), hasForceClose, incidentId, request);
+    public IncidentResponse updateStatus(String actorUserId, RoleCode roleCode, String incidentId, UpdateIncidentStatusRequest request) {
+        return doUpdateStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, request);
     }
 
-    private IncidentResponse doUpdateStatus(String actorUserId, String roleCode, boolean hasForceClose, String incidentId, UpdateIncidentStatusRequest request) {
+    private IncidentResponse doUpdateStatus(String actorUserId, String roleCode, String incidentId, UpdateIncidentStatusRequest request) {
         Incident incident = findIncident(incidentId);
 
         Status newStatus = statusRepository.findById(request.statusId())
                 .orElseThrow(() -> new ArmsAuthException("Status not found", 404));
 
-        enforceTransition(incident, newStatus, roleCode, actorUserId, hasForceClose);
+        enforceTransition(incident, newStatus, roleCode, actorUserId);
         enforceReopenWindow(incident, newStatus);
         enforceReasonRequired(newStatus, request.reason());
 
@@ -287,10 +288,8 @@ public class IncidentService {
     }
 
     @Transactional
-    public IncidentResponse updateSeverity(String actorUserId, boolean hasUpdateAny, String incidentId, UpdateIncidentSeverityRequest request) {
+    public IncidentResponse updateSeverity(String actorUserId, String incidentId, UpdateIncidentSeverityRequest request) {
         Incident incident = findIncident(incidentId);
-        enforceUpdateOwnership(actorUserId, hasUpdateAny, incident,
-                "You can only update the severity of incidents assigned to you");
         String previousSeverityName = incident.getSeverity() != null ? incident.getSeverity().getName() : "none";
         String newSeverityName = severityRepository.findById(request.severityId())
                 .map(s -> s.getName())
@@ -322,19 +321,25 @@ public class IncidentService {
     }
 
     @Transactional
-    public IncidentResponse assignIncident(String actorUserId, boolean hasUpdateAny, String incidentId, AssignIncidentRequest request) {
+    public IncidentResponse assignIncident(String actorUserId, String roleCode, String incidentId, AssignIncidentRequest request) {
         Incident incident = findIncident(incidentId);
 
-        enforceUpdateOwnership(actorUserId, hasUpdateAny, incident,
-                "You can only reassign incidents that are assigned to you");
+        String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
+        boolean isAdmin = ROLE_ADMIN.equals(normalizedRole) || ROLE_ADMIN_AGENT.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole);
+        if (!isAdmin) {
+            String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
+            if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
+                throw new ArmsAuthException("You do not have permission to reassign this incident.", 403);
+            }
+        }
 
         Agent agent = agentRepository.findById(request.agentId())
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
         if (!Boolean.TRUE.equals(agent.getStatus())) {
-            throw new ArmsAuthException("Cannot assign incident to an unavailable agent", 400);
+            throw new ArmsAuthException("This incident cannot be assigned to an unavailable agent.", 400);
         }
         if (agent.getAgentGroupId() != null && !agentRepository.hasActiveGroup(agent.getAgentGroupId(), agent.getId())) {
-            throw new ArmsAuthException("Cannot assign incident to an agent in a deactivated group", 400);
+            throw new ArmsAuthException("This incident cannot be assigned to an agent in a deactivated group.", 400);
         }
 
         agent.setLastAssignedAt(Instant.now());
@@ -424,22 +429,7 @@ public class IncidentService {
             if (isAssignee) return;
             if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
-        throw new ArmsAuthException("You do not have access to this incident", 403);
-    }
-
-    /**
-     * Cross-incident update access (reassigning, changing severity of an incident the actor
-     * neither owns nor is assigned to) requires the incident.update.any permission. Everyone
-     * else is restricted to incidents assigned to them.
-     */
-    private void enforceUpdateOwnership(String actorUserId, boolean hasUpdateAny, Incident incident, String deniedMessage) {
-        if (hasUpdateAny) {
-            return;
-        }
-        String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
-        if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
-            throw new ArmsAuthException(deniedMessage, 403);
-        }
+        throw new ArmsAuthException("You do not have permission to access this incident.", 403);
     }
 
     private void applyTopicAssignment(Incident incident, IncidentType incidentType, String creatorAgentId) {
@@ -556,7 +546,7 @@ public class IncidentService {
     private String resolvePriorityId(String requestedSeverityId) {
         if (requestedSeverityId != null && !requestedSeverityId.isBlank()) {
             if (!severityRepository.existsById(requestedSeverityId)) {
-                throw new ArmsAuthException("Severity not found", 404);
+                throw new ArmsAuthException(ApiMessages.SEVERITY_NOT_FOUND, 404);
             }
             return requestedSeverityId;
         }
@@ -667,17 +657,17 @@ public class IncidentService {
         }
     }
 
-    private void enforceTransition(Incident incident, Status newStatus, String roleCode, String actorUserId, boolean hasForceClose) {
+    private void enforceTransition(Incident incident, Status newStatus, String roleCode, String actorUserId) {
         String fromId = incident.getStatus() != null ? incident.getStatus().getId() : null;
         String toId   = newStatus.getId();
         String normalizedRole = roleCode == null ? "" : roleCode.toUpperCase();
 
         if (fromId == null) {
-            throw new ArmsAuthException("Cannot transition an incident with no current status", 422);
+            throw new ArmsAuthException("This incident does not have a current status to transition from.", 422);
         }
 
-        // Holders of incident.forceclose may force-close any incident regardless of current status
-        if (hasForceClose && STATUS_CLOSED.equals(toId)) {
+        // Admins and super-admins may force-close any incident regardless of current status
+        if ((ROLE_ADMIN.equals(normalizedRole) || ROLE_ADMIN_AGENT.equals(normalizedRole) || ROLE_SUPER_ADMIN.equals(normalizedRole)) && STATUS_CLOSED.equals(toId)) {
             return;
         }
 
@@ -693,15 +683,15 @@ public class IncidentService {
 
         if (!toMap.containsKey(toId)) {
             throw new ArmsAuthException(
-                    "Invalid status transition from '" + incident.getStatus().getName()
-                    + "' to '" + newStatus.getName() + "'",
+                    "This incident cannot be moved from '" + incident.getStatus().getName()
+                    + "' to '" + newStatus.getName() + "'.",
                     422
             );
         }
 
         if (!toMap.get(toId).contains(effectiveRole)) {
             throw new ArmsAuthException(
-                    "You do not have permission to move an incident to '" + newStatus.getName() + "'",
+                    "You do not have permission to move this incident to '" + newStatus.getName() + "'.",
                     403
             );
         }
@@ -712,7 +702,7 @@ public class IncidentService {
             String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
             if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
                 throw new ArmsAuthException(
-                        "You are not the assigned agent for this incident",
+                        "You do not have permission to update this incident because you are not the assigned agent.",
                         403
                 );
             }

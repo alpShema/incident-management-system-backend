@@ -178,7 +178,7 @@ class UserServiceTest {
     void updateUserStatus_nonAdminUpdatingOther_throws403() {
         assertThatThrownBy(() -> userService.updateUserStatus("u2", RoleCode.AGENT, "u1", false))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("You can only update your own status")
+                .hasMessage("You do not have permission to update this user's status.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
 

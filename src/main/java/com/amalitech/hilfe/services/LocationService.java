@@ -18,6 +18,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LocationService {
 
+    private static final String LOCATION_ALREADY_EXISTS_MESSAGE = "A location with this name already exists. Please choose a different name.";
+
     private final LocationRepository locationRepository;
 
     public PageResponse<LocationResponse> listLocations(String query, Boolean status, Pageable pageable) {
@@ -34,7 +36,7 @@ public class LocationService {
     @Transactional
     public LocationResponse createLocation(CreateLocationRequest request) {
         locationRepository.findByNameIgnoreCase(request.name()).ifPresent(existing -> {
-            throw new ArmsAuthException("A location with this name already exists", 409);
+            throw new ArmsAuthException(LOCATION_ALREADY_EXISTS_MESSAGE, 409);
         });
         Location location = Location.builder()
                 .id("loc-" + UUID.randomUUID().toString().substring(0, 8))
@@ -51,7 +53,7 @@ public class LocationService {
         if (request.name() != null && !request.name().isBlank()) {
             locationRepository.findByNameIgnoreCase(request.name()).ifPresent(existing -> {
                 if (!existing.getId().equals(id)) {
-                    throw new ArmsAuthException("A location with this name already exists", 409);
+                    throw new ArmsAuthException(LOCATION_ALREADY_EXISTS_MESSAGE, 409);
                 }
             });
             location.setName(request.name().trim());

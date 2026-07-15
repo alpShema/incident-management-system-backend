@@ -8,11 +8,11 @@ import java.util.List;
 @Schema(description = "Request body for creating or updating an agent group. `departmentId` is required when creating a group and optional when patching.")
 public record AgentGroupRequest(
         @Schema(description = "Agent group name", example = "Facilities Support")
-        @Size(max = 100, message = "must not exceed 100 characters")
+        @Size(max = 100, message = "Agent group name must not exceed 100 characters.")
         String name,
 
         @Schema(description = "Optional agent group description", nullable = true)
-        @Size(max = 1000, message = "must not exceed 1000 characters")
+        @Size(max = 1000, message = "Agent group description must not exceed 1000 characters.")
         String description,
 
         @Schema(description = "Internal department ID this agent group belongs to. Required on create.", example = "dept-facilities")

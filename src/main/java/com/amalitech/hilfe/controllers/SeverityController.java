@@ -38,7 +38,7 @@ public class SeverityController {
     public ResponseEntity<ApiResponse<SeverityResponse>> getSeverity(
             @Parameter(description = "Severity ID") @PathVariable String id
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Severity retrieved", severityService.getSeverity(id)));
+        return ResponseEntity.ok(ApiResponse.success("Severity retrieved successfully", severityService.getSeverity(id)));
     }
 
     @Operation(summary = "Create a severity", description = "Creates a new severity level.")
@@ -50,7 +50,7 @@ public class SeverityController {
             @Valid @RequestBody SeverityRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Severity created", severityService.createSeverity(request)));
+                .body(ApiResponse.success("Severity created successfully", severityService.createSeverity(request)));
     }
 
     @Operation(summary = "Update a severity", description = "Updates an existing severity's name and description.")
@@ -63,7 +63,7 @@ public class SeverityController {
             @Parameter(description = "Severity ID") @PathVariable String id,
             @Valid @RequestBody SeverityRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Severity updated", severityService.updateSeverity(id, request)));
+        return ResponseEntity.ok(ApiResponse.success("Severity updated successfully", severityService.updateSeverity(id, request)));
     }
 
     @Operation(summary = "Update severity SLA thresholds", description = "Updates response and resolution SLA thresholds for a severity.")
@@ -76,7 +76,7 @@ public class SeverityController {
             @Parameter(description = "Severity ID") @PathVariable String id,
             @Valid @RequestBody UpdateSeveritySlaRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Severity SLA updated", severityService.updateSeveritySla(id, request)));
+        return ResponseEntity.ok(ApiResponse.success("Severity SLA updated successfully", severityService.updateSeveritySla(id, request)));
     }
 
     @Operation(summary = "Deactivate a severity", description = "Soft-deletes a severity by setting status to false.")
@@ -88,7 +88,7 @@ public class SeverityController {
     public ResponseEntity<ApiResponse<SeverityResponse>> deactivateSeverity(
             @Parameter(description = "Severity ID") @PathVariable String id
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Severity deactivated", severityService.deactivateSeverity(id)));
+        return ResponseEntity.ok(ApiResponse.success("Severity deactivated successfully", severityService.deactivateSeverity(id)));
     }
 
     @Operation(summary = "Delete a severity", description = "Permanently deletes a severity if not in use by any incidents.")

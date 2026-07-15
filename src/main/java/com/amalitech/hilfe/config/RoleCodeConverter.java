@@ -13,7 +13,7 @@ public class RoleCodeConverter implements Converter<String, RoleCode> {
             return RoleCode.valueOf(source.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(
-                    "Invalid role code: '" + source + "'. Valid values are: CLIENT, AGENT, ADMIN, ADMIN_AGENT, SUPER_ADMIN");
+                    "'" + source + "' is not a valid role. Please choose one of: CLIENT, AGENT, ADMIN, ADMIN_AGENT, SUPER_ADMIN.");
         }
     }
 }
