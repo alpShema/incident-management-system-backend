@@ -843,8 +843,8 @@ type Query {
   location(id: ID!): Location
 
   # Agents
-  agents(departmentId: String, query: String, available: Boolean, locationId: String, page: PageInput): AgentPage
-  allAgents(departmentId: String, query: String, available: Boolean, locationId: String, page: PageInput): AgentPage
+  agents(departmentId: String, query: String, status: Boolean, locationId: String, page: PageInput): AgentPage
+  allAgents(departmentId: String, query: String, status: Boolean, locationId: String, page: PageInput): AgentPage
   myAgentStatus: Agent
 
   # Admins
