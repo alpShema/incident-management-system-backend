@@ -194,10 +194,7 @@ public class IncidentCategoryService {
         if (description != null && !description.isBlank()) {
             topic.setDescription(description);
         }
-        if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
-            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
-            topic.setAgentGroupId(assignedGroup.getId());
-        }
+        applyAgentGroupChange(topic, request, category);
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
         }
@@ -238,10 +235,7 @@ public class IncidentCategoryService {
             findActiveCategory(request.categoryId());
             topic.setCategoryId(request.categoryId());
         }
-        if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
-            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
-            topic.setAgentGroupId(assignedGroup.getId());
-        }
+        applyAgentGroupChange(topic, request, category);
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
         }
@@ -251,6 +245,21 @@ public class IncidentCategoryService {
         entityManager.clear();
         return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
                 .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_AFTER_UPDATE, 500)));
+    }
+
+    private void applyAgentGroupChange(IncidentType topic, UpdateTopicRequest request, IncidentCategory category) {
+        boolean hasNewGroup = request.agentGroupId() != null && !request.agentGroupId().isBlank();
+        if (Boolean.TRUE.equals(request.removeAgentGroup())) {
+            if (hasNewGroup) {
+                throw new ArmsAuthException("Cannot remove and reassign the agent group in the same request", 400);
+            }
+            topic.setAgentGroupId(null);
+            return;
+        }
+        if (hasNewGroup) {
+            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
+            topic.setAgentGroupId(assignedGroup.getId());
+        }
     }
 
     @Transactional
