@@ -24,9 +24,11 @@ public class AgentResolver {
     public PageResponse<AgentResponse> agents(
             @Argument String departmentId,
             @Argument String query,
+            @Argument Boolean available,
+            @Argument String locationId,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
-                agentService.listAgents(departmentId, query, PageInput.toPageable(page))
+                agentService.listAgents(departmentId, query, available, locationId, PageInput.toPageable(page))
         );
     }
 
@@ -35,9 +37,11 @@ public class AgentResolver {
     public PageResponse<AgentResponse> allAgents(
             @Argument String departmentId,
             @Argument String query,
+            @Argument Boolean available,
+            @Argument String locationId,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
-                agentService.listAllAgents(departmentId, query, PageInput.toPageable(page))
+                agentService.listAllAgents(departmentId, query, available, locationId, PageInput.toPageable(page))
         );
     }
 
