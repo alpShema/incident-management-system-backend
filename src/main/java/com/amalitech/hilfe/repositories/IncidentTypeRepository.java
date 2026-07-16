@@ -4,6 +4,7 @@ import com.amalitech.hilfe.models.IncidentType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -88,4 +89,8 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
 
     @Query("SELECT it FROM IncidentType it LEFT JOIN FETCH it.category WHERE it.agentGroupId = :agentGroupId")
     List<IncidentType> findByAgentGroupId(@Param("agentGroupId") String agentGroupId);
+
+    @Modifying
+    @Query("UPDATE IncidentType it SET it.agentGroupId = null WHERE it.agentGroupId = :agentGroupId")
+    void clearAgentGroupId(@Param("agentGroupId") String agentGroupId);
 }
