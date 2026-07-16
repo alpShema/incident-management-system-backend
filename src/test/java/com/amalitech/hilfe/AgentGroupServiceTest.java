@@ -302,22 +302,49 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void updateAgentGroup_syncTopics_clearsOldAndAssignsNew() {
+    void updateAgentGroup_addingNewTopic_doesNotRemoveExistingTopics() {
         AgentGroup group = group(true);
         IncidentCategory category = IncidentCategory.builder().id("cat-1").departmentId("dept-1").build();
-        IncidentType topic = IncidentType.builder().id("topic-new").name("New Topic").build();
-        topic.setCategory(category);
+
+        IncidentType existingTopic = IncidentType.builder().id("topic-existing").name("Network Issues").agentGroupId("group-1").build();
+        existingTopic.setCategory(category);
+        IncidentType newTopic = IncidentType.builder().id("topic-new").name("Software Bugs").build();
+        newTopic.setCategory(category);
 
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
         when(agentGroupRepository.save(group)).thenReturn(group);
-        when(incidentTypeRepository.findById("topic-new")).thenReturn(Optional.of(topic));
+        when(incidentTypeRepository.findById("topic-new")).thenReturn(Optional.of(newTopic));
 
+        // Only the new topic is sent — "Network Issues" is not re-selected, matching HV-1435's exact repro.
         var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, null, List.of("topic-new"));
         agentGroupService.updateAgentGroup("group-1", request);
 
-        verify(incidentTypeRepository).clearAgentGroupId("group-1");
-        verify(incidentTypeRepository).save(topic);
-        assertThat(topic.getAgentGroupId()).isEqualTo("group-1");
+        // The endpoint must never issue a bulk clear — only the topic actually looked up/linked in this call.
+        verify(incidentTypeRepository, never()).findById("topic-existing");
+        verify(incidentTypeRepository, never()).save(existingTopic);
+        assertThat(existingTopic.getAgentGroupId()).isEqualTo("group-1");
+
+        verify(incidentTypeRepository).save(newTopic);
+        assertThat(newTopic.getAgentGroupId()).isEqualTo("group-1");
+    }
+
+    @Test
+    void updateAgentGroup_emptyTopicIds_doesNotRemoveExistingTopics() {
+        AgentGroup group = group(true);
+        IncidentCategory category = IncidentCategory.builder().id("cat-1").departmentId("dept-1").build();
+        IncidentType existingTopic = IncidentType.builder().id("topic-existing").name("Network Issues").agentGroupId("group-1").build();
+        existingTopic.setCategory(category);
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        // Simulates an edit-form save with no topic changes, submitted as an empty list rather than null.
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, null, List.of());
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(incidentTypeRepository, never()).findById(any());
+        verify(incidentTypeRepository, never()).save(any(IncidentType.class));
+        assertThat(existingTopic.getAgentGroupId()).isEqualTo("group-1");
     }
 
     @Test
@@ -329,7 +356,8 @@ class AgentGroupServiceTest {
         var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, null, null);
         agentGroupService.updateAgentGroup("group-1", request);
 
-        verify(incidentTypeRepository, never()).clearAgentGroupId(any());
+        verify(incidentTypeRepository, never()).findById(any());
+        verify(incidentTypeRepository, never()).save(any(IncidentType.class));
     }
 
     @Test
