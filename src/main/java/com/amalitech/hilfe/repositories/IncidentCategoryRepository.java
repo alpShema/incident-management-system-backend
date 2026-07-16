@@ -46,6 +46,10 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
                    OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
+              AND (:status = FALSE OR EXISTS (
+                    SELECT 1 FROM IncidentType t
+                    WHERE t.categoryId = c.id AND t.status = TRUE
+              ))
             """,
             countQuery = """
             SELECT COUNT(c) FROM IncidentCategory c
@@ -55,6 +59,10 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
                    OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
+              AND (:status = FALSE OR EXISTS (
+                    SELECT 1 FROM IncidentType t
+                    WHERE t.categoryId = c.id AND t.status = TRUE
+              ))
             """)
     Page<IncidentCategory> findByStatusWithDepartmentAndQueryPaged(
             @Param("status") Boolean status,
