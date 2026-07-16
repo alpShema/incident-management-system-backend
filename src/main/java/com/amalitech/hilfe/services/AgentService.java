@@ -22,17 +22,17 @@ public class AgentService {
     private final AgentRepository agentRepository;
     private final DepartmentRepository departmentRepository;
 
-    public Page<AgentResponse> listAgents(String departmentId, String query, Pageable pageable) {
+    public Page<AgentResponse> listAgents(String departmentId, String query, Boolean available, String locationId, Pageable pageable) {
         String queryPattern = buildQueryPattern(query);
         if (departmentId == null || departmentId.isBlank()) {
-            return agentRepository.findAllActiveWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
+            return agentRepository.findAllActiveWithUserAndQuery(queryPattern, available, locationId, pageable).map(AgentResponse::from);
         }
 
-        return getAgentResponses(departmentId, pageable, queryPattern);
+        return getAgentResponses(departmentId, pageable, queryPattern, available, locationId);
     }
 
     @NonNull
-    private Page<AgentResponse> getAgentResponses(String departmentId, Pageable pageable, String queryPattern) {
+    private Page<AgentResponse> getAgentResponses(String departmentId, Pageable pageable, String queryPattern, Boolean available, String locationId) {
         boolean activeDepartment = departmentRepository.findById(departmentId)
                 .map(department -> Boolean.TRUE.equals(department.getStatus()))
                 .orElse(false);
@@ -40,16 +40,16 @@ public class AgentService {
             return new PageImpl<>(List.of(), pageable, 0);
         }
 
-        return agentRepository.findByDepartmentIdWithUserAndQuery(departmentId, queryPattern, pageable).map(AgentResponse::from);
+        return agentRepository.findByDepartmentIdWithUserAndQuery(departmentId, queryPattern, available, locationId, pageable).map(AgentResponse::from);
     }
 
-    public Page<AgentResponse> listAllAgents(String departmentId, String query, Pageable pageable) {
+    public Page<AgentResponse> listAllAgents(String departmentId, String query, Boolean available, String locationId, Pageable pageable) {
         String queryPattern = buildQueryPattern(query);
         if (departmentId == null || departmentId.isBlank()) {
-            return agentRepository.findAllWithUserAndQuery(queryPattern, pageable).map(AgentResponse::from);
+            return agentRepository.findAllWithUserAndQuery(queryPattern, available, locationId, pageable).map(AgentResponse::from);
         }
 
-        return getAgentResponses(departmentId, pageable, queryPattern);
+        return getAgentResponses(departmentId, pageable, queryPattern, available, locationId);
     }
 
     public AgentResponse getStatus(String userId) {
