@@ -487,8 +487,11 @@ public class IncidentService {
 
     private void assignViaSingleAgent(Incident incident, IncidentType incidentType, String creatorAgentId) {
         boolean isSelf = incidentType.getAgentId().equals(creatorAgentId);
-        Agent agent = isSelf ? null : agentRepository.findById(incidentType.getAgentId()).orElse(null);
-        if (agent != null && Boolean.TRUE.equals(agent.getStatus())) {
+        Agent agent = isSelf ? null : agentRepository.findByIdWithUser(incidentType.getAgentId()).orElse(null);
+        boolean available = agent != null
+                && Boolean.TRUE.equals(agent.getStatus())
+                && Boolean.TRUE.equals(agent.getUser().getStatus());
+        if (available) {
             agent.setLastAssignedAt(Instant.now());
             agentRepository.save(agent);
             incident.setAssignedToId(incidentType.getAgentId());
