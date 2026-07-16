@@ -291,9 +291,8 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
         when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
 
-        assertThatThrownBy(() -> categoryService.updateTopic(
-                "cat-1", "type-1",
-                new UpdateTopicRequest(null, null, null, "group-2", true, null)))
+        UpdateTopicRequest request = new UpdateTopicRequest(null, null, null, "group-2", true, null);
+        assertThatThrownBy(() -> categoryService.updateTopic("cat-1", "type-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Cannot remove and reassign the agent group in the same request")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
