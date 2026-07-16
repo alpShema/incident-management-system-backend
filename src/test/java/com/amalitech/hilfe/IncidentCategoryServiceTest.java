@@ -38,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -239,7 +240,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null));
+                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null, null));
 
         assertThat(topic.getName()).isEqualTo("New Name");
         assertThat(topic.getDescription()).isEqualTo("New desc");
@@ -258,10 +259,48 @@ class IncidentCategoryServiceTest {
 
         IncidentTopicResponse response = categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("New Name", "New desc", null, "group-1", false));
+                new UpdateTopicRequest("New Name", "New desc", null, "group-1", null, false));
 
         assertThat(response).isNotNull();
         verify(typeRepository).save(any(IncidentType.class));
+    }
+
+    @Test
+    void updateTopic_removeAgentGroup_clearsAssignment() {
+        IncidentCategory category = buildCategory();
+        IncidentType topic = buildType();
+        assertThat(topic.getAgentGroupId()).isEqualTo("group-1");
+
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(topic);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
+
+        categoryService.updateTopic(
+                "cat-1", "type-1",
+                new UpdateTopicRequest(null, null, null, null, true, null));
+
+        assertThat(topic.getAgentGroupId()).isNull();
+        verify(agentGroupRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateTopic_removeAgentGroupAndProvideNewGroup_throws400() {
+        IncidentCategory category = buildCategory();
+        IncidentType topic = buildType();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+
+        assertThatThrownBy(() -> categoryService.updateTopic(
+                "cat-1", "type-1",
+                new UpdateTopicRequest(null, null, null, "group-2", true, null)))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Cannot remove and reassign the agent group in the same request")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        assertThat(topic.getAgentGroupId()).isEqualTo("group-1");
+        verify(typeRepository, never()).save(any(IncidentType.class));
     }
 
     @Test
