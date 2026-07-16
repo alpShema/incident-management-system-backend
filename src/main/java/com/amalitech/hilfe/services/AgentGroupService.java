@@ -153,7 +153,6 @@ public class AgentGroupService {
 
         if (request.topicIds() != null) {
             validateTopicsForDepartment(request.topicIds(), group.getDepartmentId());
-            incidentTypeRepository.clearAgentGroupId(id);
             for (String topicId : request.topicIds()) {
                 IncidentType topic = incidentTypeRepository.findById(topicId)
                         .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
