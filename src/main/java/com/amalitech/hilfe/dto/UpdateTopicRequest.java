@@ -13,8 +13,11 @@ public record UpdateTopicRequest(
         @Schema(description = "New category ID to reassign the topic to. When provided alongside agentGroupId, the agent group is validated against the new category's department.", nullable = true)
         String categoryId,
 
-        @Schema(description = "Responsible agent group ID. The group must have a primary agent and belong to the same department as the category.", nullable = true)
+        @Schema(description = "Responsible agent group ID. The group must have a primary agent and belong to the same department as the category. Ignored when removeAgentGroup is true.", nullable = true)
         String agentGroupId,
+
+        @Schema(description = "When true, unassigns this topic from its current agent group. Cannot be combined with a non-blank agentGroupId in the same request.", nullable = true)
+        Boolean removeAgentGroup,
 
         @Schema(description = "Whether this topic is visible to group members", nullable = true)
         Boolean visibleToGroup
