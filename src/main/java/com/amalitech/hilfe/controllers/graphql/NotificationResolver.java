@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.NotificationResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.services.JwtTokenService;
@@ -33,12 +34,14 @@ public class NotificationResolver {
     public NotificationResponse markNotificationRead(
             @Argument String id,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Notification marked as read");
         return notificationService.markAsRead(principal.userId(), id);
     }
 
     @MutationMapping
     public boolean markAllNotificationsRead(@AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         notificationService.markAllAsRead(principal.userId());
+        GraphQlResponseMessage.set("All notifications marked as read");
         return true;
     }
 }

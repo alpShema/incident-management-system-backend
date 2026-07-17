@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.SeverityRequest;
 import com.amalitech.hilfe.dto.SeverityResponse;
 import com.amalitech.hilfe.services.SeverityService;
@@ -31,24 +32,28 @@ public class SeverityResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('severity.create')")
     public SeverityResponse createSeverity(@Argument SeverityRequest input) {
+        GraphQlResponseMessage.set("Severity created successfully");
         return severityService.createSeverity(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('severity.update')")
     public SeverityResponse updateSeverity(@Argument String id, @Argument SeverityRequest input) {
+        GraphQlResponseMessage.set("Severity updated successfully");
         return severityService.updateSeverity(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('severity.update')")
     public SeverityResponse updateSeveritySla(@Argument String id, @Argument UpdateSeveritySlaInput input) {
+        GraphQlResponseMessage.set("Severity SLA updated successfully");
         return severityService.updateSeveritySla(id, input.toRequest());
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('severity.delete')")
     public SeverityResponse deactivateSeverity(@Argument String id) {
+        GraphQlResponseMessage.set("Severity deactivated successfully");
         return severityService.deactivateSeverity(id);
     }
 
@@ -56,6 +61,7 @@ public class SeverityResolver {
     @PreAuthorize("hasAuthority('severity.delete')")
     public boolean deleteSeverity(@Argument String id) {
         severityService.deleteSeverity(id);
+        GraphQlResponseMessage.set("Severity deleted successfully");
         return true;
     }
 

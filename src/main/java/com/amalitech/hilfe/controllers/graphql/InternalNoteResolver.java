@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.InternalNoteRequest;
 import com.amalitech.hilfe.dto.InternalNoteResponse;
 import com.amalitech.hilfe.dto.PageResponse;
@@ -38,6 +39,7 @@ public class InternalNoteResolver {
             @Argument InternalNoteRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
+        GraphQlResponseMessage.set("Note created successfully");
         return noteService.createNote(principal.userId(), incidentId, input);
     }
 
@@ -49,6 +51,7 @@ public class InternalNoteResolver {
             @Argument InternalNoteRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
+        GraphQlResponseMessage.set("Note updated successfully");
         return noteService.updateNote(principal.userId(), incidentId, noteId, input);
     }
 
@@ -60,6 +63,7 @@ public class InternalNoteResolver {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         noteService.deleteNote(principal.userId(), principal.roleCode(), incidentId, noteId);
+        GraphQlResponseMessage.set("Note deleted successfully");
         return true;
     }
 }
