@@ -24,7 +24,7 @@ public class AgentResolver {
     public PageResponse<AgentResponse> agents(
             @Argument String departmentId,
             @Argument String query,
-            @Argument Boolean available,
+            @Argument("status") Boolean available,
             @Argument String locationId,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
@@ -37,7 +37,7 @@ public class AgentResolver {
     public PageResponse<AgentResponse> allAgents(
             @Argument String departmentId,
             @Argument String query,
-            @Argument Boolean available,
+            @Argument("status") Boolean available,
             @Argument String locationId,
             @Argument PageInput page) {
         return PageInput.toPageResponse(

@@ -186,7 +186,7 @@ class AgentControllerTest {
                 agentPrincipal(), null, List.of(() -> "agent.read"));
 
         mvc.perform(get("/agents/all")
-                        .param("available", "true")
+                        .param("status", "true")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
@@ -203,7 +203,7 @@ class AgentControllerTest {
                 agentPrincipal(), null, List.of(() -> "agent.read"));
 
         mvc.perform(get("/agents/all")
-                        .param("available", "false")
+                        .param("status", "false")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(1));
@@ -237,7 +237,7 @@ class AgentControllerTest {
                 agentPrincipal(), null, List.of(() -> "agent.read"));
 
         mvc.perform(get("/agents/all")
-                        .param("available", "true")
+                        .param("status", "true")
                         .param("locationId", "loc-1")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
