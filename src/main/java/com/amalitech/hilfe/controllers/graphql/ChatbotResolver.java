@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.ChatbotAnswerChunk;
 import com.amalitech.hilfe.dto.ChatbotInteractionResponse;
@@ -34,6 +35,7 @@ public class ChatbotResolver {
     public ChatbotQueryResponse chatbotQuery(
             @Argument ChatbotQueryRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Chatbot query processed successfully");
         return chatbotService.query(principal.userId(), input.query());
     }
 

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.CreateTopicRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryRequest;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
@@ -54,18 +55,21 @@ public class IncidentCategoryResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('incident-category.create')")
     public IncidentCategoryResponse createIncidentCategory(@Argument IncidentCategoryRequest input) {
+        GraphQlResponseMessage.set("Incident category created successfully");
         return categoryService.createCategory(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('incident-category.update')")
     public IncidentCategoryResponse updateIncidentCategory(@Argument String id, @Argument UpdateIncidentCategoryRequest input) {
+        GraphQlResponseMessage.set("Incident category updated successfully");
         return categoryService.updateCategory(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('incident-category.delete')")
     public IncidentCategoryResponse updateIncidentCategoryStatus(@Argument String id, @Argument UpdateIncidentCategoryStatusInput input) {
+        GraphQlResponseMessage.set("Incident category status updated successfully");
         return categoryService.updateCategoryStatus(id, input.status());
     }
 
@@ -75,6 +79,7 @@ public class IncidentCategoryResolver {
             @Argument String categoryId,
             @Argument CreateTopicRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Incident topic created successfully");
         return categoryService.createTopic(categoryId, principal.userId(), input);
     }
 
@@ -84,6 +89,7 @@ public class IncidentCategoryResolver {
             @Argument String categoryId,
             @Argument String topicId,
             @Argument UpdateTopicRequest input) {
+        GraphQlResponseMessage.set("Incident topic updated successfully");
         return categoryService.updateTopic(categoryId, topicId, input);
     }
 
@@ -91,6 +97,7 @@ public class IncidentCategoryResolver {
     @PreAuthorize("hasAuthority('incident-type.delete')")
     public boolean deleteCategoryTopic(@Argument String categoryId, @Argument String topicId) {
         categoryService.deleteTopic(categoryId, topicId);
+        GraphQlResponseMessage.set("Incident topic deleted successfully");
         return true;
     }
 

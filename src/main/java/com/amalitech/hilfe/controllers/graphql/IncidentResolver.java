@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.ActivityLogResponse;
 import com.amalitech.hilfe.dto.AssignIncidentRequest;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
@@ -124,6 +125,7 @@ public class IncidentResolver {
     public IncidentResponse createIncident(
             @Argument CreateIncidentRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Incident created successfully");
         return incidentService.createIncident(principal.userId(), input);
     }
 
@@ -134,6 +136,7 @@ public class IncidentResolver {
             @Argument UpdateIncidentStatusRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         boolean hasForceClose = CurrentUserAuthority.has(RbacPermissions.INCIDENT_FORCECLOSE);
+        GraphQlResponseMessage.set("Incident status updated successfully");
         return incidentService.updateStatus(principal.userId(), principal.roleCode(), hasForceClose, id, input);
     }
 
@@ -144,6 +147,7 @@ public class IncidentResolver {
             @Argument UpdateIncidentSeverityRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
+        GraphQlResponseMessage.set("Incident severity updated successfully");
         return incidentService.updateSeverity(principal.userId(), hasUpdateAny, id, input);
     }
 
@@ -154,6 +158,7 @@ public class IncidentResolver {
             @Argument AssignIncidentRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
+        GraphQlResponseMessage.set("Incident assigned successfully");
         return incidentService.assignIncident(principal.userId(), hasUpdateAny, id, input);
     }
 
