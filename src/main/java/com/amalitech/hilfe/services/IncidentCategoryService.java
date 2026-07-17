@@ -10,9 +10,11 @@ import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.specifications.IncidentCategorySpecifications;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -40,9 +42,18 @@ public class IncidentCategoryService {
 
     public Page<IncidentCategoryResponse> listCategories(Boolean status, String query, Pageable pageable) {
         Boolean resolvedStatus = status != null ? status : Boolean.TRUE;
-        boolean requireActiveTopics = Boolean.TRUE.equals(resolvedStatus);
         String queryPattern = buildQueryPattern(query);
-        return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, requireActiveTopics, queryPattern, pageable)
+
+        Specification<IncidentCategory> statusFilter = Boolean.TRUE.equals(resolvedStatus)
+                ? IncidentCategorySpecifications.isActiveCategory().and(IncidentCategorySpecifications.hasActiveTopics())
+                : Specification.not(IncidentCategorySpecifications.isActiveCategory());
+
+        Specification<IncidentCategory> spec = Specification
+                .where(IncidentCategorySpecifications.withDepartment())
+                .and(statusFilter)
+                .and(IncidentCategorySpecifications.matchesQuery(queryPattern));
+
+        return categoryRepository.findAll(spec, pageable)
                 .map(IncidentCategoryResponse::from);
     }
 
