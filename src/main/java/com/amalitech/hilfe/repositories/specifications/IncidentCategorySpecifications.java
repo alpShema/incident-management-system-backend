@@ -18,6 +18,8 @@ import org.springframework.data.jpa.domain.Specification;
  */
 public final class IncidentCategorySpecifications {
 
+    private static final String DEPARTMENT_ATTRIBUTE = "department";
+
     private IncidentCategorySpecifications() {
     }
 
@@ -66,14 +68,14 @@ public final class IncidentCategorySpecifications {
     @SuppressWarnings("unchecked")
     private static Join<IncidentCategory, Department> joinDepartment(Root<IncidentCategory> root, CriteriaQuery<?> query) {
         for (Join<?, ?> join : root.getJoins()) {
-            if ("department".equals(join.getAttribute().getName())) {
+            if (DEPARTMENT_ATTRIBUTE.equals(join.getAttribute().getName())) {
                 return (Join<IncidentCategory, Department>) join;
             }
         }
         boolean isCountQuery = Long.class.equals(query.getResultType());
         if (isCountQuery) {
-            return root.join("department", JoinType.LEFT);
+            return root.join(DEPARTMENT_ATTRIBUTE, JoinType.LEFT);
         }
-        return (Join<IncidentCategory, Department>) (Object) root.fetch("department", JoinType.LEFT);
+        return (Join<IncidentCategory, Department>) (Object) root.fetch(DEPARTMENT_ATTRIBUTE, JoinType.LEFT);
     }
 }
