@@ -28,91 +28,91 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
     @Override
     protected GraphQLError resolveToSingleError(Throwable ex, DataFetchingEnvironment env) {
         if (ex instanceof ArmsAuthException ae) {
-            return handleArmsAuthError(ae);
+            return handleArmsAuthError(ae, env);
         }
 
         if (ex instanceof AuthorizationDeniedException || ex instanceof AccessDeniedException) {
-            return handleAuthorizationError(ex);
+            return handleAuthorizationError(ex, env);
         }
 
         if (ex instanceof NullPointerException npe) {
-            return handleNullPointerError(npe);
+            return handleNullPointerError(npe, env);
         }
 
         if (ex instanceof CoercingParseValueException || ex instanceof CoercingParseLiteralException) {
-            return handleCoercionError(ex);
+            return handleCoercionError(ex, env);
         }
 
         if (ex instanceof IllegalArgumentException iae) {
-            return handleIllegalArgumentError(iae);
+            return handleIllegalArgumentError(iae, env);
         }
 
         if (ex instanceof DataIntegrityViolationException dive) {
-            return handleDataIntegrityError(dive);
+            return handleDataIntegrityError(dive, env);
         }
 
         if (ex instanceof ServiceUnavailableException sue) {
-            return handleServiceUnavailableError(sue);
+            return handleServiceUnavailableError(sue, env);
         }
 
         if (ex instanceof UnsupportedOperationException uoe) {
-            return handleUnsupportedOperationError(uoe);
+            return handleUnsupportedOperationError(uoe, env);
         }
 
         log.error("GraphQL unhandled exception", ex);
-        return buildError("An unexpected error occurred", 500, "Internal Server Error");
+        return buildError(env, "An unexpected error occurred", 500, "Internal Server Error");
     }
 
-    private GraphQLError handleArmsAuthError(ArmsAuthException ae) {
+    private GraphQLError handleArmsAuthError(ArmsAuthException ae, DataFetchingEnvironment env) {
         log.warn("GraphQL ARMS auth error: {}", ae.getMessage());
-        return buildError(ae.getMessage(), ae.getHttpStatus(), "Bad Gateway");
+        return buildError(env, ae.getMessage(), ae.getHttpStatus(), "Bad Gateway");
     }
 
-    private GraphQLError handleAuthorizationError(Throwable ex) {
+    private GraphQLError handleAuthorizationError(Throwable ex, DataFetchingEnvironment env) {
         if (isAnonymous()) {
             log.warn("GraphQL unauthenticated access attempt");
-            return buildError(ApiMessages.AUTHENTICATION_REQUIRED, 401, "Unauthorized");
+            return buildError(env, ApiMessages.AUTHENTICATION_REQUIRED, 401, "Unauthorized");
         }
         log.warn("GraphQL access denied: {}", ex.getMessage());
-        return buildError("Access denied", 403, "Forbidden");
+        return buildError(env, "Access denied", 403, "Forbidden");
     }
 
-    private GraphQLError handleNullPointerError(NullPointerException npe) {
+    private GraphQLError handleNullPointerError(NullPointerException npe, DataFetchingEnvironment env) {
         if (isAnonymous()) {
             log.warn("GraphQL unauthenticated request — @AuthenticationPrincipal was null");
-            return buildError(ApiMessages.AUTHENTICATION_REQUIRED, 401, "Unauthorized");
+            return buildError(env, ApiMessages.AUTHENTICATION_REQUIRED, 401, "Unauthorized");
         }
         log.warn("GraphQL null pointer: {}", npe.getMessage());
-        return buildError("An unexpected error occurred", 500, "Internal Server Error");
+        return buildError(env, "An unexpected error occurred", 500, "Internal Server Error");
     }
 
-    private GraphQLError handleCoercionError(Throwable ex) {
+    private GraphQLError handleCoercionError(Throwable ex, DataFetchingEnvironment env) {
         log.warn("GraphQL argument coercion error: {}", ex.getMessage());
-        return buildError("Invalid argument value: " + ex.getMessage(), 400, "Bad Request");
+        return buildError(env, "Invalid argument value: " + ex.getMessage(), 400, "Bad Request");
     }
 
-    private GraphQLError handleIllegalArgumentError(IllegalArgumentException iae) {
+    private GraphQLError handleIllegalArgumentError(IllegalArgumentException iae, DataFetchingEnvironment env) {
         log.warn("GraphQL illegal argument: {}", iae.getMessage());
-        return buildError(iae.getMessage(), 400, "Bad Request");
+        return buildError(env, iae.getMessage(), 400, "Bad Request");
     }
 
-    private GraphQLError handleDataIntegrityError(DataIntegrityViolationException dive) {
+    private GraphQLError handleDataIntegrityError(DataIntegrityViolationException dive, DataFetchingEnvironment env) {
         log.warn("GraphQL data integrity violation: {}",
                 dive.getCause() != null ? dive.getCause().getMessage() : dive.getMessage());
         String message = isDuplicateKeyViolation(dive)
                 ? "A record with this value already exists"
                 : "Data integrity constraint violated";
-        return buildError(message, 409, "Conflict");
+        return buildError(env, message, 409, "Conflict");
     }
 
-    private GraphQLError handleServiceUnavailableError(ServiceUnavailableException sue) {
+    private GraphQLError handleServiceUnavailableError(ServiceUnavailableException sue, DataFetchingEnvironment env) {
         log.error("GraphQL service unavailable: {}", sue.getMessage());
-        return buildError(sue.getMessage(), 503, "Service Unavailable");
+        return buildError(env, sue.getMessage(), 503, "Service Unavailable");
     }
 
-    private GraphQLError handleUnsupportedOperationError(UnsupportedOperationException uoe) {
+    private GraphQLError handleUnsupportedOperationError(UnsupportedOperationException uoe, DataFetchingEnvironment env) {
         log.warn("GraphQL not implemented: {}", uoe.getMessage());
-        return buildError(uoe.getMessage(), 501, "Not Implemented");
+        return buildError(env, uoe.getMessage(), 501, "Not Implemented");
     }
 
     private boolean isAnonymous() {
@@ -128,8 +128,8 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
                 && dive.getCause().getMessage().contains("duplicate key");
     }
 
-    private GraphQLError buildError(String message, int status, String error) {
-        return GraphqlErrorBuilder.newError()
+    private GraphQLError buildError(DataFetchingEnvironment env, String message, int status, String error) {
+        return GraphqlErrorBuilder.newError(env)
                 .message(message)
                 .errorType(statusToErrorType(status))
                 .extensions(extensions(message, status, error))
@@ -142,7 +142,6 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
         ext.put("status", status);
         ext.put("error", error);
         ext.put("message", message != null ? message : error);
-        ext.put("path", "/graphql");
         return ext;
     }
 
