@@ -55,7 +55,8 @@ class GraphQlResponseFilterTest {
                 "{\"data\":{\"updateAgentStatus\":null},\"errors\":[{\"message\":\"Agent not found\",\"path\":[\"updateAgentStatus\"]}]}");
 
         String body = response.getContentAsString(StandardCharsets.UTF_8);
-        assertThat(body).contains("\"message\":\"Agent not found\"");
-        assertThat(body).doesNotContain("Agent status updated successfully");
+        assertThat(body)
+                .contains("\"message\":\"Agent not found\"")
+                .doesNotContain("Agent status updated successfully");
     }
 }
