@@ -18,6 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AgentService {
     private static final String AGENT_NOT_FOUND = "AGENT_NOT_FOUND";
+    private static final String DEACTIVATED_ACCOUNT_MESSAGE = "Cannot update availability for a deactivated account.";
 
     private final AgentRepository agentRepository;
     private final DepartmentRepository departmentRepository;
@@ -60,6 +61,7 @@ public class AgentService {
     public AgentResponse updateAvailability(String userId, boolean available) {
         Agent agent = agentRepository.findByUserIdWithUser(userId)
                 .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404));
+        requireActiveAccount(agent);
         agent.setStatus(available);
         agentRepository.save(agent);
         return AgentResponse.from(agent);
@@ -68,9 +70,16 @@ public class AgentService {
     public AgentResponse updateAvailabilityById(String agentId, boolean available) {
         Agent agent = agentRepository.findByIdWithUser(agentId)
                 .orElseThrow(() -> new ArmsAuthException(AGENT_NOT_FOUND, 404));
+        requireActiveAccount(agent);
         agent.setStatus(available);
         agentRepository.save(agent);
         return AgentResponse.from(agent);
+    }
+
+    private void requireActiveAccount(Agent agent) {
+        if (!Boolean.TRUE.equals(agent.getUser().getStatus())) {
+            throw new ArmsAuthException(DEACTIVATED_ACCOUNT_MESSAGE, 409);
+        }
     }
 
     private String buildQueryPattern(String query) {

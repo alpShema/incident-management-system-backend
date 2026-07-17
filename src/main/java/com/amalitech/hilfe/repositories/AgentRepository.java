@@ -211,6 +211,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
             WHERE a.status = true
+            AND u.status = true
             AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
             AND EXISTS (
                 SELECT 1 FROM AgentGroupMember m
@@ -231,6 +232,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
             WHERE a.status = true
+            AND u.status = true
             AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
             AND EXISTS (
                 SELECT 1 FROM AgentGroupMember m
