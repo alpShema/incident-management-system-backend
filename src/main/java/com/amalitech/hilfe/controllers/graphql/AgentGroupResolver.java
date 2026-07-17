@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.AddAgentGroupMemberRequest;
 import com.amalitech.hilfe.dto.AgentGroupMemberResponse;
 import com.amalitech.hilfe.dto.AgentGroupRequest;
@@ -68,12 +69,14 @@ public class AgentGroupResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('agent-group.create')")
     public AgentGroupResponse createAgentGroup(@Argument AgentGroupRequest input) {
+        GraphQlResponseMessage.set("Agent group created successfully");
         return agentGroupService.createAgentGroup(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('agent-group.update')")
     public AgentGroupResponse updateAgentGroup(@Argument String id, @Argument AgentGroupRequest input) {
+        GraphQlResponseMessage.set("Agent group updated successfully");
         return agentGroupService.updateAgentGroup(id, input);
     }
 
@@ -83,12 +86,14 @@ public class AgentGroupResolver {
             @Argument String id,
             @Argument UpdateAgentGroupStatusInput input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Agent group status updated successfully");
         return agentGroupService.updateAgentGroupStatus(principal.userId(), id, input.status());
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('agent-group.update')")
     public AgentGroupMemberResponse addAgentGroupMember(@Argument String id, @Argument AddAgentGroupMemberRequest input) {
+        GraphQlResponseMessage.set("Agent group member added successfully");
         return agentGroupService.addMember(id, input.agentId());
     }
 

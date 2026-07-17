@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.AutoCloseConfigResponse;
 import com.amalitech.hilfe.dto.SlaConfigResponse;
 import com.amalitech.hilfe.dto.UpdateAutoCloseConfigRequest;
@@ -35,12 +36,14 @@ public class SystemConfigResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('system.config.update')")
     public AutoCloseConfigResponse updateAutoCloseConfig(@Argument UpdateAutoCloseConfigRequest input) {
+        GraphQlResponseMessage.set("Auto-close configuration updated successfully");
         return autoCloseService.updateConfig(input.durationSeconds());
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('system.config.update')")
     public SlaConfigResponse updateSlaConfig(@Argument UpdateSlaConfigRequest input) {
+        GraphQlResponseMessage.set("SLA configuration updated successfully");
         return slaService.updateConfig(input);
     }
 }

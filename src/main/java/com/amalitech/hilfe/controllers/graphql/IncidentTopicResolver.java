@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.IncidentTopicListResponse;
 import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.dto.PageResponse;
@@ -34,12 +35,14 @@ public class IncidentTopicResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('incident-type.update')")
     public IncidentTopicResponse updateTopicById(@Argument String id, @Argument UpdateTopicRequest input) {
+        GraphQlResponseMessage.set("Incident topic updated successfully");
         return categoryService.updateTopicById(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('incident-type.delete')")
     public IncidentTopicResponse updateTopicStatus(@Argument String id, @Argument UpdateTopicStatusInput input) {
+        GraphQlResponseMessage.set("Incident topic status updated successfully");
         return categoryService.updateTopicStatus(id, input.status());
     }
 
