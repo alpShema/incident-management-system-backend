@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.AgentResponse;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.AdminService;
@@ -25,12 +26,14 @@ public class AdminResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_CREATE + "')")
     public AgentResponse grantAdminAgentAccess(@Argument String userId) {
+        GraphQlResponseMessage.set("Agent access granted successfully");
         return adminService.grantAgentAccess(userId);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_CREATE + "')")
     public AgentResponse revokeAdminAgentAccess(@Argument String userId) {
+        GraphQlResponseMessage.set("Agent access revoked successfully");
         return adminService.revokeAgentAccess(userId);
     }
 }

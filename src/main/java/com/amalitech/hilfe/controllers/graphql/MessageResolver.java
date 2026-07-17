@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.MessageResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.PresignedUrlRequest;
@@ -35,6 +36,7 @@ public class MessageResolver {
             @Argument String incidentId,
             @Argument SendMessageRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Message sent successfully");
         return messageService.sendMessage(principal.userId(), principal.roleCode(), incidentId,
                 input.content(), input.attachments());
     }
@@ -45,6 +47,7 @@ public class MessageResolver {
             @Argument String messageId,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         messageService.deleteMessage(principal.userId(), principal.roleCode(), messageId);
+        GraphQlResponseMessage.set("Message deleted successfully");
         return true;
     }
 
@@ -53,6 +56,7 @@ public class MessageResolver {
             @Argument String incidentId,
             @Argument PresignedUrlRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Presigned URL generated successfully");
         return messageService.generateMessagePresignedUrl(principal.userId(), principal.roleCode(), incidentId, input);
     }
 }

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.PresignedUrlRequest;
 import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.services.MediaService;
@@ -18,6 +19,7 @@ public class MediaResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('incident.create')")
     public PresignedUrlResponse generateMediaPresignedUrl(@Argument PresignedUrlRequest input) {
+        GraphQlResponseMessage.set("Presigned URL generated successfully");
         return mediaService.generatePresignedUploadUrl(input);
     }
 }

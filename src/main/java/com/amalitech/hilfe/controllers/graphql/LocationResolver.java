@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.CreateLocationRequest;
 import com.amalitech.hilfe.dto.LocationResponse;
 import com.amalitech.hilfe.dto.PageResponse;
@@ -34,18 +35,23 @@ public class LocationResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('location.create')")
     public LocationResponse createLocation(@Argument CreateLocationRequest input) {
+        GraphQlResponseMessage.set("Location created successfully");
         return locationService.createLocation(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('location.update')")
     public LocationResponse updateLocation(@Argument String id, @Argument UpdateLocationRequest input) {
+        GraphQlResponseMessage.set("Location updated successfully");
         return locationService.updateLocation(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('location.update')")
     public LocationResponse updateLocationStatus(@Argument String id, @Argument UpdateLocationStatusInput input) {
+        GraphQlResponseMessage.set(Boolean.TRUE.equals(input.status())
+                ? "Location activated successfully"
+                : "Location deactivated successfully");
         return locationService.updateStatus(id, input.status());
     }
 
