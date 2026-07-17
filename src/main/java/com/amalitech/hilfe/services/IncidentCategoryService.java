@@ -40,8 +40,9 @@ public class IncidentCategoryService {
 
     public Page<IncidentCategoryResponse> listCategories(Boolean status, String query, Pageable pageable) {
         Boolean resolvedStatus = status != null ? status : Boolean.TRUE;
+        boolean requireActiveTopics = Boolean.TRUE.equals(resolvedStatus);
         String queryPattern = buildQueryPattern(query);
-        return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
+        return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, requireActiveTopics, queryPattern, pageable)
                 .map(IncidentCategoryResponse::from);
     }
 
