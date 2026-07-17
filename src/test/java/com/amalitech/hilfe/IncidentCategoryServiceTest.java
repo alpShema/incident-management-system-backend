@@ -108,9 +108,9 @@ class IncidentCategoryServiceTest {
     // ── listCategories ────────────────────────────────────────────────────────
 
     @Test
-    void listCategories_returnsMappedList() {
+    void listCategories_statusTrue_returnsMappedListAndRequiresActiveTopics() {
         IncidentCategory cat = buildCategory();
-        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged(true, null, PageRequest.of(0, 20)))
+        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged(true, true, null, PageRequest.of(0, 20)))
                 .thenReturn(new PageImpl<>(List.of(cat), PageRequest.of(0, 20), 1));
 
         var result = categoryService.listCategories(true, null, PageRequest.of(0, 20));
@@ -118,6 +118,33 @@ class IncidentCategoryServiceTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
         assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
+        verify(categoryRepository).findByStatusWithDepartmentAndQueryPaged(true, true, null, PageRequest.of(0, 20));
+    }
+
+    @Test
+    void listCategories_statusNull_defaultsToActiveAndRequiresActiveTopics() {
+        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged(true, true, null, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listCategories(null, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findByStatusWithDepartmentAndQueryPaged(true, true, null, PageRequest.of(0, 20));
+    }
+
+    @Test
+    void listCategories_statusFalse_appliesActiveCategoryFilterOnly_doesNotRequireActiveTopics() {
+        IncidentCategory inactive = IncidentCategory.builder()
+                .id("cat-2")
+                .name("Archived")
+                .status(false)
+                .build();
+        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged(false, false, null, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listCategories(false, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(categoryRepository).findByStatusWithDepartmentAndQueryPaged(false, false, null, PageRequest.of(0, 20));
     }
 
     // ── listAllCategories ─────────────────────────────────────────────────────

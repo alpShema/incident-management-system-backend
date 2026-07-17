@@ -41,12 +41,12 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
     @Query(value = """
             SELECT c FROM IncidentCategory c
             LEFT JOIN FETCH c.department d
-            WHERE c.status = :status
+            WHERE (:status IS NULL OR c.status = :status)
               AND (:queryPattern IS NULL
                    OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
-              AND (:status = FALSE OR EXISTS (
+              AND (:requireActiveTopics = FALSE OR EXISTS (
                     SELECT 1 FROM IncidentType t
                     WHERE t.categoryId = c.id AND t.status = TRUE
               ))
@@ -54,18 +54,19 @@ public interface IncidentCategoryRepository extends JpaRepository<IncidentCatego
             countQuery = """
             SELECT COUNT(c) FROM IncidentCategory c
             LEFT JOIN c.department d
-            WHERE c.status = :status
+            WHERE (:status IS NULL OR c.status = :status)
               AND (:queryPattern IS NULL
                    OR LOWER(c.name) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(c.description) LIKE :queryPattern ESCAPE '!'
                    OR LOWER(d.name) LIKE :queryPattern ESCAPE '!')
-              AND (:status = FALSE OR EXISTS (
+              AND (:requireActiveTopics = FALSE OR EXISTS (
                     SELECT 1 FROM IncidentType t
                     WHERE t.categoryId = c.id AND t.status = TRUE
               ))
             """)
     Page<IncidentCategory> findByStatusWithDepartmentAndQueryPaged(
             @Param("status") Boolean status,
+            @Param("requireActiveTopics") boolean requireActiveTopics,
             @Param("queryPattern") String queryPattern,
             Pageable pageable);
 
