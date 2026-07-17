@@ -34,12 +34,16 @@ class AgentServiceTest {
     @InjectMocks AgentService agentService;
 
     private Agent agent(String id, boolean status) {
+        return agent(id, status, true);
+    }
+
+    private Agent agent(String id, boolean status, boolean userActive) {
         Agent a = Agent.builder()
                 .id(id)
                 .userId("user-" + id)
                 .status(status)
                 .build();
-        a.setUser(User.builder().id("user-" + id).fullName("Agent " + id).email(id + "@test.com").build());
+        a.setUser(User.builder().id("user-" + id).fullName("Agent " + id).email(id + "@test.com").status(userActive).build());
         return a;
     }
 
@@ -258,6 +262,58 @@ class AgentServiceTest {
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    // ── updateAvailability / updateAvailabilityById (HV-1442) ──────────────────
+
+    @Test
+    void updateAvailability_activeAccount_updatesStatus() {
+        Agent a = agent("a1", false, true);
+        when(agentRepository.findByUserIdWithUser("user-a1")).thenReturn(Optional.of(a));
+
+        AgentResponse result = agentService.updateAvailability("user-a1", true);
+
+        assertThat(result.status()).isTrue();
+        assertThat(a.getStatus()).isTrue();
+        verify(agentRepository).save(a);
+    }
+
+    @Test
+    void updateAvailability_deactivatedAccount_throws409AndDoesNotSave() {
+        Agent a = agent("a1", false, false);
+        when(agentRepository.findByUserIdWithUser("user-a1")).thenReturn(Optional.of(a));
+
+        assertThatThrownBy(() -> agentService.updateAvailability("user-a1", true))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+
+        verify(agentRepository, never()).save(a);
+    }
+
+    @Test
+    void updateAvailabilityById_activeAccount_updatesStatus() {
+        Agent a = agent("a1", false, true);
+        when(agentRepository.findByIdWithUser("a1")).thenReturn(Optional.of(a));
+
+        AgentResponse result = agentService.updateAvailabilityById("a1", true);
+
+        assertThat(result.status()).isTrue();
+        assertThat(a.getStatus()).isTrue();
+        verify(agentRepository).save(a);
+    }
+
+    @Test
+    void updateAvailabilityById_deactivatedAccount_throws409AndDoesNotSave() {
+        Agent a = agent("a1", false, false);
+        when(agentRepository.findByIdWithUser("a1")).thenReturn(Optional.of(a));
+
+        assertThatThrownBy(() -> agentService.updateAvailabilityById("a1", true))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+
+        verify(agentRepository, never()).save(a);
     }
 
     @Test
