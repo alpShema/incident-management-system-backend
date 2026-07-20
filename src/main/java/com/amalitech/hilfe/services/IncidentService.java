@@ -116,7 +116,9 @@ public class IncidentService {
                 .incidentTypeId(request.incidentTypeId())
                 .severityId(resolvePriorityId(request.severityId()))
                 .build();
-        String creatorAgentId = agentRepository.findByUserId(userId).map(Agent::getId).orElse(null);
+        String creatorAgentId = agentRepository.findByUserId(userId)
+                .filter(a -> Boolean.TRUE.equals(a.getStatus()))
+                .map(Agent::getId).orElse(null);
         applyTopicAssignment(incident, incidentType, creatorAgentId);
 
         Incident saved = incidentRepository.save(incident);
