@@ -27,8 +27,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
@@ -606,8 +608,9 @@ class IncidentCategoryServiceTest {
     @Test
     void listTopics_noStatusFilter_returnsAllTopics() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+        var defaultSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "name"));
+        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, defaultSort))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), defaultSort, 1));
 
         var result = categoryService.listTopics(null, null, null, null, null, pageable);
 
@@ -615,30 +618,64 @@ class IncidentCategoryServiceTest {
         IncidentTopicListResponse row = result.getContent().get(0);
         assertThat(row.category()).isNotNull();
         assertThat(row.agentGroup()).isNotNull();
-        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, pageable);
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, defaultSort);
     }
 
     @Test
     void listTopics_statusAll_passesNullToRepository() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        var defaultSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "name"));
+        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, defaultSort))
+                .thenReturn(new PageImpl<>(List.of(), defaultSort, 0));
 
         categoryService.listTopics(null, null, null, null, null, pageable);
 
-        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, pageable);
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, defaultSort);
     }
 
     @Test
     void listTopics_statusActive_filtersActiveTopics() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(null, null, null, true, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+        var defaultSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "name"));
+        when(typeRepository.findAllTopicsFiltered(null, null, null, true, null, defaultSort))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), defaultSort, 1));
 
         var result = categoryService.listTopics(null, null, null, true, null, pageable);
 
         assertThat(result.getTotalElements()).isEqualTo(1);
-        verify(typeRepository).findAllTopicsFiltered(null, null, null, true, null, pageable);
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, true, null, defaultSort);
+    }
+
+    @Test
+    void listTopics_sortByCategoryAlias_translatesToCategoryNamePath() {
+        Page<IncidentType> page = new PageImpl<>(List.of());
+        when(typeRepository.findAllTopicsFiltered(any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        var categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "category"));
+        categoryService.listTopics(null, null, null, null, null, categorySort);
+
+        var captor = forClass(org.springframework.data.domain.Pageable.class);
+        verify(typeRepository).findAllTopicsFiltered(any(), any(), any(), any(), any(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("category.name")).isNotNull();
+        assertThat(captured.getOrderFor("category")).isNull();
+    }
+
+    @Test
+    void listTopics_sortByUnknownField_fallsBackToDefaultNameSort() {
+        Page<IncidentType> page = new PageImpl<>(List.of());
+        when(typeRepository.findAllTopicsFiltered(any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        var unknownSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "bogusField"));
+        categoryService.listTopics(null, null, null, null, null, unknownSort);
+
+        var captor = forClass(org.springframework.data.domain.Pageable.class);
+        verify(typeRepository).findAllTopicsFiltered(any(), any(), any(), any(), any(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("name")).isNotNull();
+        assertThat(captured.getOrderFor("bogusField")).isNull();
     }
 
     // ── listTopicsByCategory ──────────────────────────────────────────────────

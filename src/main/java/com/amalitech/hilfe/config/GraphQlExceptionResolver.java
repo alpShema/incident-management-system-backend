@@ -10,6 +10,8 @@ import graphql.schema.CoercingParseValueException;
 import graphql.schema.DataFetchingEnvironment;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
 import org.springframework.graphql.execution.ErrorType;
 import org.springframework.security.access.AccessDeniedException;
@@ -20,10 +22,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
 public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapter {
+
+    private static final Pattern UNKNOWN_ATTRIBUTE_PATTERN =
+            Pattern.compile("Could not resolve attribute '(.+?)' of");
+    private static final String BAD_REQUEST = "Bad Request";
 
     @Override
     protected GraphQLError resolveToSingleError(Throwable ex, DataFetchingEnvironment env) {
@@ -45,6 +52,14 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
 
         if (ex instanceof IllegalArgumentException iae) {
             return handleIllegalArgumentError(iae, env);
+        }
+
+        if (ex instanceof PropertyReferenceException pre) {
+            return handlePropertyReferenceError(pre, env);
+        }
+
+        if (ex instanceof InvalidDataAccessApiUsageException idaue) {
+            return handleInvalidDataAccessError(idaue, env);
         }
 
         if (ex instanceof DataIntegrityViolationException dive) {
@@ -88,12 +103,27 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
 
     private GraphQLError handleCoercionError(Throwable ex, DataFetchingEnvironment env) {
         log.warn("GraphQL argument coercion error: {}", ex.getMessage());
-        return buildError(env, "Invalid argument value: " + ex.getMessage(), 400, "Bad Request");
+        return buildError(env, "Invalid argument value: " + ex.getMessage(), 400, BAD_REQUEST);
     }
 
     private GraphQLError handleIllegalArgumentError(IllegalArgumentException iae, DataFetchingEnvironment env) {
         log.warn("GraphQL illegal argument: {}", iae.getMessage());
-        return buildError(env, iae.getMessage(), 400, "Bad Request");
+        return buildError(env, iae.getMessage(), 400, BAD_REQUEST);
+    }
+
+    private GraphQLError handlePropertyReferenceError(PropertyReferenceException pre, DataFetchingEnvironment env) {
+        log.warn("GraphQL invalid sort field: {}", pre.getMessage());
+        return buildError(env, "Invalid sort field: " + pre.getPropertyName(), 400, BAD_REQUEST);
+    }
+
+    private GraphQLError handleInvalidDataAccessError(InvalidDataAccessApiUsageException idaue, DataFetchingEnvironment env) {
+        log.warn("GraphQL invalid data access usage: {}", idaue.getMessage());
+        String rootMessage = idaue.getMostSpecificCause().getMessage();
+        java.util.regex.Matcher matcher = UNKNOWN_ATTRIBUTE_PATTERN.matcher(rootMessage != null ? rootMessage : "");
+        String message = matcher.find()
+                ? "Invalid sort field: " + matcher.group(1)
+                : "Invalid query argument";
+        return buildError(env, message, 400, BAD_REQUEST);
     }
 
     private GraphQLError handleDataIntegrityError(DataIntegrityViolationException dive, DataFetchingEnvironment env) {
