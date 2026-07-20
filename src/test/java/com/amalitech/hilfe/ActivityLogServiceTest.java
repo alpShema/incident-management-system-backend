@@ -242,6 +242,21 @@ class ActivityLogServiceTest {
         assertThat(captor.getValue().getSubjectId()).isEqualTo("inc-1");
     }
 
+    @Test
+    void logIncidentStatusChange_nullActor_attributesChangeToSystem() {
+        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(
+                Incident.builder().id("inc-1").incidentNo(42).build()));
+        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        activityLogService.logIncidentStatusChange(null, "inc-1", "Resolved", "Closed");
+
+        ArgumentCaptor<ActivityLog> captor = ArgumentCaptor.forClass(ActivityLog.class);
+        verify(activityLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getActorUserId()).isNull();
+        assertThat(captor.getValue().getDescription()).contains("by System").doesNotContain("Unknown");
+        verifyNoInteractions(userRepository);
+    }
+
     // ── logIncidentAssignment ────────────────────────────────────────────────
 
     @Test
