@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityLogService {
     private static final String SUBJECT_INCIDENT = "INCIDENT";
     private static final String UNKNOWN = "Unknown";
+    private static final String SYSTEM = "System";
     private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
 
     private final ActivityLogRepository activityLogRepository;
@@ -417,7 +418,7 @@ public class ActivityLogService {
     }
 
     private String resolveUserName(String userId) {
-        if (userId == null) return UNKNOWN;
+        if (userId == null) return SYSTEM;
         return userRepository.findById(userId)
                 .map(User::getFullName)
                 .orElse(UNKNOWN);
