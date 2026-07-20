@@ -609,9 +609,16 @@ type SlaConfig {
 # INPUT TYPES
 # ══════════════════════════════════════
 
+enum SortDirection {
+  ASC
+  DESC
+}
+
 input PageInput {
   page: Int = 0
   size: Int = 20
+  sortBy: String
+  sortDirection: SortDirection = DESC
 }
 
 input LoginInput {
