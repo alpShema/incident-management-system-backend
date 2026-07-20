@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +24,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class GraphQlExceptionResolverTest {
@@ -173,5 +177,43 @@ class GraphQlExceptionResolverTest {
 
         assertThat(error.getPath()).isEqualTo(List.of("archiveIncident"));
         assertThat(error.getMessage()).isEqualTo("Not yet implemented");
+    }
+
+    @Test
+    void resolveException_propertyReferenceException_populatesPathAndFieldName() {
+        stubEnvironmentPath("departments");
+        PropertyReferenceException pre = mock(PropertyReferenceException.class);
+        when(pre.getPropertyName()).thenReturn("bogusField");
+
+        GraphQLError error = resolver.resolveException(pre, env).block().get(0);
+
+        assertThat(error.getPath()).isEqualTo(List.of("departments"));
+        assertThat(error.getMessage()).isEqualTo("Invalid sort field: bogusField");
+    }
+
+    @Test
+    void resolveException_invalidDataAccessApiUsageException_extractsUnknownSortField() {
+        stubEnvironmentPath("departments");
+        InvalidDataAccessApiUsageException idaue = new InvalidDataAccessApiUsageException(
+                "translated",
+                new RuntimeException(
+                        "Could not resolve attribute 'bogusField' of 'com.amalitech.hilfe.models.Department'"));
+
+        GraphQLError error = resolver.resolveException(idaue, env).block().get(0);
+
+        assertThat(error.getPath()).isEqualTo(List.of("departments"));
+        assertThat(error.getMessage()).isEqualTo("Invalid sort field: bogusField");
+    }
+
+    @Test
+    void resolveException_invalidDataAccessApiUsageException_withoutUnknownAttribute_fallsBackToGenericMessage() {
+        stubEnvironmentPath("departments");
+        InvalidDataAccessApiUsageException idaue = new InvalidDataAccessApiUsageException(
+                "translated", new RuntimeException("some other JPA failure"));
+
+        GraphQLError error = resolver.resolveException(idaue, env).block().get(0);
+
+        assertThat(error.getPath()).isEqualTo(List.of("departments"));
+        assertThat(error.getMessage()).isEqualTo("Invalid query argument");
     }
 }
