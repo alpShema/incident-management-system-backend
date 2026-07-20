@@ -203,7 +203,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 AND m.agentGroupId IN :agentGroupIds
             )
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(DISTINCT i) FROM Incident i
@@ -213,7 +214,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 AND m.agentGroupId IN :agentGroupIds
             )
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchByDepartment(
             @Param("agentGroupIds") List<String> agentGroupIds,
@@ -239,7 +241,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             AND (:filterFrom = false OR i.createdAt >= :fromDate)
             AND (:filterTo = false OR i.createdAt < :toDate)
             """,
@@ -251,7 +254,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             AND (:filterFrom = false OR i.createdAt >= :fromDate)
             AND (:filterTo = false OR i.createdAt < :toDate)
             """)
@@ -283,7 +287,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -293,7 +298,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchByAgentScope(
             @Param("userId") String userId,
@@ -319,7 +325,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             """,
             countQuery = """
             SELECT COUNT(i) FROM Incident i
@@ -328,7 +335,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
               OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
               OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!')
+              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             """)
     Page<Incident> searchAll(
             @Param("queryPattern") String queryPattern,
@@ -354,7 +362,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -372,7 +381,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -412,7 +422,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -434,7 +445,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -469,7 +481,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -486,7 +499,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -521,7 +535,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -539,7 +554,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'))
+                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
+                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
