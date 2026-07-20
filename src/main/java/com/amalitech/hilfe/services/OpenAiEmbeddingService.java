@@ -26,11 +26,13 @@ public class OpenAiEmbeddingService implements EmbeddingService {
         this.props = embeddingProps;
         this.restClient = RestClient.builder()
                 .baseUrl(amaliAiProps.embeddingUrl())
+                .requestFactory(amaliAiProps.requestFactory())
                 .defaultHeader("X-Api-Key", amaliAiProps.apiKey())
                 .defaultHeader("Provider", amaliAiProps.provider())
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
                 .build();
-        log.info("OpenAiEmbeddingService initialized — model={}, url={}", embeddingProps.model(), amaliAiProps.embeddingUrl());
+        log.info("OpenAiEmbeddingService initialized — model={}, url={}, connectTimeout={}, readTimeout={}",
+                embeddingProps.model(), amaliAiProps.embeddingUrl(), amaliAiProps.connectTimeout(), amaliAiProps.readTimeout());
     }
 
     @Override

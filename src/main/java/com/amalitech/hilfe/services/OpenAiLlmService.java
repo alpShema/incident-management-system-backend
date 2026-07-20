@@ -54,20 +54,34 @@ public class OpenAiLlmService implements LlmService {
             Keep your answer concise and directly relevant to how the user asked.
             """;
 
+    // Bounded well under the reverse proxy's read timeout — used for the plain, non-streaming
+    // chat completions (rewrite/answer) so a hung provider fails fast instead of the proxy
+    // timing out first and returning a bare, CORS-less 504.
     private final RestClient restClient;
+    // No client-side read timeout — streamed answers legitimately run longer than the bounded
+    // timeout above as tokens trickle in, and the /graphql route already gets a long-lived
+    // proxy timeout to match (see nginx-host-backend-staging.conf).
+    private final RestClient streamingRestClient;
     private final LlmProperties props;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public OpenAiLlmService(LlmProperties llmProps, AmaliAiProperties amaliAiProps) {
         this.props = llmProps;
-        this.restClient = RestClient.builder()
+        this.restClient = baseClientBuilder(amaliAiProps)
+                .requestFactory(amaliAiProps.requestFactory())
+                .build();
+        this.streamingRestClient = baseClientBuilder(amaliAiProps).build();
+        log.info("OpenAiLlmService initialized — model={}, temperature={}, maxTokens={}, url={}, connectTimeout={}, readTimeout={}",
+                llmProps.model(), llmProps.temperature(), llmProps.maxTokens(), amaliAiProps.llmUrl(),
+                amaliAiProps.connectTimeout(), amaliAiProps.readTimeout());
+    }
+
+    private static RestClient.Builder baseClientBuilder(AmaliAiProperties amaliAiProps) {
+        return RestClient.builder()
                 .baseUrl(amaliAiProps.llmUrl())
                 .defaultHeader("X-Api-Key", amaliAiProps.apiKey())
                 .defaultHeader("Provider", amaliAiProps.provider())
-                .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .build();
-        log.info("OpenAiLlmService initialized — model={}, temperature={}, maxTokens={}, url={}",
-                llmProps.model(), llmProps.temperature(), llmProps.maxTokens(), amaliAiProps.llmUrl());
+                .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE);
     }
 
     @Override
@@ -133,7 +147,7 @@ public class OpenAiLlmService implements LlmService {
     private void streamChatCompletion(String operation, List<Map<String, String>> messages, Consumer<String> onChunk) {
         long start = System.currentTimeMillis();
         try {
-            restClient.post()
+            streamingRestClient.post()
                     .body(Map.of(
                             "model", props.model(),
                             "messages", messages,
