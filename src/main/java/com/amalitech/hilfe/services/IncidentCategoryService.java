@@ -10,16 +10,22 @@ import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.specifications.IncidentCategorySpecifications;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -30,6 +36,21 @@ public class IncidentCategoryService {
     private static final String TOPIC_NOT_FOUND_AFTER_UPDATE = "Incident topic not found after update";
     private static final String TOPIC_ALREADY_EXISTS_MESSAGE = "A topic with this name already exists. Please choose a different name.";
     private static final String CATEGORY_ALREADY_EXISTS_MESSAGE = "An incident category with this name already exists. Please choose a different name.";
+    private static final String SORT_NAME = "name";
+    private static final String SORT_STATUS = "status";
+    private static final String SORT_CREATED_AT = "createdAt";
+    private static final String SORT_UPDATED_AT = "updatedAt";
+    private static final String SORT_CATEGORY_NAME = "category.name";
+    private static final String SORT_AGENT_GROUP_NAME = "agentGroup.name";
+
+    private static final Map<String, String> TOPIC_SORT_FIELD_ALIASES = Map.of(
+            "category", SORT_CATEGORY_NAME,
+            "agentGroup", SORT_AGENT_GROUP_NAME
+    );
+
+    private static final Set<String> TOPIC_ALLOWED_SORT_FIELDS = Set.of(
+            SORT_NAME, SORT_STATUS, SORT_CREATED_AT, SORT_UPDATED_AT, SORT_CATEGORY_NAME, SORT_AGENT_GROUP_NAME
+    );
 
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
@@ -41,7 +62,17 @@ public class IncidentCategoryService {
     public Page<IncidentCategoryResponse> listCategories(Boolean status, String query, Pageable pageable) {
         Boolean resolvedStatus = status != null ? status : Boolean.TRUE;
         String queryPattern = buildQueryPattern(query);
-        return categoryRepository.findByStatusWithDepartmentAndQueryPaged(resolvedStatus, queryPattern, pageable)
+
+        Specification<IncidentCategory> statusFilter = Boolean.TRUE.equals(resolvedStatus)
+                ? IncidentCategorySpecifications.isActiveCategory().and(IncidentCategorySpecifications.hasActiveTopics())
+                : Specification.not(IncidentCategorySpecifications.isActiveCategory());
+
+        Specification<IncidentCategory> spec = Specification
+                .where(IncidentCategorySpecifications.withDepartment())
+                .and(statusFilter)
+                .and(IncidentCategorySpecifications.matchesQuery(queryPattern));
+
+        return categoryRepository.findAll(spec, pageable)
                 .map(IncidentCategoryResponse::from);
     }
 
@@ -142,8 +173,32 @@ public class IncidentCategoryService {
                         blankToNull(agentGroupId),
                         status,
                         queryPattern,
-                        pageable)
+                        ensureTopicSorted(pageable))
                 .map(IncidentTopicListResponse::from);
+    }
+
+    private Pageable ensureTopicSorted(Pageable pageable) {
+        if (pageable.getSort().isSorted()) {
+            Sort translated = translateTopicSort(pageable.getSort());
+            return pageable.isUnpaged()
+                    ? Pageable.unpaged(translated)
+                    : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), translated);
+        }
+        if (pageable.isUnpaged()) return Pageable.unpaged(Sort.by(Sort.Direction.ASC, SORT_NAME));
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(Sort.Direction.ASC, SORT_NAME));
+    }
+
+    private Sort translateTopicSort(Sort sort) {
+        List<Sort.Order> orders = sort.stream()
+                .map(o -> TOPIC_SORT_FIELD_ALIASES.containsKey(o.getProperty())
+                        ? o.withProperty(TOPIC_SORT_FIELD_ALIASES.get(o.getProperty()))
+                        : o)
+                .filter(o -> TOPIC_ALLOWED_SORT_FIELDS.contains(o.getProperty()))
+                .toList();
+        if (orders.isEmpty()) {
+            return Sort.by(Sort.Direction.ASC, SORT_NAME);
+        }
+        return Sort.by(orders);
     }
 
     @Transactional
@@ -194,10 +249,7 @@ public class IncidentCategoryService {
         if (description != null && !description.isBlank()) {
             topic.setDescription(description);
         }
-        if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
-            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
-            topic.setAgentGroupId(assignedGroup.getId());
-        }
+        applyAgentGroupChange(topic, request, category);
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
         }
@@ -238,10 +290,7 @@ public class IncidentCategoryService {
             findActiveCategory(request.categoryId());
             topic.setCategoryId(request.categoryId());
         }
-        if (request.agentGroupId() != null && !request.agentGroupId().isBlank()) {
-            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
-            topic.setAgentGroupId(assignedGroup.getId());
-        }
+        applyAgentGroupChange(topic, request, category);
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
         }
@@ -251,6 +300,21 @@ public class IncidentCategoryService {
         entityManager.clear();
         return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
                 .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_AFTER_UPDATE, 500)));
+    }
+
+    private void applyAgentGroupChange(IncidentType topic, UpdateTopicRequest request, IncidentCategory category) {
+        boolean hasNewGroup = request.agentGroupId() != null && !request.agentGroupId().isBlank();
+        if (Boolean.TRUE.equals(request.removeAgentGroup())) {
+            if (hasNewGroup) {
+                throw new ArmsAuthException("Cannot remove and reassign the agent group in the same request", 400);
+            }
+            topic.setAgentGroupId(null);
+            return;
+        }
+        if (hasNewGroup) {
+            AgentGroup assignedGroup = resolveAssignableAgentGroup(request.agentGroupId(), category);
+            topic.setAgentGroupId(assignedGroup.getId());
+        }
     }
 
     @Transactional

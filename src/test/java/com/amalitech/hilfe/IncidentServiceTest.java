@@ -279,6 +279,120 @@ class IncidentServiceTest {
         verify(notificationEventPublisher, never()).publish(isA(IncidentAutoAssignedClientEvent.class));
     }
 
+    // ── creator agent-status check (HV-1464) ────────────────────────────────────
+
+    @Test
+    void createIncident_demotedAgentCreator_groupAssignment_doesNotLogSelfAssignmentPrevented() {
+        Agent creatorAgent = Agent.builder().id("creator-agent-id").userId("user-1").status(false).build();
+        Agent assignedAgent = Agent.builder().id("agent-2").userId("agent-user-2").status(true).build();
+        AgentGroup agentGroup = AgentGroup.builder().id("group-1").name("Test Group").status(true).build();
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1").name("Topic").categoryId("cat-1").agentGroupId("group-1").build();
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(creatorAgent));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(agentGroup));
+        when(agentRepository.findAvailableByAgentGroupIdAndLocation("group-1", "loc-1")).thenReturn(List.of(assignedAgent));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        var incidentCaptor = forClass(Incident.class);
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(incidentRepository).save(incidentCaptor.capture());
+        assertThat(incidentCaptor.getValue().getAssignedToId()).isEqualTo("agent-2");
+        verify(activityLogService, never()).logSelfAssignmentPrevented(any(), any(), any());
+    }
+
+    @Test
+    void createIncident_activeAgentCreator_groupAssignment_logsSelfAssignmentPrevented() {
+        Agent creatorAgent = Agent.builder().id("creator-agent-id").userId("user-1").status(true).build();
+        Agent assignedAgent = Agent.builder().id("agent-2").userId("agent-user-2").status(true).build();
+        AgentGroup agentGroup = AgentGroup.builder().id("group-1").name("Test Group").status(true).build();
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1").name("Topic").categoryId("cat-1").agentGroupId("group-1").build();
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(creatorAgent));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(agentGroup));
+        when(agentRepository.findAvailableByAgentGroupIdAndLocation("group-1", "loc-1")).thenReturn(List.of(assignedAgent));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(anyString())).thenReturn(Optional.of(incident));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(activityLogService).logSelfAssignmentPrevented(anyString(), eq("creator-agent-id"), eq("agent-2"));
+    }
+
+    // ── single-agent (direct topic assignment) routing (HV-1442) ───────────────
+
+    @Test
+    void createIncident_directAgentAssignment_activeAccount_assignsAgentAndSetsInProgress() {
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1").name("Topic").categoryId("cat-1").agentId("agent-1").build();
+        Agent agent = Agent.builder().id("agent-1").userId("agent-user-1").status(true).build();
+        agent.setUser(User.builder().id("agent-user-1").status(true).build());
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        var incidentCaptor = forClass(Incident.class);
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(incidentRepository).save(incidentCaptor.capture());
+        Incident capturedIncident = incidentCaptor.getValue();
+        assertThat(capturedIncident.getAssignedToId()).isEqualTo("agent-1");
+        assertThat(capturedIncident.getStatusId()).isEqualTo("status-in-progress");
+        verify(agentRepository).save(agent);
+    }
+
+    @Test
+    void createIncident_directAgentAssignment_deactivatedAccount_leavesUnassignedAndOpen() {
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1").name("Topic").categoryId("cat-1").agentId("agent-1").build();
+        Agent agent = Agent.builder().id("agent-1").userId("agent-user-1").status(true).build();
+        agent.setUser(User.builder().id("agent-user-1").status(false).build());
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(agentRepository.findByIdWithUser("agent-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of());
+
+        var incidentCaptor = forClass(Incident.class);
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(incidentRepository).save(incidentCaptor.capture());
+        Incident capturedIncident = incidentCaptor.getValue();
+        assertThat(capturedIncident.getAssignedToId()).isNull();
+        assertThat(capturedIncident.getStatusId()).isEqualTo("status-open");
+        verify(agentRepository, never()).save(any(Agent.class));
+    }
+
     @Test
     void createIncident_noAutoAssignment_doesNotLogAutoAssignment() {
         Incident incident = buildIncident(); // assignedToId = null

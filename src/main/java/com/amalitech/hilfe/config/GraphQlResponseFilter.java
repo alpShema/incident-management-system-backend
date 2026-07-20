@@ -64,7 +64,7 @@ public class GraphQlResponseFilter extends OncePerRequestFilter {
                 }
             }
 
-            Map<String, Object> envelope = buildEnvelope(data, errors);
+            Map<String, Object> envelope = buildEnvelope(data, errors, request);
             byte[] wrapped = OBJECT_MAPPER.writeValueAsBytes(envelope);
             responseWrapper.resetBuffer();
             response.setContentLength(wrapped.length);
@@ -90,7 +90,7 @@ public class GraphQlResponseFilter extends OncePerRequestFilter {
         }
     }
 
-    private Map<String, Object> buildEnvelope(Object data, List<Map<String, Object>> errors) {
+    private Map<String, Object> buildEnvelope(Object data, List<Map<String, Object>> errors, HttpServletRequest request) {
         Map<String, Object> envelope = new LinkedHashMap<>();
 
         if (errors != null && !errors.isEmpty()) {
@@ -99,7 +99,8 @@ public class GraphQlResponseFilter extends OncePerRequestFilter {
             envelope.put("data", data);
             envelope.put("errors", errors);
         } else {
-            envelope.put(MESSAGE_KEY, "Success");
+            Object resolverMessage = request.getAttribute(GraphQlResponseMessage.ATTRIBUTE_NAME);
+            envelope.put(MESSAGE_KEY, resolverMessage instanceof String message ? message : "Success");
             envelope.put("data", data);
         }
 

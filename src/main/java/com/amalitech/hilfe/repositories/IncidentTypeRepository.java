@@ -91,6 +91,6 @@ public interface IncidentTypeRepository extends JpaRepository<IncidentType, Stri
     List<IncidentType> findByAgentGroupId(@Param("agentGroupId") String agentGroupId);
 
     @Modifying
-    @Query("UPDATE IncidentType it SET it.agentGroupId = NULL WHERE it.agentGroupId = :groupId")
-    void clearAgentGroupId(@Param("groupId") String groupId);
+    @Query("UPDATE IncidentType it SET it.agentGroupId = null WHERE it.agentGroupId = :agentGroupId")
+    void clearAgentGroupId(@Param("agentGroupId") String agentGroupId);
 }

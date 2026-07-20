@@ -609,9 +609,16 @@ type SlaConfig {
 # INPUT TYPES
 # ══════════════════════════════════════
 
+enum SortDirection {
+  ASC
+  DESC
+}
+
 input PageInput {
   page: Int = 0
   size: Int = 20
+  sortBy: String
+  sortDirection: SortDirection = DESC
 }
 
 input LoginInput {
@@ -843,8 +850,8 @@ type Query {
   location(id: ID!): Location
 
   # Agents
-  agents(departmentId: String, query: String, page: PageInput): AgentPage
-  allAgents(departmentId: String, query: String, page: PageInput): AgentPage
+  agents(departmentId: String, query: String, status: Boolean, locationId: String, page: PageInput): AgentPage
+  allAgents(departmentId: String, query: String, status: Boolean, locationId: String, page: PageInput): AgentPage
   myAgentStatus: Agent
 
   # Admins

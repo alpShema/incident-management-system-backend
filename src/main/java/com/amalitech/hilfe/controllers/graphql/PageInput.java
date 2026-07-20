@@ -4,11 +4,14 @@ import com.amalitech.hilfe.dto.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
-public record PageInput(Integer page, Integer size) {
+public record PageInput(Integer page, Integer size, String sortBy, SortDirection sortDirection) {
 
     public Pageable toPageable() {
-        return PageRequest.of(page != null ? page : 0, size != null ? size : 20);
+        Sort.Direction direction = sortDirection == SortDirection.ASC ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Sort sort = (sortBy != null && !sortBy.isBlank()) ? Sort.by(direction, sortBy) : Sort.unsorted();
+        return PageRequest.of(page != null ? page : 0, size != null ? size : 20, sort);
     }
 
     public static Pageable toPageable(PageInput input) {

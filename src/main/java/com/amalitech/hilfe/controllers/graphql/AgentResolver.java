@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.AgentResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateAvailabilityRequest;
@@ -24,9 +25,11 @@ public class AgentResolver {
     public PageResponse<AgentResponse> agents(
             @Argument String departmentId,
             @Argument String query,
+            @Argument("status") Boolean available,
+            @Argument String locationId,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
-                agentService.listAgents(departmentId, query, PageInput.toPageable(page))
+                agentService.listAgents(departmentId, query, available, locationId, PageInput.toPageable(page))
         );
     }
 
@@ -35,9 +38,11 @@ public class AgentResolver {
     public PageResponse<AgentResponse> allAgents(
             @Argument String departmentId,
             @Argument String query,
+            @Argument("status") Boolean available,
+            @Argument String locationId,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
-                agentService.listAllAgents(departmentId, query, PageInput.toPageable(page))
+                agentService.listAllAgents(departmentId, query, available, locationId, PageInput.toPageable(page))
         );
     }
 
@@ -52,12 +57,14 @@ public class AgentResolver {
     public AgentResponse updateMyAgentStatus(
             @Argument UpdateAvailabilityRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Agent status updated successfully");
         return agentService.updateAvailability(principal.userId(), input.available());
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('agent.availability.update.any')")
     public AgentResponse updateAgentStatus(@Argument String agentId, @Argument UpdateAvailabilityRequest input) {
+        GraphQlResponseMessage.set("Agent status updated successfully");
         return agentService.updateAvailabilityById(agentId, input.available());
     }
 }

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.AuthResult;
 import com.amalitech.hilfe.dto.AuthSessionResponse;
 import com.amalitech.hilfe.dto.LoginRequest;
@@ -40,6 +41,7 @@ public class AuthResolver {
         CookieUtils.addAuthCookies(response, result.tokens(), cookieSecure, cookieSameSite);
         CookieUtils.addArmsTokenCookie(response, input.armsToken(), cookieSecure, cookieSameSite,
                 result.tokens().getRefreshTokenExpiresIn());
+        GraphQlResponseMessage.set("Login successful");
         return result.session();
     }
 
@@ -53,6 +55,7 @@ public class AuthResolver {
         CookieUtils.addAuthCookies(response, result.tokens(), cookieSecure, cookieSameSite);
         CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, cookieSameSite,
                 result.tokens().getRefreshTokenExpiresIn());
+        GraphQlResponseMessage.set("Token refreshed successfully");
         return result.session();
     }
 
@@ -63,6 +66,7 @@ public class AuthResolver {
         String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
         authService.logout(refreshToken);
         CookieUtils.clearAuthCookies(response, cookieSecure, cookieSameSite);
+        GraphQlResponseMessage.set("Logout successful");
         return true;
     }
 

@@ -21,6 +21,6 @@ public record AgentGroupRequest(
         @Schema(description = "List of agent IDs to add as members. Required on create — at least one active agent must be provided. Optional on update: null leaves membership unchanged, empty list removes all members.", nullable = true)
         List<String> agentIds,
 
-        @Schema(description = "Optional list of topic IDs to assign to this group. Replaces existing assignments when present. Pass an empty list to remove all topics.", nullable = true)
+        @Schema(description = "Optional list of topic IDs to assign to this group. On update, this replaces the full set of topics linked to the group: any topic currently linked but not included here is unassigned. Null leaves topic assignments unchanged; pass an empty list to unassign all topics.", nullable = true)
         List<String> topicIds
 ) {}

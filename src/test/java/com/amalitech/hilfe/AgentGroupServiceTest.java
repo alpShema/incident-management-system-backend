@@ -302,22 +302,39 @@ class AgentGroupServiceTest {
     }
 
     @Test
-    void updateAgentGroup_syncTopics_clearsOldAndAssignsNew() {
+    void updateAgentGroup_topicIds_replacesFullSetAndRemovesUnselectedTopics() {
         AgentGroup group = group(true);
         IncidentCategory category = IncidentCategory.builder().id("cat-1").departmentId("dept-1").build();
-        IncidentType topic = IncidentType.builder().id("topic-new").name("New Topic").build();
-        topic.setCategory(category);
+        IncidentType newTopic = IncidentType.builder().id("topic-new").name("Software Bugs").build();
+        newTopic.setCategory(category);
 
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
         when(agentGroupRepository.save(group)).thenReturn(group);
-        when(incidentTypeRepository.findById("topic-new")).thenReturn(Optional.of(topic));
+        when(incidentTypeRepository.findById("topic-new")).thenReturn(Optional.of(newTopic));
 
+        // The frontend resends the full remaining selection on every save — "Network Issues" is
+        // deliberately omitted here to simulate the user deselecting it.
         var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, null, List.of("topic-new"));
         agentGroupService.updateAgentGroup("group-1", request);
 
         verify(incidentTypeRepository).clearAgentGroupId("group-1");
-        verify(incidentTypeRepository).save(topic);
-        assertThat(topic.getAgentGroupId()).isEqualTo("group-1");
+        verify(incidentTypeRepository).save(newTopic);
+        assertThat(newTopic.getAgentGroupId()).isEqualTo("group-1");
+    }
+
+    @Test
+    void updateAgentGroup_emptyTopicIds_removesAllTopics() {
+        AgentGroup group = group(true);
+
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
+        when(agentGroupRepository.save(group)).thenReturn(group);
+
+        var request = new com.amalitech.hilfe.dto.AgentGroupRequest(null, null, null, null, List.of());
+        agentGroupService.updateAgentGroup("group-1", request);
+
+        verify(incidentTypeRepository).clearAgentGroupId("group-1");
+        verify(incidentTypeRepository, never()).findById(any());
+        verify(incidentTypeRepository, never()).save(any(IncidentType.class));
     }
 
     @Test
@@ -330,6 +347,8 @@ class AgentGroupServiceTest {
         agentGroupService.updateAgentGroup("group-1", request);
 
         verify(incidentTypeRepository, never()).clearAgentGroupId(any());
+        verify(incidentTypeRepository, never()).findById(any());
+        verify(incidentTypeRepository, never()).save(any(IncidentType.class));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqResponse;
 import com.amalitech.hilfe.dto.FaqUpsertResult;
@@ -34,18 +35,22 @@ public class FaqResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.create')")
     public FaqUpsertResult createFaq(@Argument CreateFaqRequest input) {
-        return faqService.createFaq(input);
+        FaqUpsertResult result = faqService.createFaq(input);
+        GraphQlResponseMessage.set(result.created() ? "FAQ created successfully" : "FAQ updated successfully");
+        return result;
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.update')")
     public FaqResponse updateFaq(@Argument String id, @Argument UpdateFaqRequest input) {
+        GraphQlResponseMessage.set("FAQ updated successfully");
         return faqService.updateFaq(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.update')")
     public FaqResponse toggleFaqActive(@Argument String id, @Argument boolean active) {
+        GraphQlResponseMessage.set(active ? "FAQ activated successfully" : "FAQ deactivated successfully");
         return faqService.toggleActive(id, active);
     }
 
@@ -53,12 +58,15 @@ public class FaqResolver {
     @PreAuthorize("hasAuthority('faq.delete')")
     public boolean deleteFaq(@Argument String id) {
         faqService.deleteFaq(id);
+        GraphQlResponseMessage.set("FAQ deleted successfully");
         return true;
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.update')")
     public int reEmbedFaqs() {
-        return faqService.reEmbedAll();
+        int count = faqService.reEmbedAll();
+        GraphQlResponseMessage.set("FAQs re-embedded successfully");
+        return count;
     }
 }

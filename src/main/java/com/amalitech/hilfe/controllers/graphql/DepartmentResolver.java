@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
@@ -46,30 +47,35 @@ public class DepartmentResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('department.create')")
     public DepartmentResponse createDepartment(@Argument DepartmentRequest input) {
+        GraphQlResponseMessage.set("Department created successfully");
         return departmentService.createDepartment(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('department.update')")
     public DepartmentResponse updateDepartment(@Argument String id, @Argument DepartmentRequest input) {
+        GraphQlResponseMessage.set("Department updated successfully");
         return departmentService.updateDepartment(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('department.delete')")
     public DepartmentResponse updateDepartmentStatus(@Argument String id, @Argument UpdateDepartmentStatusInput input) {
+        GraphQlResponseMessage.set("Department status updated successfully");
         return departmentService.updateDepartmentStatus(id, input.status());
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('department.update')")
     public IncidentCategoryResponse linkCategoryToDepartment(@Argument String departmentId, @Argument String categoryId) {
+        GraphQlResponseMessage.set("Department category added successfully");
         return departmentService.addCategory(departmentId, categoryId);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('department.update')")
     public IncidentCategoryResponse unlinkCategoryFromDepartment(@Argument String departmentId, @Argument String categoryId) {
+        GraphQlResponseMessage.set("Department category removed successfully");
         return departmentService.removeCategory(departmentId, categoryId);
     }
 

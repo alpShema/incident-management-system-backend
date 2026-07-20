@@ -152,8 +152,13 @@ public class AgentGroupService {
         }
 
         if (request.topicIds() != null) {
-            validateTopicsForDepartment(request.topicIds(), group.getDepartmentId());
+            // Clear before validating/re-linking: clearAgentGroupId is a bulk update that
+            // bypasses the persistence context, so any topic entity already loaded beforehand
+            // would keep a stale in-memory agentGroupId. If that stale value happened to equal
+            // the id being re-set (an already-linked topic resubmitted unchanged), Hibernate's
+            // dirty checking would see no change and silently skip re-linking it.
             incidentTypeRepository.clearAgentGroupId(id);
+            validateTopicsForDepartment(request.topicIds(), group.getDepartmentId());
             for (String topicId : request.topicIds()) {
                 IncidentType topic = incidentTypeRepository.findById(topicId)
                         .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
