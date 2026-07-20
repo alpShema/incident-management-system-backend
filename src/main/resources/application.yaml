@@ -196,10 +196,12 @@ amali-ai:
   provider: openai
   # Bounded well under the reverse proxy's 60s read timeout (see nginx-host-backend*.conf) so a
   # hung/unreachable provider fails fast with a real error response instead of the proxy timing
-  # out first and returning a bare 504 with no CORS headers. A single /chatbot/query request can
-  # make up to 3 sequential calls (rewrite, embed, answer); keep 3x this well under 60s.
-  connect-timeout: ${AMALI_AI_CONNECT_TIMEOUT:5s}
-  read-timeout: ${AMALI_AI_READ_TIMEOUT:10s}
+  # out first and returning a bare 504 with no CORS headers. Worst case per call is roughly
+  # connect-timeout + 2 * read-timeout (HttpURLConnection retries once against the error stream
+  # after the first read times out). A single /chatbot/query request can make up to 3 such
+  # sequential calls (rewrite, embed, answer) — keep 3x that comfortably under 60s.
+  connect-timeout: ${AMALI_AI_CONNECT_TIMEOUT:3s}
+  read-timeout: ${AMALI_AI_READ_TIMEOUT:6s}
 
 # ──────────────────────────────────────────
 # AI LLM

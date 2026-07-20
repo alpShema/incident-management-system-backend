@@ -16,8 +16,8 @@ public record AmaliAiProperties(
 ) {
     public AmaliAiProperties {
         if (provider == null || provider.isBlank()) provider = "openai";
-        if (connectTimeout == null) connectTimeout = Duration.ofSeconds(5);
-        if (readTimeout == null) readTimeout = Duration.ofSeconds(10);
+        if (connectTimeout == null) connectTimeout = Duration.ofSeconds(3);
+        if (readTimeout == null) readTimeout = Duration.ofSeconds(6);
     }
 
     public String llmUrl() {
@@ -32,6 +32,12 @@ public record AmaliAiProperties(
      * A request factory bounded well under the reverse proxy's read timeout, so a hung or
      * unreachable AI provider fails fast with a normal error response (CORS headers included)
      * instead of the proxy timing out first and returning a bare, CORS-less 504.
+     * <p>
+     * Worst case per call is not just {@code readTimeout}: once the first read times out,
+     * {@code HttpURLConnection} makes one more attempt to read the error stream, bound by the
+     * same readTimeout again — so budget roughly {@code connectTimeout + 2 * readTimeout} per
+     * call. A single /chatbot/query request can make up to 3 such sequential calls; the
+     * defaults keep that worst case comfortably under the reverse proxy's 60s read timeout.
      */
     public ClientHttpRequestFactory requestFactory() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
