@@ -12,7 +12,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +24,8 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentCaptor.forClass;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -326,5 +330,53 @@ class AgentServiceTest {
 
         assertThat(result.getTotalElements()).isEqualTo(1);
         verify(agentRepository).findAllActiveWithUserAndQuery(null, null, null, pageable);
+    }
+
+    // ── sort field translation ────────────────────────────────────────────────
+
+    @Test
+    void listAllAgents_sortByFullNameAlias_translatesToUserFullNamePath() {
+        var page = new PageImpl<Agent>(List.of());
+        when(agentRepository.findAllWithUserAndQuery(any(), any(), any(), any()))
+                .thenReturn(page);
+
+        var fullNameSort = PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "fullName"));
+        agentService.listAllAgents(null, null, null, null, fullNameSort);
+
+        var captor = forClass(Pageable.class);
+        verify(agentRepository).findAllWithUserAndQuery(any(), any(), any(), captor.capture());
+        var captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("user.fullName")).isNotNull();
+        assertThat(captured.getOrderFor("fullName")).isNull();
+    }
+
+    @Test
+    void listAllAgents_sortByOfficeLocationAlias_translatesToUserLocationNamePath() {
+        var page = new PageImpl<Agent>(List.of());
+        when(agentRepository.findAllWithUserAndQuery(any(), any(), any(), any()))
+                .thenReturn(page);
+
+        var officeLocationSort = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "officeLocation"));
+        agentService.listAllAgents(null, null, null, null, officeLocationSort);
+
+        var captor = forClass(Pageable.class);
+        verify(agentRepository).findAllWithUserAndQuery(any(), any(), any(), captor.capture());
+        var captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("user.location.name")).isNotNull();
+        assertThat(captured.getOrderFor("officeLocation")).isNull();
+    }
+
+    @Test
+    void listAllAgents_sortByUnknownField_fallsBackToUnsorted() {
+        var page = new PageImpl<Agent>(List.of());
+        when(agentRepository.findAllWithUserAndQuery(any(), any(), any(), any()))
+                .thenReturn(page);
+
+        var unknownSort = PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "bogusField"));
+        agentService.listAllAgents(null, null, null, null, unknownSort);
+
+        var captor = forClass(Pageable.class);
+        verify(agentRepository).findAllWithUserAndQuery(any(), any(), any(), captor.capture());
+        assertThat(captor.getValue().getSort().isUnsorted()).isTrue();
     }
 }
