@@ -17,6 +17,8 @@
 #   COOKIE_SECURE   — true
 #   S3_BUCKET_NAME  — hilfe-v2-media-staging
 #   S3_REGION       — eu-west-1
+#   MAIL_ENABLED, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD,
+#   MAIL_FROM_ADDRESS, MAIL_FROM_NAME — SMTP config, no defaults in yaml
 
 services:
 
@@ -65,8 +67,12 @@ services:
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
       APP_BASE_URL: ${APP_BASE_URL:-https://hilfe-pro-service.amalitech-dev.net}
       MAIL_ENABLED: ${MAIL_ENABLED}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
       interval: 30s
