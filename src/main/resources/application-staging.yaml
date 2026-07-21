@@ -67,21 +67,21 @@ spring:
       seedDemoTaxonomy: "false"
       seedDemoData: "false"
   mail:
-    host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}
-    port: ${MAIL_PORT:2525}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
-          auth: true
+          auth: false
           starttls:
             enable: true
 
 mail:
-  enabled: ${MAIL_ENABLED:false}
-  from-address: ${MAIL_FROM_ADDRESS:no-reply@hilfe.amalitech.net}
-  from-name: ${MAIL_FROM_NAME:HILFE}
+  enabled: ${MAIL_ENABLED}
+  from-address: ${MAIL_FROM_ADDRESS}
+  from-name: ${MAIL_FROM_NAME}
   # Mailtrap's free Testing plan enforces a strict emails/second cap — keep this conservative.
   rate-limit:
     emails-per-second: ${MAIL_RATE_LIMIT_PER_SECOND:2}
