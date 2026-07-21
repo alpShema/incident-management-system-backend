@@ -48,6 +48,20 @@ spring:
     baseline-on-migrate: true
     repair-on-migrate: true
     validate-on-migrate: false
+    placeholders:
+      # Gates the placeholder Department/Category/Topic taxonomy seeded by
+      # V21 (see V68) — true everywhere except staging/production, so the
+      # local/dev/testing seed workflow is unaffected. Override to "false"
+      # in a profile's YAML (see application-staging.yaml) to keep that
+      # environment's taxonomy empty for admin-driven configuration.
+      # Frozen as-is (used only by the already-applied V68) — new seed
+      # exclusions should gate on seedDemoData instead, not repurpose this one.
+      seedDemoTaxonomy: "true"
+      # Gates the seeded "System" user (V21) and "Super Admin" role catalog
+      # entry (V35) — see V69. Same true-everywhere-except-staging/production
+      # shape as seedDemoTaxonomy; kept as a separate flag so V68 (already
+      # applied on every environment) never needs to change.
+      seedDemoData: "true"
 
   # ──────────────────────────────────────────
   # GraphQL

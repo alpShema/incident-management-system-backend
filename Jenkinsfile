@@ -244,7 +244,7 @@ pipeline {
                                  sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
 
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
+                                "cd /home/ubuntu/app && docker compose pull backend node-exporter && docker compose up -d --no-deps backend node-exporter"
                         """
                         } // withEnv
                     }
