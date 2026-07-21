@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +39,10 @@ public class AgentService {
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             SORT_FULL_NAME, SORT_OFFICE_LOCATION, SORT_STATUS, SORT_CREATED_AT, SORT_UPDATED_AT, SORT_LAST_ASSIGNED_AT
     );
+
+    private static final String ALLOWED_SORT_FIELDS_MESSAGE = ALLOWED_SORT_FIELDS.stream()
+            .sorted()
+            .collect(Collectors.joining(", "));
 
     private final AgentRepository agentRepository;
     private final DepartmentRepository departmentRepository;
@@ -80,8 +85,13 @@ public class AgentService {
                 .map(o -> SORT_FIELD_ALIASES.containsKey(o.getProperty())
                         ? o.withProperty(SORT_FIELD_ALIASES.get(o.getProperty()))
                         : o)
-                .filter(o -> ALLOWED_SORT_FIELDS.contains(o.getProperty()))
                 .toList();
+        for (Sort.Order order : orders) {
+            if (!ALLOWED_SORT_FIELDS.contains(order.getProperty())) {
+                throw new IllegalArgumentException(
+                        "Invalid sort field: '" + order.getProperty() + "'. Allowed fields: " + ALLOWED_SORT_FIELDS_MESSAGE);
+            }
+        }
         Sort sort = orders.isEmpty() ? Sort.unsorted() : Sort.by(orders);
         return pageable.isUnpaged()
                 ? Pageable.unpaged(sort)
