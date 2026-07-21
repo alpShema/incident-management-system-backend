@@ -51,10 +51,18 @@ slack:
     burst-size: ${SLACK_RATE_LIMIT_BURST:10}
 
 # ──────────────────────────────────────────
+# Flyway (Database Migration)
+# Keeps the Department/Category/Topic taxonomy empty here — seeded
+# placeholder values were driving incorrect incident routing on staging.
+# Apply the same override to a "production" profile before go-live.
+#
 # Email (SMTP) — same Mailtrap sandbox as dev for now; swap MAIL_HOST when a
 # real ESP is provisioned for staging.
 # ──────────────────────────────────────────
 spring:
+  flyway:
+    placeholders:
+      seedDemoTaxonomy: "false"
   mail:
     host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}
     port: ${MAIL_PORT:2525}

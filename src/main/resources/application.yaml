@@ -48,6 +48,13 @@ spring:
     baseline-on-migrate: true
     repair-on-migrate: true
     validate-on-migrate: false
+    placeholders:
+      # Gates the placeholder Department/Category/Topic taxonomy seeded by
+      # V21 (see V68) — true everywhere except staging/production, so the
+      # local/dev/testing seed workflow is unaffected. Override to "false"
+      # in a profile's YAML (see application-staging.yaml) to keep that
+      # environment's taxonomy empty for admin-driven configuration.
+      seedDemoTaxonomy: "true"
 
   # ──────────────────────────────────────────
   # GraphQL
