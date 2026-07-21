@@ -367,16 +367,30 @@ class AgentServiceTest {
     }
 
     @Test
-    void listAllAgents_sortByUnknownField_fallsBackToUnsorted() {
-        var page = new PageImpl<Agent>(List.of());
-        when(agentRepository.findAllWithUserAndQuery(any(), any(), any(), any()))
-                .thenReturn(page);
-
+    void listAllAgents_sortByUnknownField_throwsIllegalArgumentWithAllowedFields() {
         var unknownSort = PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "bogusField"));
-        agentService.listAllAgents(null, null, null, null, unknownSort);
 
-        var captor = forClass(Pageable.class);
-        verify(agentRepository).findAllWithUserAndQuery(any(), any(), any(), captor.capture());
-        assertThat(captor.getValue().getSort().isUnsorted()).isTrue();
+        assertThatThrownBy(() -> agentService.listAllAgents(null, null, null, null, unknownSort))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid sort field: 'bogusField'")
+                .hasMessageContaining("user.fullName")
+                .hasMessageContaining("user.location.name")
+                .hasMessageContaining("status")
+                .hasMessageContaining("createdAt")
+                .hasMessageContaining("updatedAt")
+                .hasMessageContaining("lastAssignedAt");
+
+        verify(agentRepository, never()).findAllWithUserAndQuery(any(), any(), any(), any());
+    }
+
+    @Test
+    void listAgents_sortByUnknownField_throwsIllegalArgument() {
+        var unknownSort = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "unknownField"));
+
+        assertThatThrownBy(() -> agentService.listAgents(null, null, null, null, unknownSort))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid sort field: 'unknownField'");
+
+        verify(agentRepository, never()).findAllActiveWithUserAndQuery(any(), any(), any(), any());
     }
 }
