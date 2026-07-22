@@ -55,7 +55,10 @@ class DashboardServiceTest {
                 Status.builder().id("status-pending").name("Pending").build(),
                 Status.builder().id("status-in-progress").name("In Progress").build(),
                 Status.builder().id("status-resolved").name("Resolved").build(),
-                Status.builder().id("status-closed").name("Closed").build()
+                Status.builder().id("status-closed").name("Closed").build(),
+                // Reopened is a real seeded Status row (transition trigger, never a resting state —
+                // see IncidentService.applyReopenTransition) and must never surface in dashboard charts.
+                Status.builder().id("status-reopened").name("Reopened").build()
         );
     }
 
@@ -181,6 +184,8 @@ class DashboardServiceTest {
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
         assertThat(charts.byStatus()).hasSize(5);
+        assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
+                .noneMatch(label -> label.equalsIgnoreCase("Reopened"));
         assertThat(charts.byStatus()).allMatch(lc -> lc.count() == 0);
         assertThat(charts.trends()).hasSize(2);
         assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
@@ -254,6 +259,8 @@ class DashboardServiceTest {
         DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, null);
 
         assertThat(charts.byStatus()).hasSize(5);
+        assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
+                .noneMatch(label -> label.equalsIgnoreCase("Reopened"));
         assertThat(countFor(charts.byStatus(), "Open")).isEqualTo(10);
         assertThat(countFor(charts.byStatus(), "Closed")).isEqualTo(5);
         assertThat(countFor(charts.byStatus(), "Pending")).isZero();
