@@ -21,6 +21,8 @@
 #   S3_REGION       — eu-west-1
 #   MAIL_ENABLED, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD,
 #   MAIL_FROM_ADDRESS, MAIL_FROM_NAME — SMTP config, no defaults in yaml
+#   LOKI_PUSH_URL   — Loki push endpoint on the observability instance,
+#                     e.g. http://<observability-instance-ip>:3100/loki/api/v1/push
 
 services:
 
@@ -106,6 +108,24 @@ services:
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     ports:
       - "9100:9100"
+    networks:
+      - hilfe-net
+
+  # --------------------------------------------------------------------------
+  # Alloy — tails the backend container's logs and ships them to the central
+  # Loki instance on the observability host. LOKI_PUSH_URL points at
+  # http://<observability-instance-ip>:3100/loki/api/v1/push.
+  # --------------------------------------------------------------------------
+  alloy:
+    image: grafana/alloy:latest
+    container_name: hilfe-alloy
+    restart: unless-stopped
+    environment:
+      LOKI_PUSH_URL: ${LOKI_PUSH_URL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./alloy-config.river:/etc/alloy/config.river:ro
+    command: run /etc/alloy/config.river
     networks:
       - hilfe-net
 
