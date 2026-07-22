@@ -9,6 +9,7 @@ public final class RbacPermissions {
     public static final String INCIDENT_READ_ALL = "incident.read.all";
     public static final String INCIDENT_READ_DEPARTMENT = "incident.read.department";
     public static final String INCIDENT_ASSIGN = "incident.assign";
+    public static final String INCIDENT_ASSIGNEE = "incident.assignee";
     public static final String INCIDENT_STATUS_CHANGE = "incident.status.change";
     public static final String INCIDENT_SEVERITY_CHANGE = "incident.severity.change";
     public static final String INCIDENT_UPDATE_ANY = "incident.update.any";
@@ -70,6 +71,7 @@ public final class RbacPermissions {
             INCIDENT_READ_ASSIGNED,
             INCIDENT_READ_DEPARTMENT,
             INCIDENT_ASSIGN,
+            INCIDENT_ASSIGNEE,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
             AGENT_READ,
@@ -134,6 +136,7 @@ public final class RbacPermissions {
             INCIDENT_READ_ALL,
             INCIDENT_READ_DEPARTMENT,
             INCIDENT_ASSIGN,
+            INCIDENT_ASSIGNEE,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
             INCIDENT_UPDATE_ANY,
