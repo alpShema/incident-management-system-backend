@@ -481,11 +481,17 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
                 q("query IncidentCategories($query: String, $page: PageInput) {\n  incidentCategories(status: true, query: $query, page: $page) {\n    items { id name description department { name } status }\n    totalElements\n  }\n}",
                         vars(K_QUERY, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
 
+        ex.put("[categories] list (active with active topics)", ex(
+                "List active incident categories that have at least one active topic",
+                "Combines the status and hasActiveTopics filters.",
+                q("query IncidentCategories($query: String, $page: PageInput) {\n  incidentCategories(status: true, hasActiveTopics: true, query: $query, page: $page) {\n    items { id name description department { name } status }\n    totalElements\n  }\n}",
+                        vars(K_QUERY, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
+
         ex.put("[categories] allCategories (admin)", ex(
                 "List all categories — requires: ADMIN or SUPER_ADMIN",
-                "Includes both active and inactive categories.",
-                q("query AllCategories($status: Boolean, $page: PageInput) {\n  allIncidentCategories(status: $status, page: $page) {\n    items { id name status department { name } updatedAt }\n    totalElements\n  }\n}",
-                        vars(K_STATUS, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
+                "Includes both active and inactive categories. Status and hasActiveTopics filters are independent.",
+                q("query AllCategories($status: Boolean, $hasActiveTopics: Boolean, $page: PageInput) {\n  allIncidentCategories(status: $status, hasActiveTopics: $hasActiveTopics, page: $page) {\n    items { id name status department { name } updatedAt }\n    totalElements\n  }\n}",
+                        vars(K_STATUS, null, "hasActiveTopics", null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
 
         ex.put("[categories] topics", ex(
                 "List topics in a category — open to authenticated users",
