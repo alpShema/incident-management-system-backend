@@ -865,8 +865,8 @@ type Query {
   agentGroupsByCategory(categoryId: ID!): [Lookup!]
 
   # Incident categories
-  incidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
-  allIncidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  incidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  allIncidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
   categoryTopics(categoryId: ID!, status: Boolean): [IncidentTopic!]
 
   # Incident topics

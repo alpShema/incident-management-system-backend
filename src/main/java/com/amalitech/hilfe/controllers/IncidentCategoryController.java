@@ -28,37 +28,40 @@ import java.util.List;
 public class IncidentCategoryController {
     private final IncidentCategoryService categoryService;
 
-    @Operation(summary = "List incident categories", description = "Returns categories filtered by status and optional search query. Defaults to active categories. Pass `status=inactive` to get inactive ones. Pass `query` to search by category name, description, or department name. Requires authentication, but no role-specific permission.")
+    @Operation(summary = "List incident categories", description = "Returns categories filtered by status, optional active-topic filter, and optional search query. Defaults to active categories when `status` is omitted. If only `hasActiveTopics` is supplied, status is not restricted. Pass `status=false` to get inactive ones. Pass `hasActiveTopics=true` to require at least one active linked topic. Pass `query` to search by category name, description, or department name. Requires authentication, but no role-specific permission.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listCategories(
-            @Parameter(description = "Filter by status: true (default) for active, false for inactive") @RequestParam(required = false) Boolean status,
+            @Parameter(description = "Filter by category status: true for active, false for inactive") @RequestParam(required = false) Boolean status,
+            @Parameter(description = "Filter by active linked topics: true requires at least one active topic, false requires none") @RequestParam(required = false) Boolean hasActiveTopics,
             @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
-                PageResponse.from(categoryService.listCategories(status, query, pageable))));
+                PageResponse.from(categoryService.listCategories(status, hasActiveTopics, query, pageable))));
     }
 
     @Operation(
             summary = "List all incident categories regardless of state",
             description = "Returns all incident categories — both active and inactive — visible to admin users. "
-                    + "Supports an optional `state` filter: `active` returns only active categories, `inactive` returns only inactive categories, "
-                    + "`all` (default when omitted) returns both. "
+                    + "Supports optional `status` and `hasActiveTopics` filters that can be applied independently or combined. "
+                    + "`status=true` returns only active categories, `status=false` returns only inactive categories, omitting `status` returns both. "
+                    + "`hasActiveTopics=true` returns categories with at least one active linked topic, `hasActiveTopics=false` returns categories with no active topics. "
                     + "Supports an optional `query` parameter to search by category name, description, or department name. "
                     + "Results are paginated. Requires `ADMIN`, `ADMIN_AGENT`, or `SUPER_ADMIN` role.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid state filter value")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid filter value")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @GetMapping("/all")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_AGENT', 'SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listAllCategories(
-            @Parameter(description = "Filter by status: true for active, false for inactive, omit for all") @RequestParam(required = false) Boolean status,
+            @Parameter(description = "Filter by category status: true for active, false for inactive, omit for all") @RequestParam(required = false) Boolean status,
+            @Parameter(description = "Filter by active linked topics: true requires at least one active topic, false requires none") @RequestParam(required = false) Boolean hasActiveTopics,
             @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
-                PageResponse.from(categoryService.listAllCategories(status, query, pageable))));
+                PageResponse.from(categoryService.listAllCategories(status, hasActiveTopics, query, pageable))));
     }
 
     @Operation(summary = "Create an incident category", description = "Creates a new category under an internal department. `departmentId` is required. Requires `incident-category.create` permission.")
