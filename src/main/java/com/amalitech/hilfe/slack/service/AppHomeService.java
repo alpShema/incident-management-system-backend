@@ -45,8 +45,11 @@ public class AppHomeService {
     private static final String STYLE_PRIMARY = "primary";
     private static final String PLAIN_TEXT = "plain_text";
 
-    @Value("${app.base-url:https://hilfe.amalitech.net}")
+    @Value("${app.base-url}")
     private String appBaseUrl;
+
+    @Value("${app.frontend-url}")
+    private String appFrontendUrl;
 
     @Value("${app.slack-image-report-url:https://i.ibb.co/VYXTtTTF/screenshot1.jpg}")
     private String slackImageReportUrl;
@@ -174,7 +177,7 @@ public class AppHomeService {
 
         // ── Footer ────────────────────────────────────────────────────────────
         blocks.add(context(c -> c.elements(List.of(
-                markdownText("<https://hilfe.amalitech.net|Open HILFE>  ·  Use `/hilfe disconnect` to unlink your account")
+                markdownText("<" + appFrontendUrl + "|Open HILFE>  ·  Use `/hilfe disconnect` to unlink your account")
         ))));
 
         return Views.view(v -> v.type("home").blocks(blocks));
