@@ -147,14 +147,7 @@ app:
 # ──────────────────────────────────────────
 # Logging
 # ──────────────────────────────────────────
-logging:
-  level:
-    root: INFO
-    com.amalitech.hilfe: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.flywaydb: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+# Log levels and output format are configured in logback-spring.xml.
 
 # ──────────────────────────────────────────
 # AI Embedding
