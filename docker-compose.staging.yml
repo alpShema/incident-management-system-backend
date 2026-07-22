@@ -13,6 +13,8 @@
 #   DB_PASSWORD     — RDS password
 #   JWT_SECRET      — JWT signing secret (>= 32 chars)
 #   ARMS_SSO_URL    — SSO validation endpoint
+#   APP_BASE_URL    — public backend base URL, e.g. https://hilfe-staging-service.amalitech-dev.net
+#   APP_FRONTEND_URL — public frontend URL used in Slack/email links, e.g. https://hilfe-staging-frontend.amalitech-dev.net
 #   CORS_ALLOWED_ORIGINS — comma-separated allowed frontend origins
 #   COOKIE_SECURE   — true
 #   S3_BUCKET_NAME  — hilfe-v2-media-staging
@@ -65,7 +67,8 @@ services:
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
-      APP_BASE_URL: ${APP_BASE_URL:-https://hilfe-pro-service.amalitech-dev.net}
+      APP_BASE_URL: ${APP_BASE_URL}
+      APP_FRONTEND_URL: ${APP_FRONTEND_URL}
       MAIL_ENABLED: ${MAIL_ENABLED}
       MAIL_HOST: ${MAIL_HOST}
       MAIL_PORT: ${MAIL_PORT}
