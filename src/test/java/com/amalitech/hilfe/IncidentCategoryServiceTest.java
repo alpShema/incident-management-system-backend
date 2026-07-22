@@ -117,22 +117,11 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(cat), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listCategories(true, null, PageRequest.of(0, 20));
+        var result = categoryService.listCategories(true, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
         assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
-        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void listCategories_statusNull_defaultsToActive() {
-        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
-
-        categoryService.listCategories(null, null, PageRequest.of(0, 20));
-
         verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
@@ -147,69 +136,129 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listCategories(false, null, PageRequest.of(0, 20));
+        var result = categoryService.listCategories(false, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategories_hasActiveTopicsOnly_returnsAllCategoriesWithActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listCategories(null, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategories_bothFilters_appliesStatusAndActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listCategories(true, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategories_noFilters_defaultsToActive() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listCategories(null, null, null, PageRequest.of(0, 20));
+
         verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     // ── listAllCategories ─────────────────────────────────────────────────────
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_noStateFilter_passesNullStatusToRepository() {
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(null, null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, null, PageRequest.of(0, 20));
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_stateAll_passesNullStatusToRepository() {
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        categoryService.listAllCategories(null, null, PageRequest.of(0, 20));
+        categoryService.listAllCategories(null, null, null, PageRequest.of(0, 20));
 
-        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, null, PageRequest.of(0, 20));
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_statusTrue_filtersToActiveOnly() {
         IncidentCategory active = buildCategory();
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(true), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(active), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(true, null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(true, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).status()).isTrue();
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_statusFalse_filtersToInactiveOnly() {
         IncidentCategory inactive = IncidentCategory.builder()
                 .id("cat-2").name("Old Category").status(false).build();
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(false), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(false, null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(false, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).status()).isFalse();
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_withQuery_buildsQueryPattern() {
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq("%facility%"), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(null, "facility", PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(null, null, "facility", PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, "%facility%", PageRequest.of(0, 20));
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listAllCategories_hasActiveTopicsOnly_returnsAllCategoriesWithActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listAllCategories(null, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listAllCategories_bothFilters_appliesStatusAndActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listAllCategories(true, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     // ── createCategory ────────────────────────────────────────────────────────
