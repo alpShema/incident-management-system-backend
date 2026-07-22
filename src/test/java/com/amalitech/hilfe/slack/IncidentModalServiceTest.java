@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -98,7 +99,7 @@ class IncidentModalServiceTest {
     @Test
     void openCreateIncidentModal_whenConnected_opensModal() {
         when(oauthService.findBySlackUserId("U_SLACK_001")).thenReturn(Optional.of(mapping));
-        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of(category));
+        when(incidentCategoryRepository.findAll(any(Specification.class))).thenReturn(List.of(category));
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(severityRepository.findByStatus(true)).thenReturn(List.of(severity));
 
@@ -110,7 +111,7 @@ class IncidentModalServiceTest {
     @Test
     void openCreateIncidentModal_logsAuditEvent() {
         when(oauthService.findBySlackUserId("U_SLACK_001")).thenReturn(Optional.of(mapping));
-        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of());
+        when(incidentCategoryRepository.findAll(any(Specification.class))).thenReturn(List.of());
         when(locationRepository.findAll()).thenReturn(List.of());
         when(severityRepository.findByStatus(true)).thenReturn(List.of());
 
@@ -131,11 +132,27 @@ class IncidentModalServiceTest {
         verifyNoInteractions(slackClient);
     }
 
+    @Test
+    void openCreateIncidentModal_whenNoSelectableCategories_showsEmptyStateBlock() {
+        when(oauthService.findBySlackUserId("U_SLACK_001")).thenReturn(Optional.of(mapping));
+        when(incidentCategoryRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(locationRepository.findAll()).thenReturn(List.of(location));
+        when(severityRepository.findByStatus(true)).thenReturn(List.of(severity));
+
+        incidentModalService.openCreateIncidentModal("U_SLACK_001", "trigger-1");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(View.class);
+        verify(slackClient).viewsOpen(eq("trigger-1"), captor.capture());
+        assertThat(captor.getValue().getBlocks().toString())
+                .contains("No incident categories are currently available");
+        verify(incidentCategoryRepository, never()).findByStatus(any());
+    }
+
     // ── handleCategorySelection ──────────────────────────────────────────────
 
     @Test
     void handleCategorySelection_withValidCategory_updatesModalWithTopics() {
-        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of(category));
+        when(incidentCategoryRepository.findAll(any(Specification.class))).thenReturn(List.of(category));
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(severityRepository.findByStatus(true)).thenReturn(List.of(severity));
         when(incidentTypeRepository.findByCategoryIdWithAgentAndStatus("cat-1", true))
@@ -150,7 +167,7 @@ class IncidentModalServiceTest {
 
     @Test
     void handleCategorySelection_withNullCategory_updatesModalWithEmptyTopics() {
-        when(incidentCategoryRepository.findByStatus(true)).thenReturn(List.of(category));
+        when(incidentCategoryRepository.findAll(any(Specification.class))).thenReturn(List.of(category));
         when(locationRepository.findAll()).thenReturn(List.of(location));
         when(severityRepository.findByStatus(true)).thenReturn(List.of(severity));
 

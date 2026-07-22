@@ -227,6 +227,7 @@ pipeline {
                                  echo 'BACKEND_IMAGE=\${ECR_REPO}:${imageTag}' >> /home/ubuntu/app/.env"
 
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" docker-compose.staging.yml "ubuntu@\${EC2_IP}:/home/ubuntu/app/docker-compose.yml"
+                            scp \${SSH_OPTS} -i "\${SSH_KEY}" alloy-config.river "ubuntu@\${EC2_IP}:/home/ubuntu/app/alloy-config.river"
 
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging.conf      "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend.conf"
                             scp \${SSH_OPTS} -i "\${SSH_KEY}" nginx-host-backend-staging-init.conf "ubuntu@\${EC2_IP}:/tmp/nginx-host-backend-init.conf"
@@ -244,7 +245,7 @@ pipeline {
                                  sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
 
                             ssh \${SSH_OPTS} -i "\${SSH_KEY}" "ubuntu@\${EC2_IP}" \\
-                                "cd /home/ubuntu/app && docker compose pull backend node-exporter && docker compose up -d --no-deps backend node-exporter"
+                                "cd /home/ubuntu/app && docker compose pull backend node-exporter alloy && docker compose up -d --no-deps backend node-exporter alloy"
                         """
                         } // withEnv
                     }
