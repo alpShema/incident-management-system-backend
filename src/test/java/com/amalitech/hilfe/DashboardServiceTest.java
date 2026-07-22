@@ -9,9 +9,11 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.StatusRepository;
 import com.amalitech.hilfe.services.DashboardService;
 import com.amalitech.hilfe.services.SlaService;
 import org.junit.jupiter.api.Test;
@@ -39,11 +41,26 @@ class DashboardServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
+    @Mock StatusRepository statusRepository;
     @Mock SlaService slaService;
     @InjectMocks DashboardService dashboardService;
 
     private Agent buildAgent(String agentId) {
         return Agent.builder().id(agentId).userId("user-1").build();
+    }
+
+    private List<Status> allStatuses() {
+        return List.of(
+                Status.builder().id("status-open").name("Open").build(),
+                Status.builder().id("status-pending").name("Pending").build(),
+                Status.builder().id("status-in-progress").name("In Progress").build(),
+                Status.builder().id("status-resolved").name("Resolved").build(),
+                Status.builder().id("status-closed").name("Closed").build()
+        );
+    }
+
+    private void givenAllStatuses() {
+        when(statusRepository.findAll()).thenReturn(allStatuses());
     }
 
     // ── getStats ──────────────────────────────────────────────────────────────
@@ -127,6 +144,7 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_adminRole_noPeriod_returnsAllIncidentsTrendSeries() {
+        givenAllStatuses();
         List<Object[]> statusData = new java.util.ArrayList<>();
         statusData.add(new Object[]{"Open", 10L});
         when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
@@ -140,6 +158,7 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
+        givenAllStatuses();
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
@@ -154,13 +173,15 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndSeries() {
+    void getCharts_agentRole_agentNotFound_returnsAllStatusesWithZeroCount() {
+        givenAllStatuses();
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
         when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
-        assertThat(charts.byStatus()).isEmpty();
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(charts.byStatus()).allMatch(lc -> lc.count() == 0);
         assertThat(charts.trends()).hasSize(2);
         assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
         assertThat(charts.trends().get(0).data()).isNotEmpty();
@@ -172,6 +193,7 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_adminRole_noPeriod_trendCoversExactlySixCalendarMonths() {
+        givenAllStatuses();
         List<Object[]> statusData = new java.util.ArrayList<>();
         statusData.add(new Object[]{"Open", 10L});
         when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
@@ -197,6 +219,7 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_agentRole_noPeriod_bothTrendsCoverExactlySixCalendarMonths() {
+        givenAllStatuses();
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
@@ -217,6 +240,71 @@ class DashboardServiceTest {
 
         assertThat(charts.trends().get(0).data()).hasSize(6);
         assertThat(charts.trends().get(1).data()).hasSize(6);
+    }
+
+    @Test
+    void getCharts_adminRole_noPeriod_includesZeroCountStatuses() {
+        givenAllStatuses();
+        when(incidentRepository.countByStatusGlobal()).thenReturn(List.of(
+                new Object[]{"Open", 10L},
+                new Object[]{"Closed", 5L}
+        ));
+        when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, null);
+
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(countFor(charts.byStatus(), "Open")).isEqualTo(10);
+        assertThat(countFor(charts.byStatus(), "Closed")).isEqualTo(5);
+        assertThat(countFor(charts.byStatus(), "Pending")).isZero();
+        assertThat(countFor(charts.byStatus(), "In Progress")).isZero();
+        assertThat(countFor(charts.byStatus(), "Resolved")).isZero();
+    }
+
+    @Test
+    void getCharts_adminRole_withPeriod_includesZeroCountStatuses() {
+        givenAllStatuses();
+        when(incidentRepository.countByStatusSince(any(Instant.class))).thenReturn(List.<Object[]>of(
+                new Object[]{"In Progress", 3L}
+        ));
+        when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, "7d");
+
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(countFor(charts.byStatus(), "In Progress")).isEqualTo(3);
+        assertThat(countFor(charts.byStatus(), "Open")).isZero();
+        assertThat(countFor(charts.byStatus(), "Pending")).isZero();
+        assertThat(countFor(charts.byStatus(), "Resolved")).isZero();
+        assertThat(countFor(charts.byStatus(), "Closed")).isZero();
+    }
+
+    @Test
+    void getCharts_agentRole_includesZeroCountStatuses() {
+        givenAllStatuses();
+        Agent agent = buildAgent("agent-1");
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.<Object[]>of(
+                new Object[]{"Resolved", 1L}
+        ));
+        when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
+
+        DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
+
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(countFor(charts.byStatus(), "Resolved")).isEqualTo(1);
+        assertThat(countFor(charts.byStatus(), "Open")).isZero();
+        assertThat(countFor(charts.byStatus(), "Pending")).isZero();
+        assertThat(countFor(charts.byStatus(), "In Progress")).isZero();
+        assertThat(countFor(charts.byStatus(), "Closed")).isZero();
+    }
+
+    private int countFor(List<com.amalitech.hilfe.dto.dashboard.LabelCount> list, String statusName) {
+        return list.stream()
+                .filter(lc -> lc.label().equalsIgnoreCase(statusName))
+                .mapToInt(com.amalitech.hilfe.dto.dashboard.LabelCount::count)
+                .sum();
     }
 
     @Test
@@ -286,6 +374,7 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_adminAgentRole_returnsAllIncidentsTrendSeries() {
+        givenAllStatuses();
         List<Object[]> statusData = new java.util.ArrayList<>();
         statusData.add(new Object[]{"Open", 2L});
         when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);

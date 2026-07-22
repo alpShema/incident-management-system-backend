@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -63,6 +64,8 @@ class IncidentModalServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(incidentModalService, "hilfeWebUrl", "https://hilfe.example.com");
+
         mapping = SlackUserMapping.builder()
                 .slackUserId("U_SLACK_001")
                 .hilfeUserId("hilfe-user-1")

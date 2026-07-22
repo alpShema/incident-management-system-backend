@@ -29,10 +29,11 @@ public class IncidentCategoryResolver {
     @QueryMapping
     public PageResponse<IncidentCategoryResponse> incidentCategories(
             @Argument Boolean status,
+            @Argument Boolean hasActiveTopics,
             @Argument String query,
-            @Argument PageInput page) {
+            @Argument PageInput page    ) {
         return PageInput.toPageResponse(
-                categoryService.listCategories(status != null ? status : Boolean.TRUE, query, PageInput.toPageable(page))
+                categoryService.listCategories(status, hasActiveTopics, query, PageInput.toPageable(page))
         );
     }
 
@@ -40,10 +41,11 @@ public class IncidentCategoryResolver {
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_AGENT', 'SUPER_ADMIN')")
     public PageResponse<IncidentCategoryResponse> allIncidentCategories(
             @Argument Boolean status,
+            @Argument Boolean hasActiveTopics,
             @Argument String query,
             @Argument PageInput page) {
         return PageInput.toPageResponse(
-                categoryService.listAllCategories(status, query, PageInput.toPageable(page))
+                categoryService.listAllCategories(status, hasActiveTopics, query, PageInput.toPageable(page))
         );
     }
 

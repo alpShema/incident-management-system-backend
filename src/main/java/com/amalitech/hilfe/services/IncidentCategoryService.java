@@ -59,27 +59,58 @@ public class IncidentCategoryService {
     private final IncidentRepository incidentRepository;
     private final EntityManager entityManager;
 
-    public Page<IncidentCategoryResponse> listCategories(Boolean status, String query, Pageable pageable) {
-        Boolean resolvedStatus = status != null ? status : Boolean.TRUE;
+    public Page<IncidentCategoryResponse> listCategories(Boolean status, Boolean hasActiveTopics, String query, Pageable pageable) {
         String queryPattern = buildQueryPattern(query);
-
-        Specification<IncidentCategory> statusFilter = Boolean.TRUE.equals(resolvedStatus)
-                ? IncidentCategorySpecifications.isActiveCategory().and(IncidentCategorySpecifications.hasActiveTopics())
-                : Specification.not(IncidentCategorySpecifications.isActiveCategory());
 
         Specification<IncidentCategory> spec = Specification
                 .where(IncidentCategorySpecifications.withDepartment())
-                .and(statusFilter)
+                .and(resolveStatusFilter(status, hasActiveTopics))
+                .and(activeTopicsFilter(hasActiveTopics))
                 .and(IncidentCategorySpecifications.matchesQuery(queryPattern));
 
         return categoryRepository.findAll(spec, pageable)
                 .map(IncidentCategoryResponse::from);
     }
 
-    public Page<IncidentCategoryResponse> listAllCategories(Boolean status, String query, Pageable pageable) {
+    public Page<IncidentCategoryResponse> listAllCategories(Boolean status, Boolean hasActiveTopics, String query, Pageable pageable) {
         String queryPattern = buildQueryPattern(query);
-        return categoryRepository.findAllWithDepartmentAndQueryPaged(status, queryPattern, pageable)
+
+        Specification<IncidentCategory> spec = Specification
+                .where(IncidentCategorySpecifications.withDepartment())
+                .and(categoryStatusFilter(status))
+                .and(activeTopicsFilter(hasActiveTopics))
+                .and(IncidentCategorySpecifications.matchesQuery(queryPattern));
+
+        return categoryRepository.findAll(spec, pageable)
                 .map(IncidentCategoryResponse::from);
+    }
+
+    private Specification<IncidentCategory> categoryStatusFilter(Boolean status) {
+        if (status == null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return Boolean.TRUE.equals(status)
+                ? IncidentCategorySpecifications.isActiveCategory()
+                : Specification.not(IncidentCategorySpecifications.isActiveCategory());
+    }
+
+    private Specification<IncidentCategory> activeTopicsFilter(Boolean hasActiveTopics) {
+        if (hasActiveTopics == null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return Boolean.TRUE.equals(hasActiveTopics)
+                ? IncidentCategorySpecifications.hasActiveTopics()
+                : Specification.not(IncidentCategorySpecifications.hasActiveTopics());
+    }
+
+    private Specification<IncidentCategory> resolveStatusFilter(Boolean status, Boolean hasActiveTopics) {
+        if (status != null) {
+            return categoryStatusFilter(status);
+        }
+        if (hasActiveTopics != null) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return categoryStatusFilter(Boolean.TRUE);
     }
 
     public Page<IncidentCategoryResponse> searchCategories(String query, Pageable pageable) {

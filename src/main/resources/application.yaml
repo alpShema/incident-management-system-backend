@@ -133,8 +133,8 @@ info:
 # Auth / JWT
 # ──────────────────────────────────────────
 app:
-  base-url: ${APP_BASE_URL:https://hilfe.amalitech.net}
-  frontend-url: ${APP_FRONTEND_URL:https://hilfe-pro-frontend.amalitech-dev.net}
+  base-url: ${APP_BASE_URL}
+  frontend-url: ${APP_FRONTEND_URL}
   slack-image-report-url: ${SLACK_IMAGE_REPORT_URL:${app.base-url}/images/slack-report.jpg}
   slack-image-updates-url: ${SLACK_IMAGE_UPDATES_URL:${app.base-url}/images/slack-updates.jpg}
   jwt:
