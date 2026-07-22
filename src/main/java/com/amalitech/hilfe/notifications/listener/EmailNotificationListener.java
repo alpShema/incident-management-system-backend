@@ -39,7 +39,7 @@ public class EmailNotificationListener {
     private final IncidentRepository incidentRepository;
     private final UserRepository userRepository;
 
-    @Value("${app.frontend-url:https://hilfe-pro-frontend.amalitech-dev.net}")
+    @Value("${app.frontend-url}")
     private String frontendUrl;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

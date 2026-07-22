@@ -19,6 +19,7 @@ import com.slack.api.model.view.ViewSubmit;
 import com.slack.api.model.view.ViewClose;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,7 +56,8 @@ public class IncidentModalService {
     private static final String MODAL             = "modal";
     private static final String PLAIN_TEXT        = "plain_text";
 
-    private static final String HILFE_WEB_URL     = "https://hilfe-pro-frontend.amalitech-dev.net";
+    @Value("${app.frontend-url}")
+    private String hilfeWebUrl;
 
     private record ModalState(
             String title,
@@ -225,7 +227,7 @@ public class IncidentModalService {
                     "*ID:* " + incident.incidentNo() + "\n" +
                     "*Title:* " + incident.title() + "\n" +
                     "*Status:* " + incident.status().name() + "\n\n" +
-                    "<" + HILFE_WEB_URL + "/incidents/" + incident.id() + "|View in HILFE>");
+                    "<" + hilfeWebUrl + "/incidents/" + incident.id() + "|View in HILFE>");
 
             auditLogService.log("INCIDENT_CREATED_VIA_SLACK", slackUserId, mapping.getHilfeUserId(),
                     "INCIDENT", incident.id(), Map.of("incidentNo", incident.incidentNo()));
@@ -451,7 +453,7 @@ public class IncidentModalService {
     private List<LayoutBlock> buildIncidentBlock(IncidentResponse incident) {
         String statusName   = incident.status()   != null ? incident.status().name()   : "Unknown";
         String priorityName = incident.priority() != null ? incident.priority().name() : "N/A";
-        String url          = HILFE_WEB_URL + "/incidents/" + incident.id();
+        String url          = hilfeWebUrl + "/incidents/" + incident.id();
 
         StringBuilder text = new StringBuilder();
         text.append("*<").append(url).append("|#").append(incident.incidentNo()).append("  ")

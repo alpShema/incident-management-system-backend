@@ -6,6 +6,7 @@ import com.amalitech.hilfe.models.SlackUserMapping;
 import com.amalitech.hilfe.slack.client.SlackClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -25,7 +26,9 @@ public class SlackNotificationBroadcaster {
     private final SlackAuditLogService auditLogService;
     private final SlackProperties slackProperties;
 
-    private static final String HILFE_WEB_URL = "https://hilfe-pro-frontend.amalitech-dev.net";
+    @Value("${app.frontend-url}")
+    private String hilfeWebUrl;
+
     private static final String EMOJI_CYCLE = ":arrows_counterclockwise:";
 
     @Async
@@ -80,7 +83,7 @@ public class SlackNotificationBroadcaster {
     private String buildSlackMessage(Notification notification) {
         String emoji = getNotificationEmoji(notification.getType());
         String link = notification.getIncidentId() != null
-                ? "\n<" + HILFE_WEB_URL + "/incidents/" + notification.getIncidentId() + "|View in HILFE>"
+                ? "\n<" + hilfeWebUrl + "/incidents/" + notification.getIncidentId() + "|View in HILFE>"
                 : "";
 
         return emoji + " *" + notification.getTitle() + "*\n" +
