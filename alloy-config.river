@@ -1,0 +1,37 @@
+// Tails the hilfe-backend container's logs and pushes them to the central
+// Loki instance running on the observability host. LOKI_PUSH_URL is set via
+// the alloy service's environment in docker-compose.staging.yml.
+
+discovery.docker "staging" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "hilfe_backend_only" {
+  targets = discovery.docker.staging.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/hilfe-backend"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "staging" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.staging.targets
+  relabel_rules = discovery.relabel.hilfe_backend_only.rules
+  labels        = {"env" = "staging", "job" = "hilfe-backend"}
+  forward_to    = [loki.write.staging.receiver]
+}
+
+loki.write "staging" {
+  endpoint {
+    url = sys.env("LOKI_PUSH_URL")
+  }
+}
