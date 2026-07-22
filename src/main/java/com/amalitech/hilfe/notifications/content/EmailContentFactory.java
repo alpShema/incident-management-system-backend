@@ -19,7 +19,7 @@ public class EmailContentFactory {
     private static final String RESPONSE_LABEL = "Response";
     private static final String RESOLUTION_LABEL = "Resolution";
     private static final String FOOTER_TEXT = "If you have any questions or need additional guidance, please don't "
-            + "hesitate to reach out to the ARMS Team. We're here to support you throughout the process.";
+            + "hesitate to reach out to the HILFE Team. We're here to support you throughout the process.";
 
     private static String ref(IncidentResponse incident) {
         return "#" + incident.incidentNo() + " — " + incident.title();
@@ -45,13 +45,30 @@ public class EmailContentFactory {
         return minutes + (minutes == 1 ? " minute" : " minutes");
     }
 
+    // First line is the intro sentence, last line is the closing/CTA sentence — each gets its own
+    // paragraph. Everything between them is the incident details block, kept tight with <br> instead
+    // of paragraph breaks so it reads as one grouped block, matching the Figma spacing.
     private static String body(String recipientName, String... lines) {
-        StringBuilder sb = new StringBuilder("<p>").append(greeting(recipientName)).append("</p><p>");
-        for (int i = 0; i < lines.length; i++) {
-            if (i > 0) sb.append("<br>");
-            sb.append(lines[i]);
+        StringBuilder sb = new StringBuilder("<p>").append(greeting(recipientName)).append("</p>");
+        if (lines.length == 0) return sb.toString();
+
+        sb.append("<p>").append(lines[0]).append("</p>");
+
+        int lastIndex = lines.length - 1;
+        if (lastIndex > 1) {
+            sb.append("<p>");
+            for (int i = 1; i < lastIndex; i++) {
+                if (i > 1) sb.append("<br>");
+                sb.append(lines[i]);
+            }
+            sb.append("</p>");
         }
-        return sb.append("</p>").toString();
+
+        if (lastIndex > 0) {
+            sb.append("<p>").append(lines[lastIndex]).append("</p>");
+        }
+
+        return sb.toString();
     }
 
     // event carries no fields beyond incidentNo (already on incident) — kept only so overload

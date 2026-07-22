@@ -92,30 +92,79 @@
       .email-container { width: 100% !important; max-width: 672px !important; }
     }
 
+    /* Outlook.com / new Outlook / mobile Outlook apply their own auto-dark-mode
+       conversion independently of the color-scheme meta tags above, tagging the
+       elements they recolor with data-ogsc/data-ogsb. These rules force our
+       light-only palette back on top of that auto-injected styling. */
+    [data-ogsc] .email-container,
+    [data-ogsb] .email-container {
+      border-color: #E6EAEB !important;
+    }
+
+    [data-ogsc] .email-wrapper,
+    [data-ogsb] .email-wrapper {
+      background-color: #FDFDFD !important;
+      color: #08283B !important;
+    }
+
+    [data-ogsc] .email-header td,
+    [data-ogsb] .email-header td {
+      background-color: #ECECEB !important;
+    }
+
+    [data-ogsc] .email-content,
+    [data-ogsb] .email-content {
+      color: #08283B !important;
+    }
+
+    [data-ogsc] .email-cta,
+    [data-ogsb] .email-cta {
+      background-color: #08283B !important;
+      color: #FDFDFD !important;
+    }
+
+    [data-ogsc] .email-cta-link,
+    [data-ogsb] .email-cta-link {
+      color: #08283B !important;
+    }
+
+    [data-ogsc] .email-footer,
+    [data-ogsb] .email-footer,
+    [data-ogsc] .email-footer p,
+    [data-ogsb] .email-footer p {
+      color: #395362 !important;
+    }
+
+    [data-ogsc] img,
+    [data-ogsb] img {
+      filter: none !important;
+      opacity: 1 !important;
+    }
+
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f5f5f5;width:100%;">
+<body bgcolor="#f5f5f5" style="margin:0;padding:0;background-color:#f5f5f5;width:100%;">
   
     <div class="preheader" style="display:none;visibility:hidden;opacity:0;color:transparent;height:0;width:0;line-height:0;max-height:0;max-width:0;overflow:hidden;mso-hide:all;font-size:1px;" aria-hidden="true">
         {{preheader}}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
        </div>
     <div class="email-container" style="width:100%;max-width:672px;margin:0 auto;border-radius:8px;border:1px solid #E6EAEB;overflow:hidden;box-sizing:border-box;">
-      <table role="presentation" lang="en" class="email-wrapper" cellpadding="0" cellspacing="0"
+      <table role="presentation" lang="en" class="email-wrapper" cellpadding="0" cellspacing="0" bgcolor="#FDFDFD"
              style="width:100%;background-color:#FDFDFD;font-family:Arial, Helvetica, sans-serif;color:#08283B;table-layout:fixed;word-wrap:break-word;">
 
         <!-- Header -->
         <tr class="email-header">
-          <td style="padding:0 0 0 24px;text-align:left;vertical-align:middle;width:auto;background-color:#ECECEB;">
+          <td bgcolor="#ECECEB" style="padding:0 0 0 24px;text-align:left;vertical-align:middle;width:auto;background-color:#ECECEB;">
             <img src="{{app_base_url}}/images/email/hilfe-logo-email.png" width="120" height="63" alt="HILFE" style="display:block;width:120px;height:63px;">
           </td>
-          <td style="text-align:right;padding:0;line-height:0;vertical-align:middle;background-color:#ECECEB;white-space:nowrap;">
+          <td bgcolor="#ECECEB" style="text-align:right;padding:0;line-height:0;vertical-align:middle;background-color:#ECECEB;white-space:nowrap;">
             <img src="{{app_base_url}}/images/email/hilfe-icon-collage-email.png" width="330" height="193" alt="" style="display:block;width:330px;height:193px;">
           </td>
         </tr>
 
         <!-- Content -->
         <tr>
-          <td class="email-content" colspan="2"
+          <td class="email-content" colspan="2" bgcolor="#FDFDFD"
               style="padding:48px 24px 16px 24px;font-size:16px;line-height:1.5;color:#08283B;font-weight:400;word-wrap:break-word;overflow-wrap:break-word;word-break:break-word;">
             {{content}}
           </td>
@@ -123,11 +172,11 @@
 
         <!-- CTA -->
         <tr>
-        <td colspan="2" style="text-align:left;padding:0 24px 48px;word-wrap:break-word;overflow-wrap:break-word;">
-          
+        <td colspan="2" bgcolor="#FDFDFD" style="text-align:left;padding:0 24px 48px;word-wrap:break-word;overflow-wrap:break-word;">
+
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0;">
       <tr>
-        <td style="background-color:#08283B;border-radius:8px;text-align:left;">
+        <td bgcolor="#08283B" style="background-color:#08283B;border-radius:8px;text-align:left;">
           <a href="{{cta_href}}" class="email-cta" role="button" target="_blank" rel="noopener noreferrer"
              style="display:inline-block;padding:10px 20px;background-color:#08283B;color:#FDFDFD;text-decoration:none;font-weight:500;font-size:16px;line-height:1.2;border:none;border-radius:8px;">
             {{cta_text}}
@@ -140,7 +189,7 @@
 
         <!-- Footer -->
         <tr>
-          <td class="email-footer" colspan="2"
+          <td class="email-footer" colspan="2" bgcolor="#FDFDFD"
               style="padding:0 24px 48px;font-size:12px;line-height:1.5;color:#395362;text-align:left;word-wrap:break-word;overflow-wrap:break-word;">
             <img src="{{app_base_url}}/images/email/amalitech-logo-email.png" width="200" height="18" alt="AMALITECH" style="display:block;width:200px;height:18px;">
             <p style="margin:16px 0 8px 0;font-size:12px;color:#395362;font-weight:400;word-wrap:break-word;overflow-wrap:break-word;">{{footer_text}}</p>
