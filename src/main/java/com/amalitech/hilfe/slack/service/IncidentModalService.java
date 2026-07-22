@@ -7,6 +7,7 @@ import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
+import com.amalitech.hilfe.repositories.specifications.IncidentCategorySpecifications;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.slack.client.SlackClient;
 import com.amalitech.hilfe.slack.exception.SlackNotConnectedException;
@@ -24,6 +25,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,7 +94,7 @@ public class IncidentModalService {
         SlackUserMapping mapping = oauthService.findBySlackUserId(slackUserId)
                 .orElseThrow(SlackNotConnectedException::new);
 
-        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(true);
+        List<IncidentCategory> categories = fetchSelectableCategories();
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
@@ -175,7 +177,7 @@ public class IncidentModalService {
         String currentSeverityName = stateValues.path(SEVERITY_BLOCK).path(ACTION_SEVERITY)
                 .path(SELECTED_OPTION).path("text").path("text").asText(null);
 
-        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(true);
+        List<IncidentCategory> categories = fetchSelectableCategories();
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
@@ -239,6 +241,15 @@ public class IncidentModalService {
         }
     }
 
+    // ── Category lookup ──────────────────────────────────────────────────────
+
+    private List<IncidentCategory> fetchSelectableCategories() {
+        Specification<IncidentCategory> spec = Specification
+                .where(IncidentCategorySpecifications.isActiveCategory())
+                .and(IncidentCategorySpecifications.hasActiveTopics());
+        return incidentCategoryRepository.findAll(spec);
+    }
+
     // ── Modal builders ───────────────────────────────────────────────────────
 
     private View buildCreateIncidentModal(List<IncidentCategory> categories,
@@ -280,6 +291,10 @@ public class IncidentModalService {
 
     private LayoutBlock buildCategoryBlock(List<IncidentCategory> categories,
                                             String selectedCategoryId, String selectedCategoryName) {
+        if (categories.isEmpty()) {
+            return context(c -> c.elements(List.of(markdownText(
+                    "_No incident categories are currently available. Please contact an administrator._"))));
+        }
         return input(i -> i
                 .blockId(CATEGORY_BLOCK)
                 .dispatchAction(true)
