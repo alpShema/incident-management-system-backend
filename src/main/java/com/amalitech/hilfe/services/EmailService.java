@@ -5,6 +5,7 @@ import com.amalitech.hilfe.notifications.content.EmailContent;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -26,6 +27,9 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final MailProperties mailProperties;
     private final EmailRateLimiter rateLimiter;
+
+    @Value("${app.base-url}")
+    private String appBaseUrl;
 
     private volatile String cachedTemplate;
 
@@ -56,7 +60,8 @@ public class EmailService {
                 .replace("{{content}}", content.contentHtml())
                 .replace("{{cta_href}}", ctaHref)
                 .replace("{{cta_text}}", content.ctaText())
-                .replace("{{footer_text}}", content.footerText());
+                .replace("{{footer_text}}", content.footerText())
+                .replace("{{app_base_url}}", appBaseUrl);
     }
 
     private String loadTemplate() throws IOException {
