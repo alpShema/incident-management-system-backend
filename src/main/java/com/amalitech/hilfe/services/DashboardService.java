@@ -6,9 +6,11 @@ import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.StatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -36,6 +38,7 @@ public class DashboardService {
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final StatusRepository statusRepository;
     private final SlaService slaService;
 
     public DashboardStats getStats(String userId, RoleCode role) {
@@ -73,9 +76,9 @@ public class DashboardService {
 
         switch (role) {
             case ADMIN, ADMIN_AGENT, SUPER_ADMIN -> {
-                byStatus = toLabel(since != null
+                byStatus = fillStatusGaps(toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
-                        : incidentRepository.countByStatusGlobal());
+                        : incidentRepository.countByStatusGlobal()));
                 List<MonthlyCount> allTrend = fillMonthGaps(
                         toMonthlyCount(incidentRepository.countByMonthSince(trendSince)),
                         trendSince);
@@ -83,9 +86,9 @@ public class DashboardService {
             }
             case AGENT -> {
                 var agentOpt = agentRepository.findByUserId(userId);
-                byStatus = agentOpt.map(agent -> toLabel(
-                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince)))
-                        .orElse(List.of());
+                byStatus = agentOpt.map(agent -> fillStatusGaps(toLabel(
+                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince))))
+                        .orElseGet(this::allStatusesZero);
                 List<MonthlyCount> myTrend = fillMonthGaps(
                         toMonthlyCount(incidentRepository.countByMonthForUser(userId, trendSince)),
                         trendSince);
@@ -204,5 +207,24 @@ public class DashboardService {
             cursor = cursor.plusMonths(1);
         }
         return full;
+    }
+
+    private List<LabelCount> fillStatusGaps(List<LabelCount> counted) {
+        Map<String, Integer> countByName = counted.stream()
+                .filter(c -> c.label() != null)
+                .collect(Collectors.toMap(c -> c.label().toLowerCase(), LabelCount::count));
+        return statusRepository.findAll().stream()
+                .map(Status::getName)
+                .sorted()
+                .map(name -> new LabelCount(name, countByName.getOrDefault(name.toLowerCase(), 0)))
+                .toList();
+    }
+
+    private List<LabelCount> allStatusesZero() {
+        return statusRepository.findAll().stream()
+                .map(Status::getName)
+                .sorted()
+                .map(name -> new LabelCount(name, 0))
+                .toList();
     }
 }
