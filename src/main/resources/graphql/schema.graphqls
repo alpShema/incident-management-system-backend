@@ -1,5 +1,6 @@
 scalar Instant
 scalar Long
+scalar Upload
 
 # ──────────────────────────────────────
 # SHARED TYPES
@@ -428,6 +429,53 @@ type FaqPage {
   totalPages: Int!
   hasNext: Boolean!
   hasPrevious: Boolean!
+}
+
+enum FaqRowStatus {
+  READY
+  NEEDS_ATTENTION
+}
+
+type FaqRowError {
+  row: Int!
+  reason: String!
+}
+
+type FaqBulkUploadResult {
+  created: Int!
+  updated: Int!
+  failed: Int!
+  errors: [FaqRowError!]!
+}
+
+type FaqInspectionSummary {
+  totalRows: Int!
+  readyCount: Int!
+  needsAttentionCount: Int!
+}
+
+type FaqInspectionRow {
+  row: Int!
+  question: String
+  answer: String
+  questionMissing: Boolean!
+  answerMissing: Boolean!
+  status: FaqRowStatus!
+}
+
+type FaqInspectionRowPage {
+  items: [FaqInspectionRow!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+type FaqInspectionResult {
+  summary: FaqInspectionSummary!
+  rows: FaqInspectionRowPage!
 }
 
 # ──────────────────────────────────────
@@ -875,6 +923,8 @@ type Query {
   # FAQs
   faqs(active: Boolean, search: String, page: PageInput): FaqPage
   faq(id: ID!): Faq
+  inspectFaqImport(file: Upload!, status: FaqRowStatus, page: PageInput): FaqInspectionResult!
+  faqImportTemplate: String!
 
   # Severities
   severities: [Severity!]
@@ -989,6 +1039,7 @@ type Mutation {
   toggleFaqActive(id: ID!, active: Boolean!): Faq
   deleteFaq(id: ID!): Boolean
   reEmbedFaqs: Int!
+  bulkImportFaqs(file: Upload!): FaqBulkUploadResult!
 
   # Severities
   createSeverity(input: SeverityInput!): Severity

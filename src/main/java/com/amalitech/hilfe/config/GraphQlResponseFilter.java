@@ -23,12 +23,17 @@ import java.util.Map;
 public class GraphQlResponseFilter extends OncePerRequestFilter {
 
     private static final String GRAPHQL_PATH = "/graphql";
+    // The multipart-upload entry point (GraphQlMultipartUploadController) lives at its own
+    // path rather than /graphql itself -- see that class for why -- but its response must
+    // still get the same {message, data, errors} envelope as the standard JSON endpoint.
+    private static final String GRAPHQL_UPLOAD_PATH = "/graphql/upload";
     private static final String MESSAGE_KEY = "message";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().endsWith(GRAPHQL_PATH);
+        String uri = request.getRequestURI();
+        return !uri.endsWith(GRAPHQL_PATH) && !uri.endsWith(GRAPHQL_UPLOAD_PATH);
     }
 
     @Override
