@@ -3,10 +3,14 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.Department;
+import com.amalitech.hilfe.models.IncidentCategory;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
+import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import com.amalitech.hilfe.services.DepartmentService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -15,14 +19,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,6 +34,7 @@ class DepartmentServiceTest {
     @Mock DepartmentRepository departmentRepository;
     @Mock AgentGroupRepository agentGroupRepository;
     @Mock IncidentCategoryRepository categoryRepository;
+    @Mock IncidentTypeRepository typeRepository;
     @Mock EntityManager entityManager;
     @InjectMocks DepartmentService departmentService;
 
@@ -70,32 +74,56 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void updateDepartmentStatus_deactivate_withCategories_succeeds() {
+    void updateDepartmentStatus_deactivate_withCategories_cascadesToCategoryAndTopics() {
         Department dept = department(true);
+        IncidentCategory category = IncidentCategory.builder()
+                .id("cat-1")
+                .name("Networking")
+                .departmentId("dept-1")
+                .status(true)
+                .build();
+        IncidentType topic = IncidentType.builder()
+                .id("topic-1")
+                .name("Wifi")
+                .categoryId("cat-1")
+                .status(true)
+                .build();
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true))
-                .thenReturn(java.util.List.of(mock(com.amalitech.hilfe.models.IncidentCategory.class)));
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of(category));
+        when(typeRepository.findByCategoryId("cat-1")).thenReturn(List.of(topic));
+        when(agentGroupRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
 
         DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
         assertThat(response.status()).isFalse();
-        assertThat(response.categoryCount()).isEqualTo(1L);
+        assertThat(category.getStatus()).isFalse();
+        assertThat(topic.getStatus()).isFalse();
         verify(departmentRepository).save(dept);
+        verify(categoryRepository).saveAll(List.of(category));
+        verify(typeRepository).saveAll(List.of(topic));
     }
 
     @Test
-    void updateDepartmentStatus_deactivate_withActiveAgentGroups_succeeds() {
+    void updateDepartmentStatus_deactivate_withActiveAgentGroups_cascadesToAgentGroups() {
         Department dept = department(true);
+        AgentGroup agentGroup = AgentGroup.builder()
+                .id("group-1")
+                .name("IT Support")
+                .departmentId("dept-1")
+                .status(true)
+                .build();
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
-        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(java.util.List.of());
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+        when(agentGroupRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of(agentGroup));
 
         DepartmentResponse response = departmentService.updateDepartmentStatus("dept-1", false);
 
         assertThat(response.status()).isFalse();
+        assertThat(agentGroup.getStatus()).isFalse();
         verify(departmentRepository).save(dept);
-        verifyNoInteractions(agentGroupRepository);
+        verify(agentGroupRepository).saveAll(List.of(agentGroup));
     }
 
     @Test

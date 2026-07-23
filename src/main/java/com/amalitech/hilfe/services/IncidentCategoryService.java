@@ -176,7 +176,22 @@ public class IncidentCategoryService {
                 .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
         category.setStatus(status);
         categoryRepository.save(category);
+
+        if (Boolean.FALSE.equals(status)) {
+            deactivateTopics(id);
+        }
+
         return IncidentCategoryResponse.from(category);
+    }
+
+    private void deactivateTopics(String categoryId) {
+        List<IncidentType> topics = typeRepository.findByCategoryId(categoryId).stream()
+                .filter(topic -> Boolean.TRUE.equals(topic.getStatus()))
+                .toList();
+        if (!topics.isEmpty()) {
+            topics.forEach(topic -> topic.setStatus(false));
+            typeRepository.saveAll(topics);
+        }
     }
 
     public List<IncidentTopicResponse> listTopicsByCategory(String categoryId, Boolean status) {

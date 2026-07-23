@@ -4,11 +4,14 @@ import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
+import com.amalitech.hilfe.repositories.IncidentTypeRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -29,6 +32,7 @@ public class DepartmentService {
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
+    private final IncidentTypeRepository typeRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -100,7 +104,40 @@ public class DepartmentService {
         }
 
         department.setStatus(status);
-        return toResponse(departmentRepository.save(department));
+        Department saved = departmentRepository.save(department);
+
+        if (Boolean.FALSE.equals(status)) {
+            deactivateLinkedRecords(id);
+        }
+
+        return toResponse(saved);
+    }
+
+    private void deactivateLinkedRecords(String departmentId) {
+        List<IncidentCategory> categories = categoryRepository.findByDepartmentIdAndStatus(departmentId, true);
+        categories.forEach(category -> {
+            category.setStatus(false);
+            deactivateTopics(category.getId());
+        });
+        if (!categories.isEmpty()) {
+            categoryRepository.saveAll(categories);
+        }
+
+        List<AgentGroup> agentGroups = agentGroupRepository.findByDepartmentIdAndStatus(departmentId, true);
+        agentGroups.forEach(agentGroup -> agentGroup.setStatus(false));
+        if (!agentGroups.isEmpty()) {
+            agentGroupRepository.saveAll(agentGroups);
+        }
+    }
+
+    private void deactivateTopics(String categoryId) {
+        List<IncidentType> topics = typeRepository.findByCategoryId(categoryId).stream()
+                .filter(topic -> Boolean.TRUE.equals(topic.getStatus()))
+                .toList();
+        if (!topics.isEmpty()) {
+            topics.forEach(topic -> topic.setStatus(false));
+            typeRepository.saveAll(topics);
+        }
     }
 
     public List<IncidentCategoryResponse> listCategories(String departmentId) {
