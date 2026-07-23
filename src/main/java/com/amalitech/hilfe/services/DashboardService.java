@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,6 +35,19 @@ import java.util.stream.Collectors;
 public class DashboardService {
 
     private static final String NO_DASHBOARD_PERMISSION_MESSAGE = "You do not have permission to view this dashboard.";
+
+    private static final String STATUS_OPEN = "open";
+    private static final String STATUS_PENDING = "pending";
+    private static final String STATUS_IN_PROGRESS = "in progress";
+    private static final String STATUS_RESOLVED = "resolved";
+    private static final String STATUS_CLOSED = "closed";
+
+    // Reopened is a transition trigger (IncidentService.applyReopenTransition immediately flips it
+    // back to In Progress within the same transaction), never a resting status — excluded here so
+    // dashboard charts don't surface a permanent zero-count "Reopened" entry.
+    private static final Set<String> DASHBOARD_STATUS_NAMES = Set.of(
+            STATUS_OPEN, STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_RESOLVED, STATUS_CLOSED
+    );
 
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
@@ -48,9 +62,9 @@ public class DashboardService {
                         List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agent.getId()));
                         long total = byStatus.stream().mapToLong(LabelCount::count).sum();
                         return new DashboardStats(total,
-                                countFor(byStatus, "open"), countFor(byStatus, "pending"),
-                                countFor(byStatus, "in progress"),
-                                countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+                                countFor(byStatus, STATUS_OPEN), countFor(byStatus, STATUS_PENDING),
+                                countFor(byStatus, STATUS_IN_PROGRESS),
+                                countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED));
                     })
                     .orElse(new DashboardStats(0, 0, 0, 0, 0, 0));
         }
@@ -59,9 +73,9 @@ public class DashboardService {
             List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusGlobal());
             long total = byStatus.stream().mapToLong(LabelCount::count).sum();
             return new DashboardStats(total,
-                    countFor(byStatus, "open"), countFor(byStatus, "pending"),
-                    countFor(byStatus, "in progress"),
-                    countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+                    countFor(byStatus, STATUS_OPEN), countFor(byStatus, STATUS_PENDING),
+                    countFor(byStatus, STATUS_IN_PROGRESS),
+                    countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED));
         }
 
         throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
@@ -209,21 +223,25 @@ public class DashboardService {
         return full;
     }
 
+    private List<String> dashboardStatusNames() {
+        return statusRepository.findAll().stream()
+                .map(Status::getName)
+                .filter(name -> name != null && DASHBOARD_STATUS_NAMES.contains(name.toLowerCase()))
+                .sorted()
+                .toList();
+    }
+
     private List<LabelCount> fillStatusGaps(List<LabelCount> counted) {
         Map<String, Integer> countByName = counted.stream()
                 .filter(c -> c.label() != null)
                 .collect(Collectors.toMap(c -> c.label().toLowerCase(), LabelCount::count));
-        return statusRepository.findAll().stream()
-                .map(Status::getName)
-                .sorted()
+        return dashboardStatusNames().stream()
                 .map(name -> new LabelCount(name, countByName.getOrDefault(name.toLowerCase(), 0)))
                 .toList();
     }
 
     private List<LabelCount> allStatusesZero() {
-        return statusRepository.findAll().stream()
-                .map(Status::getName)
-                .sorted()
+        return dashboardStatusNames().stream()
                 .map(name -> new LabelCount(name, 0))
                 .toList();
     }
