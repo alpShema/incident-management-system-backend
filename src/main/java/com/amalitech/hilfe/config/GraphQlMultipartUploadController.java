@@ -71,7 +71,10 @@ public class GraphQlMultipartUploadController {
             operations = objectMapper.readValue(operationsJson, new TypeReference<Map<String, Object>>() {});
             fileMap = objectMapper.readValue(mapJson, new TypeReference<Map<String, List<String>>>() {});
         } catch (IOException e) {
-            return ResponseEntity.ok(errorEnvelope("The 'operations' or 'map' part is not valid JSON."));
+            // Malformed transport parts -- the request never reaches GraphQL execution, so a
+            // real 400 is returned here (unlike GraphQL-level errors below, which always
+            // respond 200 with an errors[] array per this app's established convention).
+            return badRequest("The 'operations' or 'map' part is not valid JSON.");
         }
 
         @SuppressWarnings("unchecked")
@@ -81,17 +84,17 @@ public class GraphQlMultipartUploadController {
         for (Map.Entry<String, List<String>> entry : fileMap.entrySet()) {
             MultipartFile file = multipartRequest.getFile(entry.getKey());
             if (file == null) {
-                return ResponseEntity.ok(errorEnvelope("No file part found for multipart field '" + entry.getKey() + "'."));
+                return badRequest("No file part found for multipart field '" + entry.getKey() + "'.");
             }
             List<String> paths = entry.getValue();
             if (paths == null || paths.isEmpty()) {
-                return ResponseEntity.ok(errorEnvelope("Multipart 'map' entry for '" + entry.getKey() + "' has no target path."));
+                return badRequest("Multipart 'map' entry for '" + entry.getKey() + "' has no target path.");
             }
             for (String path : paths) {
                 String variableName = topLevelVariableName(path);
                 if (variableName == null) {
-                    return ResponseEntity.ok(errorEnvelope("Unsupported upload path '" + path
-                            + "'; only top-level 'variables.<name>' paths are supported."));
+                    return badRequest("Unsupported upload path '" + path
+                            + "'; only top-level 'variables.<name>' paths are supported.");
                 }
                 variables.put(variableName, file);
             }
@@ -101,12 +104,17 @@ public class GraphQlMultipartUploadController {
                 URI.create(servletRequest.getRequestURL().toString()),
                 new ServletServerHttpRequest(servletRequest).getHeaders(),
                 readCookies(servletRequest),
+                null,
                 Map.of(),
                 operations,
                 UUID.randomUUID().toString(),
                 servletRequest.getLocale());
 
         WebGraphQlResponse response = webGraphQlHandler.handleRequest(request).block();
+        if (response == null) {
+            return ResponseEntity.internalServerError()
+                    .body(errorEnvelope("GraphQL execution did not return a response.", 500, "Internal Server Error"));
+        }
         return ResponseEntity.ok(response.toMap());
     }
 
@@ -115,15 +123,19 @@ public class GraphQlMultipartUploadController {
         return (parts.length == 2 && "variables".equals(parts[0])) ? parts[1] : null;
     }
 
-    private Map<String, Object> errorEnvelope(String message) {
+    private ResponseEntity<Map<String, Object>> badRequest(String message) {
+        return ResponseEntity.badRequest().body(errorEnvelope(message, 400, "Bad Request"));
+    }
+
+    private Map<String, Object> errorEnvelope(String message, int status, String error) {
         // Map.of(...) rejects null values, and "data" must be null here, so build this by hand.
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("data", null);
         envelope.put("errors", List.of(Map.of(
                 "message", message,
                 "extensions", Map.of(
-                        "status", 400,
-                        "error", "Bad Request",
+                        "status", status,
+                        "error", error,
                         "timestamp", Instant.now().toString()))));
         return envelope;
     }
