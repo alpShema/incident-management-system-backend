@@ -2,7 +2,10 @@ package com.amalitech.hilfe.controllers.graphql;
 
 import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.CreateFaqRequest;
+import com.amalitech.hilfe.dto.FaqBulkUploadResult;
+import com.amalitech.hilfe.dto.FaqInspectionResult;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.FaqRowStatus;
 import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
@@ -13,6 +16,7 @@ import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.multipart.MultipartFile;
 
 @Controller
 @RequiredArgsConstructor
@@ -68,5 +72,26 @@ public class FaqResolver {
         int count = faqService.reEmbedAll();
         GraphQlResponseMessage.set("FAQs re-embedded successfully");
         return count;
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasAuthority('faq.create')")
+    public FaqBulkUploadResult bulkImportFaqs(@Argument MultipartFile file) {
+        FaqBulkUploadResult result = faqService.bulkImport(file);
+        GraphQlResponseMessage.set(result.created() + " FAQ(s) created, " + result.updated() + " updated, "
+                + result.failed() + " row(s) skipped.");
+        return result;
+    }
+
+    @QueryMapping
+    @PreAuthorize("hasAuthority('faq.create')")
+    public FaqInspectionResult inspectFaqImport(@Argument MultipartFile file, @Argument FaqRowStatus status, @Argument PageInput page) {
+        return faqService.inspectBulkImport(file, status, PageInput.toPageable(page));
+    }
+
+    @QueryMapping
+    @PreAuthorize("hasAuthority('faq.create')")
+    public String faqImportTemplate() {
+        return FaqService.CSV_IMPORT_TEMPLATE;
     }
 }
