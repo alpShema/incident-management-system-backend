@@ -42,6 +42,11 @@ public final class IncidentCategorySpecifications {
         };
     }
 
+    /** Department Filter: matches categories linked to the given department id. */
+    public static Specification<IncidentCategory> hasDepartmentId(String departmentId) {
+        return (root, query, cb) -> cb.equal(root.get("departmentId"), departmentId);
+    }
+
     /** Matches categories whose name, description, or department name contain the given (already lower-cased, escaped) pattern. */
     public static Specification<IncidentCategory> matchesQuery(String queryPattern) {
         if (queryPattern == null) {
