@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -43,6 +44,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -257,6 +259,75 @@ class IncidentCategoryServiceTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         categoryService.listAllCategories(true, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    // ── listCategoriesByDepartment ────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategoriesByDepartment_validDepartment_returnsMappedPage() {
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listCategoriesByDepartment("dept-1", null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategoriesByDepartment_noStatusFilter_doesNotDefaultToActiveOnly() {
+        // Unlike listCategories, omitting status here must NOT restrict to active-only —
+        // matches "fetch all categories, filter by department client-side" per HV-1493.
+        IncidentCategory inactive = IncidentCategory.builder().id("cat-2").name("Archived").departmentId("dept-1").status(false).build();
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(buildCategory(), inactive), PageRequest.of(0, 20), 2));
+
+        var result = categoryService.listCategoriesByDepartment("dept-1", null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(2);
+    }
+
+    @Test
+    void listCategoriesByDepartment_inactiveDepartment_stillAllowed() {
+        // findDepartmentOrThrow only checks existence, unlike the stricter active-only
+        // validateDepartment used for create/update — matches /departments/{id}/categories today.
+        Department inactiveDept = Department.builder().id("dept-1").name("Facilities").status(false).build();
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(inactiveDept));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        var result = categoryService.listCategoriesByDepartment("dept-1", null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
+    void listCategoriesByDepartment_departmentNotFound_throws404() {
+        when(departmentRepository.findById("missing")).thenReturn(Optional.empty());
+        Pageable pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> categoryService.listCategoriesByDepartment("missing", null, null, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+        verifyNoInteractions(categoryRepository);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategoriesByDepartment_statusFilterApplied_returnsOnlyMatching() {
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
+
+        categoryService.listCategoriesByDepartment("dept-1", true, null, PageRequest.of(0, 20));
 
         verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
