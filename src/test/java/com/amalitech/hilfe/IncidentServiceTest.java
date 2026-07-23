@@ -566,6 +566,23 @@ class IncidentServiceTest {
     }
 
     @Test
+    void createIncident_incidentTypeInactive_throws404() {
+        IncidentType inactiveType = buildIncidentType();
+        inactiveType.setStatus(false);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(inactiveType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Title", "Desc", "type-1", "loc-1", null, null);
+
+        assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Incident type with the provided ID is not currently active.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
     void createIncident_locationNotFound_throws404() {
         when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("bad-loc")).thenReturn(false);
