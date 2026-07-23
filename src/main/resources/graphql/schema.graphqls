@@ -84,6 +84,8 @@ type IncidentSla {
   responseStatus: String
   resolutionStatus: String
   paused: Boolean!
+  responseElapsedMs: Long
+  resolutionElapsedMs: Long
 }
 
 type Incident {
