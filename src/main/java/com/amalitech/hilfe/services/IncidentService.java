@@ -7,6 +7,8 @@ import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.notifications.NotificationEventPublisher;
 import com.amalitech.hilfe.notifications.events.*;
 import com.amalitech.hilfe.repositories.*;
+import com.amalitech.hilfe.security.authorization.CurrentUserAuthority;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -164,8 +166,19 @@ public class IncidentService {
             IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
+        requireAdminForSlaStatusFilter(filters);
         return slaService.toIncidentResponsePage(incidentRepository
                 .findByUserIdUnified(userId, buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable)));
+    }
+
+    // The SLA status filter is admin-only per HV-1477. queryAllIncidents' endpoint is already
+    // @PreAuthorize'd to dashboard.admin only, so it doesn't need this check — but myIncidents has no
+    // @PreAuthorize at all, and deptIncidents/assignedIncidents allow dashboard.agent too, so both
+    // need this service-layer guard to keep agents and clients from using the filter.
+    private void requireAdminForSlaStatusFilter(IncidentFilterParams filters) {
+        if (filters != null && filters.slaStatus() != null && !CurrentUserAuthority.has(RbacPermissions.DASHBOARD_ADMIN)) {
+            throw new ArmsAuthException("The SLA status filter is only available to admin users.", 403);
+        }
     }
 
     public Page<IncidentResponse> queryAllIncidents(
@@ -185,6 +198,7 @@ public class IncidentService {
             IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
+        requireAdminForSlaStatusFilter(filters);
         Pageable sorted = ensureSorted(pageable);
         String queryPattern = buildQueryPattern(query);
 
@@ -212,6 +226,7 @@ public class IncidentService {
             IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
+        requireAdminForSlaStatusFilter(filters);
         Pageable sorted = ensureSorted(pageable);
         String queryPattern = buildQueryPattern(query);
         return agentRepository.findByUserId(userId)
