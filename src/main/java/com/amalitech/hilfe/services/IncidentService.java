@@ -96,6 +96,8 @@ public class IncidentService {
         IncidentType incidentType = incidentTypeRepository.findById(request.incidentTypeId()).orElse(null);
         if (incidentType == null) {
             notFound.add("Incident type with the provided ID could not be found.");
+        } else if (!Boolean.TRUE.equals(incidentType.getStatus())) {
+            notFound.add("Incident type with the provided ID is not currently active.");
         }
         if (!locationRepository.existsById(request.locationId())) {
             notFound.add("Location with the provided ID could not be found.");

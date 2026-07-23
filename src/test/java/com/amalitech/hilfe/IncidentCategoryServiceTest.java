@@ -483,6 +483,21 @@ class IncidentCategoryServiceTest {
     }
 
     @Test
+    void updateCategoryStatus_deactivate_cascadesToActiveTopics() {
+        IncidentCategory cat = buildCategory();
+        IncidentType topic = buildType();
+        topic.setStatus(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(typeRepository.findByCategoryId("cat-1")).thenReturn(List.of(topic));
+
+        categoryService.updateCategoryStatus("cat-1", false);
+
+        assertThat(cat.getStatus()).isFalse();
+        assertThat(topic.getStatus()).isFalse();
+        verify(typeRepository).saveAll(List.of(topic));
+    }
+
+    @Test
     void updateCategoryStatus_activate_setsActive() {
         IncidentCategory cat = buildCategory();
         cat.setStatus(false);
