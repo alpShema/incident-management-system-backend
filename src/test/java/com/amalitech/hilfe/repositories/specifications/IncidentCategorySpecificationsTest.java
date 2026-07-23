@@ -94,6 +94,23 @@ class IncidentCategorySpecificationsTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void hasDepartmentId_checksOnlyDepartmentIdEquality() {
+        Root<IncidentCategory> root = mock(Root.class);
+        CriteriaQuery<?> query = mock(CriteriaQuery.class);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class);
+        Path<Object> departmentIdPath = mock(Path.class);
+        Predicate expected = mock(Predicate.class);
+
+        when(root.<Object>get("departmentId")).thenReturn(departmentIdPath);
+        when(cb.equal(departmentIdPath, "dept-1")).thenReturn(expected);
+
+        Predicate result = IncidentCategorySpecifications.hasDepartmentId("dept-1").toPredicate(root, query, cb);
+
+        assertThat(result).isSameAs(expected);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void matchesQuery_returnsAlwaysTruePredicate_andSkipsJoins_whenPatternIsNull() {
         Root<IncidentCategory> root = mock(Root.class);
         CriteriaQuery<?> query = mock(CriteriaQuery.class);
