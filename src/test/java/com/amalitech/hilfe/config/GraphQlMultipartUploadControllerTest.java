@@ -140,13 +140,16 @@ class GraphQlMultipartUploadControllerTest {
 
     @Test
     void handle_malformedOperationsJson_returnsWellFormedErrorEnvelope() throws Exception {
+        // Unlike GraphQL-level errors (which always respond 200 + errors[], per this app's
+        // established convention), this never reaches GraphQL execution at all -- it's a
+        // malformed transport request, so it gets a real 400.
         mvc.perform(multipart("/graphql/upload")
                         .file(csvPart())
                         .param("operations", "not valid json")
                         .param("map", SINGLE_FILE_MAP)
                         .with(authentication(adminAuth()))
                         .with(csrf()))
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data").doesNotExist())
                 .andExpect(jsonPath("$.errors[0].extensions.status").value(400));
     }
@@ -158,7 +161,7 @@ class GraphQlMultipartUploadControllerTest {
                         .param("map", SINGLE_FILE_MAP)
                         .with(authentication(adminAuth()))
                         .with(csrf()))
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data").doesNotExist())
                 .andExpect(jsonPath("$.errors[0].message").value("No file part found for multipart field '0'."));
     }
