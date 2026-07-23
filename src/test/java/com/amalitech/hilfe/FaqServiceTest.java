@@ -18,6 +18,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -505,5 +507,47 @@ class FaqServiceTest {
         assertThatThrownBy(() -> faqService.bulkImport(file))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no data rows");
+    }
+
+    @ParameterizedTest(name = "answer starting with ''{0}'' is prefixed with an apostrophe to prevent CSV/formula injection")
+    @ValueSource(strings = {"=", "+", "-", "@"})
+    void createFaq_answerStartsWithFormulaTriggerChar_prefixedWithApostrophe(String leadingChar) {
+        when(faqRepository.findByNormalizedQuestion(anyString())).thenReturn(Optional.empty());
+        when(faqRepository.saveAndFlush(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        String maliciousAnswer = leadingChar + "cmd|'/c calc'!A0";
+
+        FaqUpsertResult result = faqService.createFaq(new CreateFaqRequest("New question", maliciousAnswer));
+
+        assertThat(result.faq().answer()).isEqualTo("'" + maliciousAnswer);
+    }
+
+    @Test
+    void bulkImport_questionStartsWithFormulaChar_prefixedWithApostropheBeforeSave() {
+        ArgumentCaptor<Faq> savedFaq = ArgumentCaptor.forClass(Faq.class);
+        when(faqRepository.saveAndFlush(savedFaq.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(faqEmbeddingService.embedAndStore(any(Faq.class))).thenReturn(true);
+
+        MockMultipartFile file = csvFile("question,answer\n=HYPERLINK(\"http://evil.example\"),A1\n");
+
+        FaqBulkUploadResult result = faqService.bulkImport(file);
+
+        assertThat(result.created()).isEqualTo(1);
+        assertThat(result.failed()).isZero();
+        assertThat(savedFaq.getValue().getQuestion()).isEqualTo("'=HYPERLINK(\"http://evil.example\")");
+    }
+
+    @Test
+    void createFaq_answerStartsWithHyphenUsedAsOrdinaryProseNotFormula_stillPrefixedAsAcceptedTradeoff() {
+        // The formula-injection guard can't distinguish "-1 vs +1 pricing" (legitimate
+        // prose) from an actual spreadsheet formula -- prefixing both is the accepted
+        // trade-off of the standard mitigation: it's better to slightly alter a rare
+        // legitimate answer than to ever let a real formula payload through unneutralized.
+        when(faqRepository.findByNormalizedQuestion(anyString())).thenReturn(Optional.empty());
+        when(faqRepository.saveAndFlush(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        FaqUpsertResult result = faqService.createFaq(new CreateFaqRequest("Pricing question", "-1 vs +1 pricing"));
+
+        assertThat(result.faq().answer()).isEqualTo("'-1 vs +1 pricing");
     }
 }
