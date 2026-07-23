@@ -106,13 +106,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAllIncidents(
                 query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
@@ -139,13 +140,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
@@ -176,13 +178,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryDeptIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Department incidents retrieved successfully", PageResponse.from(page)));
@@ -213,13 +216,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAssignedIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(page)));
