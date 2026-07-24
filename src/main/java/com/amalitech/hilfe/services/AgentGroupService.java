@@ -46,6 +46,9 @@ public class AgentGroupService {
     }
 
     public Page<AgentGroupResponse> listAllAgentGroups(Boolean status, String query, String departmentId, Pageable pageable) {
+        if (!isBlank(departmentId)) {
+            findDepartmentOrThrow(departmentId);
+        }
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
         return agentGroupRepository.listAllAgentGroups(status, queryPattern, departmentId, pageable)
                 .map(this::toResponse);
@@ -267,6 +270,14 @@ public class AgentGroupService {
     private Department findActiveDepartment(String departmentId) {
         return departmentRepository.findById(departmentId)
                 .filter(department -> Boolean.TRUE.equals(department.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
+    }
+
+    // Existence-only check for read-side department filtering (HV-1498) — unlike
+    // findActiveDepartment (used for create/update), listing shouldn't reject an inactive
+    // department; it should just scope to whatever agent groups exist under it.
+    private void findDepartmentOrThrow(String departmentId) {
+        departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
     }
 

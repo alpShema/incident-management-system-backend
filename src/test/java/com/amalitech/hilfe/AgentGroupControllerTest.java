@@ -192,6 +192,28 @@ class AgentGroupControllerTest {
     }
 
     @Test
+    void listAllAgentGroups_withDepartmentId_returnsFilteredResults() throws Exception {
+        when(agentGroupService.listAllAgentGroups(isNull(), isNull(), eq("dept-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(group(true))));
+
+        mvc.perform(get("/agent-groups/all?departmentId=dept-1")
+                        .with(authentication(adminAuth("agent-group.read"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+    }
+
+    @Test
+    void listAllAgentGroups_departmentNotFound_returns404() throws Exception {
+        when(agentGroupService.listAllAgentGroups(isNull(), isNull(), eq("missing"), any(Pageable.class)))
+                .thenThrow(new ArmsAuthException("Department not found", 404));
+
+        mvc.perform(get("/agent-groups/all?departmentId=missing")
+                        .with(authentication(adminAuth("agent-group.read"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Department not found"));
+    }
+
+    @Test
     void getAgentGroup_inactive_returns200() throws Exception {
         when(agentGroupService.getAgentGroup("group-1")).thenReturn(group(false));
 
