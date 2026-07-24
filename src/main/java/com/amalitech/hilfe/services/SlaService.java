@@ -323,11 +323,8 @@ public class SlaService {
     private void scanResponseTimers(int atRiskPct) {
         Instant now = Instant.now();
         for (IncidentSla sla : incidentSlaRepository.findActiveResponseTimers()) {
-            if (sla.getIncident() == null) {
-                continue;
-            }
-            if (sla.getResolvedAtSnapshot() != null) {
-                continue; // frozen on resolve/force-close -- never notify
+            if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
+                continue; // no incident, or frozen on resolve/force-close -- never notify
             }
             String freshStatus = computeResponseStatus(sla, now, atRiskPct);
             boolean statusChanged = !freshStatus.equals(sla.getResponseStatus());
@@ -356,11 +353,8 @@ public class SlaService {
     private void scanResolutionTimers(int atRiskPct) {
         Instant now = Instant.now();
         for (IncidentSla sla : incidentSlaRepository.findActiveResolutionTimers()) {
-            if (sla.getIncident() == null) {
-                continue;
-            }
-            if (sla.getResolvedAtSnapshot() != null) {
-                continue; // frozen on resolve/force-close -- never notify
+            if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
+                continue; // no incident, or frozen on resolve/force-close -- never notify
             }
             String freshStatus = computeResolutionStatus(sla, now, atRiskPct);
             boolean statusChanged = !freshStatus.equals(sla.getResolutionStatus());
