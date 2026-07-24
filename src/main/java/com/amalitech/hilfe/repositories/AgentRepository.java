@@ -23,6 +23,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             LEFT JOIN FETCH a.user u
             LEFT JOIN FETCH u.location l
             WHERE u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+            AND u.status = true
             AND (:available IS NULL OR a.status = :available)
             AND (:locationId IS NULL OR u.locationId = :locationId)
             AND (:queryPattern IS NULL OR (
@@ -36,6 +37,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             LEFT JOIN a.user u
             LEFT JOIN u.location l
             WHERE u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+            AND u.status = true
             AND (:available IS NULL OR a.status = :available)
             AND (:locationId IS NULL OR u.locationId = :locationId)
             AND (:queryPattern IS NULL OR (
@@ -103,6 +105,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                     )
                     AND a.status = true
                     AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+                    AND u.status = true
                     AND (:available IS NULL OR a.status = :available)
                     AND (:locationId IS NULL OR u.locationId = :locationId)
                     AND (:queryPattern IS NULL OR (
@@ -127,6 +130,7 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                         LEFT JOIN u.location l
                         WHERE u.id = a.userId
                         AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+                        AND u.status = true
                         AND (:locationId IS NULL OR u.locationId = :locationId)
                         AND (:queryPattern IS NULL OR (
                             LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
