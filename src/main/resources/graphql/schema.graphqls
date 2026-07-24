@@ -928,6 +928,8 @@ type Query {
   # Incident categories
   incidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
   allIncidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  # HV-1493: departmentId required — GraphQL rejects the query at validation time if omitted.
+  incidentCategoriesByDepartment(departmentId: String!, status: Boolean, query: String, page: PageInput): IncidentCategoryPage
   categoryTopics(categoryId: ID!, status: Boolean): [IncidentTopic!]
 
   # Incident topics
