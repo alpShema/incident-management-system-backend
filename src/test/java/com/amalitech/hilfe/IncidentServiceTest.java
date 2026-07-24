@@ -6,6 +6,7 @@ import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.notifications.NotificationEventPublisher;
 import com.amalitech.hilfe.notifications.events.*;
 import com.amalitech.hilfe.repositories.*;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AutoCloseService;
@@ -13,6 +14,7 @@ import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.SlaService;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -76,6 +81,17 @@ class IncidentServiceTest {
                     return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
                 });
         lenient().when(agentRepository.hasActiveGroup(any(), any())).thenReturn(true);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void setAuthority(String authority) {
+        var auth = new UsernamePasswordAuthenticationToken(
+                "user", null, List.of(new SimpleGrantedAuthority(authority)));
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     private Incident buildIncident() {
@@ -566,6 +582,23 @@ class IncidentServiceTest {
     }
 
     @Test
+    void createIncident_incidentTypeInactive_throws404() {
+        IncidentType inactiveType = buildIncidentType();
+        inactiveType.setStatus(false);
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(inactiveType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+
+        CreateIncidentRequest request = new CreateIncidentRequest(
+                "Title", "Desc", "type-1", "loc-1", null, null);
+
+        assertThatThrownBy(() -> incidentService.createIncident("user-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Incident type with the provided ID is not currently active.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
     void createIncident_locationNotFound_throws404() {
         when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
         when(locationRepository.existsById("bad-loc")).thenReturn(false);
@@ -637,6 +670,34 @@ class IncidentServiceTest {
 
         assertThat(result).hasSize(1);
         verify(incidentRepository).findByUserIdUnified(eq("user-1"), eq("%fire%"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
+    }
+
+    @Test
+    void queryIncidents_withSlaStatusFilter_withoutAdminAuthority_throws403() {
+        SecurityContextHolder.clearContext();
+        IncidentFilterParams filters = new IncidentFilterParams(null, null, null, null, null, SlaStatus.BREACHED);
+        IncidentDateFilter dateFilter = new IncidentDateFilter(null, null);
+        Pageable pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> incidentService.queryIncidents("user-1", null, filters, dateFilter, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+        verifyNoInteractions(incidentRepository);
+    }
+
+    @Test
+    void queryIncidents_withSlaStatusFilter_withAdminAuthority_succeeds() {
+        setAuthority(RbacPermissions.DASHBOARD_ADMIN);
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(page);
+        IncidentFilterParams filters = new IncidentFilterParams(null, null, null, null, null, SlaStatus.BREACHED);
+
+        incidentService.queryIncidents("user-1", null, filters, new IncidentDateFilter(null, null), PageRequest.of(0, 20));
+
+        verify(incidentRepository).findByUserIdUnified(
+                eq("user-1"), isNull(), eq(filters), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     // ── searchIncidents ───────────────────────────────────────────────────────
@@ -1998,6 +2059,20 @@ class IncidentServiceTest {
         verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any());
     }
 
+    @Test
+    void queryDeptIncidents_withSlaStatusFilter_withoutAdminAuthority_throws403() {
+        SecurityContextHolder.clearContext();
+        IncidentFilterParams filters = new IncidentFilterParams(null, null, null, null, null, SlaStatus.AT_RISK);
+        IncidentDateFilter dateFilter = new IncidentDateFilter(null, null);
+        Pageable pageable = Pageable.unpaged();
+
+        assertThatThrownBy(() -> incidentService.queryDeptIncidents("user-1", null, filters, dateFilter, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+        verifyNoInteractions(incidentRepository, agentRepository, agentGroupMemberRepository, agentGroupRepository);
+    }
+
     // ── queryAssignedIncidents ────────────────────────────────────────────────
 
     @Test
@@ -2022,6 +2097,35 @@ class IncidentServiceTest {
 
         assertThat(result.getTotalElements()).isZero();
         verify(incidentRepository, never()).findByAssignedToIdUnified(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void queryAssignedIncidents_withSlaStatusFilter_withoutAdminAuthority_throws403() {
+        SecurityContextHolder.clearContext();
+        IncidentFilterParams filters = new IncidentFilterParams(null, null, null, null, null, SlaStatus.AT_RISK);
+        IncidentDateFilter dateFilter = new IncidentDateFilter(null, null);
+        Pageable pageable = Pageable.unpaged();
+
+        assertThatThrownBy(() -> incidentService.queryAssignedIncidents("user-1", null, filters, dateFilter, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+        verifyNoInteractions(incidentRepository, agentRepository);
+    }
+
+    @Test
+    void queryAssignedIncidents_withSlaStatusFilter_withAdminAuthority_succeeds() {
+        setAuthority(RbacPermissions.DASHBOARD_ADMIN);
+        Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.findByAssignedToIdUnified(eq("agent-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+        IncidentFilterParams filters = new IncidentFilterParams(null, null, null, null, null, SlaStatus.BREACHED);
+
+        incidentService.queryAssignedIncidents("user-1", null, filters, new IncidentDateFilter(null, null), Pageable.unpaged());
+
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), eq(filters), any(IncidentDateFilter.class), any());
     }
 
     // ── sort field translation ────────────────────────────────────────────────

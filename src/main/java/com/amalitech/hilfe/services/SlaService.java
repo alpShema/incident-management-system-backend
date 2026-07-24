@@ -76,13 +76,15 @@ public class SlaService {
         Integer resolutionThreshold = severity != null ? severity.getResolutionTimeMinutes() : null;
         Instant createdAt = incident.getCreatedAt() != null ? incident.getCreatedAt() : Instant.now();
 
-        incidentSlaRepository.save(IncidentSla.builder()
+        IncidentSla sla = IncidentSla.builder()
                 .incidentId(incident.getId())
                 .responseThresholdMinutes(responseThreshold)
                 .resolutionThresholdMinutes(resolutionThreshold)
                 .responseDueAt(addMinutes(createdAt, responseThreshold))
                 .resolutionDueAt(addMinutes(createdAt, resolutionThreshold))
-                .build());
+                .build();
+        refreshMaterializedStatus(sla, Instant.now(), readAtRiskPercentage());
+        incidentSlaRepository.save(sla);
     }
 
     @Transactional
@@ -107,6 +109,7 @@ public class SlaService {
             if (sla.getResponseDueAt() != null && now.isAfter(sla.getResponseDueAt()) && sla.getResponseBreachedAt() == null) {
                 sla.setResponseBreachedAt(sla.getResponseDueAt());
             }
+            refreshMaterializedStatus(sla, now, readAtRiskPercentage());
             incidentSlaRepository.save(sla);
         });
     }
@@ -146,6 +149,7 @@ public class SlaService {
             changed = true;
         }
         if (changed) {
+            refreshMaterializedStatus(sla, now, readAtRiskPercentage());
             incidentSlaRepository.save(sla);
         }
     }
@@ -187,6 +191,17 @@ public class SlaService {
                 sla.setResolutionBreachedAt(sla.getResolutionDueAt());
             }
         }
+        // A direct-to-closed transition (only reachable via force close, see VALID_TRANSITIONS
+        // in IncidentService) can happen before an agent ever responded. Freeze the response
+        // timer here too, the same snapshot pattern onAgentMessageSent uses for a real reply --
+        // otherwise its status keeps recomputing against now() forever, and
+        // findActiveResponseTimers() keeps returning this row on every SlaMonitorScheduler tick.
+        if (sla.getFirstResponseAt() == null && sla.getResponseDueAt() != null) {
+            sla.setResponseElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
+            if (now.isAfter(sla.getResponseDueAt()) && sla.getResponseBreachedAt() == null) {
+                sla.setResponseBreachedAt(sla.getResponseDueAt());
+            }
+        }
     }
 
     private void applyReopening(IncidentSla sla, Instant now) {
@@ -218,8 +233,9 @@ public class SlaService {
     }
 
     public IncidentSlaResponse getIncidentSlaResponse(String incidentId) {
+        int atRiskPct = readAtRiskPercentage();
         return incidentSlaRepository.findById(incidentId)
-                .map(this::toResponse)
+                .map(sla -> toResponse(sla, atRiskPct))
                 .orElse(null);
     }
 
@@ -228,9 +244,10 @@ public class SlaService {
             return Map.of();
         }
 
+        int atRiskPct = readAtRiskPercentage();
         Map<String, IncidentSlaResponse> responses = new HashMap<>();
         for (IncidentSla sla : incidentSlaRepository.findByIncidentIdIn(incidentIds)) {
-            responses.put(sla.getIncidentId(), toResponse(sla));
+            responses.put(sla.getIncidentId(), toResponse(sla, atRiskPct));
         }
         return responses;
     }
@@ -306,50 +323,64 @@ public class SlaService {
     private void scanResponseTimers(int atRiskPct) {
         Instant now = Instant.now();
         for (IncidentSla sla : incidentSlaRepository.findActiveResponseTimers()) {
-            if (sla.getIncident() == null) {
-                continue;
+            if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
+                continue; // no incident, or frozen on resolve/force-close -- never notify
             }
-            if (isBreached(now, sla.getResponseDueAt())) {
-                handleResponseBreach(sla, now);
-            } else {
-                checkResponseAtRisk(sla, now, atRiskPct);
+            String freshStatus = computeResponseStatus(sla, now, atRiskPct);
+            boolean statusChanged = !freshStatus.equals(sla.getResponseStatus());
+            sla.setResponseStatus(freshStatus);
+
+            boolean saved = isBreached(now, sla.getResponseDueAt())
+                    ? handleResponseBreach(sla, now)
+                    : checkResponseAtRisk(sla, now, atRiskPct);
+            if (statusChanged && !saved) {
+                incidentSlaRepository.save(sla);
             }
         }
     }
 
-    private void checkResponseAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
+    private boolean checkResponseAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
         if (sla.getResponseAtRiskNotifiedAt() == null
                 && isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
             publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESPONSE, remainingMinutes(now, sla.getResponseDueAt()));
             sla.setResponseAtRiskNotifiedAt(now);
             incidentSlaRepository.save(sla);
+            return true;
         }
+        return false;
     }
 
     private void scanResolutionTimers(int atRiskPct) {
         Instant now = Instant.now();
         for (IncidentSla sla : incidentSlaRepository.findActiveResolutionTimers()) {
-            if (sla.getIncident() == null) {
-                continue;
+            if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
+                continue; // no incident, or frozen on resolve/force-close -- never notify
             }
-            if (isBreached(now, sla.getResolutionDueAt())) {
-                handleResolutionBreach(sla, now);
-            } else {
-                checkResolutionAtRisk(sla, now, atRiskPct);
+            String freshStatus = computeResolutionStatus(sla, now, atRiskPct);
+            boolean statusChanged = !freshStatus.equals(sla.getResolutionStatus());
+            sla.setResolutionStatus(freshStatus);
+
+            boolean saved = isBreached(now, sla.getResolutionDueAt())
+                    ? handleResolutionBreach(sla, now)
+                    : checkResolutionAtRisk(sla, now, atRiskPct);
+            if (statusChanged && !saved) {
+                incidentSlaRepository.save(sla);
             }
         }
     }
 
-    private void checkResolutionAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
+    private boolean checkResolutionAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
         if (sla.getResolutionAtRiskNotifiedAt() == null
                 && isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
             publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESOLUTION, remainingMinutes(now, sla.getResolutionDueAt()));
             sla.setResolutionAtRiskNotifiedAt(now);
             incidentSlaRepository.save(sla);
+            return true;
         }
+        return false;
     }
 
-    private void handleResponseBreach(IncidentSla sla, Instant now) {
+    private boolean handleResponseBreach(IncidentSla sla, Instant now) {
         boolean changed = false;
         if (sla.getResponseBreachedAt() == null) {
             sla.setResponseBreachedAt(sla.getResponseDueAt());
@@ -364,9 +395,10 @@ public class SlaService {
         if (changed) {
             incidentSlaRepository.save(sla);
         }
+        return changed;
     }
 
-    private void handleResolutionBreach(IncidentSla sla, Instant now) {
+    private boolean handleResolutionBreach(IncidentSla sla, Instant now) {
         boolean changed = false;
         if (sla.getResolutionBreachedAt() == null) {
             sla.setResolutionBreachedAt(sla.getResolutionDueAt());
@@ -381,6 +413,7 @@ public class SlaService {
         if (changed) {
             incidentSlaRepository.save(sla);
         }
+        return changed;
     }
 
     private void publishAtRiskNotifications(Incident incident, String slaType, long minutesRemaining) {
@@ -427,7 +460,7 @@ public class SlaService {
         return recipients;
     }
 
-    private IncidentSlaResponse toResponse(IncidentSla sla) {
+    private IncidentSlaResponse toResponse(IncidentSla sla, int atRiskPct) {
         Instant effectiveNow = sla.getPauseStartedAt() != null ? sla.getPauseStartedAt() : Instant.now();
         return new IncidentSlaResponse(
                 sla.getResponseThresholdMinutes(),
@@ -439,9 +472,11 @@ public class SlaService {
                 sla.getFirstResponseAt(),
                 sla.getResponseBreachedAt(),
                 sla.getResolutionBreachedAt(),
-                computeResponseStatus(sla, effectiveNow),
-                computeResolutionStatus(sla, effectiveNow),
-                sla.getPauseStartedAt() != null
+                computeResponseStatus(sla, effectiveNow, atRiskPct),
+                computeResolutionStatus(sla, effectiveNow, atRiskPct),
+                sla.getPauseStartedAt() != null,
+                sla.getResponseElapsedMs(),
+                sla.getResolutionElapsedMs()
         );
     }
 
@@ -449,23 +484,23 @@ public class SlaService {
         return minutes != null ? minutes * 60L : null;
     }
 
-    private String computeResponseStatus(IncidentSla sla, Instant now) {
+    private String computeResponseStatus(IncidentSla sla, Instant now, int atRiskPct) {
         if (sla.getResponseThresholdMinutes() == null || sla.getResponseDueAt() == null) {
             return "NOT_TRACKED";
         }
-        if (sla.getFirstResponseAt() != null) {
+        if (sla.getFirstResponseAt() != null || sla.getResolvedAtSnapshot() != null) {
             return sla.getResponseBreachedAt() == null ? "MET" : STATUS_BREACHED;
         }
         if (sla.getResponseBreachedAt() != null || !now.isBefore(sla.getResponseDueAt())) {
             return STATUS_BREACHED;
         }
-        if (isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), readAtRiskPercentage())) {
+        if (isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
             return "AT_RISK";
         }
         return "ON_TRACK";
     }
 
-    private String computeResolutionStatus(IncidentSla sla, Instant now) {
+    private String computeResolutionStatus(IncidentSla sla, Instant now, int atRiskPct) {
         if (sla.getResolutionThresholdMinutes() == null || sla.getResolutionDueAt() == null) {
             return "NOT_TRACKED";
         }
@@ -475,10 +510,16 @@ public class SlaService {
         if (sla.getResolutionBreachedAt() != null || !now.isBefore(sla.getResolutionDueAt())) {
             return STATUS_BREACHED;
         }
-        if (isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), readAtRiskPercentage())) {
+        if (isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
             return "AT_RISK";
         }
         return "ON_TRACK";
+    }
+
+    private void refreshMaterializedStatus(IncidentSla sla, Instant now, int atRiskPct) {
+        Instant effectiveNow = sla.getPauseStartedAt() != null ? sla.getPauseStartedAt() : now;
+        sla.setResponseStatus(computeResponseStatus(sla, effectiveNow, atRiskPct));
+        sla.setResolutionStatus(computeResolutionStatus(sla, effectiveNow, atRiskPct));
     }
 
     private int readAtRiskPercentage() {

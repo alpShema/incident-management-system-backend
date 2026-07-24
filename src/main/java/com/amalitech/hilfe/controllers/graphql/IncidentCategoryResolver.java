@@ -8,6 +8,7 @@ import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateIncidentCategoryRequest;
 import com.amalitech.hilfe.dto.UpdateTopicRequest;
+import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.IncidentCategoryService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,18 @@ public class IncidentCategoryResolver {
             @Argument PageInput page) {
         return PageInput.toPageResponse(
                 categoryService.listAllCategories(status, hasActiveTopics, query, PageInput.toPageable(page))
+        );
+    }
+
+    @QueryMapping
+    @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")
+    public PageResponse<IncidentCategoryResponse> incidentCategoriesByDepartment(
+            @Argument String departmentId,
+            @Argument Boolean status,
+            @Argument String query,
+            @Argument PageInput page) {
+        return PageInput.toPageResponse(
+                categoryService.listCategoriesByDepartment(departmentId, status, query, PageInput.toPageable(page))
         );
     }
 

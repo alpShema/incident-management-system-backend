@@ -26,6 +26,8 @@ import java.util.List;
 @RequestMapping("/incident-categories")
 @RequiredArgsConstructor
 public class IncidentCategoryController {
+    private static final String MSG_CATEGORIES_RETRIEVED = "Incident categories retrieved successfully";
+
     private final IncidentCategoryService categoryService;
 
     @Operation(summary = "List incident categories", description = "Returns categories filtered by status, optional active-topic filter, and optional search query. Defaults to active categories when `status` is omitted. If only `hasActiveTopics` is supplied, status is not restricted. Pass `status=false` to get inactive ones. Pass `hasActiveTopics=true` to require at least one active linked topic. Pass `query` to search by category name, description, or department name. Requires authentication, but no role-specific permission.")
@@ -37,7 +39,7 @@ public class IncidentCategoryController {
             @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
             Pageable pageable
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
+        return ResponseEntity.ok(ApiResponse.success(MSG_CATEGORIES_RETRIEVED,
                 PageResponse.from(categoryService.listCategories(status, hasActiveTopics, query, pageable))));
     }
 
@@ -60,8 +62,30 @@ public class IncidentCategoryController {
             @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
             Pageable pageable
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Incident categories retrieved successfully",
+        return ResponseEntity.ok(ApiResponse.success(MSG_CATEGORIES_RETRIEVED,
                 PageResponse.from(categoryService.listAllCategories(status, hasActiveTopics, query, pageable))));
+    }
+
+    @Operation(
+            summary = "List incident categories by department",
+            description = "Returns categories linked to the given department, of every status by default (no active-only "
+                    + "restriction) — pass `status` to narrow to active or inactive only. Supports an optional `query` "
+                    + "search across category name, description, or department name. `departmentId` is required; omitting "
+                    + "it returns a validation error. Requires `department.read` permission.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Categories retrieved")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Missing departmentId")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Department not found")
+    @GetMapping("/by-department")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")
+    public ResponseEntity<ApiResponse<PageResponse<IncidentCategoryResponse>>> listCategoriesByDepartment(
+            @Parameter(description = "Department ID to scope categories to. Required.") @RequestParam String departmentId,
+            @Parameter(description = "Filter by category status: true for active, false for inactive, omit for all") @RequestParam(required = false) Boolean status,
+            @Parameter(description = "Optional search keyword for category name, description, or department name") @RequestParam(required = false) String query,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(MSG_CATEGORIES_RETRIEVED,
+                PageResponse.from(categoryService.listCategoriesByDepartment(departmentId, status, query, pageable))));
     }
 
     @Operation(summary = "Create an incident category", description = "Creates a new category under an internal department. `departmentId` is required. Requires `incident-category.create` permission.")

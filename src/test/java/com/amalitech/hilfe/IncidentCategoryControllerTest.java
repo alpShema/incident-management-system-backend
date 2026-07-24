@@ -195,6 +195,63 @@ class IncidentCategoryControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    // ── GET /incident-categories/by-department ───────────────────────────────
+
+    @Test
+    void listCategoriesByDepartment_validRequest_returns200WithList() throws Exception {
+        when(categoryService.listCategoriesByDepartment(eq("dept-1"), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-categories/by-department?departmentId=dept-1")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident categories retrieved successfully"))
+                .andExpect(jsonPath("$.data.items[0].id").value("cat-1"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void listCategoriesByDepartment_missingDepartmentId_returns400() throws Exception {
+        mvc.perform(get("/incident-categories/by-department")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listCategoriesByDepartment_departmentNotFound_returns404() throws Exception {
+        when(categoryService.listCategoriesByDepartment(eq("missing"), any(), any(), any()))
+                .thenThrow(new ArmsAuthException("Department not found", 404));
+
+        mvc.perform(get("/incident-categories/by-department?departmentId=missing")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Department not found"));
+    }
+
+    @Test
+    void listCategoriesByDepartment_withoutDepartmentReadAuthority_returns403() throws Exception {
+        mvc.perform(get("/incident-categories/by-department?departmentId=dept-1")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_AGENT")))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listCategoriesByDepartment_withStatusFilter_passesStatusToService() throws Exception {
+        when(categoryService.listCategoriesByDepartment(eq("dept-1"), eq(Boolean.TRUE), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-categories/by-department?departmentId=dept-1&status=true")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isOk());
+
+        verify(categoryService).listCategoriesByDepartment(eq("dept-1"), eq(Boolean.TRUE), any(), any());
+    }
+
     // ── POST /incident-categories ─────────────────────────────────────────────
 
     @Test

@@ -11,6 +11,7 @@ import graphql.schema.GraphQLScalarType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.graphql.execution.RuntimeWiringConfigurer;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -26,7 +27,39 @@ public class GraphQlConfig {
     public RuntimeWiringConfigurer runtimeWiringConfigurer() {
         return wiringBuilder -> wiringBuilder
                 .scalar(ExtendedScalars.GraphQLLong)
-                .scalar(instantScalar());
+                .scalar(instantScalar())
+                .scalar(uploadScalar());
+    }
+
+    // Backs the multipart-request-spec upload path (see GraphQlMultipartUploadController):
+    // the controller splices the real MultipartFile straight into the variables map before
+    // execution, so parseValue only ever needs to accept it as-is — there is no JSON
+    // representation of a file, so serialize/parseLiteral are intentionally unsupported.
+    private GraphQLScalarType uploadScalar() {
+        return GraphQLScalarType.newScalar()
+                .name("Upload")
+                .description("A file supplied via the GraphQL multipart request spec")
+                .coercing(new Coercing<MultipartFile, Void>() {
+                    @Override
+                    public Void serialize(Object input, GraphQLContext context, Locale locale) throws CoercingSerializeException {
+                        throw new CoercingSerializeException("Upload is an input-only type and cannot be returned in a response");
+                    }
+
+                    @Override
+                    public MultipartFile parseValue(Object input, GraphQLContext context, Locale locale) throws CoercingParseValueException {
+                        if (input instanceof MultipartFile multipartFile) {
+                            return multipartFile;
+                        }
+                        throw new CoercingParseValueException("Expected an uploaded file for the Upload variable");
+                    }
+
+                    @Override
+                    public MultipartFile parseLiteral(Value<?> input, CoercedVariables variables,
+                            GraphQLContext context, Locale locale) throws CoercingParseLiteralException {
+                        throw new CoercingParseLiteralException("Upload values must be supplied as a variable, not an inline literal");
+                    }
+                })
+                .build();
     }
 
     private GraphQLScalarType instantScalar() {

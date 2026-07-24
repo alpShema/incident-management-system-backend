@@ -1,5 +1,6 @@
 scalar Instant
 scalar Long
+scalar Upload
 
 # ──────────────────────────────────────
 # SHARED TYPES
@@ -83,6 +84,8 @@ type IncidentSla {
   responseStatus: String
   resolutionStatus: String
   paused: Boolean!
+  responseElapsedMs: Long
+  resolutionElapsedMs: Long
 }
 
 type Incident {
@@ -430,6 +433,53 @@ type FaqPage {
   hasPrevious: Boolean!
 }
 
+enum FaqRowStatus {
+  READY
+  NEEDS_ATTENTION
+}
+
+type FaqRowError {
+  row: Int!
+  reason: String!
+}
+
+type FaqBulkUploadResult {
+  created: Int!
+  updated: Int!
+  failed: Int!
+  errors: [FaqRowError!]!
+}
+
+type FaqInspectionSummary {
+  totalRows: Int!
+  readyCount: Int!
+  needsAttentionCount: Int!
+}
+
+type FaqInspectionRow {
+  row: Int!
+  question: String
+  answer: String
+  questionMissing: Boolean!
+  answerMissing: Boolean!
+  status: FaqRowStatus!
+}
+
+type FaqInspectionRowPage {
+  items: [FaqInspectionRow!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+type FaqInspectionResult {
+  summary: FaqInspectionSummary!
+  rows: FaqInspectionRowPage!
+}
+
 # ──────────────────────────────────────
 # SEVERITIES & STATUSES
 # ──────────────────────────────────────
@@ -614,6 +664,16 @@ enum SortDirection {
   DESC
 }
 
+# Combined per-incident SLA status — the worst-of the response and resolution SLA timers
+# (BREACHED > AT_RISK > ON_TRACK > MET). Incidents with no tracked SLA on either timer match none
+# of these values.
+enum SlaStatus {
+  MET
+  ON_TRACK
+  AT_RISK
+  BREACHED
+}
+
 input PageInput {
   page: Int = 0
   size: Int = 20
@@ -631,6 +691,7 @@ input IncidentFilterInput {
   incidentTypeId: String
   categoryId: String
   locationId: String
+  slaStatus: SlaStatus
 }
 
 input AttachmentInput {
@@ -867,6 +928,8 @@ type Query {
   # Incident categories
   incidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
   allIncidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  # HV-1493: departmentId required — GraphQL rejects the query at validation time if omitted.
+  incidentCategoriesByDepartment(departmentId: String!, status: Boolean, query: String, page: PageInput): IncidentCategoryPage
   categoryTopics(categoryId: ID!, status: Boolean): [IncidentTopic!]
 
   # Incident topics
@@ -875,6 +938,8 @@ type Query {
   # FAQs
   faqs(active: Boolean, search: String, page: PageInput): FaqPage
   faq(id: ID!): Faq
+  inspectFaqImport(file: Upload!, status: FaqRowStatus, page: PageInput): FaqInspectionResult!
+  faqImportTemplate: String!
 
   # Severities
   severities: [Severity!]
@@ -989,6 +1054,7 @@ type Mutation {
   toggleFaqActive(id: ID!, active: Boolean!): Faq
   deleteFaq(id: ID!): Boolean
   reEmbedFaqs: Int!
+  bulkImportFaqs(file: Upload!): FaqBulkUploadResult!
 
   # Severities
   createSeverity(input: SeverityInput!): Severity

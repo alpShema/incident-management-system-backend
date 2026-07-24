@@ -106,7 +106,7 @@ public class FaqController {
     @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
     @Operation(summary = "Download CSV template", description = "Returns a blank CSV file with the required headers (question, answer) for bulk upload")
     public ResponseEntity<Resource> downloadTemplate() {
-        byte[] csvBytes = "question,answer\n".getBytes();
+        byte[] csvBytes = FaqService.CSV_IMPORT_TEMPLATE.getBytes();
         ByteArrayResource resource = new ByteArrayResource(csvBytes);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv"))

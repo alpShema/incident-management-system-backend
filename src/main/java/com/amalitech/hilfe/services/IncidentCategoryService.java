@@ -113,6 +113,28 @@ public class IncidentCategoryService {
         return categoryStatusFilter(Boolean.TRUE);
     }
 
+    // HV-1493: unlike listCategories/listAllCategories's "active by default" behaviour, this has no
+    // implicit status restriction — omitting `status` returns categories of every status for the
+    // department, matching "fetch all categories, filter by department client-side".
+    public Page<IncidentCategoryResponse> listCategoriesByDepartment(String departmentId, Boolean status, String query, Pageable pageable) {
+        findDepartmentOrThrow(departmentId);
+        String queryPattern = buildQueryPattern(query);
+
+        Specification<IncidentCategory> spec = Specification
+                .where(IncidentCategorySpecifications.withDepartment())
+                .and(IncidentCategorySpecifications.hasDepartmentId(departmentId))
+                .and(categoryStatusFilter(status))
+                .and(IncidentCategorySpecifications.matchesQuery(queryPattern));
+
+        return categoryRepository.findAll(spec, pageable)
+                .map(IncidentCategoryResponse::from);
+    }
+
+    private void findDepartmentOrThrow(String departmentId) {
+        departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
+    }
+
     public Page<IncidentCategoryResponse> searchCategories(String query, Pageable pageable) {
         String queryPattern = (query == null || query.isBlank()) ? null
                 : "%" + query.toLowerCase().replace("%", "\\%").replace("_", "\\_") + "%";
@@ -176,7 +198,22 @@ public class IncidentCategoryService {
                 .orElseThrow(() -> new ArmsAuthException(CATEGORY_NOT_FOUND, 404));
         category.setStatus(status);
         categoryRepository.save(category);
+
+        if (Boolean.FALSE.equals(status)) {
+            deactivateTopics(id);
+        }
+
         return IncidentCategoryResponse.from(category);
+    }
+
+    private void deactivateTopics(String categoryId) {
+        List<IncidentType> topics = typeRepository.findByCategoryId(categoryId).stream()
+                .filter(topic -> Boolean.TRUE.equals(topic.getStatus()))
+                .toList();
+        if (!topics.isEmpty()) {
+            topics.forEach(topic -> topic.setStatus(false));
+            typeRepository.saveAll(topics);
+        }
     }
 
     public List<IncidentTopicResponse> listTopicsByCategory(String categoryId, Boolean status) {

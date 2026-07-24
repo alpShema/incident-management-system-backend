@@ -35,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -45,6 +46,10 @@ public class FaqService {
             "The uploaded CSV file could not be read. Please check the file format and try again.";
     private static final String QUESTION_COLUMN = "question";
     private static final String ANSWER_COLUMN = "answer";
+
+    // Single source of truth for the downloadable CSV template, shared by the REST
+    // (FaqController) and GraphQL (FaqResolver) surfaces so they can't drift apart.
+    public static final String CSV_IMPORT_TEMPLATE = QUESTION_COLUMN + "," + ANSWER_COLUMN + "\n";
 
     private final FaqRepository faqRepository;
     private final FaqEmbeddingService faqEmbeddingService;
@@ -355,9 +360,24 @@ public class FaqService {
                 .orElseThrow(() -> new ArmsAuthException("FAQ not found.", 404));
     }
 
+    private static final Pattern CSV_FORMULA_PREFIX = Pattern.compile("^[=+\\-@]");
+
     private String sanitize(String input) {
         if (input == null) return null;
         // Strip HTML/script tags to prevent XSS stored in FAQ content
-        return input.replaceAll("<[^>]*>", "").trim();
+        String cleaned = input.replaceAll("<[^>]*>", "").trim();
+        // Neutralize CSV/formula injection: if this text is ever exported back to CSV/XLSX
+        // (e.g. a future FAQ export, or an admin backup dump) and opened in Excel/Sheets/
+        // LibreOffice, a leading =, +, -, or @ would be interpreted as a live formula rather
+        // than literal text — letting attacker-supplied FAQ content run formulas (data
+        // exfiltration via HYPERLINK, or legacy DDE command execution) on whoever opens
+        // that export. Prefixing with a single quote is the standard mitigation:
+        // spreadsheet applications treat a leading apostrophe as "force text". (A leading
+        // tab/CR is also a known trigger, but trim() above already removes those, so they
+        // can never reach this check.)
+        if (CSV_FORMULA_PREFIX.matcher(cleaned).find()) {
+            cleaned = "'" + cleaned;
+        }
+        return cleaned;
     }
 }
