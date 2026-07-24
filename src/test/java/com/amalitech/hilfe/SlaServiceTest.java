@@ -32,6 +32,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -203,6 +204,106 @@ class SlaServiceTest {
         assertThat(sla.getResolvedAtSnapshot()).isNotNull();
         assertThat(sla.getResolutionBreachedAt()).isEqualTo(sla.getResolutionDueAt());
         assertThat(sla.getResolutionRemainingMsOnResolve()).isZero();
+    }
+
+    @Test
+    void onStatusChanged_forceClosedBeforeFirstResponse_freezesResponseElapsedWithoutBreach() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofMinutes(5))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.plus(Duration.ofMinutes(25)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResponseElapsedMs()).isNotNull();
+        assertThat(sla.getResponseBreachedAt()).isNull();
+    }
+
+    @Test
+    void onStatusChanged_forceClosedAfterResponseDeadlinePassed_marksResponseBreached() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(1))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.minus(Duration.ofMinutes(10)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResponseBreachedAt()).isEqualTo(sla.getResponseDueAt());
+        assertThat(sla.getResponseElapsedMs()).isNotNull();
+    }
+
+    @Test
+    void onStatusChanged_forceClosedAfterAgentAlreadyResponded_doesNotOverwriteExistingResponseElapsed() {
+        Instant now = FIXED_NOW;
+        Instant firstResponseAt = now.minus(Duration.ofMinutes(20));
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(1))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.minus(Duration.ofMinutes(30)))
+                .firstResponseAt(firstResponseAt)
+                .responseElapsedMs(123_456L)
+                .resolutionDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResponseElapsedMs()).isEqualTo(123_456L);
+    }
+
+    @Test
+    void scanAndNotify_frozenResponseAndResolutionTimers_neverPublishesNotification() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder().id("inc-1").incidentNo(7).build();
+        IncidentSla responseSla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.minus(Duration.ofMinutes(10)))
+                .resolvedAtSnapshot(now.minus(Duration.ofMinutes(1)))
+                .build();
+        IncidentSla resolutionSla = IncidentSla.builder()
+                .incidentId("inc-2")
+                .incident(incident)
+                .resolutionThresholdMinutes(60)
+                .resolutionDueAt(now.minus(Duration.ofMinutes(5)))
+                .resolvedAtSnapshot(now.minus(Duration.ofMinutes(1)))
+                .build();
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(responseSla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of(resolutionSla));
+
+        slaService.scanAndNotify();
+
+        verify(notificationEventPublisher, never()).publish(any());
+        verify(incidentSlaRepository, never()).save(any());
+    }
+
+    @Test
+    void getIncidentSlaResponse_forceClosedBeforeResponseDueDate_reportsResponseStatusMet() {
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(60)
+                .responseDueAt(FIXED_NOW.plus(Duration.ofMinutes(30)))
+                .resolvedAtSnapshot(FIXED_NOW.minus(Duration.ofMinutes(1)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        IncidentSlaResponse response = slaService.getIncidentSlaResponse("inc-1");
+
+        assertThat(response).isNotNull();
+        assertThat(response.responseStatus()).isEqualTo("MET");
     }
 
     @Test

@@ -191,6 +191,17 @@ public class SlaService {
                 sla.setResolutionBreachedAt(sla.getResolutionDueAt());
             }
         }
+        // A direct-to-closed transition (only reachable via force close, see VALID_TRANSITIONS
+        // in IncidentService) can happen before an agent ever responded. Freeze the response
+        // timer here too, the same snapshot pattern onAgentMessageSent uses for a real reply --
+        // otherwise its status keeps recomputing against now() forever, and
+        // findActiveResponseTimers() keeps returning this row on every SlaMonitorScheduler tick.
+        if (sla.getFirstResponseAt() == null && sla.getResponseDueAt() != null) {
+            sla.setResponseElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
+            if (now.isAfter(sla.getResponseDueAt()) && sla.getResponseBreachedAt() == null) {
+                sla.setResponseBreachedAt(sla.getResponseDueAt());
+            }
+        }
     }
 
     private void applyReopening(IncidentSla sla, Instant now) {
@@ -312,8 +323,8 @@ public class SlaService {
     private void scanResponseTimers(int atRiskPct) {
         Instant now = Instant.now();
         for (IncidentSla sla : incidentSlaRepository.findActiveResponseTimers()) {
-            if (sla.getIncident() == null) {
-                continue;
+            if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
+                continue; // no incident, or frozen on resolve/force-close -- never notify
             }
             String freshStatus = computeResponseStatus(sla, now, atRiskPct);
             boolean statusChanged = !freshStatus.equals(sla.getResponseStatus());
@@ -342,8 +353,8 @@ public class SlaService {
     private void scanResolutionTimers(int atRiskPct) {
         Instant now = Instant.now();
         for (IncidentSla sla : incidentSlaRepository.findActiveResolutionTimers()) {
-            if (sla.getIncident() == null) {
-                continue;
+            if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
+                continue; // no incident, or frozen on resolve/force-close -- never notify
             }
             String freshStatus = computeResolutionStatus(sla, now, atRiskPct);
             boolean statusChanged = !freshStatus.equals(sla.getResolutionStatus());
@@ -463,7 +474,9 @@ public class SlaService {
                 sla.getResolutionBreachedAt(),
                 computeResponseStatus(sla, effectiveNow, atRiskPct),
                 computeResolutionStatus(sla, effectiveNow, atRiskPct),
-                sla.getPauseStartedAt() != null
+                sla.getPauseStartedAt() != null,
+                sla.getResponseElapsedMs(),
+                sla.getResolutionElapsedMs()
         );
     }
 
@@ -475,7 +488,7 @@ public class SlaService {
         if (sla.getResponseThresholdMinutes() == null || sla.getResponseDueAt() == null) {
             return "NOT_TRACKED";
         }
-        if (sla.getFirstResponseAt() != null) {
+        if (sla.getFirstResponseAt() != null || sla.getResolvedAtSnapshot() != null) {
             return sla.getResponseBreachedAt() == null ? "MET" : STATUS_BREACHED;
         }
         if (sla.getResponseBreachedAt() != null || !now.isBefore(sla.getResponseDueAt())) {

@@ -21,6 +21,7 @@ public interface IncidentSlaRepository extends JpaRepository<IncidentSla, String
             JOIN FETCH sla.incident incident
             WHERE sla.responseDueAt IS NOT NULL
               AND sla.firstResponseAt IS NULL
+              AND sla.resolvedAtSnapshot IS NULL
               AND sla.pauseStartedAt IS NULL
             """)
     List<IncidentSla> findActiveResponseTimers();
