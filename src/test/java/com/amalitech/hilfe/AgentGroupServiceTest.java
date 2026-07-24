@@ -482,6 +482,48 @@ class AgentGroupServiceTest {
     }
 
     @Test
+    void listAllAgentGroups_withDepartmentId_filtersToThatDepartment() {
+        AgentGroup active = group(true);
+        Department dept = Department.builder().id("dept-1").name("Facilities").status(true).build();
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(agentGroupRepository.listAllAgentGroups(isNull(), isNull(), eq("dept-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(active)));
+        when(agentGroupMemberRepository.countByAgentGroupId("group-1")).thenReturn(0L);
+
+        var result = agentGroupService.listAllAgentGroups(null, null, "dept-1", Pageable.unpaged());
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(agentGroupRepository).listAllAgentGroups(isNull(), isNull(), eq("dept-1"), any(Pageable.class));
+    }
+
+    @Test
+    void listAllAgentGroups_departmentNotFound_throws404() {
+        when(departmentRepository.findById("missing")).thenReturn(Optional.empty());
+        Pageable pageable = Pageable.unpaged();
+
+        assertThatThrownBy(() -> agentGroupService.listAllAgentGroups(null, null, "missing", pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Department not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+        verify(agentGroupRepository, never()).listAllAgentGroups(any(), any(), any(), any());
+    }
+
+    @Test
+    void listAllAgentGroups_inactiveDepartment_stillAllowed() {
+        // Existence-only check (unlike findActiveDepartment for create/update) — an inactive
+        // department's existing agent groups should still be listable.
+        Department inactiveDept = Department.builder().id("dept-1").name("Facilities").status(false).build();
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(inactiveDept));
+        when(agentGroupRepository.listAllAgentGroups(isNull(), isNull(), eq("dept-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        var result = agentGroupService.listAllAgentGroups(null, null, "dept-1", Pageable.unpaged());
+
+        assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
     void listMembers_inactiveGroup_returnsMembers() {
         AgentGroup group = group(false);
         when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(group));
