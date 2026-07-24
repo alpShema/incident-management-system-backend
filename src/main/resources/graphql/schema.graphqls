@@ -664,6 +664,16 @@ enum SortDirection {
   DESC
 }
 
+# Combined per-incident SLA status — the worst-of the response and resolution SLA timers
+# (BREACHED > AT_RISK > ON_TRACK > MET). Incidents with no tracked SLA on either timer match none
+# of these values.
+enum SlaStatus {
+  MET
+  ON_TRACK
+  AT_RISK
+  BREACHED
+}
+
 input PageInput {
   page: Int = 0
   size: Int = 20
@@ -681,6 +691,7 @@ input IncidentFilterInput {
   incidentTypeId: String
   categoryId: String
   locationId: String
+  slaStatus: SlaStatus
 }
 
 input AttachmentInput {

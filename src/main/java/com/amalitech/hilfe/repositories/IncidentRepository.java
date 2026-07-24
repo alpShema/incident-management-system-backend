@@ -17,6 +17,36 @@ import java.util.Optional;
 @Repository
 public interface IncidentRepository extends JpaRepository<Incident, String> {
 
+    // Shared by every query that supports filters.slaStatus — kept as single constants so the main
+    // query and its count-query twin can never drift out of sync with each other. Ranks each SLA
+    // timer's materialized status (SlaService.computeResponseStatus/computeResolutionStatus,
+    // persisted onto IncidentSla.responseStatus/resolutionStatus) and takes the worst-of the two as
+    // the incident's combined SLA status: BREACHED > AT_RISK > ON_TRACK > MET. Untracked timers rank
+    // below MET so they never affect the outcome unless both timers are untracked, in which case the
+    // incident matches no slaStatus filter value.
+    String SLA_JOIN = "LEFT JOIN IncidentSla sla ON sla.incidentId = i.id";
+
+    String SLA_STATUS_FILTER = """
+            AND (:#{#filters.slaStatusName()} IS NULL OR
+                 GREATEST(
+                     CASE WHEN sla.responseStatus = 'BREACHED' THEN 3
+                          WHEN sla.responseStatus = 'AT_RISK' THEN 2
+                          WHEN sla.responseStatus = 'ON_TRACK' THEN 1
+                          WHEN sla.responseStatus = 'MET' THEN 0
+                          ELSE -1 END,
+                     CASE WHEN sla.resolutionStatus = 'BREACHED' THEN 3
+                          WHEN sla.resolutionStatus = 'AT_RISK' THEN 2
+                          WHEN sla.resolutionStatus = 'ON_TRACK' THEN 1
+                          WHEN sla.resolutionStatus = 'MET' THEN 0
+                          ELSE -1 END
+                 ) =
+                 CASE WHEN :#{#filters.slaStatusName()} = 'BREACHED' THEN 3
+                      WHEN :#{#filters.slaStatusName()} = 'AT_RISK' THEN 2
+                      WHEN :#{#filters.slaStatusName()} = 'ON_TRACK' THEN 1
+                      WHEN :#{#filters.slaStatusName()} = 'MET' THEN 0
+                      ELSE -1 END)
+            """;
+
     @Query(value = """
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
@@ -357,6 +387,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user assignedUser
             LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
             WHERE i.userId = :userId
             AND (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
@@ -369,6 +401,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """,
@@ -376,6 +409,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
+            """ + SLA_JOIN + """
+
             WHERE i.userId = :userId
             AND (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
@@ -388,6 +423,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """)
@@ -413,6 +449,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user assignedUser
             LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
             WHERE EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = i.assignedToId
@@ -429,6 +467,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """,
@@ -436,6 +475,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             SELECT COUNT(DISTINCT i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
+            """ + SLA_JOIN + """
+
             WHERE EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 WHERE m.agentId = i.assignedToId
@@ -452,6 +493,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """)
@@ -477,6 +519,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user assignedUser
             LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
             WHERE (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
@@ -488,6 +532,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """,
@@ -495,6 +540,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
+            """ + SLA_JOIN + """
+
             WHERE (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
@@ -506,6 +553,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """)
@@ -530,6 +578,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user assignedUser
             LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
             WHERE i.assignedToId = :agentId
             AND (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
@@ -542,6 +592,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """,
@@ -549,6 +600,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             SELECT COUNT(i) FROM Incident i
             LEFT JOIN i.incidentType it
             LEFT JOIN it.category ic
+            """ + SLA_JOIN + """
+
             WHERE i.assignedToId = :agentId
             AND (:queryPattern IS NULL OR (
                 LOWER(i.title) LIKE :queryPattern ESCAPE '!'
@@ -561,6 +614,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """)
