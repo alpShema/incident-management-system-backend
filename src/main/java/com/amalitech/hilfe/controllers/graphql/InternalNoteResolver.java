@@ -6,6 +6,7 @@ import com.amalitech.hilfe.dto.InternalNoteResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.services.InternalNoteService;
 import com.amalitech.hilfe.services.JwtTokenService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -36,7 +37,7 @@ public class InternalNoteResolver {
     @PreAuthorize("hasAnyRole('AGENT', 'ADMIN', 'SUPER_ADMIN')")
     public InternalNoteResponse createInternalNote(
             @Argument String incidentId,
-            @Argument InternalNoteRequest input,
+            @Valid @Argument InternalNoteRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         GraphQlResponseMessage.set("Note created successfully");
@@ -48,7 +49,7 @@ public class InternalNoteResolver {
     public InternalNoteResponse updateInternalNote(
             @Argument String incidentId,
             @Argument String noteId,
-            @Argument InternalNoteRequest input,
+            @Valid @Argument InternalNoteRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         GraphQlResponseMessage.set("Note updated successfully");

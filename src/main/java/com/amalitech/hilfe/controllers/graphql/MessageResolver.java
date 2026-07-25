@@ -8,6 +8,7 @@ import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.dto.SendMessageRequest;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.MessageService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -34,7 +35,7 @@ public class MessageResolver {
     @MutationMapping
     public MessageResponse sendMessage(
             @Argument String incidentId,
-            @Argument SendMessageRequest input,
+            @Valid @Argument SendMessageRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("Message sent successfully");
         return messageService.sendMessage(principal.userId(), principal.roleCode(), incidentId,
@@ -54,7 +55,7 @@ public class MessageResolver {
     @MutationMapping
     public PresignedUrlResponse generateMessagePresignedUrl(
             @Argument String incidentId,
-            @Argument PresignedUrlRequest input,
+            @Valid @Argument PresignedUrlRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("Presigned URL generated successfully");
         return messageService.generateMessagePresignedUrl(principal.userId(), principal.roleCode(), incidentId, input);
