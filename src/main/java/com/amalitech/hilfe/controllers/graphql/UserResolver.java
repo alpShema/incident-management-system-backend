@@ -8,6 +8,7 @@ import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -39,7 +40,7 @@ public class UserResolver {
     @PreAuthorize("hasAuthority('" + RbacPermissions.RBAC_USER_ROLE_UPDATE + "')")
     public UserRoleSummaryResponse updateUserRole(
             @Argument String userId,
-            @Argument UpdateUserRoleRequest input,
+            @Valid @Argument UpdateUserRoleRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("User role updated successfully");
         return userService.assignUserRole(principal.userId(), userId, input.roleCode());
@@ -48,7 +49,7 @@ public class UserResolver {
     @MutationMapping
     public UserRoleSummaryResponse updateUserStatus(
             @Argument String userId,
-            @Argument UpdateUserStatusInput input,
+            @Valid @Argument UpdateUserStatusInput input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("User status updated successfully");
         return userService.updateUserStatus(principal.userId(), RoleCode.valueOf(principal.roleCode()), userId, input.status());

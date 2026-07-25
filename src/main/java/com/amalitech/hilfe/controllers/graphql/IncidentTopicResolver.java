@@ -6,6 +6,7 @@ import com.amalitech.hilfe.dto.IncidentTopicResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateTopicRequest;
 import com.amalitech.hilfe.services.IncidentCategoryService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -34,14 +35,14 @@ public class IncidentTopicResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('incident-type.update')")
-    public IncidentTopicResponse updateTopicById(@Argument String id, @Argument UpdateTopicRequest input) {
+    public IncidentTopicResponse updateTopicById(@Argument String id, @Valid @Argument UpdateTopicRequest input) {
         GraphQlResponseMessage.set("Incident topic updated successfully");
         return categoryService.updateTopicById(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('incident-type.delete')")
-    public IncidentTopicResponse updateTopicStatus(@Argument String id, @Argument UpdateTopicStatusInput input) {
+    public IncidentTopicResponse updateTopicStatus(@Argument String id, @Valid @Argument UpdateTopicStatusInput input) {
         GraphQlResponseMessage.set("Incident topic status updated successfully");
         return categoryService.updateTopicStatus(id, input.status());
     }
