@@ -10,6 +10,7 @@ import com.amalitech.hilfe.dto.RoleResponse;
 import com.amalitech.hilfe.dto.UpdateRoleRequest;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.RoleService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -39,28 +40,28 @@ public class RoleResolver {
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') and hasAuthority('rbac.role.update')")
-    public RoleResponse createRole(@Argument CreateRoleRequest input) {
+    public RoleResponse createRole(@Valid @Argument CreateRoleRequest input) {
         GraphQlResponseMessage.set("Role created successfully");
         return roleService.createRole(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') and hasAuthority('" + RbacPermissions.RBAC_USER_ROLE_UPDATE + "')")
-    public BulkAssignRoleResponse bulkAssignRole(@Argument String roleCode, @Argument BulkAssignRoleRequest input) {
+    public BulkAssignRoleResponse bulkAssignRole(@Argument String roleCode, @Valid @Argument BulkAssignRoleRequest input) {
         GraphQlResponseMessage.set("Users assigned to role successfully");
         return roleService.bulkAssignRole(roleCode, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') and hasAuthority('rbac.role.update')")
-    public RoleResponse updateRole(@Argument String roleCode, @Argument UpdateRoleRequest input) {
+    public RoleResponse updateRole(@Argument String roleCode, @Valid @Argument UpdateRoleRequest input) {
         GraphQlResponseMessage.set("Role updated successfully");
         return roleService.updateRole(roleCode, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') and hasAuthority('rbac.user-role.update')")
-    public BulkAssignRoleResponse removeRoleUsers(@Argument String roleCode, @Argument BulkAssignRoleRequest input) {
+    public BulkAssignRoleResponse removeRoleUsers(@Argument String roleCode, @Valid @Argument BulkAssignRoleRequest input) {
         GraphQlResponseMessage.set("Users removed from role successfully");
         return roleService.removeUsersFromRole(roleCode, input);
     }

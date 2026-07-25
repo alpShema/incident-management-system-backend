@@ -10,6 +10,7 @@ import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
 import com.amalitech.hilfe.services.FaqService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -38,7 +39,7 @@ public class FaqResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.create')")
-    public FaqUpsertResult createFaq(@Argument CreateFaqRequest input) {
+    public FaqUpsertResult createFaq(@Valid @Argument CreateFaqRequest input) {
         FaqUpsertResult result = faqService.createFaq(input);
         GraphQlResponseMessage.set(result.created() ? "FAQ created successfully" : "FAQ updated successfully");
         return result;
@@ -46,7 +47,7 @@ public class FaqResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('faq.update')")
-    public FaqResponse updateFaq(@Argument String id, @Argument UpdateFaqRequest input) {
+    public FaqResponse updateFaq(@Argument String id, @Valid @Argument UpdateFaqRequest input) {
         GraphQlResponseMessage.set("FAQ updated successfully");
         return faqService.updateFaq(id, input);
     }
