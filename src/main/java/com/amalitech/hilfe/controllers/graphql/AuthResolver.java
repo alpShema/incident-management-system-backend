@@ -10,6 +10,7 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.utils.CookieUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.graphql.data.method.annotation.Argument;
@@ -34,7 +35,7 @@ public class AuthResolver {
     private String cookieSameSite;
 
     @MutationMapping
-    public AuthSessionResponse login(@Argument LoginInput input) {
+    public AuthSessionResponse login(@Valid @Argument LoginInput input) {
         LoginRequest request = new LoginRequest(input.armsToken());
         AuthResult result = authService.login(request);
         HttpServletResponse response = currentResponse();

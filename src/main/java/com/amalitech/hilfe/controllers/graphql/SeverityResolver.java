@@ -4,6 +4,7 @@ import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.SeverityRequest;
 import com.amalitech.hilfe.dto.SeverityResponse;
 import com.amalitech.hilfe.services.SeverityService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -31,21 +32,21 @@ public class SeverityResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('severity.create')")
-    public SeverityResponse createSeverity(@Argument SeverityRequest input) {
+    public SeverityResponse createSeverity(@Valid @Argument SeverityRequest input) {
         GraphQlResponseMessage.set("Severity created successfully");
         return severityService.createSeverity(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('severity.update')")
-    public SeverityResponse updateSeverity(@Argument String id, @Argument SeverityRequest input) {
+    public SeverityResponse updateSeverity(@Argument String id, @Valid @Argument SeverityRequest input) {
         GraphQlResponseMessage.set("Severity updated successfully");
         return severityService.updateSeverity(id, input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('severity.update')")
-    public SeverityResponse updateSeveritySla(@Argument String id, @Argument UpdateSeveritySlaInput input) {
+    public SeverityResponse updateSeveritySla(@Argument String id, @Valid @Argument UpdateSeveritySlaInput input) {
         GraphQlResponseMessage.set("Severity SLA updated successfully");
         return severityService.updateSeveritySla(id, input.toRequest());
     }

@@ -6,6 +6,7 @@ import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateAvailabilityRequest;
 import com.amalitech.hilfe.services.AgentService;
 import com.amalitech.hilfe.services.JwtTokenService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -55,7 +56,7 @@ public class AgentResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('agent.availability.update')")
     public AgentResponse updateMyAgentStatus(
-            @Argument UpdateAvailabilityRequest input,
+            @Valid @Argument UpdateAvailabilityRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("Agent status updated successfully");
         return agentService.updateAvailability(principal.userId(), input.available());
@@ -63,7 +64,7 @@ public class AgentResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('agent.availability.update.any')")
-    public AgentResponse updateAgentStatus(@Argument String agentId, @Argument UpdateAvailabilityRequest input) {
+    public AgentResponse updateAgentStatus(@Argument String agentId, @Valid @Argument UpdateAvailabilityRequest input) {
         GraphQlResponseMessage.set("Agent status updated successfully");
         return agentService.updateAvailabilityById(agentId, input.available());
     }
