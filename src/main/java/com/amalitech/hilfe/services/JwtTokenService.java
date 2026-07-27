@@ -1,181 +1,101 @@
 package com.amalitech.hilfe.services;
 
-import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.constants.ApiMessages;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
-import java.sql.Timestamp;
+import java.util.Base64;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 public class JwtTokenService implements TokenService {
-    private static final String CLAIM_EMAIL = "email";
-    private static final String CLAIM_ROLE = "role";
-    private static final String CLAIM_TYPE = "type";
-    private static final String CLAIM_TOKEN_VERSION = "ver";
-    private static final String TOKEN_TYPE_ACCESS = "access";
-    private static final String TOKEN_TYPE_REFRESH = "refresh";
+    private static final String CLAIM_USER_ID = "user_id";
 
-    private final SecretKey signingKey;
-    private final String jwtIssuer;
-    private final String jwtAudience;
-    private final long accessTokenTtlSeconds;
-    private final long refreshTokenTtlSeconds;
+    private final PublicKey armsPublicKey;
     private final UserAuthorityService userAuthorityService;
+    private final TokenRevocationService tokenRevocationService;
 
     public JwtTokenService(
-            @Value("${app.jwt.secret}") String jwtSecret,
-            @Value("${app.jwt.issuer}") String jwtIssuer,
-            @Value("${app.jwt.audience}") String jwtAudience,
-            @Value("${app.jwt.access-ttl-seconds:3600}") long accessTokenTtlSeconds,
-            @Value("${app.jwt.refresh-ttl-seconds:86400}") long refreshTokenTtlSeconds,
-            UserAuthorityService userAuthorityService
+            @Value("${arms.sso-public-key}") String armsSsoPublicKeyPem,
+            UserAuthorityService userAuthorityService,
+            TokenRevocationService tokenRevocationService
     ) {
-        this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        this.jwtIssuer = jwtIssuer;
-        this.jwtAudience = jwtAudience;
-        this.accessTokenTtlSeconds = accessTokenTtlSeconds;
-        this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
+        this.armsPublicKey = parsePublicKey(armsSsoPublicKeyPem);
         this.userAuthorityService = userAuthorityService;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @Override
-    public String generateAccessToken(User user) {
-        return buildToken(user, TOKEN_TYPE_ACCESS, accessTokenTtlSeconds, true);
-    }
-
-    @Override
-    public String generateRefreshToken(User user) {
-        return buildToken(user, TOKEN_TYPE_REFRESH, refreshTokenTtlSeconds, false);
-    }
-
-    @Override
-    public String generateRefreshToken(User user, long ttlSeconds) {
-        return buildToken(user, TOKEN_TYPE_REFRESH, ttlSeconds, false);
-    }
-
-    @Override
-    public Optional<Authentication> authenticateAccessToken(String token) {
+    public Optional<Authentication> authenticateAccessToken(String armsToken) {
         try {
-            Jws<Claims> parsed = Jwts.parser()
-                    .verifyWith(signingKey)
-                    .build()
-                    .parseSignedClaims(token);
-
-            Claims claims = parsed.getPayload();
-
-            if (!TOKEN_TYPE_ACCESS.equals(claims.get(CLAIM_TYPE, String.class))) {
+            Claims claims = verifyArmsToken(armsToken);
+            String userId = claims.get(CLAIM_USER_ID, String.class);
+            if (userId == null || userId.isBlank()) {
                 return Optional.empty();
             }
-
-            String userId = claims.getSubject();
-            String email = claims.get(CLAIM_EMAIL, String.class);
-            String claimedRole = claims.get(CLAIM_ROLE, String.class);
-            Integer claimedVersion = claims.get(CLAIM_TOKEN_VERSION, Integer.class);
+            if (tokenRevocationService.isRevoked(armsToken)) {
+                return Optional.empty();
+            }
             return userAuthorityService.resolveByUserId(userId)
-                    .filter(r -> email.equals(r.email()))
-                    .filter(r -> hasMatchingRoleClaim(claimedRole, r.roleCode()))
-                    .filter(r -> claimedVersion != null && claimedVersion == r.tokenVersion())
                     .map(r -> {
-                        AuthPrincipal principal = new AuthPrincipal(
-                                r.userId(),
-                                r.email(),
-                                r.roleCode()
-                        );
-                        return new UsernamePasswordAuthenticationToken(
-                                principal,
-                                null,
-                                r.authorities()
-                        );
+                        AuthPrincipal principal = new AuthPrincipal(r.userId(), r.email(), r.roleCode());
+                        return new UsernamePasswordAuthenticationToken(principal, null, r.authorities());
                     });
-
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }
     }
 
     @Override
-    public Optional<RefreshPrincipal> authenticateRefreshToken(String token) {
+    public long getArmsTokenRemainingSeconds(String armsToken) {
         try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(signingKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-
-            if (!TOKEN_TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class))) {
-                return Optional.empty();
+            Claims claims = verifyArmsToken(armsToken);
+            long remainingSeconds = claims.getExpiration().toInstant().getEpochSecond() - Instant.now().getEpochSecond();
+            if (remainingSeconds <= 0) {
+                throw new ArmsAuthException(ApiMessages.SESSION_EXPIRED, 401);
             }
-
-            String userId = claims.getSubject();
-            String email = claims.get(CLAIM_EMAIL, String.class);
-            if (userId == null || email == null) {
-                return Optional.empty();
-            }
-
-            String jti = claims.getId();
-            Instant expiresAt = claims.getExpiration().toInstant();
-
-            return Optional.of(new RefreshPrincipal(userId, email, jti, expiresAt));
+            return remainingSeconds;
+        } catch (ArmsAuthException e) {
+            throw e;
         } catch (JwtException | IllegalArgumentException e) {
-            return Optional.empty();
+            throw new ArmsAuthException(ApiMessages.SESSION_UNVERIFIABLE, 401, e);
         }
     }
 
-    @Override
-    public long getAccessTokenTtlSeconds() {
-        return accessTokenTtlSeconds;
+    private Claims verifyArmsToken(String armsToken) {
+        return Jwts.parser()
+                .verifyWith(armsPublicKey)
+                .build()
+                .parseSignedClaims(armsToken)
+                .getPayload();
     }
 
-    @Override
-    public long getRefreshTokenTtlSeconds() {
-        return refreshTokenTtlSeconds;
-    }
-
-    private String buildToken(User user, String type, long ttlSeconds, boolean includeRoleClaim) {
-        Instant now = Instant.now();
-        Instant expiry = now.plusSeconds(ttlSeconds);
-
-        var builder = Jwts.builder()
-                .subject(user.getId())
-                .issuer(jwtIssuer)
-                .audience().add(jwtAudience).and()
-                .claim(CLAIM_EMAIL, user.getEmail())
-                .claim(CLAIM_TYPE, type)
-                .issuedAt(Timestamp.from(now))
-                .expiration(Timestamp.from(expiry));
-
-        if (TOKEN_TYPE_REFRESH.equals(type)) {
-            builder.id(UUID.randomUUID().toString());
+    private static PublicKey parsePublicKey(String pem) {
+        String base64Body = pem
+                .replace("\\n", "")
+                .replaceAll("-----BEGIN (.*)-----", "")
+                .replaceAll("-----END (.*)-----", "")
+                .replaceAll("\\s+", "");
+        byte[] decoded = Base64.getDecoder().decode(base64Body);
+        try {
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            return keyFactory.generatePublic(new X509EncodedKeySpec(decoded));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Failed to parse ARMS SSO public key", e);
         }
-
-        if (includeRoleClaim) {
-            String resolvedRoleCode = userAuthorityService.resolve(user).roleCode();
-            builder.claim(CLAIM_ROLE, resolvedRoleCode);
-        }
-
-        if (TOKEN_TYPE_ACCESS.equals(type)) {
-            builder.claim(CLAIM_TOKEN_VERSION, user.getTokenVersion());
-        }
-
-        return builder.signWith(signingKey, Jwts.SIG.HS256).compact();
-    }
-
-    private boolean hasMatchingRoleClaim(String claimedRole, String resolvedRoleCode) {
-        return claimedRole != null && claimedRole.equals(resolvedRoleCode);
     }
 
     public record AuthPrincipal(String userId, String email, String roleCode) {

@@ -975,7 +975,6 @@ type Query {
 type Mutation {
   # Auth
   login(input: LoginInput!): AuthSession
-  refreshToken: AuthSession
   logout: Boolean
 
   # Incidents
