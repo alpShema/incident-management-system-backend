@@ -17,6 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
 import java.time.Instant;
 import java.util.List;
@@ -24,16 +26,13 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    private static final Instant FIXED_NOW = Instant.parse("2026-06-29T14:00:00Z");
-
     @Mock ArmsClient armsClient;
-    @Mock ArmsTokenExpiryService armsTokenExpiryService;
     @Mock TokenService tokenService;
     @Mock TokenRevocationService tokenRevocationService;
     @Mock UserRepository userRepository;
@@ -41,27 +40,18 @@ class AuthServiceTest {
     @Mock UserAuthorityService userAuthorityService;
     @InjectMocks AuthService authService;
 
-    private static final String TEST_JTI = "test-jti-1";
-    private static final Instant TEST_EXPIRY = FIXED_NOW.plusSeconds(3600);
-
     @Test
-    void login_happyPath_upsertsUserAndReturnsTokens() {
+    void login_happyPath_upsertsUserAndReturnsSessionTtl() {
         ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png", null);
         User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").roleCode(RoleCode.CLIENT).build();
 
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
-        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(7200L);
+        when(tokenService.getArmsTokenRemainingSeconds("arms-token")).thenReturn(7200L);
         when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
-        when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
-        when(tokenService.generateRefreshToken(user, 7200L)).thenReturn("refresh-jwt");
-        when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
 
         AuthResult result = authService.login(new LoginRequest("arms-token"));
 
-        assertThat(result.tokens().getAccessToken()).isEqualTo("access-jwt");
-        assertThat(result.tokens().getRefreshToken()).isEqualTo("refresh-jwt");
-        assertThat(result.tokens().getAccessTokenExpiresIn()).isEqualTo(3600L);
-        assertThat(result.tokens().getRefreshTokenExpiresIn()).isEqualTo(7200L);
+        assertThat(result.sessionTtlSeconds()).isEqualTo(7200L);
         assertThat(result.session().getUserId()).isEqualTo("u1");
         assertThat(result.session().getEmail()).isEqualTo("john@test.com");
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, "http://img.png", null, null);
@@ -73,10 +63,8 @@ class AuthServiceTest {
         User user = User.builder().id("u2").email("alice@test.com").fullName("Alice Smith").roleCode(RoleCode.CLIENT).build();
 
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
-        when(armsTokenExpiryService.getRemainingLifetimeSeconds("token")).thenReturn(5400L);
+        when(tokenService.getArmsTokenRemainingSeconds("token")).thenReturn(5400L);
         when(userRepository.findAuthUserById("u2")).thenReturn(Optional.of(user));
-        when(tokenService.generateAccessToken(any())).thenReturn("at");
-        when(tokenService.generateRefreshToken(any(), anyLong())).thenReturn("rt");
 
         authService.login(new LoginRequest("token"));
 
@@ -109,10 +97,8 @@ class AuthServiceTest {
         when(armsClient.getUserByToken("token")).thenReturn(armsUser);
         when(locationRepository.findByNameIgnoreCase("Takoradi Office")).thenReturn(Optional.empty());
         when(locationRepository.findByNameIgnoreCase("Takoradi")).thenReturn(Optional.of(location));
-        when(armsTokenExpiryService.getRemainingLifetimeSeconds("token")).thenReturn(5400L);
+        when(tokenService.getArmsTokenRemainingSeconds("token")).thenReturn(5400L);
         when(userRepository.findAuthUserById("1170")).thenReturn(Optional.of(user));
-        when(tokenService.generateAccessToken(any())).thenReturn("at");
-        when(tokenService.generateRefreshToken(any(), anyLong())).thenReturn("rt");
 
         authService.login(new LoginRequest("token"));
 
@@ -141,8 +127,6 @@ class AuthServiceTest {
                 .hasMessageContaining("deactivated")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
-
-        verify(tokenService, never()).generateAccessToken(any());
     }
 
     @Test
@@ -174,128 +158,14 @@ class AuthServiceTest {
         User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").roleCode(RoleCode.CLIENT).build();
 
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
-        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(7200L);
+        when(tokenService.getArmsTokenRemainingSeconds("arms-token")).thenReturn(7200L);
         when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
-        when(tokenService.generateAccessToken(user)).thenReturn("access-jwt");
-        when(tokenService.generateRefreshToken(user, 7200L)).thenReturn("refresh-jwt");
-        when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
 
         AuthResult result = authService.login(new LoginRequest("arms-token"));
 
         assertThat(result.session().getUserId()).isEqualTo("u1");
         assertThat(user.getRoleCode()).isEqualTo("CLIENT");
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, null, null, null);
-    }
-
-    @Test
-    void refresh_happyPath_reissuesTokensUsingArmsExpiry() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png", null);
-        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
-
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
-        when(tokenRevocationService.isRevoked(TEST_JTI)).thenReturn(false);
-        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
-        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(1800L);
-        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
-        when(tokenService.generateAccessToken(user)).thenReturn("new-access");
-        when(tokenService.generateRefreshToken(user, 1800L)).thenReturn("new-refresh");
-        when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
-
-        AuthResult result = authService.refresh("rt", "arms-token");
-
-        assertThat(result.tokens().getAccessToken()).isEqualTo("new-access");
-        assertThat(result.tokens().getRefreshToken()).isEqualTo("new-refresh");
-        assertThat(result.tokens().getAccessTokenExpiresIn()).isEqualTo(3600L);
-        assertThat(result.tokens().getRefreshTokenExpiresIn()).isEqualTo(1800L);
-        assertThat(result.session().getUserId()).isEqualTo("u1");
-        verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, "http://img.png", null, null);
-    }
-
-    @Test
-    void refresh_successfulRefresh_revokesOldJti() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", "http://img.png", null);
-        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").build();
-
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
-        when(tokenRevocationService.isRevoked(TEST_JTI)).thenReturn(false);
-        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
-        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(1800L);
-        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
-        when(tokenService.generateAccessToken(user)).thenReturn("new-access");
-        when(tokenService.generateRefreshToken(user, 1800L)).thenReturn("new-refresh");
-        when(tokenService.getAccessTokenTtlSeconds()).thenReturn(3600L);
-
-        authService.refresh("rt", "arms-token");
-
-        verify(tokenRevocationService).revoke(TEST_JTI, "u1", TEST_EXPIRY);
-    }
-
-    @Test
-    void refresh_deactivatedUser_throws403() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u1", "John", "Doe", "john@test.com", null, null);
-        User user = User.builder().id("u1").email("john@test.com").fullName("John Doe").status(false).build();
-
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
-        when(tokenRevocationService.isRevoked(TEST_JTI)).thenReturn(false);
-        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
-        when(armsTokenExpiryService.getRemainingLifetimeSeconds("arms-token")).thenReturn(1800L);
-        when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
-
-        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("deactivated")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(403);
-
-        verify(tokenService, never()).generateAccessToken(any());
-    }
-
-    @Test
-    void refresh_revokedToken_throwsUnauthorized() {
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
-        when(tokenRevocationService.isRevoked(TEST_JTI)).thenReturn(true);
-
-        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Your session has expired. Please log in again.");
-    }
-
-    @Test
-    void refresh_legacyTokenWithNullJti_throwsUnauthorized() {
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", null, TEST_EXPIRY)));
-        when(tokenRevocationService.isRevoked(null)).thenReturn(true);
-
-        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Your session has expired. Please log in again.");
-    }
-
-    @Test
-    void refresh_invalidRefreshToken_throwsUnauthorized() {
-        when(tokenService.authenticateRefreshToken("rt")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Your session has expired. Please log in again.");
-    }
-
-    @Test
-    void refresh_mismatchedArmsUser_throwsUnauthorized() {
-        ArmsUserInfo armsUser = new ArmsUserInfo("u2", "John", "Doe", "john@test.com", null, null);
-
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
-        when(tokenRevocationService.isRevoked(TEST_JTI)).thenReturn(false);
-        when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
-
-        assertThatThrownBy(() -> authService.refresh("rt", "arms-token"))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Your session could not be verified. Please log in again.");
     }
 
     @Test
@@ -306,29 +176,27 @@ class AuthServiceTest {
     }
 
     @Test
-    void logout_withValidRefreshToken_revokesJti() {
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
-
-        authService.logout("rt");
-
-        verify(tokenRevocationService).revoke(TEST_JTI, "u1", TEST_EXPIRY);
-        verify(userRepository).incrementTokenVersion("u1");
+    void logout_blankToken_completesWithoutException() {
+        assertThatCode(() -> authService.logout(" "))
+                .doesNotThrowAnyException();
+        verify(tokenRevocationService, never()).revoke(any(), any(), any());
     }
 
     @Test
-    void logout_withValidRefreshToken_incrementsTokenVersion() {
-        when(tokenService.authenticateRefreshToken("rt"))
-                .thenReturn(Optional.of(new TokenService.RefreshPrincipal("u1", "john@test.com", TEST_JTI, TEST_EXPIRY)));
+    void logout_withValidSessionToken_revokesToken() {
+        JwtTokenService.AuthPrincipal principal = new JwtTokenService.AuthPrincipal("u1", "john@test.com", "CLIENT");
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, List.of());
+        when(tokenService.authenticateAccessToken("arms-token")).thenReturn(Optional.of(auth));
+        when(tokenService.getArmsTokenRemainingSeconds("arms-token")).thenReturn(3600L);
 
-        authService.logout("rt");
+        authService.logout("arms-token");
 
-        verify(userRepository).incrementTokenVersion("u1");
+        verify(tokenRevocationService).revoke(eq("arms-token"), eq("u1"), any(Instant.class));
     }
 
     @Test
-    void logout_withInvalidRefreshToken_skipsRevocation() {
-        when(tokenService.authenticateRefreshToken("bad-token")).thenReturn(Optional.empty());
+    void logout_withInvalidSessionToken_skipsRevocation() {
+        when(tokenService.authenticateAccessToken("bad-token")).thenReturn(Optional.empty());
 
         assertThatCode(() -> authService.logout("bad-token"))
                 .doesNotThrowAnyException();
