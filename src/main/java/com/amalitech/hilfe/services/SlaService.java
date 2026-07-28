@@ -44,7 +44,7 @@ import java.util.Optional;
 public class SlaService {
 
     public static final String SLA_AT_RISK_PCT_KEY = "sla_at_risk_pct";
-    public static final int DEFAULT_AT_RISK_PCT = 20;
+    public static final int DEFAULT_AT_RISK_PCT = 80;
 
     private static final String STATUS_PENDING = "status-pending";
     private static final String STATUS_RESOLVED = "status-resolved";
@@ -573,7 +573,7 @@ public class SlaService {
             return false;
         }
         long thresholdMs = Duration.ofMinutes(thresholdMinutes).toMillis();
-        long bufferMs = thresholdMs * atRiskPct / 100;
+        long bufferMs = thresholdMs - (thresholdMs * atRiskPct / 100);
         return !now.isBefore(dueAt.minusMillis(bufferMs));
     }
 
