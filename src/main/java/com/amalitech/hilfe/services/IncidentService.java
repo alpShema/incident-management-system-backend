@@ -348,6 +348,10 @@ public class IncidentService {
         enforceUpdateOwnership(actorUserId, hasUpdateAny, incident,
                 "You do not have permission to reassign this incident.");
 
+        if (STATUS_RESOLVED.equals(incident.getStatusId())) {
+            throw new ArmsAuthException("You cannot reassign a Resolved incident.", 400);
+        }
+
         Agent agent = agentRepository.findById(request.agentId())
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
         if (!Boolean.TRUE.equals(agent.getStatus())) {
