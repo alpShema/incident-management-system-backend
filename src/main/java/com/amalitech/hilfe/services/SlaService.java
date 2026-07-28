@@ -446,15 +446,27 @@ public class SlaService {
         activityLogService.logIncidentSlaBreached(incidentId, slaType, minutesOverdue);
     }
 
+    /**
+     * Admin/Admin-Agent recipients are suppressed once an available agent is assigned to the
+     * incident, since their intervention is not needed in that case. The assigned agent is always
+     * notified regardless of this rule — including when that agent's user account itself holds an
+     * admin-capacity role, since they remain the person responsible for actioning the incident.
+     */
     private List<String> resolveNotificationRecipients(Incident incident) {
+        Agent assignedAgent = resolveAssignedAgent(incident);
+        String agentUserId = assignedAgent != null ? assignedAgent.getUserId() : null;
+        boolean agentAvailable = assignedAgent != null && Boolean.TRUE.equals(assignedAgent.getStatus());
+        boolean suppressAdmins = agentUserId != null && agentAvailable;
+
         List<String> recipients = new ArrayList<>();
-        String agentUserId = resolveAssignedAgentUserId(incident);
         if (agentUserId != null) {
             recipients.add(agentUserId);
         }
-        for (String adminId : userRepository.findActiveAdminUserIds()) {
-            if (!recipients.contains(adminId)) {
-                recipients.add(adminId);
+        if (!suppressAdmins) {
+            for (String adminId : userRepository.findActiveAdminUserIds()) {
+                if (!recipients.contains(adminId)) {
+                    recipients.add(adminId);
+                }
             }
         }
         return recipients;
@@ -536,16 +548,19 @@ public class SlaService {
     }
 
     private String resolveAssignedAgentUserId(Incident incident) {
+        Agent assignedAgent = resolveAssignedAgent(incident);
+        return assignedAgent != null ? assignedAgent.getUserId() : null;
+    }
+
+    private Agent resolveAssignedAgent(Incident incident) {
         if (incident.getAssignedToId() == null) {
             return null;
         }
         Agent assignedAgent = incident.getAssignedTo();
         if (assignedAgent != null && assignedAgent.getUserId() != null) {
-            return assignedAgent.getUserId();
+            return assignedAgent;
         }
-        return agentRepository.findById(incident.getAssignedToId())
-                .map(Agent::getUserId)
-                .orElse(null);
+        return agentRepository.findById(incident.getAssignedToId()).orElse(assignedAgent);
     }
 
     private long computeElapsedMs(IncidentSla sla, Instant createdAt, Instant now) {
