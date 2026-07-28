@@ -341,6 +341,190 @@ class SlaServiceTest {
     }
 
     @Test
+    void scanAndNotify_availableAssignedAgent_suppressesAdminNotifications() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(15)
+                .assignedToId("agent-1")
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(agentRepository.findById("agent-1"))
+                .thenReturn(Optional.of(Agent.builder().id("agent-1").userId("agent-user-1").status(true).build()));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("agent-user-1");
+        verify(userRepository, never()).findActiveAdminUserIds();
+    }
+
+    @Test
+    void scanAndNotify_availableAssignedAgent_suppressesAdminsOnResolutionBreach() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(15)
+                .assignedToId("agent-1")
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .resolutionThresholdMinutes(480)
+                .resolutionDueAt(now.minus(Duration.ofMinutes(5)))
+                .resolutionStatus("AT_RISK")
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of());
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of(sla));
+        when(agentRepository.findById("agent-1"))
+                .thenReturn(Optional.of(Agent.builder().id("agent-1").userId("agent-user-1").status(true).build()));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<com.amalitech.hilfe.notifications.events.IncidentSlaBreachedEvent> captor =
+                ArgumentCaptor.forClass(com.amalitech.hilfe.notifications.events.IncidentSlaBreachedEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("agent-user-1");
+        verify(userRepository, never()).findActiveAdminUserIds();
+    }
+
+    @Test
+    void scanAndNotify_unavailableAssignedAgent_stillNotifiesAdmins() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(15)
+                .assignedToId("agent-1")
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(agentRepository.findById("agent-1"))
+                .thenReturn(Optional.of(Agent.builder().id("agent-1").userId("agent-user-1").status(false).build()));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-1"));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(2)).publish(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(IncidentSlaAtRiskEvent::recipientUserId)
+                .containsExactlyInAnyOrder("agent-user-1", "admin-1");
+    }
+
+    @Test
+    void scanAndNotify_noAssignedAgent_notifiesAdminsNormally() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(15)
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-1"));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("admin-1");
+        verify(agentRepository, never()).findById(any());
+    }
+
+    @Test
+    void scanAndNotify_availableAdminAgentSelfAssigned_stillNotifiedAsAssignee() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(15)
+                .assignedToId("agent-1")
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(agentRepository.findById("agent-1"))
+                .thenReturn(Optional.of(Agent.builder().id("agent-1").userId("admin-agent-1").status(true).build()));
+
+        slaService.scanAndNotify();
+
+        // The Admin-Agent is still notified exactly once, in their capacity as the assignee —
+        // suppression only removes *other* admin/admin-agent recipients, never the assignee itself.
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("admin-agent-1");
+        verify(userRepository, never()).findActiveAdminUserIds();
+    }
+
+    @Test
+    void scanAndNotify_unavailableAdminAgentSelfAssigned_receivesNotification() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(15)
+                .assignedToId("agent-1")
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(agentRepository.findById("agent-1"))
+                .thenReturn(Optional.of(Agent.builder().id("agent-1").userId("admin-agent-1").status(false).build()));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-agent-1"));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("admin-agent-1");
+    }
+
+    @Test
     void scanAndNotify_responseBreached_materializesBreachedStatus() {
         Instant now = FIXED_NOW;
         Incident incident = Incident.builder()
