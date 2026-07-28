@@ -86,8 +86,8 @@ public class JwtTokenService implements TokenService {
     private static PublicKey parsePublicKey(String pem) {
         String base64Body = pem
                 .replace("\\n", "")
-                .replaceAll("-----BEGIN (.*)-----", "")
-                .replaceAll("-----END (.*)-----", "")
+                .replaceAll("-----BEGIN [^-]+-----", "")
+                .replaceAll("-----END [^-]+-----", "")
                 .replaceAll("\\s+", "");
         byte[] decoded = Base64.getDecoder().decode(base64Body);
         try {
