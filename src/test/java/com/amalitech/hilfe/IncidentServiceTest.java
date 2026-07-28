@@ -1701,6 +1701,58 @@ class IncidentServiceTest {
     }
 
     @Test
+    void assignIncident_resolvedIncident_throws400() {
+        Incident incident = buildIncident();
+        incident.setStatusId("status-resolved");
+        incident.setAssignedToId("agent-1");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("actor-1", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You cannot reassign a Resolved incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-1");
+        assertThat(incident.getStatusId()).isEqualTo("status-resolved");
+        verify(incidentRepository, never()).save(any(Incident.class));
+        verify(agentRepository, never()).findById(any());
+    }
+
+    @Test
+    void assignIncident_resolvedIncident_deniedForAdmin() {
+        Incident incident = buildIncident();
+        incident.setStatusId("status-resolved");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-1");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("admin-1", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You cannot reassign a Resolved incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void assignIncident_resolvedIncident_permissionDeniedTakesPrecedenceOverStatusGuard() {
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        incident.setStatusId("status-resolved");
+        stubAssignedAgent(); // agent-1 → userId "actor-1"
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("other-agent-user", false, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You do not have permission to reassign this incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
     void assignIncident_agentIsOwner_succeeds() {
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");

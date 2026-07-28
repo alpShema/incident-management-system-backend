@@ -314,6 +314,7 @@ public class IncidentController {
                     + "Callers without `incident.update.any` may only reassign incidents already assigned to them."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident assigned")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid agent, or incident is Resolved and cannot be reassigned")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
     @PatchMapping("/{id}/assign")
