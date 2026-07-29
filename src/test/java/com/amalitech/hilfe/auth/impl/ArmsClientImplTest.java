@@ -37,7 +37,7 @@ class ArmsClientImplTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         ArmsProperties properties = new ArmsProperties(
-                SSO_URL, "http://auth", "http://emp", "api-key");
+                SSO_URL, "http://auth", "http://emp", "api-key", "test-public-key");
         client = new ArmsClientImpl(builder.build(), properties);
     }
 

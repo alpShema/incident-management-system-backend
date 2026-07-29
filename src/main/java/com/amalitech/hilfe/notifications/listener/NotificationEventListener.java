@@ -1,9 +1,11 @@
 package com.amalitech.hilfe.notifications.listener;
 
+import com.amalitech.hilfe.dto.NotificationResponse;
 import com.amalitech.hilfe.models.Notification;
 import com.amalitech.hilfe.notifications.content.NotificationContentFactory;
 import com.amalitech.hilfe.notifications.content.NotificationDraft;
 import com.amalitech.hilfe.notifications.delivery.NotificationBroadcaster;
+import com.amalitech.hilfe.notifications.delivery.NotificationSubscriptionRegistry;
 import com.amalitech.hilfe.notifications.events.*;
 import com.amalitech.hilfe.notifications.persistence.NotificationPersistenceService;
 import com.amalitech.hilfe.slack.service.SlackNotificationBroadcaster;
@@ -24,16 +26,19 @@ public class NotificationEventListener {
     private final NotificationContentFactory contentFactory;
     private final NotificationPersistenceService persistenceService;
     private final NotificationBroadcaster broadcaster;
+    private final NotificationSubscriptionRegistry subscriptionRegistry;
     private final SlackNotificationBroadcaster slackBroadcaster;
 
     public NotificationEventListener(
             NotificationContentFactory contentFactory,
             NotificationPersistenceService persistenceService,
             NotificationBroadcaster broadcaster,
+            NotificationSubscriptionRegistry subscriptionRegistry,
             ObjectProvider<SlackNotificationBroadcaster> slackBroadcasterProvider) {
         this.contentFactory = contentFactory;
         this.persistenceService = persistenceService;
         this.broadcaster = broadcaster;
+        this.subscriptionRegistry = subscriptionRegistry;
         this.slackBroadcaster = slackBroadcasterProvider.getIfAvailable();
     }
 
@@ -139,6 +144,13 @@ public class NotificationEventListener {
             broadcaster.broadcast(notification);
         } catch (Exception ex) {
             log.error("Failed to broadcast notification for event {} user {} incident {}", eventType, recipientUserId, incidentId, ex);
+        }
+
+        // Also push to any live GraphQL subscription for this user
+        try {
+            subscriptionRegistry.push(notification.getUserId(), NotificationResponse.from(notification));
+        } catch (Exception ex) {
+            log.error("Failed to push GraphQL subscription notification for event {} user {} incident {}", eventType, recipientUserId, incidentId, ex);
         }
 
         // Also broadcast to Slack if enabled

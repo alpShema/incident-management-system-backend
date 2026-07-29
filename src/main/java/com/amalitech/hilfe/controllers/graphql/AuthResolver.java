@@ -39,24 +39,8 @@ public class AuthResolver {
         LoginRequest request = new LoginRequest(input.armsToken());
         AuthResult result = authService.login(request);
         HttpServletResponse response = currentResponse();
-        CookieUtils.addAuthCookies(response, result.tokens(), cookieSecure, cookieSameSite);
-        CookieUtils.addArmsTokenCookie(response, input.armsToken(), cookieSecure, cookieSameSite,
-                result.tokens().getRefreshTokenExpiresIn());
+        CookieUtils.addSessionCookie(response, input.armsToken(), result.sessionTtlSeconds(), cookieSecure, cookieSameSite);
         GraphQlResponseMessage.set("Login successful");
-        return result.session();
-    }
-
-    @MutationMapping
-    public AuthSessionResponse refreshToken() {
-        HttpServletRequest request = currentRequest();
-        HttpServletResponse response = currentResponse();
-        String armsToken = CookieUtils.getCookieValue(request, CookieUtils.ARMS_TOKEN_COOKIE);
-        String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
-        AuthResult result = authService.refresh(refreshToken, armsToken);
-        CookieUtils.addAuthCookies(response, result.tokens(), cookieSecure, cookieSameSite);
-        CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, cookieSameSite,
-                result.tokens().getRefreshTokenExpiresIn());
-        GraphQlResponseMessage.set("Token refreshed successfully");
         return result.session();
     }
 
@@ -64,11 +48,17 @@ public class AuthResolver {
     public boolean logout() {
         HttpServletRequest request = currentRequest();
         HttpServletResponse response = currentResponse();
-        String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
-        authService.logout(refreshToken);
+        String armsToken = CookieUtils.getCookieValue(request, CookieUtils.ACCESS_TOKEN_COOKIE);
+        authService.logout(armsToken);
         CookieUtils.clearAuthCookies(response, cookieSecure, cookieSameSite);
         GraphQlResponseMessage.set("Logout successful");
         return true;
+    }
+
+    @QueryMapping
+    @PreAuthorize("isAuthenticated()")
+    public AuthSessionResponse me(@AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        return authService.getCurrentSession(principal.userId());
     }
 
     @QueryMapping

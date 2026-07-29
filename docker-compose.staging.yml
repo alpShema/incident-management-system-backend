@@ -11,8 +11,9 @@
 #   DB_NAME         — hilfe
 #   DB_USER         — RDS username
 #   DB_PASSWORD     — RDS password
-#   JWT_SECRET      — JWT signing secret (>= 32 chars)
 #   ARMS_SSO_URL    — SSO validation endpoint
+#   ARMS_SSO_PUBLIC_KEY — RSA public key ARMS signs SSO tokens with (RS256), PEM format
+#                          with newlines escaped as \n
 #   APP_BASE_URL    — public backend base URL, e.g. https://hilfe-staging-service.amalitech-dev.net
 #   APP_FRONTEND_URL — public frontend URL used in Slack/email links, e.g. https://hilfe-staging-frontend.amalitech-dev.net
 #   CORS_ALLOWED_ORIGINS — comma-separated allowed frontend origins
@@ -37,8 +38,8 @@ services:
       DB_URL:      jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}
       DB_USERNAME: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET:  ${JWT_SECRET}
       ARMS_SSO_URL:                ${ARMS_SSO_URL}
+      ARMS_SSO_PUBLIC_KEY:         ${ARMS_SSO_PUBLIC_KEY}
       CORS_ALLOWED_ORIGINS:        ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
       COOKIE_SECURE:               ${COOKIE_SECURE}
       COOKIE_SAME_SITE:            ${COOKIE_SAME_SITE:-Lax}

@@ -4,6 +4,7 @@ import com.amalitech.hilfe.models.Notification;
 import com.amalitech.hilfe.notifications.content.NotificationContentFactory;
 import com.amalitech.hilfe.notifications.content.NotificationDraft;
 import com.amalitech.hilfe.notifications.delivery.NotificationBroadcaster;
+import com.amalitech.hilfe.notifications.delivery.NotificationSubscriptionRegistry;
 import com.amalitech.hilfe.notifications.events.IncidentAssignedEvent;
 import com.amalitech.hilfe.notifications.events.IncidentSlaAtRiskEvent;
 import com.amalitech.hilfe.notifications.listener.NotificationEventListener;
@@ -24,6 +25,7 @@ class NotificationEventListenerTest {
     @Mock NotificationContentFactory contentFactory;
     @Mock NotificationPersistenceService persistenceService;
     @Mock NotificationBroadcaster broadcaster;
+    @Mock NotificationSubscriptionRegistry subscriptionRegistry;
 
     NotificationEventListener listener;
 
@@ -32,7 +34,7 @@ class NotificationEventListenerTest {
     void setUp() {
         ObjectProvider<SlackNotificationBroadcaster> slackProvider = mock(ObjectProvider.class);
         when(slackProvider.getIfAvailable()).thenReturn(null);
-        listener = new NotificationEventListener(contentFactory, persistenceService, broadcaster, slackProvider);
+        listener = new NotificationEventListener(contentFactory, persistenceService, broadcaster, subscriptionRegistry, slackProvider);
     }
 
     @Test

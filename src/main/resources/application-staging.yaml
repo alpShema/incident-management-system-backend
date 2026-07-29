@@ -13,6 +13,7 @@
 # ──────────────────────────────────────────
 arms:
   sso-url: ${ARMS_SSO_URL}
+  sso-public-key: ${ARMS_SSO_PUBLIC_KEY}
 
 # ──────────────────────────────────────────
 # Cookie
