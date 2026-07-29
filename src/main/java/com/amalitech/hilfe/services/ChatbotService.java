@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 import reactor.core.scheduler.Schedulers;
 
 import java.sql.PreparedStatement;
@@ -174,54 +175,72 @@ public class ChatbotService {
      * on {@link Schedulers#boundedElastic()} once the client actually subscribes.
      */
     public Flux<ChatbotAnswerChunk> queryStream(String userId, String rawQuery) {
-        return Flux.<ChatbotAnswerChunk>defer(() -> {
-            log.debug("Chatbot stream start | userId={} | rawQuery=\"{}\"", userId, rawQuery);
-            ConversationContext ctx = contextService.getContext(userId);
+        return Flux.defer(() -> buildStream(userId, rawQuery)).subscribeOn(Schedulers.boundedElastic());
+    }
 
-            String rewrittenQuery = llmService.rewriteQuery(rawQuery, ctx.recentTurns());
-            float[] vector = embeddingService.embed(rewrittenQuery);
-            FaqMatch match = findNearestFaq(vector);
-            double roundedSimilarity = Math.round(match.similarity() * 100.0) / 100.0;
+    private Flux<ChatbotAnswerChunk> buildStream(String userId, String rawQuery) {
+        log.debug("Chatbot stream start | userId={} | rawQuery=\"{}\"", userId, rawQuery);
+        ConversationContext ctx = contextService.getContext(userId);
 
-            if (match.faq().isEmpty() || match.similarity() < props.confidenceThreshold()) {
-                interactionLogService.logInteraction(userId, rawQuery, null, match.similarity(), OUTCOME_ESCALATED);
-                return Flux.just(
-                        ChatbotAnswerChunk.delta(ESCALATION_HINT),
-                        ChatbotAnswerChunk.done(roundedSimilarity, OUTCOME_ESCALATED)
-                );
-            }
+        String rewrittenQuery = llmService.rewriteQuery(rawQuery, ctx.recentTurns());
+        float[] vector = embeddingService.embed(rewrittenQuery);
+        FaqMatch match = findNearestFaq(vector);
+        double roundedSimilarity = Math.round(match.similarity() * 100.0) / 100.0;
 
-            Faq faq = match.faq().get();
-            return Flux.<ChatbotAnswerChunk>create(sink -> {
-                StringBuilder fullAnswer = new StringBuilder();
-                try {
-                    llmService.streamAnswer(rewrittenQuery, faq.getQuestion(), faq.getAnswer(), ctx.rollingSummary(), delta -> {
-                        if (sink.isCancelled()) {
-                            throw new StreamCancelledException();
-                        }
-                        fullAnswer.append(delta);
-                        sink.next(ChatbotAnswerChunk.delta(delta));
-                    });
+        if (match.faq().isEmpty() || match.similarity() < props.confidenceThreshold()) {
+            return escalationStream(userId, rawQuery, match, roundedSimilarity);
+        }
 
-                    String answer = fullAnswer.toString();
-                    contextService.addTurn(userId, rawQuery, answer);
-                    interactionLogService.logInteraction(userId, rawQuery, faq.getId(), match.similarity(), OUTCOME_ANSWERED);
-                    log.debug("Chatbot stream done | outcome=ANSWERED | userId={}", userId);
+        return answerStream(userId, rawQuery, rewrittenQuery, ctx, match, roundedSimilarity);
+    }
 
-                    sink.next(ChatbotAnswerChunk.done(roundedSimilarity, OUTCOME_ANSWERED));
-                    sink.complete();
-                } catch (StreamCancelledException e) {
-                    log.debug("Chatbot stream cancelled by client | userId={}", userId);
-                } catch (ServiceUnavailableException e) {
-                    interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
-                    sink.error(e);
-                } catch (Exception e) {
-                    log.error("Chatbot stream failed for user {}: {}", userId, e.getMessage(), e);
-                    interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
-                    sink.error(new ServiceUnavailableException(CHATBOT_UNAVAILABLE_MESSAGE, e));
-                }
-            });
-        }).subscribeOn(Schedulers.boundedElastic());
+    private Flux<ChatbotAnswerChunk> escalationStream(String userId, String rawQuery, FaqMatch match, double roundedSimilarity) {
+        interactionLogService.logInteraction(userId, rawQuery, null, match.similarity(), OUTCOME_ESCALATED);
+        return Flux.just(
+                ChatbotAnswerChunk.delta(ESCALATION_HINT),
+                ChatbotAnswerChunk.done(roundedSimilarity, OUTCOME_ESCALATED)
+        );
+    }
+
+    private Flux<ChatbotAnswerChunk> answerStream(String userId, String rawQuery, String rewrittenQuery,
+                                                    ConversationContext ctx, FaqMatch match, double roundedSimilarity) {
+        Faq faq = match.faq().get();
+        return Flux.<ChatbotAnswerChunk>create(sink ->
+                emitAnswer(sink, userId, rawQuery, rewrittenQuery, ctx, faq, match, roundedSimilarity));
+    }
+
+    private void emitAnswer(FluxSink<ChatbotAnswerChunk> sink, String userId, String rawQuery,
+                             String rewrittenQuery, ConversationContext ctx, Faq faq, FaqMatch match, double roundedSimilarity) {
+        StringBuilder fullAnswer = new StringBuilder();
+        try {
+            llmService.streamAnswer(rewrittenQuery, faq.getQuestion(), faq.getAnswer(), ctx.rollingSummary(),
+                    delta -> emitDelta(sink, fullAnswer, delta));
+
+            String answer = fullAnswer.toString();
+            contextService.addTurn(userId, rawQuery, answer);
+            interactionLogService.logInteraction(userId, rawQuery, faq.getId(), match.similarity(), OUTCOME_ANSWERED);
+            log.debug("Chatbot stream done | outcome=ANSWERED | userId={}", userId);
+
+            sink.next(ChatbotAnswerChunk.done(roundedSimilarity, OUTCOME_ANSWERED));
+            sink.complete();
+        } catch (StreamCancelledException e) {
+            log.debug("Chatbot stream cancelled by client | userId={}", userId);
+        } catch (ServiceUnavailableException e) {
+            interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
+            sink.error(e);
+        } catch (Exception e) {
+            log.error("Chatbot stream failed for user {}: {}", userId, e.getMessage(), e);
+            interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
+            sink.error(new ServiceUnavailableException(CHATBOT_UNAVAILABLE_MESSAGE, e));
+        }
+    }
+
+    private void emitDelta(FluxSink<ChatbotAnswerChunk> sink, StringBuilder fullAnswer, String delta) {
+        if (sink.isCancelled()) {
+            throw new StreamCancelledException();
+        }
+        fullAnswer.append(delta);
+        sink.next(ChatbotAnswerChunk.delta(delta));
     }
 
     private static final class StreamCancelledException extends RuntimeException {
