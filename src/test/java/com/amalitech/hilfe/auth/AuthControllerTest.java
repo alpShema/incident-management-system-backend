@@ -23,6 +23,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -111,6 +112,21 @@ class AuthControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(authService).logout("arms-token-value");
+    }
+
+    @Test
+    void logout_revocationThrows_stillClearsCookie() throws Exception {
+        doThrow(new RuntimeException("db unavailable")).when(authService).logout("arms-token-value");
+
+        var result = mvc.perform(post("/auth/logout")
+                        .cookie(new MockCookie("access_token", "arms-token-value")))
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(cookies)
+                .hasSize(1)
+                .allSatisfy(c -> assertThat(c).contains("access_token=").contains("Max-Age=0"));
     }
 
     @Test
