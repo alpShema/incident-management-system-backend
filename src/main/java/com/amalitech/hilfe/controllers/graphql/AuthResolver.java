@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class AuthResolver {
@@ -49,7 +51,11 @@ public class AuthResolver {
         HttpServletRequest request = currentRequest();
         HttpServletResponse response = currentResponse();
         String armsToken = CookieUtils.getCookieValue(request, CookieUtils.ACCESS_TOKEN_COOKIE);
-        authService.logout(armsToken);
+        try {
+            authService.logout(armsToken);
+        } catch (Exception ex) {
+            log.error("Failed to revoke session during logout; clearing cookie anyway", ex);
+        }
         CookieUtils.clearAuthCookies(response, cookieSecure, cookieSameSite);
         GraphQlResponseMessage.set("Logout successful");
         return true;

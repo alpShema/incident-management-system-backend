@@ -27,6 +27,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -103,6 +104,23 @@ class AuthResolverTest {
                 .path("logout").entity(Boolean.class).isEqualTo(true);
 
         verify(authService).logout("arms-token-value");
+        List<String> cookies = servletResponse.getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(cookies)
+                .hasSize(1)
+                .allSatisfy(c -> assertThat(c).contains("access_token=").contains("Max-Age=0"));
+    }
+
+    @Test
+    void logout_revocationThrows_stillClearsCookie() {
+        servletRequest.setCookies(new Cookie(CookieUtils.ACCESS_TOKEN_COOKIE, "arms-token-value"));
+        doThrow(new RuntimeException("db unavailable")).when(authService).logout("arms-token-value");
+
+        String mutation = "mutation { logout }";
+
+        graphQlTester.document(mutation)
+                .execute()
+                .path("logout").entity(Boolean.class).isEqualTo(true);
+
         List<String> cookies = servletResponse.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies)
                 .hasSize(1)
