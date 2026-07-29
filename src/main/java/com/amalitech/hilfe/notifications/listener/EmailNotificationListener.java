@@ -50,6 +50,12 @@ public class EmailNotificationListener {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onIncidentReassigned(IncidentReassignedEvent event) {
+        send(event.recipientUserId(), event.incidentId(), (incident, name) -> contentFactory.from(event, incident, name));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIncidentUnassigned(IncidentUnassignedEvent event) {
         send(event.recipientUserId(), event.incidentId(), (incident, name) -> contentFactory.from(event, incident, name));
     }

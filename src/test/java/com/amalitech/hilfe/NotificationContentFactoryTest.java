@@ -30,6 +30,17 @@ class NotificationContentFactoryTest {
     }
 
     @Test
+    void buildsReassignedNotificationContent_withActorName() {
+        NotificationDraft draft = factory.from(new IncidentReassignedEvent("user-1", "inc-1", 12, "Isabella Wong"));
+
+        assertThat(draft.userId()).isEqualTo("user-1");
+        assertThat(draft.incidentId()).isEqualTo("inc-1");
+        assertThat(draft.type()).isEqualTo("INCIDENT_REASSIGNED");
+        assertThat(draft.title()).isEqualTo("Incident #12 reassigned to you");
+        assertThat(draft.message()).isEqualTo("Isabella Wong reassigned Incident #12 to you.");
+    }
+
+    @Test
     void buildsUnassignedNotificationContent_withActorAndNewAssigneeName() {
         NotificationDraft draft = factory.from(new IncidentUnassignedEvent("prev-agent", "inc-1", 2, "Isabella Wong", "Elena Costa"));
 

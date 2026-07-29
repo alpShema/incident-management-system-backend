@@ -22,6 +22,16 @@ public class NotificationContentFactory {
         );
     }
 
+    public NotificationDraft from(IncidentReassignedEvent event) {
+        return new NotificationDraft(
+                event.recipientUserId(),
+                event.incidentId(),
+                "INCIDENT_REASSIGNED",
+                incidentRef(event.incidentNo()) + " reassigned to you",
+                resolveActor(event.actorName()) + " reassigned " + incidentRef(event.incidentNo()) + " to you."
+        );
+    }
+
     public NotificationDraft from(IncidentEscalatedEvent event) {
         return new NotificationDraft(
                 event.recipientUserId(),
