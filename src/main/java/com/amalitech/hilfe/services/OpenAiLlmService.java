@@ -6,7 +6,7 @@ import com.amalitech.hilfe.exceptions.ServiceUnavailableException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -24,7 +24,7 @@ import java.util.function.Consumer;
 
 @Service
 @Slf4j
-@ConditionalOnProperty(name = "amali-ai.api-key", matchIfMissing = false)
+@ConditionalOnExpression("T(org.springframework.util.StringUtils).hasText('${amali-ai.api-key:}')")
 public class OpenAiLlmService implements LlmService {
 
     private static final String ROLE    = "role";
