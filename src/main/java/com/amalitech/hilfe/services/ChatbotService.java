@@ -63,6 +63,9 @@ public class ChatbotService {
 
     private record FaqMatch(Optional<Faq> faq, double similarity) {}
 
+    private record AnswerContext(String userId, String rawQuery, String rewrittenQuery, String rollingSummary,
+                                  Faq faq, double similarity, double roundedSimilarity) {}
+
     public ChatbotQueryResponse query(String userId, String rawQuery) {
         log.debug("Chatbot query start | userId={} | rawQuery=\"{}\"", userId, rawQuery);
         ConversationContext ctx = contextService.getContext(userId);
@@ -191,7 +194,9 @@ public class ChatbotService {
             return escalationStream(userId, rawQuery, match, roundedSimilarity);
         }
 
-        return answerStream(userId, rawQuery, rewrittenQuery, ctx, match, roundedSimilarity);
+        AnswerContext answerContext = new AnswerContext(
+                userId, rawQuery, rewrittenQuery, ctx.rollingSummary(), match.faq().get(), match.similarity(), roundedSimilarity);
+        return answerStream(answerContext);
     }
 
     private Flux<ChatbotAnswerChunk> escalationStream(String userId, String rawQuery, FaqMatch match, double roundedSimilarity) {
@@ -202,35 +207,31 @@ public class ChatbotService {
         );
     }
 
-    private Flux<ChatbotAnswerChunk> answerStream(String userId, String rawQuery, String rewrittenQuery,
-                                                    ConversationContext ctx, FaqMatch match, double roundedSimilarity) {
-        Faq faq = match.faq().get();
-        return Flux.<ChatbotAnswerChunk>create(sink ->
-                emitAnswer(sink, userId, rawQuery, rewrittenQuery, ctx, faq, match, roundedSimilarity));
+    private Flux<ChatbotAnswerChunk> answerStream(AnswerContext context) {
+        return Flux.<ChatbotAnswerChunk>create(sink -> emitAnswer(sink, context));
     }
 
-    private void emitAnswer(FluxSink<ChatbotAnswerChunk> sink, String userId, String rawQuery,
-                             String rewrittenQuery, ConversationContext ctx, Faq faq, FaqMatch match, double roundedSimilarity) {
+    private void emitAnswer(FluxSink<ChatbotAnswerChunk> sink, AnswerContext context) {
         StringBuilder fullAnswer = new StringBuilder();
         try {
-            llmService.streamAnswer(rewrittenQuery, faq.getQuestion(), faq.getAnswer(), ctx.rollingSummary(),
-                    delta -> emitDelta(sink, fullAnswer, delta));
+            llmService.streamAnswer(context.rewrittenQuery(), context.faq().getQuestion(), context.faq().getAnswer(),
+                    context.rollingSummary(), delta -> emitDelta(sink, fullAnswer, delta));
 
             String answer = fullAnswer.toString();
-            contextService.addTurn(userId, rawQuery, answer);
-            interactionLogService.logInteraction(userId, rawQuery, faq.getId(), match.similarity(), OUTCOME_ANSWERED);
-            log.debug("Chatbot stream done | outcome=ANSWERED | userId={}", userId);
+            contextService.addTurn(context.userId(), context.rawQuery(), answer);
+            interactionLogService.logInteraction(context.userId(), context.rawQuery(), context.faq().getId(), context.similarity(), OUTCOME_ANSWERED);
+            log.debug("Chatbot stream done | outcome=ANSWERED | userId={}", context.userId());
 
-            sink.next(ChatbotAnswerChunk.done(roundedSimilarity, OUTCOME_ANSWERED));
+            sink.next(ChatbotAnswerChunk.done(context.roundedSimilarity(), OUTCOME_ANSWERED));
             sink.complete();
         } catch (StreamCancelledException e) {
-            log.debug("Chatbot stream cancelled by client | userId={}", userId);
+            log.debug("Chatbot stream cancelled by client | userId={}", context.userId());
         } catch (ServiceUnavailableException e) {
-            interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
+            interactionLogService.logInteraction(context.userId(), context.rawQuery(), null, 0.0, OUTCOME_ERROR);
             sink.error(e);
         } catch (Exception e) {
-            log.error("Chatbot stream failed for user {}: {}", userId, e.getMessage(), e);
-            interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
+            log.error("Chatbot stream failed for user {}: {}", context.userId(), e.getMessage(), e);
+            interactionLogService.logInteraction(context.userId(), context.rawQuery(), null, 0.0, OUTCOME_ERROR);
             sink.error(new ServiceUnavailableException(CHATBOT_UNAVAILABLE_MESSAGE, e));
         }
     }
