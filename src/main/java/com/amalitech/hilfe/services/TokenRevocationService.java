@@ -45,6 +45,17 @@ public class TokenRevocationService {
     }
 
     /**
+     * Clears a prior revocation for this exact token, if any. ARMS can hand back the same raw
+     * token across multiple logins within its lifetime, so a fresh, successful login must
+     * supersede an earlier logout for that same token — otherwise a user who logs out and back
+     * in before the token's natural expiry would be permanently locked out until it expires.
+     */
+    @Transactional
+    public void unrevoke(String rawArmsToken) {
+        sessionRepository.deleteById(hash(rawArmsToken));
+    }
+
+    /**
      * Returns true if the token is null/blank (nothing to trust) or its hash is found in the
      * revocation store.
      */

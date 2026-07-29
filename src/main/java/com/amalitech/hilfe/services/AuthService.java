@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.mappers.ArmsUserMapper;
@@ -53,9 +54,17 @@ public class AuthService {
             throw new ArmsAuthException(ACCOUNT_DEACTIVATED_MESSAGE, 403);
         }
 
+        tokenRevocationService.unrevoke(request.armsToken());
+
         long sessionTtlSeconds = tokenService.getArmsTokenRemainingSeconds(request.armsToken());
 
         return new AuthResult(sessionTtlSeconds, toSessionResponse(user));
+    }
+
+    public AuthSessionResponse getCurrentSession(String userId) {
+        User user = userRepository.findAuthUserById(userId)
+                .orElseThrow(() -> new ArmsAuthException(ApiMessages.SESSION_UNVERIFIABLE, 401));
+        return toSessionResponse(user);
     }
 
     @Transactional

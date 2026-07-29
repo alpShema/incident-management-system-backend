@@ -57,6 +57,12 @@ public class AuthResolver {
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
+    public AuthSessionResponse me(@AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        return authService.getCurrentSession(principal.userId());
+    }
+
+    @QueryMapping
+    @PreAuthorize("isAuthenticated()")
     public UserPermissionsResponse myPermissions(
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         return authService.getUserPermissions(principal.userId());

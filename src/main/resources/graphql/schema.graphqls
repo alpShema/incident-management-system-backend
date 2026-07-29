@@ -877,6 +877,7 @@ input UpdateSlaConfigInput {
 
 type Query {
   # Auth
+  me: AuthSession
   myPermissions: UserPermissions
 
   # Incidents
@@ -1078,4 +1079,7 @@ type Mutation {
 type Subscription {
   # Chatbot
   chatbotAnswerStream(input: ChatbotQueryInput!): ChatbotAnswerChunk!
+
+  # Notifications
+  notificationReceived: Notification!
 }

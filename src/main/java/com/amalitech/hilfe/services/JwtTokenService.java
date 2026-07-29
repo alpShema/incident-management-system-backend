@@ -7,6 +7,7 @@ import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
 
+@Slf4j
 @Service
 public class JwtTokenService implements TokenService {
     private static final String CLAIM_USER_ID = "user_id";
@@ -42,19 +44,27 @@ public class JwtTokenService implements TokenService {
     public Optional<Authentication> authenticateAccessToken(String armsToken) {
         try {
             Claims claims = verifyArmsToken(armsToken);
-            String userId = claims.get(CLAIM_USER_ID, String.class);
+            Object rawUserId = claims.get(CLAIM_USER_ID);
+            String userId = rawUserId == null ? null : rawUserId.toString();
             if (userId == null || userId.isBlank()) {
+                log.warn("access_token rejected: user_id claim missing/blank (raw={})", rawUserId);
                 return Optional.empty();
             }
             if (tokenRevocationService.isRevoked(armsToken)) {
+                log.warn("access_token rejected: token is revoked for userId={}", userId);
                 return Optional.empty();
             }
-            return userAuthorityService.resolveByUserId(userId)
+            Optional<Authentication> resolved = userAuthorityService.resolveByUserId(userId)
                     .map(r -> {
                         AuthPrincipal principal = new AuthPrincipal(r.userId(), r.email(), r.roleCode());
                         return new UsernamePasswordAuthenticationToken(principal, null, r.authorities());
                     });
+            if (resolved.isEmpty()) {
+                log.warn("access_token rejected: userAuthorityService.resolveByUserId({}) returned empty", userId);
+            }
+            return resolved;
         } catch (JwtException | IllegalArgumentException e) {
+            log.warn("Rejected access_token on read path: {}: {}", e.getClass().getSimpleName(), e.getMessage());
             return Optional.empty();
         }
     }
