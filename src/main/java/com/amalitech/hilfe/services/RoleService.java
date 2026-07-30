@@ -14,7 +14,9 @@ import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -28,6 +30,10 @@ public class RoleService {
     private static final String INVALID_PERMISSIONS_MESSAGE = "One or more of the selected permissions are invalid.";
     private static final String AT_LEAST_ONE_USER_MESSAGE = "At least one user must be selected.";
     private static final String USERS_NOT_FOUND_MESSAGE = "One or more selected users could not be found.";
+    private static final String SORT_NAME = "name";
+    private static final String SORT_DESCRIPTION = "description";
+    private static final String SORT_UPDATED_AT = "updatedAt";
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(SORT_NAME, SORT_DESCRIPTION);
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -82,7 +88,22 @@ public class RoleService {
                     .replace("%", "!%")
                     .replace("_", "!_") + "%";
         }
-        return roleRepository.findAllFiltered(pattern, pageable).map(this::toResponse);
+        return roleRepository.findAllFiltered(pattern, ensureSorted(pageable)).map(this::toResponse);
+    }
+
+    /**
+     * Only {@code name}/{@code description} are exposed as sortable fields; any other or absent
+     * sort falls back to most-recently-created-or-edited first ({@code updatedAt} is refreshed on
+     * both create and update, so it alone captures "created or edited").
+     */
+    private Pageable ensureSorted(Pageable pageable) {
+        List<Sort.Order> allowedOrders = pageable.getSort().stream()
+                .filter(order -> ALLOWED_SORT_FIELDS.contains(order.getProperty()))
+                .toList();
+        Sort sort = allowedOrders.isEmpty() ? Sort.by(Sort.Direction.DESC, SORT_UPDATED_AT) : Sort.by(allowedOrders);
+        return pageable.isUnpaged()
+                ? Pageable.unpaged(sort)
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
     }
 
     @Transactional
