@@ -11,8 +11,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.Optional;
@@ -134,7 +137,7 @@ class RoleServiceTest {
 
         roleService.listRoles(null, Pageable.unpaged());
 
-        verify(roleRepository).findAllFiltered(null, Pageable.unpaged());
+        verify(roleRepository).findAllFiltered(eq((String) null), any(Pageable.class));
     }
 
     @Test
@@ -144,7 +147,7 @@ class RoleServiceTest {
 
         roleService.listRoles("   ", Pageable.unpaged());
 
-        verify(roleRepository).findAllFiltered(null, Pageable.unpaged());
+        verify(roleRepository).findAllFiltered(eq((String) null), any(Pageable.class));
     }
 
     @Test
@@ -154,7 +157,7 @@ class RoleServiceTest {
 
         roleService.listRoles("sales", Pageable.unpaged());
 
-        verify(roleRepository).findAllFiltered("%sales%", Pageable.unpaged());
+        verify(roleRepository).findAllFiltered(eq("%sales%"), any(Pageable.class));
     }
 
     @Test
@@ -164,7 +167,103 @@ class RoleServiceTest {
 
         roleService.listRoles("a%b_c!d", Pageable.unpaged());
 
-        verify(roleRepository).findAllFiltered("%a!%b!_c!!d%", Pageable.unpaged());
+        verify(roleRepository).findAllFiltered(eq("%a!%b!_c!!d%"), any(Pageable.class));
+    }
+
+    // ── listRoles sorting ─────────────────────────────────────────────────────
+
+    @Test
+    void listRoles_unsorted_defaultsToUpdatedAtDescending() {
+        when(roleRepository.findAllFiltered(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        roleService.listRoles(null, Pageable.unpaged());
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(roleRepository).findAllFiltered(any(), captor.capture());
+        Sort.Order order = captor.getValue().getSort().getOrderFor("updatedAt");
+        assertThat(order).isNotNull();
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    void listRoles_sortByNameAscending_passesThrough() {
+        when(roleRepository.findAllFiltered(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Pageable nameSort = PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "name"));
+        roleService.listRoles(null, nameSort);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(roleRepository).findAllFiltered(any(), captor.capture());
+        Pageable captured = captor.getValue();
+        Sort.Order order = captured.getSort().getOrderFor("name");
+        assertThat(order).isNotNull();
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.ASC);
+        assertThat(captured.getPageNumber()).isEqualTo(2);
+        assertThat(captured.getPageSize()).isEqualTo(5);
+    }
+
+    @Test
+    void listRoles_sortByNameDescending_passesThrough() {
+        when(roleRepository.findAllFiltered(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Pageable nameSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "name"));
+        roleService.listRoles(null, nameSort);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(roleRepository).findAllFiltered(any(), captor.capture());
+        Sort.Order order = captor.getValue().getSort().getOrderFor("name");
+        assertThat(order).isNotNull();
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    void listRoles_sortByDescriptionAscending_passesThrough() {
+        when(roleRepository.findAllFiltered(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Pageable descriptionSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "description"));
+        roleService.listRoles(null, descriptionSort);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(roleRepository).findAllFiltered(any(), captor.capture());
+        Sort.Order order = captor.getValue().getSort().getOrderFor("description");
+        assertThat(order).isNotNull();
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    void listRoles_sortByDescriptionDescending_passesThrough() {
+        when(roleRepository.findAllFiltered(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Pageable descriptionSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "description"));
+        roleService.listRoles(null, descriptionSort);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(roleRepository).findAllFiltered(any(), captor.capture());
+        Sort.Order order = captor.getValue().getSort().getOrderFor("description");
+        assertThat(order).isNotNull();
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    void listRoles_sortByDisallowedField_fallsBackToDefault() {
+        when(roleRepository.findAllFiltered(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Pageable codeSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "code"));
+        roleService.listRoles(null, codeSort);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(roleRepository).findAllFiltered(any(), captor.capture());
+        Sort sort = captor.getValue().getSort();
+        assertThat(sort.getOrderFor("code")).isNull();
+        Sort.Order order = sort.getOrderFor("updatedAt");
+        assertThat(order).isNotNull();
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
     }
 
     // ── bulkAssignRole ────────────────────────────────────────────────────────

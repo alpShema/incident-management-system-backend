@@ -10,7 +10,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HexFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -27,46 +30,57 @@ class TokenRevocationServiceTest {
     @Mock SessionRepository sessionRepository;
     @InjectMocks TokenRevocationService service;
 
+    private static String sha256Hex(String rawToken) throws Exception {
+        byte[] hashBytes = MessageDigest.getInstance("SHA-256").digest(rawToken.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(hashBytes);
+    }
+
     @Test
-    void isRevoked_nullJti_returnsTrue() {
+    void isRevoked_nullToken_returnsTrue() {
         assertThat(service.isRevoked(null)).isTrue();
     }
 
     @Test
-    void isRevoked_jtiPresentInRepo_returnsTrue() {
-        when(sessionRepository.existsById("jti-1")).thenReturn(true);
-
-        assertThat(service.isRevoked("jti-1")).isTrue();
+    void isRevoked_blankToken_returnsTrue() {
+        assertThat(service.isRevoked(" ")).isTrue();
     }
 
     @Test
-    void isRevoked_jtiAbsentInRepo_returnsFalse() {
-        when(sessionRepository.existsById("jti-2")).thenReturn(false);
+    void isRevoked_hashPresentInRepo_returnsTrue() throws Exception {
+        when(sessionRepository.existsById(sha256Hex("arms-token-1"))).thenReturn(true);
 
-        assertThat(service.isRevoked("jti-2")).isFalse();
+        assertThat(service.isRevoked("arms-token-1")).isTrue();
     }
 
     @Test
-    void revoke_savesSessionRecord() {
+    void isRevoked_hashAbsentInRepo_returnsFalse() throws Exception {
+        when(sessionRepository.existsById(sha256Hex("arms-token-2"))).thenReturn(false);
+
+        assertThat(service.isRevoked("arms-token-2")).isFalse();
+    }
+
+    @Test
+    void revoke_savesSessionRecordKeyedByTokenHash() throws Exception {
         Instant expiresAt = FIXED_NOW.plusSeconds(3600);
+        String expectedHash = sha256Hex("arms-token-3");
 
-        service.revoke("jti-3", "u1", expiresAt);
+        service.revoke("arms-token-3", "u1", expiresAt);
 
         verify(sessionRepository).save(argThat(s ->
-                "jti-3".equals(s.getId())
-                && "jti-3".equals(s.getSid())
+                expectedHash.equals(s.getId())
+                && expectedHash.equals(s.getSid())
                 && "u1".equals(s.getData())
                 && expiresAt.equals(s.getExpiresAt())
         ));
     }
 
     @Test
-    void revoke_duplicateJti_doesNotThrow() {
+    void revoke_duplicateToken_doesNotThrow() {
         Instant expiresAt = FIXED_NOW.plusSeconds(3600);
         when(sessionRepository.save(any(Session.class)))
                 .thenThrow(new DataIntegrityViolationException("pk conflict"));
 
-        assertThatCode(() -> service.revoke("jti-dup", "u1", expiresAt))
+        assertThatCode(() -> service.revoke("arms-token-dup", "u1", expiresAt))
                 .doesNotThrowAnyException();
     }
 

@@ -45,7 +45,7 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/login", "/auth/refresh-token", "/auth/logout").permitAll()
+                        .requestMatchers("/auth/login", "/auth/logout").permitAll()
                         .requestMatchers("/permissions/all").permitAll()
                         .requestMatchers("/actuator/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/graphiql/**", "/graphql", "/graphql/upload").permitAll()

@@ -18,6 +18,7 @@ public class SlackNotificationPreferenceService {
 
     public static final List<String> NOTIFICATION_TYPES = List.of(
             "INCIDENT_ASSIGNED",
+            "INCIDENT_REASSIGNED",
             "INCIDENT_ESCALATED",
             "INCIDENT_STATUS_CHANGED",
             "INCIDENT_PENDING",

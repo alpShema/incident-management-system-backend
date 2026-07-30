@@ -202,11 +202,26 @@
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>io.projectreactor</groupId>
+			<artifactId>reactor-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 
 	</dependencies>
 
 	<build>
 		<plugins>
+
+			<!-- ===== SonarQube Scanner ===== -->
+			<!-- Declared explicitly so `mvn sonar:sonar` resolves the plugin prefix from
+			     the project itself, regardless of whether the CI agent's settings.xml
+			     registers org.sonarsource.scanner.maven as a plugin group. -->
+			<plugin>
+				<groupId>org.sonarsource.scanner.maven</groupId>
+				<artifactId>sonar-maven-plugin</artifactId>
+				<version>4.0.0.4121</version>
+			</plugin>
 
 			<!-- ===== Spring Boot Maven Plugin ===== -->
 			<plugin>

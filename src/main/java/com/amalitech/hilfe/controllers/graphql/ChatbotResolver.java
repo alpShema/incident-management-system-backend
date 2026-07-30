@@ -11,6 +11,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.security.ChatbotRateLimiter;
 import com.amalitech.hilfe.services.ChatbotService;
 import com.amalitech.hilfe.services.JwtTokenService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -33,7 +34,7 @@ public class ChatbotResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('chatbot.query')")
     public ChatbotQueryResponse chatbotQuery(
-            @Argument ChatbotQueryRequest input,
+            @Valid @Argument ChatbotQueryRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("Chatbot query processed successfully");
         return chatbotService.query(principal.userId(), input.query());
@@ -42,7 +43,7 @@ public class ChatbotResolver {
     @SubscriptionMapping
     @PreAuthorize("hasAuthority('chatbot.query')")
     public Flux<ChatbotAnswerChunk> chatbotAnswerStream(
-            @Argument ChatbotQueryRequest input,
+            @Valid @Argument ChatbotQueryRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         if (!rateLimiter.tryAcquire(principal.userId())) {
             throw new ArmsAuthException(ApiMessages.RATE_LIMIT_EXCEEDED, 429);

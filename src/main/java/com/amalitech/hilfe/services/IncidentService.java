@@ -348,6 +348,10 @@ public class IncidentService {
         enforceUpdateOwnership(actorUserId, hasUpdateAny, incident,
                 "You do not have permission to reassign this incident.");
 
+        if (STATUS_RESOLVED.equals(incident.getStatusId())) {
+            throw new ArmsAuthException("You cannot reassign a Resolved incident.", 400);
+        }
+
         Agent agent = agentRepository.findById(request.agentId())
                 .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
         if (!Boolean.TRUE.equals(agent.getStatus())) {
@@ -377,11 +381,15 @@ public class IncidentService {
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
         String actorName = resolveActorName(actorUserId);
         String newAssigneeName = resolveAgentFullName(request.agentId());
-        notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo, actorName));
 
-        // Notify the previous agent (if any and different from the new agent) that they have been unassigned
-        if (previousAgentUserId != null && !previousAgentUserId.equals(agentUserId)) {
+        // A reassignment is a previous agent being replaced by a different agent; anything else
+        // (no previous agent, or reassigning to the same agent) is treated as an initial assignment.
+        boolean isReassignment = previousAgentUserId != null && !previousAgentUserId.equals(agentUserId);
+        if (isReassignment) {
+            notificationEventPublisher.publish(new IncidentReassignedEvent(agentUserId, incidentId, incidentNo, actorName));
             notificationEventPublisher.publish(new IncidentUnassignedEvent(previousAgentUserId, incidentId, incidentNo, actorName, newAssigneeName));
+        } else {
+            notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo, actorName));
         }
 
         // Notify the client (incident creator) that a new agent has been assigned

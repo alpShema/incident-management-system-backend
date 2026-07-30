@@ -1701,6 +1701,58 @@ class IncidentServiceTest {
     }
 
     @Test
+    void assignIncident_resolvedIncident_throws400() {
+        Incident incident = buildIncident();
+        incident.setStatusId("status-resolved");
+        incident.setAssignedToId("agent-1");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("actor-1", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You cannot reassign a Resolved incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-1");
+        assertThat(incident.getStatusId()).isEqualTo("status-resolved");
+        verify(incidentRepository, never()).save(any(Incident.class));
+        verify(agentRepository, never()).findById(any());
+    }
+
+    @Test
+    void assignIncident_resolvedIncident_deniedForAdmin() {
+        Incident incident = buildIncident();
+        incident.setStatusId("status-resolved");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-1");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("admin-1", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You cannot reassign a Resolved incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void assignIncident_resolvedIncident_permissionDeniedTakesPrecedenceOverStatusGuard() {
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        incident.setStatusId("status-resolved");
+        stubAssignedAgent(); // agent-1 → userId "actor-1"
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("other-agent-user", false, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You do not have permission to reassign this incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
     void assignIncident_agentIsOwner_succeeds() {
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
         Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
@@ -1893,8 +1945,10 @@ class IncidentServiceTest {
         // Previous agent must receive unassigned notification
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentUnassignedEvent ev
                 && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
-        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
+        // New agent must receive a reassignment notification, not an initial assignment one
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentReassignedEvent ev
                 && "new-agent-user".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
+        verify(notificationEventPublisher, never()).publish(isA(IncidentAssignedEvent.class));
     }
 
     @Test
@@ -1912,6 +1966,7 @@ class IncidentServiceTest {
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher, never()).publish(isA(IncidentUnassignedEvent.class));
+        verify(notificationEventPublisher, never()).publish(isA(IncidentReassignedEvent.class));
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
                 && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
     }
@@ -1933,6 +1988,7 @@ class IncidentServiceTest {
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-1"));
 
         verify(notificationEventPublisher, never()).publish(isA(IncidentUnassignedEvent.class));
+        verify(notificationEventPublisher, never()).publish(isA(IncidentReassignedEvent.class));
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
                 && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
     }
@@ -1954,6 +2010,28 @@ class IncidentServiceTest {
 
         verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentAssignedEvent ev
                 && "actor-1".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
+    }
+
+    @Test
+    void assignIncident_reassignedToDifferentAgent_sendsReassignmentNotificationToNewAgent() {
+        // Incident already assigned to agent-1; being reassigned to agent-2 by an admin
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+
+        Agent previousAgent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        Agent newAgent = Agent.builder().id("agent-2").userId("new-agent-user").status(true).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(previousAgent));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(newAgent));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-2"));
+
+        verify(notificationEventPublisher).publish(argThat(e -> e instanceof IncidentReassignedEvent ev
+                && "new-agent-user".equals(ev.recipientUserId()) && ev.incidentNo() == 1));
+        verify(notificationEventPublisher, never()).publish(isA(IncidentAssignedEvent.class));
     }
 
     // ── queryAllIncidents ─────────────────────────────────────────────────────

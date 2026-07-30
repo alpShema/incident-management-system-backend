@@ -8,6 +8,7 @@ import graphql.GraphqlErrorBuilder;
 import graphql.schema.CoercingParseLiteralException;
 import graphql.schema.CoercingParseValueException;
 import graphql.schema.DataFetchingEnvironment;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
@@ -36,6 +37,10 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
     protected GraphQLError resolveToSingleError(Throwable ex, DataFetchingEnvironment env) {
         if (ex instanceof ArmsAuthException ae) {
             return handleArmsAuthError(ae, env);
+        }
+
+        if (ex instanceof ConstraintViolationException cve) {
+            return handleConstraintViolationError(cve, env);
         }
 
         if (ex instanceof AuthorizationDeniedException || ex instanceof AccessDeniedException) {
@@ -81,6 +86,15 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
     private GraphQLError handleArmsAuthError(ArmsAuthException ae, DataFetchingEnvironment env) {
         log.warn("GraphQL ARMS auth error: {}", ae.getMessage());
         return buildError(env, ae.getMessage(), ae.getHttpStatus(), "Bad Gateway");
+    }
+
+    private GraphQLError handleConstraintViolationError(ConstraintViolationException cve, DataFetchingEnvironment env) {
+        String message = cve.getConstraintViolations().stream()
+                .map(v -> v.getMessage())
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(" "));
+        log.warn("GraphQL constraint violation: {}", message);
+        return buildError(env, message, 400, BAD_REQUEST);
     }
 
     private GraphQLError handleAuthorizationError(Throwable ex, DataFetchingEnvironment env) {

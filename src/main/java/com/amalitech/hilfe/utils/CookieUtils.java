@@ -1,6 +1,5 @@
 package com.amalitech.hilfe.utils;
 
-import com.amalitech.hilfe.dto.AuthTokens;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -9,40 +8,21 @@ import org.springframework.http.ResponseCookie;
 
 /**
  * Owner: Lawson
- * Depends on: AuthTokens cookie TTL values.
+ * Depends on: the raw ARMS token as the sole session credential.
  */
 public final class CookieUtils {
     public static final String ACCESS_TOKEN_COOKIE = "access_token";
-    public static final String REFRESH_TOKEN_COOKIE = "refresh_token";
-    public static final String ARMS_TOKEN_COOKIE = "arms_token";
 
     private CookieUtils() {
     }
 
-    public static void addAuthCookies(HttpServletResponse response, AuthTokens tokens, boolean secure, String sameSite) {
-        ResponseCookie accessCookie = ResponseCookie.from(ACCESS_TOKEN_COOKIE, tokens.getAccessToken())
-                .httpOnly(true)
-                .secure(secure)
-                .sameSite(sameSite)
-                .path("/")
-                .maxAge(tokens.getAccessTokenExpiresIn())
-                .build();
-
-        ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, tokens.getRefreshToken())
-                .httpOnly(true)
-                .secure(secure)
-                .sameSite(sameSite)
-                .path("/")
-                .maxAge(tokens.getRefreshTokenExpiresIn())
-                .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString());
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
-    }
-
-    public static void addArmsTokenCookie(HttpServletResponse response, String armsToken,
-                                          boolean secure, String sameSite, long ttlSeconds) {
-        ResponseCookie armsCookie = ResponseCookie.from(ARMS_TOKEN_COOKIE, armsToken)
+    /**
+     * Sets the single HttpOnly session cookie, holding the raw ARMS token, with a maxAge
+     * matching the ARMS token's own remaining lifetime.
+     */
+    public static void addSessionCookie(HttpServletResponse response, String armsToken,
+                                         long ttlSeconds, boolean secure, String sameSite) {
+        ResponseCookie sessionCookie = ResponseCookie.from(ACCESS_TOKEN_COOKIE, armsToken)
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite(sameSite)
@@ -50,23 +30,21 @@ public final class CookieUtils {
                 .maxAge(ttlSeconds)
                 .build();
 
-        response.addHeader(HttpHeaders.SET_COOKIE, armsCookie.toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie.toString());
     }
 
     /**
-     * Clears all three auth cookies: access_token, refresh_token, arms_token.
+     * Clears the session cookie.
      */
     public static void clearAuthCookies(HttpServletResponse response, boolean secure, String sameSite) {
-        for (String name : new String[]{ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, ARMS_TOKEN_COOKIE}) {
-            ResponseCookie cleared = ResponseCookie.from(name, "")
-                    .httpOnly(true)
-                    .secure(secure)
-                    .sameSite(sameSite)
-                    .path("/")
-                    .maxAge(0)
-                    .build();
-            response.addHeader(HttpHeaders.SET_COOKIE, cleared.toString());
-        }
+        ResponseCookie cleared = ResponseCookie.from(ACCESS_TOKEN_COOKIE, "")
+                .httpOnly(true)
+                .secure(secure)
+                .sameSite(sameSite)
+                .path("/")
+                .maxAge(0)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cleared.toString());
     }
 
     public static String getCookieValue(HttpServletRequest request, String name) {

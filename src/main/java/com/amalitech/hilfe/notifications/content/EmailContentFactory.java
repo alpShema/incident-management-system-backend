@@ -89,6 +89,24 @@ public class EmailContentFactory {
         );
     }
 
+    // event carries no fields beyond incidentNo (already on incident) — kept only so overload
+    // resolution can dispatch EmailNotificationListener's uniform from(event, incident, name) calls.
+    @SuppressWarnings("java:S1172")
+    public EmailContent from(IncidentReassignedEvent event, IncidentResponse incident, String recipientName) {
+        return new EmailContent(
+                "Incident reassigned to you — " + ref(incident),
+                "An incident has been reassigned to you",
+                body(recipientName,
+                        "An incident has been reassigned to you.",
+                        ref(incident),
+                        "Topic: " + topicName(incident),
+                        PRIORITY_LABEL + priorityName(incident),
+                        "Please review the details and respond. You can open the incident directly in HILFE below."),
+                CTA_TEXT,
+                FOOTER_TEXT
+        );
+    }
+
     public EmailContent from(IncidentUnassignedEvent event, IncidentResponse incident, String recipientName) {
         return new EmailContent(
                 "Incident reassigned — " + ref(incident),

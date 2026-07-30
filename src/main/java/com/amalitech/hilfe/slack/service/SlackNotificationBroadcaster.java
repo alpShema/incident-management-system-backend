@@ -93,6 +93,7 @@ public class SlackNotificationBroadcaster {
     private String getNotificationEmoji(String type) {
         return switch (type) {
             case "INCIDENT_ASSIGNED"             -> ":inbox_tray:";
+            case "INCIDENT_REASSIGNED"           -> ":inbox_tray:";
             case "INCIDENT_ESCALATED"            -> ":rotating_light:";
             case "INCIDENT_STATUS_CHANGED"       -> EMOJI_CYCLE;
             case "INCIDENT_PENDING"              -> ":hourglass_flowing_sand:";

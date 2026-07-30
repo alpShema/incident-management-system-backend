@@ -29,6 +29,9 @@ public class AuthSessionResponse {
     @Schema(description = "User's role code (e.g. ADMIN, AGENT, CLIENT)")
     private String role;
 
+    @Schema(description = "User's human-readable role name (e.g. Administrator, Agent, Client)")
+    private String roleName;
+
     @Schema(description = "List of permission strings granted to this user based on their role")
     private List<String> permissions;
 }

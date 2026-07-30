@@ -130,19 +130,13 @@ info:
     description: "Hilfe API - Amalitech"
 
 # ──────────────────────────────────────────
-# Auth / JWT
+# Auth
 # ──────────────────────────────────────────
 app:
   base-url: ${APP_BASE_URL}
   frontend-url: ${APP_FRONTEND_URL}
   slack-image-report-url: ${SLACK_IMAGE_REPORT_URL:${app.base-url}/images/slack-report.jpg}
   slack-image-updates-url: ${SLACK_IMAGE_UPDATES_URL:${app.base-url}/images/slack-updates.jpg}
-  jwt:
-    issuer: ${JWT_ISSUER:hilfe}
-    audience: ${JWT_AUDIENCE:hilfe-web}
-    secret: ${JWT_SECRET:change-me}
-    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:3600}
-    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:86400}
 
 # ──────────────────────────────────────────
 # Logging

@@ -5,7 +5,7 @@ import com.amalitech.hilfe.config.EmbeddingProperties;
 import com.amalitech.hilfe.exceptions.ServiceUnavailableException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -16,7 +16,7 @@ import java.util.Map;
 
 @Service
 @Slf4j
-@ConditionalOnProperty(name = "amali-ai.api-key", matchIfMissing = false)
+@ConditionalOnExpression("T(org.springframework.util.StringUtils).hasText('${amali-ai.api-key:}')")
 public class OpenAiEmbeddingService implements EmbeddingService {
 
     private final RestClient restClient;

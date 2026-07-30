@@ -4,6 +4,7 @@ import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.PresignedUrlRequest;
 import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.services.MediaService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -18,7 +19,7 @@ public class MediaResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('incident.create')")
-    public PresignedUrlResponse generateMediaPresignedUrl(@Argument PresignedUrlRequest input) {
+    public PresignedUrlResponse generateMediaPresignedUrl(@Valid @Argument PresignedUrlRequest input) {
         GraphQlResponseMessage.set("Presigned URL generated successfully");
         return mediaService.generatePresignedUploadUrl(input);
     }

@@ -15,6 +15,7 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.JwtTokenService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -123,7 +124,7 @@ public class IncidentResolver {
     @MutationMapping
     @PreAuthorize("hasAuthority('incident.create')")
     public IncidentResponse createIncident(
-            @Argument CreateIncidentRequest input,
+            @Valid @Argument CreateIncidentRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("Incident created successfully");
         return incidentService.createIncident(principal.userId(), input);
@@ -133,7 +134,7 @@ public class IncidentResolver {
     @PreAuthorize("hasAuthority('incident.status.change')")
     public IncidentResponse updateIncidentStatus(
             @Argument String id,
-            @Argument UpdateIncidentStatusRequest input,
+            @Valid @Argument UpdateIncidentStatusRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         boolean hasForceClose = CurrentUserAuthority.has(RbacPermissions.INCIDENT_FORCECLOSE);
         GraphQlResponseMessage.set("Incident status updated successfully");
@@ -144,7 +145,7 @@ public class IncidentResolver {
     @PreAuthorize("hasAuthority('incident.severity.change')")
     public IncidentResponse updateIncidentSeverity(
             @Argument String id,
-            @Argument UpdateIncidentSeverityRequest input,
+            @Valid @Argument UpdateIncidentSeverityRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
         GraphQlResponseMessage.set("Incident severity updated successfully");
@@ -155,7 +156,7 @@ public class IncidentResolver {
     @PreAuthorize("hasAuthority('incident.assign')")
     public IncidentResponse assignIncident(
             @Argument String id,
-            @Argument AssignIncidentRequest input,
+            @Valid @Argument AssignIncidentRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
         GraphQlResponseMessage.set("Incident assigned successfully");

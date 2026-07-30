@@ -10,7 +10,9 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.utils.CookieUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class AuthResolver {
@@ -34,28 +37,12 @@ public class AuthResolver {
     private String cookieSameSite;
 
     @MutationMapping
-    public AuthSessionResponse login(@Argument LoginInput input) {
+    public AuthSessionResponse login(@Valid @Argument LoginInput input) {
         LoginRequest request = new LoginRequest(input.armsToken());
         AuthResult result = authService.login(request);
         HttpServletResponse response = currentResponse();
-        CookieUtils.addAuthCookies(response, result.tokens(), cookieSecure, cookieSameSite);
-        CookieUtils.addArmsTokenCookie(response, input.armsToken(), cookieSecure, cookieSameSite,
-                result.tokens().getRefreshTokenExpiresIn());
+        CookieUtils.addSessionCookie(response, input.armsToken(), result.sessionTtlSeconds(), cookieSecure, cookieSameSite);
         GraphQlResponseMessage.set("Login successful");
-        return result.session();
-    }
-
-    @MutationMapping
-    public AuthSessionResponse refreshToken() {
-        HttpServletRequest request = currentRequest();
-        HttpServletResponse response = currentResponse();
-        String armsToken = CookieUtils.getCookieValue(request, CookieUtils.ARMS_TOKEN_COOKIE);
-        String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
-        AuthResult result = authService.refresh(refreshToken, armsToken);
-        CookieUtils.addAuthCookies(response, result.tokens(), cookieSecure, cookieSameSite);
-        CookieUtils.addArmsTokenCookie(response, armsToken, cookieSecure, cookieSameSite,
-                result.tokens().getRefreshTokenExpiresIn());
-        GraphQlResponseMessage.set("Token refreshed successfully");
         return result.session();
     }
 
@@ -63,11 +50,21 @@ public class AuthResolver {
     public boolean logout() {
         HttpServletRequest request = currentRequest();
         HttpServletResponse response = currentResponse();
-        String refreshToken = CookieUtils.getCookieValue(request, CookieUtils.REFRESH_TOKEN_COOKIE);
-        authService.logout(refreshToken);
+        String armsToken = CookieUtils.getCookieValue(request, CookieUtils.ACCESS_TOKEN_COOKIE);
+        try {
+            authService.logout(armsToken);
+        } catch (Exception ex) {
+            log.error("Failed to revoke session during logout; clearing cookie anyway", ex);
+        }
         CookieUtils.clearAuthCookies(response, cookieSecure, cookieSameSite);
         GraphQlResponseMessage.set("Logout successful");
         return true;
+    }
+
+    @QueryMapping
+    @PreAuthorize("isAuthenticated()")
+    public AuthSessionResponse me(@AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        return authService.getCurrentSession(principal.userId());
     }
 
     @QueryMapping

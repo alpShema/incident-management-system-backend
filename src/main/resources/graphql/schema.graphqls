@@ -59,6 +59,7 @@ type AuthSession {
   fullName: String
   profileImg: String
   role: String!
+  roleName: String!
   permissions: [String!]
 }
 
@@ -877,6 +878,7 @@ input UpdateSlaConfigInput {
 
 type Query {
   # Auth
+  me: AuthSession
   myPermissions: UserPermissions
 
   # Incidents
@@ -975,7 +977,6 @@ type Query {
 type Mutation {
   # Auth
   login(input: LoginInput!): AuthSession
-  refreshToken: AuthSession
   logout: Boolean
 
   # Incidents
@@ -1079,4 +1080,7 @@ type Mutation {
 type Subscription {
   # Chatbot
   chatbotAnswerStream(input: ChatbotQueryInput!): ChatbotAnswerChunk!
+
+  # Notifications
+  notificationReceived: Notification!
 }

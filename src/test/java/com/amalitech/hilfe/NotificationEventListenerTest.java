@@ -4,7 +4,9 @@ import com.amalitech.hilfe.models.Notification;
 import com.amalitech.hilfe.notifications.content.NotificationContentFactory;
 import com.amalitech.hilfe.notifications.content.NotificationDraft;
 import com.amalitech.hilfe.notifications.delivery.NotificationBroadcaster;
+import com.amalitech.hilfe.notifications.delivery.NotificationSubscriptionRegistry;
 import com.amalitech.hilfe.notifications.events.IncidentAssignedEvent;
+import com.amalitech.hilfe.notifications.events.IncidentReassignedEvent;
 import com.amalitech.hilfe.notifications.events.IncidentSlaAtRiskEvent;
 import com.amalitech.hilfe.notifications.listener.NotificationEventListener;
 import com.amalitech.hilfe.notifications.persistence.NotificationPersistenceService;
@@ -24,6 +26,7 @@ class NotificationEventListenerTest {
     @Mock NotificationContentFactory contentFactory;
     @Mock NotificationPersistenceService persistenceService;
     @Mock NotificationBroadcaster broadcaster;
+    @Mock NotificationSubscriptionRegistry subscriptionRegistry;
 
     NotificationEventListener listener;
 
@@ -32,7 +35,7 @@ class NotificationEventListenerTest {
     void setUp() {
         ObjectProvider<SlackNotificationBroadcaster> slackProvider = mock(ObjectProvider.class);
         when(slackProvider.getIfAvailable()).thenReturn(null);
-        listener = new NotificationEventListener(contentFactory, persistenceService, broadcaster, slackProvider);
+        listener = new NotificationEventListener(contentFactory, persistenceService, broadcaster, subscriptionRegistry, slackProvider);
     }
 
     @Test
@@ -95,6 +98,28 @@ class NotificationEventListenerTest {
         doThrow(new RuntimeException("ws failed")).when(broadcaster).broadcast(saved);
 
         listener.onIncidentAssigned(event);
+
+        verify(persistenceService).save(draft);
+        verify(broadcaster).broadcast(saved);
+    }
+
+    @Test
+    void reassignedEvent_persistsAndBroadcasts() {
+        IncidentReassignedEvent event = new IncidentReassignedEvent("user-1", "inc-1", 5, "Isabella Wong");
+        NotificationDraft draft = new NotificationDraft("user-1", "inc-1", "INCIDENT_REASSIGNED", "Reassigned", "Reassigned message");
+        Notification saved = Notification.builder()
+                .id("notif-3")
+                .userId("user-1")
+                .incidentId("inc-1")
+                .type("INCIDENT_REASSIGNED")
+                .title("Reassigned")
+                .message("Reassigned message")
+                .build();
+
+        when(contentFactory.from(event)).thenReturn(draft);
+        when(persistenceService.save(draft)).thenReturn(saved);
+
+        listener.onIncidentReassigned(event);
 
         verify(persistenceService).save(draft);
         verify(broadcaster).broadcast(saved);
