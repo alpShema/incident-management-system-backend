@@ -6,9 +6,11 @@ import com.amalitech.hilfe.dto.LoginRequest;
 import com.amalitech.hilfe.dto.UserPermissionsResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Location;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.LocationRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.services.*;
@@ -38,6 +40,7 @@ class AuthServiceTest {
     @Mock UserRepository userRepository;
     @Mock LocationRepository locationRepository;
     @Mock UserAuthorityService userAuthorityService;
+    @Mock RoleRepository roleRepository;
     @InjectMocks AuthService authService;
 
     @Test
@@ -48,13 +51,30 @@ class AuthServiceTest {
         when(armsClient.getUserByToken("arms-token")).thenReturn(armsUser);
         when(tokenService.getArmsTokenRemainingSeconds("arms-token")).thenReturn(7200L);
         when(userRepository.findAuthUserById("u1")).thenReturn(Optional.of(user));
+        when(roleRepository.findByCode("CLIENT")).thenReturn(Optional.of(Role.builder().code("CLIENT").name("Client").build()));
 
         AuthResult result = authService.login(new LoginRequest("arms-token"));
 
         assertThat(result.sessionTtlSeconds()).isEqualTo(7200L);
         assertThat(result.session().getUserId()).isEqualTo("u1");
         assertThat(result.session().getEmail()).isEqualTo("john@test.com");
+        assertThat(result.session().getRoleName()).isEqualTo("Client");
         verify(userRepository).upsert("u1", "john@test.com", "John Doe", null, "http://img.png", null, null);
+    }
+
+    @Test
+    void login_roleNotFoundInRoleTable_fallsBackToRoleCodeForRoleName() {
+        ArmsUserInfo armsUser = new ArmsUserInfo("u3", "Jane", "Roe", "jane@test.com", null, null);
+        User user = User.builder().id("u3").email("jane@test.com").fullName("Jane Roe").roleCode(RoleCode.CLIENT).build();
+
+        when(armsClient.getUserByToken("token3")).thenReturn(armsUser);
+        when(tokenService.getArmsTokenRemainingSeconds("token3")).thenReturn(3600L);
+        when(userRepository.findAuthUserById("u3")).thenReturn(Optional.of(user));
+        when(roleRepository.findByCode("CLIENT")).thenReturn(Optional.empty());
+
+        AuthResult result = authService.login(new LoginRequest("token3"));
+
+        assertThat(result.session().getRoleName()).isEqualTo("CLIENT");
     }
 
     @Test

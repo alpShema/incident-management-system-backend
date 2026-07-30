@@ -59,6 +59,7 @@ type AuthSession {
   fullName: String
   profileImg: String
   role: String!
+  roleName: String!
   permissions: [String!]
 }
 
