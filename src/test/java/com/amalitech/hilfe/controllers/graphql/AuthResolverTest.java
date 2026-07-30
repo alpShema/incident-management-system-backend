@@ -68,6 +68,8 @@ class AuthResolverTest {
                 .userId("u1")
                 .email("john@test.com")
                 .fullName("John Doe")
+                .role("CLIENT")
+                .roleName("Client")
                 .build());
         when(authService.login(any())).thenReturn(result);
 
@@ -76,6 +78,7 @@ class AuthResolverTest {
                   login(input: { armsToken: $armsToken }) {
                     userId
                     email
+                    roleName
                   }
                 }
                 """;
@@ -84,7 +87,8 @@ class AuthResolverTest {
                 .variable("armsToken", "arms-token-val")
                 .execute()
                 .path("login.userId").entity(String.class).isEqualTo("u1")
-                .path("login.email").entity(String.class).isEqualTo("john@test.com");
+                .path("login.email").entity(String.class).isEqualTo("john@test.com")
+                .path("login.roleName").entity(String.class).isEqualTo("Client");
 
         List<String> cookies = servletResponse.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies)

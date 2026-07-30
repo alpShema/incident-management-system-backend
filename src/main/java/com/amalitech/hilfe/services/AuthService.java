@@ -5,8 +5,10 @@ import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.mappers.ArmsUserMapper;
 import com.amalitech.hilfe.models.Location;
+import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.LocationRepository;
+import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import jakarta.transaction.Transactional;
@@ -30,6 +32,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final LocationRepository locationRepository;
     private final UserAuthorityService userAuthorityService;
+    private final RoleRepository roleRepository;
 
     @Transactional
     public AuthResult login(LoginRequest request) {
@@ -131,12 +134,17 @@ public class AuthService {
                         .toList())
                 .orElse(List.of());
 
+        String roleName = roleRepository.findByCode(user.getRoleCode())
+                .map(Role::getName)
+                .orElse(user.getRoleCode());
+
         return AuthSessionResponse.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .profileImg(user.getProfileImg())
                 .role(user.getRoleCode())
+                .roleName(roleName)
                 .permissions(permissions)
                 .build();
     }
