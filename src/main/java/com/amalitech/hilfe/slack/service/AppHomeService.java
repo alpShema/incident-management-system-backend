@@ -185,7 +185,7 @@ public class AppHomeService {
 
     // Slack checkboxes element allows at most 10 options — split across two groups
     private static final List<String> NOTIF_GROUP_1 = List.of(
-            "INCIDENT_ASSIGNED", "INCIDENT_ESCALATED", "INCIDENT_STATUS_CHANGED",
+            "INCIDENT_ASSIGNED", "INCIDENT_REASSIGNED", "INCIDENT_ESCALATED", "INCIDENT_STATUS_CHANGED",
             "INCIDENT_PENDING", "INCIDENT_REOPENED", "INCIDENT_PRIORITY_CHANGED",
             "INCIDENT_UNASSIGNED"
     );
@@ -268,6 +268,7 @@ public class AppHomeService {
     private static String notifLabel(String type) {
         return switch (type) {
             case "INCIDENT_ASSIGNED"             -> "New Assignment";
+            case "INCIDENT_REASSIGNED"           -> "Reassigned to You";
             case "INCIDENT_ESCALATED"            -> "Escalation Alert";
             case "INCIDENT_STATUS_CHANGED"       -> "Status Updates";
             case "INCIDENT_PENDING"              -> "Pending Notice";

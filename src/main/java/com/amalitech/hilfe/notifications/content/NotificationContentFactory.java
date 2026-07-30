@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 public class NotificationContentFactory {
 
     private static final String INCIDENT_PREFIX = "Incident #";
+    private static final String REASSIGNED_VERB = " reassigned ";
 
     private static String incidentRef(int incidentNo) {
         return INCIDENT_PREFIX + incidentNo;
@@ -19,6 +20,16 @@ public class NotificationContentFactory {
                 "INCIDENT_ASSIGNED",
                 incidentRef(event.incidentNo()) + " assigned to you",
                 resolveActor(event.actorName()) + " assigned " + incidentRef(event.incidentNo()) + " to you."
+        );
+    }
+
+    public NotificationDraft from(IncidentReassignedEvent event) {
+        return new NotificationDraft(
+                event.recipientUserId(),
+                event.incidentId(),
+                "INCIDENT_REASSIGNED",
+                incidentRef(event.incidentNo()) + " reassigned to you",
+                resolveActor(event.actorName()) + REASSIGNED_VERB + incidentRef(event.incidentNo()) + " to you."
         );
     }
 
@@ -81,7 +92,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_UNASSIGNED",
                 incidentRef(event.incidentNo()) + " reassigned",
-                resolveActor(event.actorName()) + " reassigned " + incidentRef(event.incidentNo())
+                resolveActor(event.actorName()) + REASSIGNED_VERB + incidentRef(event.incidentNo())
                         + " from you to " + event.newAssigneeName() + "."
         );
     }
@@ -122,7 +133,7 @@ public class NotificationContentFactory {
                 event.incidentId(),
                 "INCIDENT_REASSIGNED_CLIENT",
                 incidentRef(event.incidentNo()) + " has a new agent",
-                resolveActor(event.actorName()) + " reassigned " + incidentRef(event.incidentNo()) + " to " + event.newAssigneeName() + "."
+                resolveActor(event.actorName()) + REASSIGNED_VERB + incidentRef(event.incidentNo()) + " to " + event.newAssigneeName() + "."
         );
     }
 

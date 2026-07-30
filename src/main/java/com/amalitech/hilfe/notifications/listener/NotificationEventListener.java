@@ -50,6 +50,12 @@ public class NotificationEventListener {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onIncidentReassigned(IncidentReassignedEvent event) {
+        handle(event.getClass().getSimpleName(), event.recipientUserId(), event.incidentId(), () -> contentFactory.from(event));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIncidentEscalated(IncidentEscalatedEvent event) {
         handle(event.getClass().getSimpleName(), event.recipientUserId(), event.incidentId(), () -> contentFactory.from(event));
     }
