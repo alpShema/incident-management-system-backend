@@ -34,4 +34,35 @@ public interface LlmService {
             String conversationSummary,
             Consumer<String> onChunk
     );
+
+    /**
+     * Resolves pronouns/context from {@code recentTurns} and splits the message into one or
+     * more self-contained sub-questions. Returns a one-element list containing the resolved
+     * message unchanged when it is already a single question. Never returns an empty list.
+     */
+    List<String> splitQuestions(String rawQuery, List<String> recentTurns);
+
+    /**
+     * Composes one combined answer covering multiple matched FAQs and explicitly noting any
+     * sub-questions that couldn't be matched. Returns the FAQ answers concatenated verbatim
+     * when no API key is configured (stub mode).
+     */
+    String generateMultiAnswer(
+            List<FaqMatchForAnswer> matches,
+            List<String> unansweredSubQuestions,
+            String conversationSummary
+    );
+
+    /**
+     * Same as {@link #generateMultiAnswer} but streams the completion, invoking {@code onChunk}
+     * with each text delta as it arrives.
+     */
+    void streamMultiAnswer(
+            List<FaqMatchForAnswer> matches,
+            List<String> unansweredSubQuestions,
+            String conversationSummary,
+            Consumer<String> onChunk
+    );
+
+    record FaqMatchForAnswer(String subQuestion, String faqQuestion, String faqAnswer) {}
 }
