@@ -34,6 +34,7 @@ public class OpenAiLlmService implements LlmService {
     private static final String ROLE_USER   = "user";
     private static final String SSE_DATA_PREFIX = "data:";
     private static final String SSE_DONE_MARKER = "[DONE]";
+    private static final String CONVERSATION_CONTEXT_PREFIX = "Conversation context: ";
 
     private static final String REWRITE_SYSTEM_PROMPT = """
             You are a query rewriter for a support FAQ chatbot.
@@ -120,17 +121,8 @@ public class OpenAiLlmService implements LlmService {
                 userQuery, faqQuestion, conversationSummary != null && !conversationSummary.isBlank());
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, ANSWER_SYSTEM_PROMPT));
-
-        StringBuilder userContent = new StringBuilder();
-        if (conversationSummary != null && !conversationSummary.isBlank()) {
-            userContent.append("Conversation context: ").append(conversationSummary).append("\n\n");
-        }
-        userContent.append("FAQ content:\n")
-                .append("Q: ").append(faqQuestion).append("\n")
-                .append("A: ").append(faqAnswer).append("\n\n")
-                .append("User's question: ").append(userQuery);
-
-        messages.add(Map.of(ROLE, ROLE_USER, CONTENT, userContent.toString()));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
+                buildAnswerUserContent(userQuery, faqQuestion, faqAnswer, conversationSummary)));
 
         return callChatCompletion("answer", messages);
     }
@@ -142,19 +134,23 @@ public class OpenAiLlmService implements LlmService {
                 userQuery, faqQuestion, conversationSummary != null && !conversationSummary.isBlank());
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, ANSWER_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
+                buildAnswerUserContent(userQuery, faqQuestion, faqAnswer, conversationSummary)));
 
+        streamChatCompletion("answer-stream", messages, onChunk);
+    }
+
+    private static String buildAnswerUserContent(String userQuery, String faqQuestion, String faqAnswer,
+                                                  String conversationSummary) {
         StringBuilder userContent = new StringBuilder();
         if (conversationSummary != null && !conversationSummary.isBlank()) {
-            userContent.append("Conversation context: ").append(conversationSummary).append("\n\n");
+            userContent.append(CONVERSATION_CONTEXT_PREFIX).append(conversationSummary).append("\n\n");
         }
         userContent.append("FAQ content:\n")
                 .append("Q: ").append(faqQuestion).append("\n")
                 .append("A: ").append(faqAnswer).append("\n\n")
                 .append("User's question: ").append(userQuery);
-
-        messages.add(Map.of(ROLE, ROLE_USER, CONTENT, userContent.toString()));
-
-        streamChatCompletion("answer-stream", messages, onChunk);
+        return userContent.toString();
     }
 
     @Override
@@ -215,7 +211,7 @@ public class OpenAiLlmService implements LlmService {
                                                         String conversationSummary) {
         StringBuilder userContent = new StringBuilder();
         if (conversationSummary != null && !conversationSummary.isBlank()) {
-            userContent.append("Conversation context: ").append(conversationSummary).append("\n\n");
+            userContent.append(CONVERSATION_CONTEXT_PREFIX).append(conversationSummary).append("\n\n");
         }
         for (int i = 0; i < matches.size(); i++) {
             FaqMatchForAnswer m = matches.get(i);
