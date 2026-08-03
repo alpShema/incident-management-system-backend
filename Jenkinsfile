@@ -118,7 +118,8 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withCredentials([string(credentialsId: 'hilfe-v2-backend-deployment-role-arn', variable: 'ROLE_ARN')]) {
+                    withAWS(role: "${ROLE_ARN}", roleSessionName: 'jenkins-hilfe-v2-backend-deploy') {
                         def appName  = env.appName
                         def imageTag = env.IMAGE_TAG
                         def region   = env.AWS_REGION
@@ -137,6 +138,7 @@ pipeline {
                         """
                         } // withEnv
                     }
+                    }
                 }
             }
         }
@@ -148,7 +150,8 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withCredentials([string(credentialsId: 'hilfe-v2-backend-deployment-role-arn', variable: 'ROLE_ARN')]) {
+                    withAWS(role: "${ROLE_ARN}", roleSessionName: 'jenkins-hilfe-v2-backend-deploy') {
                     withCredentials([string(credentialsId: 'testing-backend-ec2-ip', variable: 'EC2_IP')]) {
                     withCredentials([sshUserPrivateKey(credentialsId: 'staging-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         def appName  = env.appName
@@ -184,6 +187,7 @@ pipeline {
                                 "cd /home/ubuntu/app && docker compose pull backend && docker compose up -d --no-deps backend"
                         """
                         } // withEnv
+                    }
                     }
                     }
                     }
