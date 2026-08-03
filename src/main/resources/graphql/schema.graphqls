@@ -254,6 +254,7 @@ type Department {
   description: String
   status: Boolean
   categoryCount: Long
+  headUserId: ID
 }
 
 type DepartmentPage {
@@ -776,6 +777,10 @@ input UpdateDepartmentStatusInput {
   status: Boolean!
 }
 
+input SetDepartmentHeadInput {
+  userId: ID!
+}
+
 input CreateLocationInput {
   name: String!
   description: String
@@ -1017,6 +1022,8 @@ type Mutation {
   updateDepartmentStatus(id: ID!, input: UpdateDepartmentStatusInput!): Department
   linkCategoryToDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
   unlinkCategoryFromDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
+  setDepartmentHead(id: ID!, input: SetDepartmentHeadInput!): Department
+  removeDepartmentHead(id: ID!): Department
 
   # Locations
   createLocation(input: CreateLocationInput!): Location

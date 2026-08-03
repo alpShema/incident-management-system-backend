@@ -26,6 +26,9 @@ public class Department {
 
     private Boolean status;
 
+    @Column(name = "head_user_id")
+    private String headUserId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

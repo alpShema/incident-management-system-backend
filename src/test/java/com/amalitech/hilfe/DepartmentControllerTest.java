@@ -46,7 +46,7 @@ class DepartmentControllerTest {
     }
 
     private DepartmentResponse department(Boolean status) {
-        return new DepartmentResponse("dept-1", "Facilities", "Facilities dept", status, 0);
+        return new DepartmentResponse("dept-1", "Facilities", "Facilities dept", status, 0, null);
     }
 
     @Test
