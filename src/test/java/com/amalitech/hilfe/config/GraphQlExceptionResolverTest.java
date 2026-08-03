@@ -94,9 +94,9 @@ class GraphQlExceptionResolverTest {
                 new ArmsAuthException("A department with this name already exists.", httpStatus), env)
                 .block().get(0);
 
-        assertThat(error.getExtensions().get("status")).isEqualTo(httpStatus);
-        assertThat(error.getExtensions().get("error")).isEqualTo(expectedErrorLabel);
-        assertThat(error.getExtensions().get("message")).isEqualTo("A department with this name already exists.");
+        assertThat(error.getExtensions()).containsEntry("status", httpStatus);
+        assertThat(error.getExtensions()).containsEntry("error", expectedErrorLabel);
+        assertThat(error.getExtensions()).containsEntry("message", "A department with this name already exists.");
         assertThat(error.getMessage()).isEqualTo("A department with this name already exists.");
         assertThat(error.getErrorType()).isEqualTo(expectedClassification);
     }
@@ -112,8 +112,8 @@ class GraphQlExceptionResolverTest {
                 new ArmsAuthException("ARMS service is unreachable"), env)
                 .block().get(0);
 
-        assertThat(error.getExtensions().get("status")).isEqualTo(502);
-        assertThat(error.getExtensions().get("error")).isEqualTo("Bad Gateway");
+        assertThat(error.getExtensions()).containsEntry("status", 502);
+        assertThat(error.getExtensions()).containsEntry("error", "Bad Gateway");
     }
 
     @Test

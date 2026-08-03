@@ -130,9 +130,9 @@ class FaqServiceTest {
         when(faqRepository.findById("faq-1")).thenReturn(Optional.of(beingUpdated));
         when(faqRepository.findByNormalizedQuestion("How do I reset my password?"))
                 .thenReturn(Optional.of(conflicting));
+        UpdateFaqRequest request = new UpdateFaqRequest("How do I reset my password?", null);
 
-        assertThatThrownBy(() -> faqService.updateFaq(
-                "faq-1", new UpdateFaqRequest("How do I reset my password?", null)))
+        assertThatThrownBy(() -> faqService.updateFaq("faq-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("How do I reset my password?")
                 .extracting(ex -> ((ArmsAuthException) ex).getHttpStatus())
