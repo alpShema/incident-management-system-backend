@@ -44,6 +44,8 @@ public class FaqService {
 
     private static final String CSV_READ_ERROR_MESSAGE =
             "The uploaded CSV file could not be read. Please check the file format and try again.";
+    private static final String DUPLICATE_QUESTION_MESSAGE =
+            "Another FAQ already uses the question \"%s\". Please choose a different question.";
     private static final String QUESTION_COLUMN = "question";
     private static final String ANSWER_COLUMN = "answer";
 
@@ -69,7 +71,9 @@ public class FaqService {
 
         boolean reEmbed = false;
         if (StringUtils.hasText(request.question())) {
-            faq.setQuestion(sanitize(request.question()));
+            String sanitizedQuestion = sanitize(request.question());
+            rejectIfQuestionUsedByAnotherFaq(faq.getId(), sanitizedQuestion);
+            faq.setQuestion(sanitizedQuestion);
             reEmbed = true;
         }
         if (StringUtils.hasText(request.answer())) {
@@ -358,6 +362,17 @@ public class FaqService {
     private Faq findOrThrow(String id) {
         return faqRepository.findById(id)
                 .orElseThrow(() -> new ArmsAuthException("FAQ not found.", 404));
+    }
+
+    // Mirrors the unique-question invariant enforced at creation time (see
+    // upsertByQuestion) but errors instead of merging: an update colliding with a
+    // *different* FAQ's question must not silently overwrite that other FAQ.
+    private void rejectIfQuestionUsedByAnotherFaq(String faqId, String sanitizedQuestion) {
+        faqRepository.findByNormalizedQuestion(sanitizedQuestion)
+                .filter(other -> !other.getId().equals(faqId))
+                .ifPresent(other -> {
+                    throw new ArmsAuthException(String.format(DUPLICATE_QUESTION_MESSAGE, other.getQuestion()), 409);
+                });
     }
 
     private static final Pattern CSV_FORMULA_PREFIX = Pattern.compile("^[=+\\-@]");
