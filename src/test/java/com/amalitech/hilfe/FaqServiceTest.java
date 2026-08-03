@@ -7,6 +7,8 @@ import com.amalitech.hilfe.dto.FaqRowStatus;
 import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.UpdateFaqRequest;
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Faq;
 import com.amalitech.hilfe.repositories.FaqRepository;
 import com.amalitech.hilfe.services.FaqEmbeddingService;
@@ -119,6 +121,56 @@ class FaqServiceTest {
         assertThat(result.created()).isFalse();
         assertThat(result.faq().id()).isEqualTo("existing-id");
         verify(faqRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void updateFaq_questionCollidesWithAnotherFaq_throwsFaqSpecificConflictError() {
+        Faq beingUpdated = faq("faq-1", "Original question", "Original answer");
+        Faq conflicting = faq("faq-2", "How do I reset my password?", "Some answer");
+        when(faqRepository.findById("faq-1")).thenReturn(Optional.of(beingUpdated));
+        when(faqRepository.findByNormalizedQuestion("How do I reset my password?"))
+                .thenReturn(Optional.of(conflicting));
+        UpdateFaqRequest request = new UpdateFaqRequest("How do I reset my password?", null);
+
+        assertThatThrownBy(() -> faqService.updateFaq("faq-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("How do I reset my password?")
+                .extracting(ex -> ((ArmsAuthException) ex).getHttpStatus())
+                .isEqualTo(409);
+
+        verify(faqRepository, never()).save(any());
+    }
+
+    @Test
+    void updateFaq_questionMatchesItsOwnCurrentQuestion_doesNotThrow() {
+        // Re-submitting the same question the FAQ already has (e.g. only the answer
+        // changed) must not be treated as a collision with itself.
+        Faq faq = faq("faq-1", "How do I reset my password?", "Old answer");
+        when(faqRepository.findById("faq-1")).thenReturn(Optional.of(faq));
+        when(faqRepository.findByNormalizedQuestion("How do I reset my password?"))
+                .thenReturn(Optional.of(faq));
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        FaqResponse result = faqService.updateFaq(
+                "faq-1", new UpdateFaqRequest("How do I reset my password?", "New answer"));
+
+        assertThat(result.answer()).isEqualTo("New answer");
+        verify(faqRepository).save(any(Faq.class));
+    }
+
+    @Test
+    void updateFaq_questionDoesNotCollide_updatesSuccessfully() {
+        Faq faq = faq("faq-1", "Original question", "Original answer");
+        when(faqRepository.findById("faq-1")).thenReturn(Optional.of(faq));
+        when(faqRepository.findByNormalizedQuestion("A brand new question"))
+                .thenReturn(Optional.empty());
+        when(faqRepository.save(any(Faq.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        FaqResponse result = faqService.updateFaq(
+                "faq-1", new UpdateFaqRequest("A brand new question", null));
+
+        assertThat(result.question()).isEqualTo("A brand new question");
+        verify(faqRepository).save(any(Faq.class));
     }
 
     @Test

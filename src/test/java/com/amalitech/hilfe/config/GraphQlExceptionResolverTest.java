@@ -11,9 +11,12 @@ import graphql.schema.DataFetchingEnvironment;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.graphql.execution.ErrorType;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.security.access.AccessDeniedException;
@@ -71,6 +74,46 @@ class GraphQlExceptionResolverTest {
 
         assertThat(error.getPath()).isEqualTo(List.of("createIncident"));
         assertThat(error.getMessage()).isEqualTo("Location with the provided ID could not be found.");
+    }
+
+    @ParameterizedTest(name = "status {0} -> error=''{1}'', classification={2}")
+    @CsvSource({
+            "400, Bad Request, BAD_REQUEST",
+            "401, Unauthorized, UNAUTHORIZED",
+            "403, Forbidden, FORBIDDEN",
+            "404, Not Found, NOT_FOUND",
+            "409, Conflict, BAD_REQUEST",
+            "422, Unprocessable Content, BAD_REQUEST",
+            "429, Too Many Requests, BAD_REQUEST",
+    })
+    void resolveException_armsAuthException_errorShapeIsInternallyConsistentAcrossStatuses(
+            int httpStatus, String expectedErrorLabel, ErrorType expectedClassification) {
+        stubEnvironmentPath("someField");
+
+        GraphQLError error = resolver.resolveException(
+                new ArmsAuthException("A department with this name already exists.", httpStatus), env)
+                .block().get(0);
+
+        assertThat(error.getExtensions()).containsEntry("status", httpStatus);
+        assertThat(error.getExtensions()).containsEntry("error", expectedErrorLabel);
+        assertThat(error.getExtensions()).containsEntry("message", "A department with this name already exists.");
+        assertThat(error.getMessage()).isEqualTo("A department with this name already exists.");
+        assertThat(error.getErrorType()).isEqualTo(expectedClassification);
+    }
+
+    @Test
+    void resolveException_armsAuthException_defaultStatus_stillReportsBadGateway() {
+        // The no-status constructor defaults httpStatus to 502 for genuine upstream
+        // ARMS-service failures -- this must stay "Bad Gateway", unlike the bug where
+        // every status (409 included) was mislabeled as "Bad Gateway".
+        stubEnvironmentPath("someField");
+
+        GraphQLError error = resolver.resolveException(
+                new ArmsAuthException("ARMS service is unreachable"), env)
+                .block().get(0);
+
+        assertThat(error.getExtensions()).containsEntry("status", 502);
+        assertThat(error.getExtensions()).containsEntry("error", "Bad Gateway");
     }
 
     @Test
