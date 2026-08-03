@@ -7,10 +7,14 @@ import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.DepartmentService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -25,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,8 +40,14 @@ class DepartmentServiceTest {
     @Mock AgentGroupRepository agentGroupRepository;
     @Mock IncidentCategoryRepository categoryRepository;
     @Mock IncidentTypeRepository typeRepository;
+    @Mock UserRepository userRepository;
+    @Mock ActivityLogService activityLogService;
     @Mock EntityManager entityManager;
     @InjectMocks DepartmentService departmentService;
+
+    private User adminUser(String id, boolean status, String roleCode) {
+        return User.builder().id(id).fullName("Test User").status(status).roleCode(RoleCode.valueOf(roleCode)).build();
+    }
 
     private Department department(Boolean status) {
         return Department.builder()
@@ -191,5 +202,112 @@ class DepartmentServiceTest {
 
         assertThat(response.status()).isFalse();
         assertThat(response.id()).isEqualTo("dept-1");
+    }
+
+    @Test
+    void setDepartmentHead_activeAdmin_succeedsAndLogs() {
+        Department dept = department(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+        when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
+
+        DepartmentResponse response = departmentService.setDepartmentHead("actor-1", "dept-1", "admin-1");
+
+        assertThat(response.headUserId()).isEqualTo("admin-1");
+        assertThat(dept.getHeadUserId()).isEqualTo("admin-1");
+        verify(activityLogService).logDepartmentHeadAssigned("actor-1", "dept-1", null, "admin-1");
+    }
+
+    @Test
+    void setDepartmentHead_adminAgent_succeeds() {
+        Department dept = department(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+        when(userRepository.findById("agent-1")).thenReturn(Optional.of(adminUser("agent-1", true, "ADMIN_AGENT")));
+
+        DepartmentResponse response = departmentService.setDepartmentHead("actor-1", "dept-1", "agent-1");
+
+        assertThat(response.headUserId()).isEqualTo("agent-1");
+    }
+
+    @Test
+    void setDepartmentHead_reassigningOverExistingHead_replacesSilently() {
+        Department dept = department(true);
+        dept.setHeadUserId("old-head");
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+        when(userRepository.findById("new-head")).thenReturn(Optional.of(adminUser("new-head", true, "ADMIN")));
+
+        DepartmentResponse response = departmentService.setDepartmentHead("actor-1", "dept-1", "new-head");
+
+        assertThat(response.headUserId()).isEqualTo("new-head");
+        verify(activityLogService).logDepartmentHeadAssigned("actor-1", "dept-1", "old-head", "new-head");
+    }
+
+    @Test
+    void setDepartmentHead_nonAdminRole_throws400() {
+        Department dept = department(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(userRepository.findById("agent-user")).thenReturn(Optional.of(adminUser("agent-user", true, "AGENT")));
+
+        assertThatThrownBy(() -> departmentService.setDepartmentHead("actor-1", "dept-1", "agent-user"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Department head must be an Admin or Admin-Agent")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void setDepartmentHead_inactiveUser_throws404() {
+        Department dept = department(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", false, "ADMIN")));
+
+        assertThatThrownBy(() -> departmentService.setDepartmentHead("actor-1", "dept-1", "admin-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("User not found or inactive")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void setDepartmentHead_departmentNotFound_throws404() {
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> departmentService.setDepartmentHead("actor-1", "dept-1", "admin-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Department not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void removeDepartmentHead_clearsFieldAndLogs() {
+        Department dept = department(true);
+        dept.setHeadUserId("admin-1");
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+
+        DepartmentResponse response = departmentService.removeDepartmentHead("actor-1", "dept-1");
+
+        assertThat(response.headUserId()).isNull();
+        verify(activityLogService).logDepartmentHeadRemoved("actor-1", "dept-1", "admin-1");
+    }
+
+    @Test
+    void removeDepartmentHead_noExistingHead_doesNotLog() {
+        Department dept = department(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+
+        DepartmentResponse response = departmentService.removeDepartmentHead("actor-1", "dept-1");
+
+        assertThat(response.headUserId()).isNull();
+        verify(activityLogService, never()).logDepartmentHeadRemoved(any(), any(), any());
     }
 }

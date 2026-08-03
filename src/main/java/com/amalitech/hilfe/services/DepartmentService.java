@@ -8,10 +8,13 @@ import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -33,6 +36,8 @@ public class DepartmentService {
     private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
+    private final UserRepository userRepository;
+    private final ActivityLogService activityLogService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -138,6 +143,36 @@ public class DepartmentService {
             topics.forEach(topic -> topic.setStatus(false));
             typeRepository.saveAll(topics);
         }
+    }
+
+    @Transactional
+    public DepartmentResponse setDepartmentHead(String actorUserId, String departmentId, String userId) {
+        Department department = findActiveDepartment(departmentId);
+        User user = userRepository.findById(userId)
+                .filter(u -> Boolean.TRUE.equals(u.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
+        RoleCode role = RoleCode.valueOf(user.getRoleCode().toUpperCase());
+        if (role != RoleCode.ADMIN && role != RoleCode.ADMIN_AGENT) {
+            throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
+        }
+
+        String previousHeadUserId = department.getHeadUserId();
+        department.setHeadUserId(userId);
+        DepartmentResponse response = toResponse(departmentRepository.save(department));
+        activityLogService.logDepartmentHeadAssigned(actorUserId, departmentId, previousHeadUserId, userId);
+        return response;
+    }
+
+    @Transactional
+    public DepartmentResponse removeDepartmentHead(String actorUserId, String departmentId) {
+        Department department = findDepartmentByIdOrThrow(departmentId);
+        String previousHeadUserId = department.getHeadUserId();
+        department.setHeadUserId(null);
+        DepartmentResponse response = toResponse(departmentRepository.save(department));
+        if (previousHeadUserId != null) {
+            activityLogService.logDepartmentHeadRemoved(actorUserId, departmentId, previousHeadUserId);
+        }
+        return response;
     }
 
     public List<IncidentCategoryResponse> listCategories(String departmentId) {

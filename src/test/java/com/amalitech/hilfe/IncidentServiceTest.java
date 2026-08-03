@@ -62,6 +62,7 @@ class IncidentServiceTest {
     @Mock MediaService mediaService;
     @Mock MediaRepository mediaRepository;
     @Mock SlaService slaService;
+    @Mock IncidentCategoryRepository incidentCategoryRepository;
     @Mock EntityManager entityManager;
     @InjectMocks IncidentService incidentService;
 
@@ -293,6 +294,111 @@ class IncidentServiceTest {
         verify(agentRepository, never()).findAvailableByAgentGroupIdViaMembership(any());
         verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
         verify(notificationEventPublisher, never()).publish(isA(IncidentAutoAssignedClientEvent.class));
+    }
+
+    // ── escalation → department head targeting (HV-1533) ───────────────────────
+
+    private IncidentCategory categoryWithHead(String headUserId) {
+        Department department = Department.builder().id("dept-1").name("Facilities").headUserId(headUserId).build();
+        return IncidentCategory.builder().id("cat-1").name("Networking").departmentId("dept-1").department(department).build();
+    }
+
+    @Test
+    void createIncident_departmentHasActiveHead_notifiesOnlyHead() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = buildIncidentType();
+        incidentType.setAgentGroupId("group-1");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead("hod-1")));
+        when(userRepository.findById("hod-1")).thenReturn(Optional.of(
+                User.builder().id("hod-1").fullName("Head Person").status(true).roleCode(RoleCode.ADMIN).build()));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("hod-1", incident.getId(), 1));
+        verify(userRepository, never()).findActiveAdminUserIds();
+    }
+
+    @Test
+    void createIncident_departmentHeadDeactivated_fallsBackToAllAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = buildIncidentType();
+        incidentType.setAgentGroupId("group-1");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead("hod-1")));
+        when(userRepository.findById("hod-1")).thenReturn(Optional.of(
+                User.builder().id("hod-1").fullName("Ex Head").status(false).roleCode(RoleCode.ADMIN).build()));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1"));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
+        verify(notificationEventPublisher, never()).publish(argThat(e ->
+                e instanceof IncidentEscalatedEvent ev && "hod-1".equals(ev.recipientUserId())));
+    }
+
+    @Test
+    void createIncident_departmentHasNoHead_fallsBackToAllAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = buildIncidentType();
+        incidentType.setAgentGroupId("group-1");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead(null)));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1"));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
+        verify(userRepository, never()).findById("hod-1");
+    }
+
+    @Test
+    void createIncident_noCategoryLinked_fallsBackToAllAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1")
+                .name("Topic")
+                .agentGroupId("group-1")
+                .build(); // no categoryId
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1"));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
+        verify(incidentCategoryRepository, never()).findByIdWithDepartment(any());
     }
 
     // ── creator agent-status check (HV-1464) ────────────────────────────────────

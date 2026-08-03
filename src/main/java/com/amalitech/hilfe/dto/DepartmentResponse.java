@@ -9,7 +9,8 @@ public record DepartmentResponse(
         @Schema(description = "Department name") String name,
         @Schema(description = "Department description", nullable = true) String description,
         @Schema(description = "Whether the department is active") Boolean status,
-        @Schema(description = "Number of incident categories linked to this department") long categoryCount
+        @Schema(description = "Number of incident categories linked to this department") long categoryCount,
+        @Schema(description = "User ID of the department's head, if assigned", nullable = true) String headUserId
 ) {
     public static DepartmentResponse from(Department department, long categoryCount) {
         return new DepartmentResponse(
@@ -17,7 +18,8 @@ public record DepartmentResponse(
                 department.getName(),
                 department.getDescription(),
                 department.getStatus(),
-                categoryCount
+                categoryCount,
+                department.getHeadUserId()
         );
     }
 }
