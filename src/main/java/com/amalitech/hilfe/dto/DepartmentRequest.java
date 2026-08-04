@@ -13,5 +13,8 @@ public record DepartmentRequest(
 
         @Schema(description = "Optional department description", nullable = true)
         @Size(max = 1000, message = "Department description must not exceed 1000 characters.")
-        String description
+        String description,
+
+        @Schema(description = "User ID of the department's head. Must be an active Admin or Admin-Agent. Omit to leave the current head unchanged.", nullable = true)
+        String headUserId
 ) {}

@@ -229,7 +229,7 @@ class DepartmentServiceTest {
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(java.util.List.of());
 
         DepartmentResponse response = departmentService.updateDepartment(
-                "dept-1", new DepartmentRequest("  Facilities Updated  ", "  Updated description  "));
+                "actor-1", "dept-1", new DepartmentRequest("  Facilities Updated  ", "  Updated description  ", null));
 
         assertThat(response.name()).isEqualTo("Facilities Updated");
         assertThat(response.description()).isEqualTo("Updated description");
@@ -249,14 +249,15 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void setDepartmentHead_activeAdmin_succeedsAndLogs() {
+    void updateDepartment_setsHeadAndLogs() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
         when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
 
-        DepartmentResponse response = departmentService.setDepartmentHead("actor-1", "dept-1", "admin-1");
+        DepartmentResponse response = departmentService.updateDepartment(
+                "actor-1", "dept-1", new DepartmentRequest(null, null, "admin-1"));
 
         assertThat(response.headUserId()).isEqualTo("admin-1");
         assertThat(dept.getHeadUserId()).isEqualTo("admin-1");
@@ -264,20 +265,21 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void setDepartmentHead_adminAgent_succeeds() {
+    void updateDepartment_adminAgentHead_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(departmentRepository.save(dept)).thenReturn(dept);
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
         when(userRepository.findById("agent-1")).thenReturn(Optional.of(adminUser("agent-1", true, "ADMIN_AGENT")));
 
-        DepartmentResponse response = departmentService.setDepartmentHead("actor-1", "dept-1", "agent-1");
+        DepartmentResponse response = departmentService.updateDepartment(
+                "actor-1", "dept-1", new DepartmentRequest(null, null, "agent-1"));
 
         assertThat(response.headUserId()).isEqualTo("agent-1");
     }
 
     @Test
-    void setDepartmentHead_reassigningOverExistingHead_replacesSilently() {
+    void updateDepartment_reassigningOverExistingHead_replacesAndLogs() {
         Department dept = department(true);
         dept.setHeadUserId("old-head");
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
@@ -285,19 +287,21 @@ class DepartmentServiceTest {
         when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
         when(userRepository.findById("new-head")).thenReturn(Optional.of(adminUser("new-head", true, "ADMIN")));
 
-        DepartmentResponse response = departmentService.setDepartmentHead("actor-1", "dept-1", "new-head");
+        DepartmentResponse response = departmentService.updateDepartment(
+                "actor-1", "dept-1", new DepartmentRequest(null, null, "new-head"));
 
         assertThat(response.headUserId()).isEqualTo("new-head");
         verify(activityLogService).logDepartmentHeadAssigned("actor-1", "dept-1", "old-head", "new-head");
     }
 
     @Test
-    void setDepartmentHead_nonAdminRole_throws400() {
+    void updateDepartment_nonAdminRoleHead_throws400() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(userRepository.findById("agent-user")).thenReturn(Optional.of(adminUser("agent-user", true, "AGENT")));
+        DepartmentRequest request = new DepartmentRequest(null, null, "agent-user");
 
-        assertThatThrownBy(() -> departmentService.setDepartmentHead("actor-1", "dept-1", "agent-user"))
+        assertThatThrownBy(() -> departmentService.updateDepartment("actor-1", "dept-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Department head must be an Admin or Admin-Agent")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -305,12 +309,13 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void setDepartmentHead_inactiveUser_throws404() {
+    void updateDepartment_inactiveHeadUser_throws404() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
         when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", false, "ADMIN")));
+        DepartmentRequest request = new DepartmentRequest(null, null, "admin-1");
 
-        assertThatThrownBy(() -> departmentService.setDepartmentHead("actor-1", "dept-1", "admin-1"))
+        assertThatThrownBy(() -> departmentService.updateDepartment("actor-1", "dept-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("User not found or inactive")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -318,14 +323,29 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void setDepartmentHead_departmentNotFound_throws404() {
+    void updateDepartment_departmentNotFound_throws404() {
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.empty());
+        DepartmentRequest request = new DepartmentRequest(null, null, "admin-1");
 
-        assertThatThrownBy(() -> departmentService.setDepartmentHead("actor-1", "dept-1", "admin-1"))
+        assertThatThrownBy(() -> departmentService.updateDepartment("actor-1", "dept-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Department not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    @Test
+    void updateDepartment_setsHeadOnInactiveDepartment_succeeds() {
+        Department dept = department(false);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+        when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
+
+        DepartmentResponse response = departmentService.updateDepartment(
+                "actor-1", "dept-1", new DepartmentRequest(null, null, "admin-1"));
+
+        assertThat(response.headUserId()).isEqualTo("admin-1");
     }
 
     @Test
