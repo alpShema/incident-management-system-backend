@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.controllers.graphql;
 
 import com.amalitech.hilfe.config.GraphQlResponseMessage;
+import com.amalitech.hilfe.dto.CreateDepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
@@ -49,9 +50,11 @@ public class DepartmentResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('department.create')")
-    public DepartmentResponse createDepartment(@Valid @Argument DepartmentRequest input) {
+    public DepartmentResponse createDepartment(
+            @Valid @Argument CreateDepartmentRequest input,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("Department created successfully");
-        return departmentService.createDepartment(input);
+        return departmentService.createDepartment(principal.userId(), input);
     }
 
     @MutationMapping

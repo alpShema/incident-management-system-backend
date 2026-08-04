@@ -773,6 +773,12 @@ input DepartmentInput {
   description: String
 }
 
+input CreateDepartmentInput {
+  name: String!
+  description: String
+  headUserId: ID!
+}
+
 input UpdateDepartmentStatusInput {
   status: Boolean!
 }
@@ -1017,7 +1023,7 @@ type Mutation {
   generateMediaPresignedUrl(input: PresignedUrlInput!): PresignedUrl
 
   # Departments
-  createDepartment(input: DepartmentInput!): Department
+  createDepartment(input: CreateDepartmentInput!): Department
   updateDepartment(id: ID!, input: DepartmentInput!): Department
   updateDepartmentStatus(id: ID!, input: UpdateDepartmentStatusInput!): Department
   linkCategoryToDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory

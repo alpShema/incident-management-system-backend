@@ -1,5 +1,6 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.dto.CreateDepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -164,9 +165,10 @@ class DepartmentServiceTest {
     void createDepartment_trimsNameAndDescription() {
         when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
         when(departmentRepository.save(any(Department.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
 
         DepartmentResponse response = departmentService.createDepartment(
-                new DepartmentRequest("  Facilities  ",  "  Facilities dept  "));
+                "actor-1", new CreateDepartmentRequest("  Facilities  ",  "  Facilities dept  ", "admin-1"));
 
         assertThat(response.name()).isEqualTo("Facilities");
         assertThat(response.description()).isEqualTo("Facilities dept");
@@ -174,6 +176,48 @@ class DepartmentServiceTest {
         verify(departmentRepository).save(captor.capture());
         assertThat(captor.getValue().getName()).isEqualTo("Facilities");
         assertThat(captor.getValue().getDescription()).isEqualTo("Facilities dept");
+    }
+
+    @Test
+    void createDepartment_setsHeadAndLogsAssignment() {
+        when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
+        when(departmentRepository.save(any(Department.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
+
+        DepartmentResponse response = departmentService.createDepartment(
+                "actor-1", new CreateDepartmentRequest("Facilities", "Facilities dept", "admin-1"));
+
+        assertThat(response.headUserId()).isEqualTo("admin-1");
+        var captor = org.mockito.ArgumentCaptor.forClass(Department.class);
+        verify(departmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getHeadUserId()).isEqualTo("admin-1");
+        verify(activityLogService).logDepartmentHeadAssigned("actor-1", captor.getValue().getId(), null, "admin-1");
+    }
+
+    @Test
+    void createDepartment_nonAdminRoleHead_throws400() {
+        when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
+        when(userRepository.findById("agent-user")).thenReturn(Optional.of(adminUser("agent-user", true, "AGENT")));
+        CreateDepartmentRequest request = new CreateDepartmentRequest("Facilities", "Facilities dept", "agent-user");
+
+        assertThatThrownBy(() -> departmentService.createDepartment("actor-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Department head must be an Admin or Admin-Agent")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void createDepartment_inactiveOrMissingHeadUser_throws404() {
+        when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
+        when(userRepository.findById("admin-1")).thenReturn(Optional.empty());
+        CreateDepartmentRequest request = new CreateDepartmentRequest("Facilities", "Facilities dept", "admin-1");
+
+        assertThatThrownBy(() -> departmentService.createDepartment("actor-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("User not found or inactive")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
     }
 
     @Test

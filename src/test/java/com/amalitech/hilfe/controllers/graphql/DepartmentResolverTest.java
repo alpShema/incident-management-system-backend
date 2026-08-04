@@ -41,8 +41,8 @@ class DepartmentResolverTest {
     @MockitoBean DepartmentService departmentService;
 
     private static final String MUTATION = """
-            mutation($name: String!) {
-              createDepartment(input: { name: $name }) {
+            mutation($name: String!, $headUserId: ID!) {
+              createDepartment(input: { name: $name, headUserId: $headUserId }) {
                 id
               }
             }
@@ -71,11 +71,12 @@ class DepartmentResolverTest {
 
         graphQlTester.document(MUTATION)
                 .variable("name", "")
+                .variable("headUserId", "admin-1")
                 .execute()
                 .errors()
                 .expect(error -> error.getMessage() != null)
                 .verify();
 
-        verify(departmentService, never()).createDepartment(any());
+        verify(departmentService, never()).createDepartment(any(), any());
     }
 }
