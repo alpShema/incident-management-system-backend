@@ -1,11 +1,15 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.DepartmentController;
+import com.amalitech.hilfe.dto.CreateDepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.dto.UpdateDepartmentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
+import com.amalitech.hilfe.security.JwtAuthenticationFilter;
+import com.amalitech.hilfe.security.SecurityConfig;
 import com.amalitech.hilfe.services.DepartmentService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
@@ -28,11 +32,12 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(DepartmentController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class, Http401AuthenticationEntryPoint.class})
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class DepartmentControllerTest {
 
@@ -105,6 +110,36 @@ class DepartmentControllerTest {
                         .content(objectMapper.writeValueAsString(new UpdateDepartmentStatusRequest(false)))
                         .with(authentication(auth)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void createDepartment_valid_returns201() throws Exception {
+        when(departmentService.createDepartment(eq("admin-1"), any()))
+                .thenReturn(new DepartmentResponse("dept-1", "Facilities", "Facilities dept", true, 0, "admin-1"));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.create"));
+
+        mvc.perform(post("/departments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateDepartmentRequest("Facilities", "Facilities dept", "admin-1")))
+                        .with(authentication(auth)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.headUserId").value("admin-1"));
+    }
+
+    @Test
+    void createDepartment_missingHeadUserId_returns400() throws Exception {
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.create"));
+
+        mvc.perform(post("/departments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new CreateDepartmentRequest("Facilities", "Facilities dept", null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.dto.CreateDepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
@@ -59,21 +60,25 @@ public class DepartmentService {
     }
 
     @Transactional
-    public DepartmentResponse createDepartment(DepartmentRequest request) {
+    public DepartmentResponse createDepartment(String actorUserId, CreateDepartmentRequest request) {
         String name = request.name() == null ? null : request.name().trim();
         String description = request.description() == null ? null : request.description().trim();
 
         if (departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException(DEPARTMENT_ALREADY_EXISTS_MESSAGE, 409);
         }
+        validateEligibleHead(request.headUserId());
 
         Department department = Department.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name)
                 .description(description)
                 .status(true)
+                .headUserId(request.headUserId())
                 .build();
-        return toResponse(departmentRepository.save(department));
+        DepartmentResponse response = toResponse(departmentRepository.save(department));
+        activityLogService.logDepartmentHeadAssigned(actorUserId, department.getId(), null, request.headUserId());
+        return response;
     }
 
     @Transactional
@@ -148,13 +153,7 @@ public class DepartmentService {
     @Transactional
     public DepartmentResponse setDepartmentHead(String actorUserId, String departmentId, String userId) {
         Department department = findActiveDepartment(departmentId);
-        User user = userRepository.findById(userId)
-                .filter(u -> Boolean.TRUE.equals(u.getStatus()))
-                .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
-        RoleCode role = RoleCode.valueOf(user.getRoleCode().toUpperCase());
-        if (role != RoleCode.ADMIN && role != RoleCode.ADMIN_AGENT) {
-            throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
-        }
+        validateEligibleHead(userId);
 
         String previousHeadUserId = department.getHeadUserId();
         department.setHeadUserId(userId);
@@ -202,6 +201,16 @@ public class DepartmentService {
         }
         category.setDepartmentId(null);
         return IncidentCategoryResponse.from(categoryRepository.save(category));
+    }
+
+    private void validateEligibleHead(String userId) {
+        User user = userRepository.findById(userId)
+                .filter(u -> Boolean.TRUE.equals(u.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
+        RoleCode role = RoleCode.valueOf(user.getRoleCode().toUpperCase());
+        if (role != RoleCode.ADMIN && role != RoleCode.ADMIN_AGENT) {
+            throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
+        }
     }
 
     private DepartmentResponse toResponse(Department department) {

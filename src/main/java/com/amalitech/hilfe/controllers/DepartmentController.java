@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.DepartmentService;
+import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,12 +44,15 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success("Department retrieved successfully", departmentService.getDepartment(id)));
     }
 
-    @Operation(summary = "Create a department", description = "Creates an internal department. Requires `department.create` permission.")
+    @Operation(summary = "Create a department", description = "Creates an internal department with a required department head. Requires `department.create` permission.")
     @PostMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_CREATE + "')")
-    public ResponseEntity<ApiResponse<DepartmentResponse>> createDepartment(@Valid @RequestBody DepartmentRequest request) {
+    public ResponseEntity<ApiResponse<DepartmentResponse>> createDepartment(
+            @Valid @RequestBody CreateDepartmentRequest request,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Department created successfully", departmentService.createDepartment(request)));
+                .body(ApiResponse.success("Department created successfully",
+                        departmentService.createDepartment(principal.userId(), request)));
     }
 
     @Operation(summary = "Update a department", description = "Updates an internal department. Requires `department.update` permission.")
