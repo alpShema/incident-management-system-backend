@@ -205,9 +205,17 @@ public class DepartmentService {
         User user = userRepository.findById(userId)
                 .filter(u -> Boolean.TRUE.equals(u.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
-        RoleCode role = RoleCode.valueOf(user.getRoleCode().toUpperCase());
-        if (role != RoleCode.ADMIN && role != RoleCode.ADMIN_AGENT) {
+        if (!isAdminOrAdminAgent(user.getRoleCode())) {
             throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
+        }
+    }
+
+    private boolean isAdminOrAdminAgent(String roleCode) {
+        try {
+            RoleCode role = RoleCode.valueOf(roleCode.toUpperCase());
+            return role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT;
+        } catch (IllegalArgumentException e) {
+            return false;
         }
     }
 

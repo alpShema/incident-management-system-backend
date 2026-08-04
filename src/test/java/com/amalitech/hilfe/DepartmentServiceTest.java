@@ -309,6 +309,26 @@ class DepartmentServiceTest {
     }
 
     @Test
+    void updateDepartment_customRoleHead_throws400WithSameMessageAsNonAdminRole() {
+        Department dept = department(true);
+        User customRoleUser = User.builder()
+                .id("custom-role-user")
+                .fullName("Test User")
+                .status(true)
+                .build();
+        customRoleUser.setRoleCode("DEPARTMENT_HEAD");
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(userRepository.findById("custom-role-user")).thenReturn(Optional.of(customRoleUser));
+        DepartmentRequest request = new DepartmentRequest(null, null, "custom-role-user");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment("actor-1", "dept-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Department head must be an Admin or Admin-Agent")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
     void updateDepartment_inactiveHeadUser_throws404() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
