@@ -367,13 +367,17 @@ public class IncidentService {
 
         // Capture the previous agent's userId BEFORE overwriting assignedToId
         String previousAgentUserId = resolveAgentUserId(incident.getAssignedToId());
+        boolean isFirstAssignment = incident.getAssignedToId() == null;
 
         incident.setAssignedToId(request.agentId());
 
-        String inProgressStatusId = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
-                .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
-                .getId();
-        incident.setStatusId(inProgressStatusId);
+        // Only auto-activate on first pickup; never clobber a status set in the same edit.
+        if (isFirstAssignment) {
+            String inProgressStatusId = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
+                    .getId();
+            incident.setStatusId(inProgressStatusId);
+        }
 
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());

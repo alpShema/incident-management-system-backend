@@ -1861,20 +1861,42 @@ class IncidentServiceTest {
     @Test
     void assignIncident_agentIsOwner_succeeds() {
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Agent agent1 = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
         Agent agent2 = Agent.builder().id("agent-2").userId("other-user").status(true).build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent1));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(agent2));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         // actor-1 is the userId of agent-1, who is the assigned agent — should be allowed
         incidentService.assignIncident("actor-1", false, "inc-1", new AssignIncidentRequest("agent-2"));
 
         assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
+    }
+
+    @Test
+    void assignIncident_reassignment_doesNotRevertStatus() {
+        // Incident already assigned to agent-1, and its status was deliberately set to
+        // Pending earlier in the same edit — reassigning must not clobber it back to In Progress.
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        incident.setStatusId("status-pending");
+        Status pendingStatus = buildStatus("status-pending", "Pending");
+        incident.setStatus(pendingStatus);
+
+        Agent agent1 = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        Agent agent2 = Agent.builder().id("agent-2").userId("other-user").status(true).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent1));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(agent2));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-2"));
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
+        assertThat(incident.getStatusId()).isEqualTo("status-pending");
+        verify(statusRepository, never()).findByNameIgnoreCase(any());
     }
 
     // ── notification: sendReopenedNotification ────────────────────────────────
@@ -2033,7 +2055,6 @@ class IncidentServiceTest {
     void assignIncident_withPreviousAgent_sendsUnassignedNotificationBeforeOverwrite() {
         // Incident already assigned to agent-1 (userId "actor-1")
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         // agent-1 is the previous agent (userId "actor-1")
         Agent previousAgent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
@@ -2043,7 +2064,6 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(previousAgent));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(newAgent));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-2"));
@@ -2081,14 +2101,12 @@ class IncidentServiceTest {
     void assignIncident_sameAgentReassigned_doesNotSendUnassignedNotification() {
         // Reassigning to the same agent: unassigned notification should be suppressed
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         Agent sameAgent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         // findById("agent-1") is called twice: once to resolve previousAgentUserId, once for the new agentUserId
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(sameAgent));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-1"));
@@ -2122,7 +2140,6 @@ class IncidentServiceTest {
     void assignIncident_reassignedToDifferentAgent_sendsReassignmentNotificationToNewAgent() {
         // Incident already assigned to agent-1; being reassigned to agent-2 by an admin
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         Agent previousAgent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
         Agent newAgent = Agent.builder().id("agent-2").userId("new-agent-user").status(true).build();
@@ -2130,7 +2147,6 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(previousAgent));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(newAgent));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-2"));
