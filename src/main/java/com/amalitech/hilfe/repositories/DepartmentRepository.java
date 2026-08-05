@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface DepartmentRepository extends JpaRepository<Department, String> {
     boolean existsByNameIgnoreCase(String name);
+    boolean existsByHeadUserId(String headUserId);
+    boolean existsByHeadUserIdAndIdNot(String headUserId, String id);
     Page<Department> findByStatus(Boolean status, Pageable pageable);
 
     @Query("""

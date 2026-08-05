@@ -221,6 +221,20 @@ class DepartmentServiceTest {
     }
 
     @Test
+    void createDepartment_headAlreadyHeadsAnotherDepartment_throws409() {
+        when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
+        when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
+        when(departmentRepository.existsByHeadUserId("admin-1")).thenReturn(true);
+        CreateDepartmentRequest request = new CreateDepartmentRequest("Facilities", "Facilities dept", "admin-1");
+
+        assertThatThrownBy(() -> departmentService.createDepartment("actor-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("This user is already the head of another department.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
     void updateDepartment_trimsNameAndDescription() {
         Department dept = department(false);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
@@ -234,6 +248,54 @@ class DepartmentServiceTest {
         assertThat(response.name()).isEqualTo("Facilities Updated");
         assertThat(response.description()).isEqualTo("Updated description");
         verify(departmentRepository).save(dept);
+    }
+
+    @Test
+    void updateDepartment_duplicateName_throws409() {
+        Department dept = department(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.existsByNameIgnoreCase("Support")).thenReturn(true);
+
+        DepartmentRequest request = new DepartmentRequest("Support", null, null);
+
+        assertThatThrownBy(() -> departmentService.updateDepartment("actor-1", "dept-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("A department with this name already exists. Please choose a different name.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
+    }
+
+    @Test
+    void updateDepartment_descriptionOnly_leavesNameAndHeadUnchanged() {
+        Department dept = department(true);
+        dept.setHeadUserId("admin-1");
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+
+        DepartmentResponse response = departmentService.updateDepartment(
+                "actor-1", "dept-1", new DepartmentRequest(null, "New description", null));
+
+        assertThat(response.name()).isEqualTo("Facilities");
+        assertThat(response.description()).isEqualTo("New description");
+        assertThat(response.headUserId()).isEqualTo("admin-1");
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateDepartment_headAlreadyHeadsAnotherDepartment_throws409() {
+        Department dept = department(true);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
+        when(departmentRepository.existsByHeadUserIdAndIdNot("admin-1", "dept-1")).thenReturn(true);
+
+        DepartmentRequest request = new DepartmentRequest(null, null, "admin-1");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment("actor-1", "dept-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("This user is already the head of another department.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(409);
     }
 
     @Test

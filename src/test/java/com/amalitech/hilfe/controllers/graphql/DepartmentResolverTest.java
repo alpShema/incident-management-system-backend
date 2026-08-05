@@ -1,7 +1,10 @@
 package com.amalitech.hilfe.controllers.graphql;
 
 import com.amalitech.hilfe.config.GraphQlConfig;
+import com.amalitech.hilfe.dto.DepartmentResponse;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.DepartmentService;
+import com.amalitech.hilfe.services.JwtTokenService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,8 +25,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 // Spot-checks the same @Valid fix applied to IncidentResolver: confirms it also closes the
 // GraphQL validation-bypass gap on a second, independent resolver (DepartmentRequest.name
@@ -59,9 +64,25 @@ class DepartmentResolverTest {
         RequestContextHolder.resetRequestAttributes();
     }
 
+    private static final String UPDATE_MUTATION = """
+            mutation($id: ID!, $description: String) {
+              updateDepartment(id: $id, input: { description: $description }) {
+                id
+                description
+              }
+            }
+            """;
+
     private void setAuthority(String authority) {
         var auth = new UsernamePasswordAuthenticationToken(
                 "user", null, List.of(new SimpleGrantedAuthority(authority)));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private void setAuthorityWithPrincipal(String authority) {
+        var principal = new JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
+        var auth = new UsernamePasswordAuthenticationToken(
+                principal, null, List.of(new SimpleGrantedAuthority(authority)));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
@@ -78,5 +99,68 @@ class DepartmentResolverTest {
                 .verify();
 
         verify(departmentService, never()).createDepartment(any(), any());
+    }
+
+    // HV-1575: the GraphQL schema — not just the DTO — now allows `name` to be omitted from
+    // the updateDepartment input entirely, so callers can target description/headUserId alone.
+    @Test
+    void updateDepartment_omittedNameVariable_succeeds() {
+        setAuthorityWithPrincipal("department.update");
+        when(departmentService.updateDepartment(eq("admin-1"), eq("dept-1"), any()))
+                .thenReturn(new DepartmentResponse("dept-1", "Facilities", "New description", true, 0, null));
+
+        graphQlTester.document(UPDATE_MUTATION)
+                .variable("id", "dept-1")
+                .variable("description", "New description")
+                .execute()
+                .errors().verify()
+                .path("updateDepartment.description").entity(String.class).isEqualTo("New description");
+
+        verify(departmentService).updateDepartment(eq("admin-1"), eq("dept-1"), any());
+    }
+
+    @Test
+    void updateDepartment_blankName_isRejectedByValidation() {
+        setAuthorityWithPrincipal("department.update");
+
+        String mutation = """
+                mutation($id: ID!, $name: String) {
+                  updateDepartment(id: $id, input: { name: $name }) {
+                    id
+                  }
+                }
+                """;
+
+        graphQlTester.document(mutation)
+                .variable("id", "dept-1")
+                .variable("name", "   ")
+                .execute()
+                .errors()
+                .expect(error -> error.getMessage() != null)
+                .verify();
+
+        verify(departmentService, never()).updateDepartment(any(), any(), any());
+    }
+
+    @Test
+    void updateDepartment_emptyInput_isRejectedByValidation() {
+        setAuthorityWithPrincipal("department.update");
+
+        String mutation = """
+                mutation($id: ID!) {
+                  updateDepartment(id: $id, input: {}) {
+                    id
+                  }
+                }
+                """;
+
+        graphQlTester.document(mutation)
+                .variable("id", "dept-1")
+                .execute()
+                .errors()
+                .expect(error -> error.getMessage() != null)
+                .verify();
+
+        verify(departmentService, never()).updateDepartment(any(), any(), any());
     }
 }

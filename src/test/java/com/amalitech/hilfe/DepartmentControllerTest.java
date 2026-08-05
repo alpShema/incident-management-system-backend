@@ -161,6 +161,50 @@ class DepartmentControllerTest {
     }
 
     @Test
+    void updateDepartment_blankName_returns400() throws Exception {
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.update"));
+
+        mvc.perform(patch("/departments/dept-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new DepartmentRequest("   ", null, null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDepartment_emptyBody_returns400() throws Exception {
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.update"));
+
+        mvc.perform(patch("/departments/dept-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new DepartmentRequest(null, null, null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDepartment_descriptionOnly_returns200() throws Exception {
+        when(departmentService.updateDepartment(eq("admin-1"), eq("dept-1"), any()))
+                .thenReturn(new DepartmentResponse("dept-1", "Facilities", "New description", true, 0, null));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.update"));
+
+        mvc.perform(patch("/departments/dept-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new DepartmentRequest(null, "New description", null)))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Facilities"))
+                .andExpect(jsonPath("$.data.description").value("New description"));
+    }
+
+    @Test
     void getDepartment_inactive_returns200() throws Exception {
         when(departmentService.getDepartment("dept-1")).thenReturn(department(false));
 

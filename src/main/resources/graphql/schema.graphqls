@@ -768,8 +768,9 @@ input ChatbotQueryInput {
   query: String!
 }
 
+# HV-1575: name is optional — fields omitted from the input are left at their current stored value.
 input DepartmentInput {
-  name: String!
+  name: String
   description: String
   headUserId: ID
 }
@@ -802,8 +803,10 @@ input UpdateAvailabilityInput {
   available: Boolean!
 }
 
+# HV-1575: name is optional — omitted fields are left at their current stored value on update;
+# createAgentGroup still requires it (enforced in AgentGroupService).
 input AgentGroupInput {
-  name: String!
+  name: String
   description: String
   departmentId: String
   agentIds: [String!]
