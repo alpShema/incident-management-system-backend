@@ -1,7 +1,7 @@
 package com.amalitech.hilfe.security;
 
 import com.amalitech.hilfe.services.JwtTokenService;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
