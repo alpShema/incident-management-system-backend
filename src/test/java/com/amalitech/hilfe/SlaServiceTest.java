@@ -5,13 +5,19 @@ import com.amalitech.hilfe.dto.SlaConfigResponse;
 import com.amalitech.hilfe.dto.UpdateSlaConfigRequest;
 import com.amalitech.hilfe.dto.dashboard.SlaReportResponse;
 import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentSla;
+import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Severity;
 import com.amalitech.hilfe.models.SystemConfig;
+import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.notifications.NotificationEventPublisher;
 import com.amalitech.hilfe.notifications.events.IncidentSlaAtRiskEvent;
 import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentSlaRepository;
 import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
@@ -48,6 +54,7 @@ class SlaServiceTest {
     @Mock SystemConfigRepository systemConfigRepository;
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
+    @Mock IncidentCategoryRepository incidentCategoryRepository;
     @Mock NotificationEventPublisher notificationEventPublisher;
     @Mock ActivityLogService activityLogService;
 
@@ -550,6 +557,152 @@ class SlaServiceTest {
         verify(incidentSlaRepository).save(sla);
         assertThat(sla.getResponseBreachedAt()).isNotNull();
         assertThat(sla.getResponseStatus()).isEqualTo("BREACHED");
+    }
+
+    // ── escalation → department head targeting ─────────────────────────────────
+
+    private IncidentCategory categoryWithHead(String headUserId) {
+        Department department = Department.builder().id("dept-1").name("Facilities").headUserId(headUserId).build();
+        return IncidentCategory.builder().id("cat-1").name("Networking").departmentId("dept-1").department(department).build();
+    }
+
+    private Incident incidentWithCategory(String categoryId) {
+        IncidentType incidentType = IncidentType.builder().id("type-1").categoryId(categoryId).build();
+        return Incident.builder().id("inc-1").incidentNo(15).incidentType(incidentType).build();
+    }
+
+    @Test
+    void scanAndNotify_departmentHasActiveHead_notifiesOnlyHead() {
+        Instant now = FIXED_NOW;
+        Incident incident = incidentWithCategory("cat-1");
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead("hod-1")));
+        when(userRepository.findById("hod-1")).thenReturn(Optional.of(
+                User.builder().id("hod-1").fullName("Head Person").status(true).roleCode(RoleCode.ADMIN).build()));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("hod-1");
+        verify(userRepository, never()).findActiveAdminUserIds();
+    }
+
+    @Test
+    void scanAndNotify_departmentHeadDeactivated_fallsBackToAllAdmins() {
+        Instant now = FIXED_NOW;
+        Incident incident = incidentWithCategory("cat-1");
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead("hod-1")));
+        when(userRepository.findById("hod-1")).thenReturn(Optional.of(
+                User.builder().id("hod-1").fullName("Ex Head").status(false).roleCode(RoleCode.ADMIN).build()));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-1"));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("admin-1");
+    }
+
+    @Test
+    void scanAndNotify_departmentHasNoHead_fallsBackToAllAdmins() {
+        Instant now = FIXED_NOW;
+        Incident incident = incidentWithCategory("cat-1");
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead(null)));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-1"));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("admin-1");
+        verify(userRepository, never()).findById("hod-1");
+    }
+
+    @Test
+    void scanAndNotify_noCategoryLinked_fallsBackToAllAdmins() {
+        Instant now = FIXED_NOW;
+        Incident incident = incidentWithCategory(null);
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-1"));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("admin-1");
+        verify(incidentCategoryRepository, never()).findByIdWithDepartment(any());
+    }
+
+    @Test
+    void scanAndNotify_departmentHeadTargeting_appliesToBreachNotificationsToo() {
+        Instant now = FIXED_NOW;
+        Incident incident = incidentWithCategory("cat-1");
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .resolutionThresholdMinutes(480)
+                .resolutionDueAt(now.minus(Duration.ofMinutes(5)))
+                .resolutionStatus("AT_RISK")
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of());
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of(sla));
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead("hod-1")));
+        when(userRepository.findById("hod-1")).thenReturn(Optional.of(
+                User.builder().id("hod-1").fullName("Head Person").status(true).roleCode(RoleCode.ADMIN).build()));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<com.amalitech.hilfe.notifications.events.IncidentSlaBreachedEvent> captor =
+                ArgumentCaptor.forClass(com.amalitech.hilfe.notifications.events.IncidentSlaBreachedEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("hod-1");
+        verify(userRepository, never()).findActiveAdminUserIds();
     }
 
     @Test
