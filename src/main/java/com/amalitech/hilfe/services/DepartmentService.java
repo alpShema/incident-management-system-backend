@@ -32,6 +32,7 @@ import java.util.UUID;
 public class DepartmentService {
 
     private static final String DEPARTMENT_ALREADY_EXISTS_MESSAGE = "A department with this name already exists. Please choose a different name.";
+    private static final String HEAD_ALREADY_ASSIGNED_MESSAGE = "This user is already the head of another department.";
 
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
@@ -67,7 +68,7 @@ public class DepartmentService {
         if (departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException(DEPARTMENT_ALREADY_EXISTS_MESSAGE, 409);
         }
-        validateEligibleHead(request.headUserId());
+        validateEligibleHead(request.headUserId(), null);
 
         Department department = Department.builder()
                 .id(UUID.randomUUID().toString())
@@ -195,18 +196,24 @@ public class DepartmentService {
     }
 
     private void assignHead(Department department, String actorUserId, String headUserId) {
-        validateEligibleHead(headUserId);
+        validateEligibleHead(headUserId, department.getId());
         String previousHeadUserId = department.getHeadUserId();
         department.setHeadUserId(headUserId);
         activityLogService.logDepartmentHeadAssigned(actorUserId, department.getId(), previousHeadUserId, headUserId);
     }
 
-    private void validateEligibleHead(String userId) {
+    private void validateEligibleHead(String userId, String excludeDepartmentId) {
         User user = userRepository.findById(userId)
                 .filter(u -> Boolean.TRUE.equals(u.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
         if (!isAdminOrAdminAgent(user.getRoleCode())) {
             throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
+        }
+        boolean alreadyHeadsAnotherDepartment = excludeDepartmentId == null
+                ? departmentRepository.existsByHeadUserId(userId)
+                : departmentRepository.existsByHeadUserIdAndIdNot(userId, excludeDepartmentId);
+        if (alreadyHeadsAnotherDepartment) {
+            throw new ArmsAuthException(HEAD_ALREADY_ASSIGNED_MESSAGE, 409);
         }
     }
 

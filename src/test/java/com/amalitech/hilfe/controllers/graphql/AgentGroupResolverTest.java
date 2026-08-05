@@ -6,6 +6,7 @@ import com.amalitech.hilfe.dto.LookupResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.services.AgentGroupService;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.graphql.test.autoconfigure.GraphQlTest;
@@ -14,11 +15,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.graphql.test.tester.GraphQlTester;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
@@ -53,9 +57,17 @@ class AgentGroupResolverTest {
             }
             """;
 
+    @BeforeEach
+    void bindRequestContext() {
+        // createAgentGroup/updateAgentGroup call GraphQlResponseMessage.set(), which needs a
+        // thread-bound request; the query-only tests above don't exercise that path.
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    }
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
     }
 
     private void setAuthority(String authority) {
@@ -111,5 +123,61 @@ class AgentGroupResolverTest {
                 .verify();
 
         verify(agentGroupService, never()).listAllAgentGroups(any(), any(), any(), any());
+    }
+
+    // HV-1575: AgentGroupInput.name is now nullable at the schema level, matching Department's
+    // fix — updateAgentGroup can be called with name omitted entirely.
+    @Test
+    void updateAgentGroup_omittedNameVariable_succeeds() {
+        setAuthority("agent-group.update");
+        when(agentGroupService.updateAgentGroup(eq("group-1"), any())).thenReturn(
+                new AgentGroupResponse("group-1", "IT Support", "New description",
+                        LookupResponse.from("dept-1", "Facilities"), true, 2, null, null));
+
+        String mutation = """
+                mutation($id: ID!, $description: String) {
+                  updateAgentGroup(id: $id, input: { description: $description }) {
+                    id
+                    description
+                  }
+                }
+                """;
+
+        graphQlTester.document(mutation)
+                .variable("id", "group-1")
+                .variable("description", "New description")
+                .execute()
+                .errors().verify()
+                .path("updateAgentGroup.description").entity(String.class).isEqualTo("New description");
+
+        verify(agentGroupService).updateAgentGroup(eq("group-1"), any());
+    }
+
+    // createAgentGroup still requires a name in practice — now enforced by AgentGroupService's
+    // existing runtime check rather than the GraphQL schema, since AgentGroupInput is shared
+    // between create and update and update must allow name to be omitted.
+    @Test
+    void createAgentGroup_omittedName_isRejectedByService() {
+        setAuthority("agent-group.create");
+        when(agentGroupService.createAgentGroup(any()))
+                .thenThrow(new ArmsAuthException("Agent group name is required", 400));
+
+        String mutation = """
+                mutation($departmentId: String!, $agentIds: [String!]!) {
+                  createAgentGroup(input: { departmentId: $departmentId, agentIds: $agentIds }) {
+                    id
+                  }
+                }
+                """;
+
+        graphQlTester.document(mutation)
+                .variable("departmentId", "dept-1")
+                .variable("agentIds", List.of("agent-1"))
+                .execute()
+                .errors()
+                .expect(error -> error.getMessage() != null)
+                .verify();
+
+        verify(agentGroupService).createAgentGroup(any());
     }
 }
