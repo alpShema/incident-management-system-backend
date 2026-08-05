@@ -59,9 +59,12 @@ public class DepartmentResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('department.update')")
-    public DepartmentResponse updateDepartment(@Argument String id, @Valid @Argument DepartmentRequest input) {
+    public DepartmentResponse updateDepartment(
+            @Argument String id,
+            @Valid @Argument DepartmentRequest input,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         GraphQlResponseMessage.set("Department updated successfully");
-        return departmentService.updateDepartment(id, input);
+        return departmentService.updateDepartment(principal.userId(), id, input);
     }
 
     @MutationMapping
@@ -87,16 +90,6 @@ public class DepartmentResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('department.update')")
-    public DepartmentResponse setDepartmentHead(
-            @Argument String id,
-            @Valid @Argument SetDepartmentHeadInput input,
-            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
-        GraphQlResponseMessage.set("Department head set successfully");
-        return departmentService.setDepartmentHead(principal.userId(), id, input.userId());
-    }
-
-    @MutationMapping
-    @PreAuthorize("hasAuthority('department.update')")
     public DepartmentResponse removeDepartmentHead(
             @Argument String id,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
@@ -105,6 +98,4 @@ public class DepartmentResolver {
     }
 
     public record UpdateDepartmentStatusInput(Boolean status) {}
-
-    public record SetDepartmentHeadInput(String userId) {}
 }

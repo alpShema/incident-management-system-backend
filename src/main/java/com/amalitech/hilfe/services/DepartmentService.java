@@ -82,7 +82,7 @@ public class DepartmentService {
     }
 
     @Transactional
-    public DepartmentResponse updateDepartment(String id, DepartmentRequest request) {
+    public DepartmentResponse updateDepartment(String actorUserId, String id, DepartmentRequest request) {
         String name = request.name() == null ? null : request.name().trim();
         String description = request.description() == null ? null : request.description().trim();
 
@@ -97,6 +97,9 @@ public class DepartmentService {
         }
         if (description != null) {
             department.setDescription(description);
+        }
+        if (request.headUserId() != null && !request.headUserId().isBlank()) {
+            assignHead(department, actorUserId, request.headUserId());
         }
         return toResponse(departmentRepository.save(department));
     }
@@ -151,18 +154,6 @@ public class DepartmentService {
     }
 
     @Transactional
-    public DepartmentResponse setDepartmentHead(String actorUserId, String departmentId, String userId) {
-        Department department = findActiveDepartment(departmentId);
-        validateEligibleHead(userId);
-
-        String previousHeadUserId = department.getHeadUserId();
-        department.setHeadUserId(userId);
-        DepartmentResponse response = toResponse(departmentRepository.save(department));
-        activityLogService.logDepartmentHeadAssigned(actorUserId, departmentId, previousHeadUserId, userId);
-        return response;
-    }
-
-    @Transactional
     public DepartmentResponse removeDepartmentHead(String actorUserId, String departmentId) {
         Department department = findDepartmentByIdOrThrow(departmentId);
         String previousHeadUserId = department.getHeadUserId();
@@ -203,13 +194,28 @@ public class DepartmentService {
         return IncidentCategoryResponse.from(categoryRepository.save(category));
     }
 
+    private void assignHead(Department department, String actorUserId, String headUserId) {
+        validateEligibleHead(headUserId);
+        String previousHeadUserId = department.getHeadUserId();
+        department.setHeadUserId(headUserId);
+        activityLogService.logDepartmentHeadAssigned(actorUserId, department.getId(), previousHeadUserId, headUserId);
+    }
+
     private void validateEligibleHead(String userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> Boolean.TRUE.equals(u.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
-        RoleCode role = RoleCode.valueOf(user.getRoleCode().toUpperCase());
-        if (role != RoleCode.ADMIN && role != RoleCode.ADMIN_AGENT) {
+        if (!isAdminOrAdminAgent(user.getRoleCode())) {
             throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
+        }
+    }
+
+    private boolean isAdminOrAdminAgent(String roleCode) {
+        try {
+            RoleCode role = RoleCode.valueOf(roleCode.toUpperCase());
+            return role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT;
+        } catch (IllegalArgumentException e) {
+            return false;
         }
     }
 

@@ -2,6 +2,7 @@ package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.controllers.DepartmentController;
 import com.amalitech.hilfe.dto.CreateDepartmentRequest;
+import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.dto.UpdateDepartmentStatusRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -140,6 +141,23 @@ class DepartmentControllerTest {
                                 new CreateDepartmentRequest("Facilities", "Facilities dept", null)))
                         .with(authentication(auth)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDepartment_setsHead_returns200() throws Exception {
+        when(departmentService.updateDepartment(eq("admin-1"), eq("dept-1"), any()))
+                .thenReturn(new DepartmentResponse("dept-1", "Facilities", "Facilities dept", true, 0, "admin-1"));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.update"));
+
+        mvc.perform(patch("/departments/dept-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new DepartmentRequest("Facilities", null, "admin-1")))
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.headUserId").value("admin-1"));
     }
 
     @Test

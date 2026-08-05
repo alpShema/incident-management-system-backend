@@ -55,14 +55,16 @@ public class DepartmentController {
                         departmentService.createDepartment(principal.userId(), request)));
     }
 
-    @Operation(summary = "Update a department", description = "Updates an internal department. Requires `department.update` permission.")
+    @Operation(summary = "Update a department", description = "Updates an internal department, optionally including its head. Requires `department.update` permission.")
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_UPDATE + "')")
     public ResponseEntity<ApiResponse<DepartmentResponse>> updateDepartment(
             @PathVariable String id,
-            @Valid @RequestBody DepartmentRequest request
+            @Valid @RequestBody DepartmentRequest request,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Department updated successfully", departmentService.updateDepartment(id, request)));
+        return ResponseEntity.ok(ApiResponse.success("Department updated successfully",
+                departmentService.updateDepartment(principal.userId(), id, request)));
     }
 
     @Operation(

@@ -771,6 +771,7 @@ input ChatbotQueryInput {
 input DepartmentInput {
   name: String!
   description: String
+  headUserId: ID
 }
 
 input CreateDepartmentInput {
@@ -781,10 +782,6 @@ input CreateDepartmentInput {
 
 input UpdateDepartmentStatusInput {
   status: Boolean!
-}
-
-input SetDepartmentHeadInput {
-  userId: ID!
 }
 
 input CreateLocationInput {
@@ -1028,7 +1025,6 @@ type Mutation {
   updateDepartmentStatus(id: ID!, input: UpdateDepartmentStatusInput!): Department
   linkCategoryToDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
   unlinkCategoryFromDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
-  setDepartmentHead(id: ID!, input: SetDepartmentHeadInput!): Department
   removeDepartmentHead(id: ID!): Department
 
   # Locations
