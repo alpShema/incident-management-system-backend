@@ -48,6 +48,12 @@ public class DepartmentResolver {
         return departmentService.listCategories(departmentId);
     }
 
+    @QueryMapping
+    @PreAuthorize("hasAuthority('department.read')")
+    public List<DepartmentResponse> departmentsHeadedBy(@Argument String userId) {
+        return departmentService.listDepartmentsHeadedBy(userId);
+    }
+
     @MutationMapping
     @PreAuthorize("hasAuthority('department.create')")
     public DepartmentResponse createDepartment(

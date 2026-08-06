@@ -84,6 +84,13 @@ public class DepartmentController {
                 departmentService.updateDepartmentStatus(id, request.status())));
     }
 
+    @Operation(summary = "List departments headed by a user", description = "Returns every department for which the given user is currently the HOD (Head of Department). A user may be HOD of more than one department at a time. Requires `department.read` permission.")
+    @GetMapping("/heads/{userId}")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")
+    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> listDepartmentsHeadedBy(@PathVariable String userId) {
+        return ResponseEntity.ok(ApiResponse.success("Departments retrieved successfully", departmentService.listDepartmentsHeadedBy(userId)));
+    }
+
     @Operation(summary = "List department categories", description = "Returns active incident categories linked to a department. Requires `department.read` permission.")
     @GetMapping("/{id}/categories")
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")

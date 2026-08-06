@@ -8,12 +8,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface DepartmentRepository extends JpaRepository<Department, String> {
     boolean existsByNameIgnoreCase(String name);
-    boolean existsByHeadUserId(String headUserId);
-    boolean existsByHeadUserIdAndIdNot(String headUserId, String id);
     Page<Department> findByStatus(Boolean status, Pageable pageable);
+    List<Department> findByHeadUserIdOrderByNameAsc(String headUserId);
 
     @Query("""
             SELECT d FROM Department d

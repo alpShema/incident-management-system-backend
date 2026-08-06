@@ -341,6 +341,12 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
                 q("query DeptCategories($departmentId: ID!) {\n  departmentCategories(departmentId: $departmentId) {\n    id name status\n  }\n}",
                         vars(K_DEPARTMENT_ID, DEPT_UUID))));
 
+        ex.put("[departments] departmentsHeadedBy", ex(
+                "List departments a user is HOD of — requires: department.read",
+                "A user may be the head of more than one department at a time.",
+                q("query DeptsHeadedBy($userId: ID!) {\n  departmentsHeadedBy(userId: $userId) {\n    id name status\n  }\n}",
+                        vars(K_USER_ID, "user-uuid-here"))));
+
         ex.put("[departments] createDepartment", ex(
                 "Create a department — requires: department.create",
                 null,

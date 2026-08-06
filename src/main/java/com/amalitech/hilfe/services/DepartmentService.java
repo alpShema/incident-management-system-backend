@@ -32,7 +32,6 @@ import java.util.UUID;
 public class DepartmentService {
 
     private static final String DEPARTMENT_ALREADY_EXISTS_MESSAGE = "A department with this name already exists. Please choose a different name.";
-    private static final String HEAD_ALREADY_ASSIGNED_MESSAGE = "This user is already the head of another department.";
 
     private final DepartmentRepository departmentRepository;
     private final AgentGroupRepository agentGroupRepository;
@@ -60,6 +59,17 @@ public class DepartmentService {
         return toResponse(findDepartmentByIdOrThrow(id));
     }
 
+    /**
+     * Returns every department for which the given user is currently the HOD.
+     * A user may head multiple departments simultaneously, so this can return
+     * more than one result.
+     */
+    public List<DepartmentResponse> listDepartmentsHeadedBy(String userId) {
+        return departmentRepository.findByHeadUserIdOrderByNameAsc(userId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
     public DepartmentResponse createDepartment(String actorUserId, CreateDepartmentRequest request) {
         String name = request.name() == null ? null : request.name().trim();
@@ -68,7 +78,7 @@ public class DepartmentService {
         if (departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException(DEPARTMENT_ALREADY_EXISTS_MESSAGE, 409);
         }
-        validateEligibleHead(request.headUserId(), null);
+        validateEligibleHead(request.headUserId());
 
         Department department = Department.builder()
                 .id(UUID.randomUUID().toString())
@@ -196,25 +206,29 @@ public class DepartmentService {
     }
 
     private void assignHead(Department department, String actorUserId, String headUserId) {
-        validateEligibleHead(headUserId, department.getId());
         String previousHeadUserId = department.getHeadUserId();
+        if (headUserId.equals(previousHeadUserId)) {
+            // No-op: this user is already the head of this department. A user may
+            // legitimately head multiple *other* departments, so this is only a
+            // same-department duplicate-assignment guard, not a cross-department one.
+            return;
+        }
+        validateEligibleHead(headUserId);
         department.setHeadUserId(headUserId);
         activityLogService.logDepartmentHeadAssigned(actorUserId, department.getId(), previousHeadUserId, headUserId);
     }
 
-    private void validateEligibleHead(String userId, String excludeDepartmentId) {
+    private void validateEligibleHead(String userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> Boolean.TRUE.equals(u.getStatus()))
                 .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
         if (!isAdminOrAdminAgent(user.getRoleCode())) {
             throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
         }
-        boolean alreadyHeadsAnotherDepartment = excludeDepartmentId == null
-                ? departmentRepository.existsByHeadUserId(userId)
-                : departmentRepository.existsByHeadUserIdAndIdNot(userId, excludeDepartmentId);
-        if (alreadyHeadsAnotherDepartment) {
-            throw new ArmsAuthException(HEAD_ALREADY_ASSIGNED_MESSAGE, 409);
-        }
+        // Intentionally no longer checks whether the user already heads another
+        // department: a single user may be HOD of multiple departments at once.
+        // Per-department uniqueness (one head per department) is still enforced
+        // simply by `headUserId` being a single-valued field on Department.
     }
 
     private boolean isAdminOrAdminAgent(String roleCode) {

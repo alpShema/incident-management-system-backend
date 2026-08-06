@@ -163,4 +163,31 @@ class DepartmentResolverTest {
 
         verify(departmentService, never()).updateDepartment(any(), any(), any());
     }
+
+    // HV-1586: a user may be HOD of more than one department at once.
+    @Test
+    void departmentsHeadedBy_returnsAllDepartmentsForUser() {
+        setAuthority("department.read");
+        when(departmentService.listDepartmentsHeadedBy("admin-1")).thenReturn(List.of(
+                new DepartmentResponse("dept-1", "Facilities", null, true, 0, "admin-1"),
+                new DepartmentResponse("dept-2", "Support", null, true, 0, "admin-1")));
+
+        String query = """
+                query($userId: ID!) {
+                  departmentsHeadedBy(userId: $userId) {
+                    id
+                  }
+                }
+                """;
+
+        graphQlTester.document(query)
+                .variable("userId", "admin-1")
+                .execute()
+                .errors().verify()
+                .path("departmentsHeadedBy[*].id")
+                .entityList(String.class)
+                .containsExactly("dept-1", "dept-2");
+
+        verify(departmentService).listDepartmentsHeadedBy("admin-1");
+    }
 }
