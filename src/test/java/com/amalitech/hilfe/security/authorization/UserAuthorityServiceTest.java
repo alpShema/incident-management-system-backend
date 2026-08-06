@@ -155,6 +155,7 @@ class UserAuthorityServiceTest {
 
         assertThat(resolvedAuthorities.authorities())
             .extracting(Object::toString)
+            .isNotEmpty()
             .doesNotContain(RbacPermissions.DEPARTMENT_HEAD);
     }
 
