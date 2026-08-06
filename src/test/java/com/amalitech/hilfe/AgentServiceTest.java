@@ -92,27 +92,29 @@ class AgentServiceTest {
     }
 
     @Test
-    void listAgents_withInactiveDepartment_returnsEmptyPage() {
+    void listAgents_withInactiveDepartment_stillReturnsAgents() {
         var pageable = PageRequest.of(0, 10);
         when(departmentRepository.findById("dept-1"))
                 .thenReturn(Optional.of(Department.builder().id("dept-1").status(false).build()));
+        when(agentRepository.findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(agent("a1", true), agent("a2", false)), pageable, 2));
 
         var result = agentService.listAgents("dept-1", null, null, null, pageable);
 
-        assertThat(result.getTotalElements()).isZero();
-        assertThat(result.getContent()).isEmpty();
-        verify(agentRepository, never()).findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable);
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        verify(agentRepository).findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable);
     }
 
     @Test
-    void listAgents_withMissingDepartment_returnsEmptyPage() {
+    void listAgents_withMissingDepartment_throws404() {
         var pageable = PageRequest.of(0, 10);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.empty());
 
-        var result = agentService.listAgents("dept-1", null, null, null, pageable);
-
-        assertThat(result.getTotalElements()).isZero();
-        assertThat(result.getContent()).isEmpty();
+        assertThatThrownBy(() -> agentService.listAgents("dept-1", null, null, null, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Department not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
         verify(agentRepository, never()).findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable);
     }
 
@@ -131,16 +133,48 @@ class AgentServiceTest {
     }
 
     @Test
-    void listAllAgents_withInactiveDepartment_returnsEmptyPage() {
+    void listAllAgents_withInactiveDepartment_stillReturnsAgents() {
         var pageable = PageRequest.of(0, 10);
         when(departmentRepository.findById("dept-1"))
                 .thenReturn(Optional.of(Department.builder().id("dept-1").status(false).build()));
+        when(agentRepository.findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(agent("a1", true), agent("a2", false)), pageable, 2));
 
         var result = agentService.listAllAgents("dept-1", null, null, null, pageable);
 
-        assertThat(result.getTotalElements()).isZero();
-        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        verify(agentRepository).findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable);
+    }
+
+    @Test
+    void listAllAgents_withMissingDepartment_throws404() {
+        var pageable = PageRequest.of(0, 10);
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> agentService.listAllAgents("dept-1", null, null, null, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Department not found")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
         verify(agentRepository, never()).findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable);
+    }
+
+    @Test
+    void listAllAgents_withDepartment_includesInactiveAgentsWhenNoStatusFilterApplied() {
+        // Regression: the department-scoped query previously hard-coded `a.status = true`,
+        // silently excluding inactive agents even though this endpoint documents
+        // "regardless of status" for department-filtered results.
+        var pageable = PageRequest.of(0, 10);
+        when(departmentRepository.findById("dept-1"))
+                .thenReturn(Optional.of(Department.builder().id("dept-1").status(true).build()));
+        when(agentRepository.findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(agent("a1", true), agent("a2", false)), pageable, 2));
+
+        var result = agentService.listAllAgents("dept-1", null, null, null, pageable);
+
+        assertThat(result.getContent()).extracting(AgentResponse::agentId).containsExactlyInAnyOrder("a1", "a2");
+        // Crucially: the service must pass `available` straight through, not force `true`.
+        verify(agentRepository).findByDepartmentIdWithUserAndQuery("dept-1", null, null, null, pageable);
     }
 
     @Test
