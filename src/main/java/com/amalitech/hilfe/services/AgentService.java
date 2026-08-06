@@ -6,7 +6,6 @@ import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import org.jspecify.annotations.NonNull;
-import org.springframework.data.domain.PageImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -58,14 +57,14 @@ public class AgentService {
 
     @NonNull
     private Page<AgentResponse> getAgentResponses(String departmentId, Pageable pageable, String queryPattern, Boolean available, String locationId) {
-        boolean activeDepartment = departmentRepository.findById(departmentId)
-                .map(department -> Boolean.TRUE.equals(department.getStatus()))
-                .orElse(false);
-        if (!activeDepartment) {
-            return new PageImpl<>(List.of(), pageable, 0);
-        }
-
+        findDepartmentOrThrow(departmentId);
         return agentRepository.findByDepartmentIdWithUserAndQuery(departmentId, queryPattern, available, locationId, translateSort(pageable)).map(AgentResponse::from);
+    }
+
+    // Existence-only check (mirrors AgentGroupService) — an inactive department still lists its agents.
+    private void findDepartmentOrThrow(String departmentId) {
+        departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
     }
 
     public Page<AgentResponse> listAllAgents(String departmentId, String query, Boolean available, String locationId, Pageable pageable) {

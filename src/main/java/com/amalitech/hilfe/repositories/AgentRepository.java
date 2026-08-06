@@ -105,7 +105,6 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.departmentId = :departmentId
                           AND g.status = true
                     )
-                    AND a.status = true
                     AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
                     AND u.status = true
                     AND (:available IS NULL OR a.status = :available)
@@ -125,7 +124,6 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.departmentId = :departmentId
                           AND g.status = true
                     )
-                    AND a.status = true
                     AND (:available IS NULL OR a.status = :available)
                     AND EXISTS (
                         SELECT 1 FROM User u
