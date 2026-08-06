@@ -4,6 +4,7 @@ import com.amalitech.hilfe.models.Admin;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
+import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,11 +27,14 @@ class UserAuthorityServiceTest {
     @Mock
     RolePermissionRepository rolePermissionRepository;
 
+    @Mock
+    DepartmentRepository departmentRepository;
+
     UserAuthorityService userAuthorityService;
 
     @BeforeEach
     void setUp() {
-        userAuthorityService = new UserAuthorityService(userRepository, rolePermissionRepository, "super-admin-id");
+        userAuthorityService = new UserAuthorityService(userRepository, rolePermissionRepository, departmentRepository, "super-admin-id");
     }
 
     @Test
@@ -116,6 +120,42 @@ class UserAuthorityServiceTest {
         when(rolePermissionRepository.findPermissionCodesByRoleCode("CLIENT")).thenReturn(List.of());
 
         assertThat(userAuthorityService.resolveByUserId("u-active")).isPresent();
+    }
+
+    @Test
+    void resolve_userHeadsADepartment_grantsDepartmentHeadAuthority() {
+        User user = User.builder()
+            .id("u-hod")
+            .email("hod@test.com")
+            .roleCode(RoleCode.ADMIN)
+            .build();
+
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("ADMIN")).thenReturn(List.of());
+        when(departmentRepository.existsByHeadUserId("u-hod")).thenReturn(true);
+
+        UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
+
+        assertThat(resolvedAuthorities.authorities())
+            .extracting(Object::toString)
+            .contains(RbacPermissions.DEPARTMENT_HEAD);
+    }
+
+    @Test
+    void resolve_userDoesNotHeadADepartment_omitsDepartmentHeadAuthority() {
+        User user = User.builder()
+            .id("u-not-hod")
+            .email("not-hod@test.com")
+            .roleCode(RoleCode.ADMIN)
+            .build();
+
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("ADMIN")).thenReturn(List.of());
+        when(departmentRepository.existsByHeadUserId("u-not-hod")).thenReturn(false);
+
+        UserAuthorityService.ResolvedAuthorities resolvedAuthorities = userAuthorityService.resolve(user);
+
+        assertThat(resolvedAuthorities.authorities())
+            .extracting(Object::toString)
+            .doesNotContain(RbacPermissions.DEPARTMENT_HEAD);
     }
 
     @Test
