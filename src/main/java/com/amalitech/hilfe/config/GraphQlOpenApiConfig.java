@@ -57,6 +57,7 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
     private static final String GROUP_UUID = "group-uuid-here";
     private static final String FAQ_UUID = "faq-uuid-here";
     private static final String AGENT_UUID = "agent-uuid-here";
+    private static final String USER_UUID = "user-uuid-here";
 
     private static final String DESCRIPTION = """
             All GraphQL operations go through a **single HTTP endpoint**: `POST /graphql`.
@@ -287,13 +288,13 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
                 "Assign a role to a user — requires: rbac.user.role.update",
                 null,
                 q("mutation UpdateUserRole($userId: ID!, $input: UpdateUserRoleInput!) {\n  updateUserRole(userId: $userId, input: $input) {\n    userId email roleCode roleName\n  }\n}",
-                        vars(K_USER_ID, "user-uuid-here", K_INPUT, vars(K_ROLE_CODE, ROLE_AGENT)))));
+                        vars(K_USER_ID, USER_UUID, K_INPUT, vars(K_ROLE_CODE, ROLE_AGENT)))));
 
         ex.put("[users] updateUserStatus", ex(
                 "Activate or deactivate a user — requires: authentication",
                 null,
                 q("mutation UpdateUserStatus($userId: ID!, $input: UpdateUserStatusInput!) {\n  updateUserStatus(userId: $userId, input: $input) {\n    userId email status\n  }\n}",
-                        vars(K_USER_ID, "user-uuid-here", K_INPUT, vars(K_STATUS, true)))));
+                        vars(K_USER_ID, USER_UUID, K_INPUT, vars(K_STATUS, true)))));
 
         // ── Roles & Permissions ───────────────────
         ex.put("[roles] list", ex(
@@ -340,6 +341,12 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
                 null,
                 q("query DeptCategories($departmentId: ID!) {\n  departmentCategories(departmentId: $departmentId) {\n    id name status\n  }\n}",
                         vars(K_DEPARTMENT_ID, DEPT_UUID))));
+
+        ex.put("[departments] departmentsHeadedBy", ex(
+                "List departments a user is HOD of — requires: department.read",
+                "A user may be the head of more than one department at a time.",
+                q("query DeptsHeadedBy($userId: ID!) {\n  departmentsHeadedBy(userId: $userId) {\n    id name status\n  }\n}",
+                        vars(K_USER_ID, USER_UUID))));
 
         ex.put("[departments] createDepartment", ex(
                 "Create a department — requires: department.create",

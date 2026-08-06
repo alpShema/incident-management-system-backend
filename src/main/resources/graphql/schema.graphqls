@@ -918,6 +918,8 @@ type Query {
   departments(query: String, status: Boolean, page: PageInput): DepartmentPage
   department(id: ID!): Department
   departmentCategories(departmentId: ID!): [IncidentCategory!]
+  # HV-1586: departments this user currently heads (a user may be HOD of more than one)
+  departmentsHeadedBy(userId: ID!): [Department!]!
 
   # Locations
   locations(query: String, status: Boolean, page: PageInput): LocationPage

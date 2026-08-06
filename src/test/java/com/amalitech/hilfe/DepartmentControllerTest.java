@@ -216,4 +216,21 @@ class DepartmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value(false));
     }
+
+    @Test
+    void listDepartmentsHeadedBy_returnsAllDepartmentsForUser() throws Exception {
+        when(departmentService.listDepartmentsHeadedBy("admin-1")).thenReturn(List.of(
+                new DepartmentResponse("dept-1", "Facilities", "Facilities dept", true, 0, "admin-1"),
+                new DepartmentResponse("dept-2", "Support", "Support dept", true, 0, "admin-1")));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                adminPrincipal(), null, List.of(() -> "department.read"));
+
+        mvc.perform(get("/departments/heads/admin-1")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value("dept-1"))
+                .andExpect(jsonPath("$.data[1].id").value("dept-2"));
+    }
 }

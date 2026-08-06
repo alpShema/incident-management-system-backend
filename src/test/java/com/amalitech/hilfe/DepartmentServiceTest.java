@@ -30,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -221,17 +222,16 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void createDepartment_headAlreadyHeadsAnotherDepartment_throws409() {
+    void createDepartment_headAlreadyHeadsAnotherDepartment_succeeds() {
         when(departmentRepository.existsByNameIgnoreCase("Facilities")).thenReturn(false);
+        when(departmentRepository.save(any(Department.class))).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
-        when(departmentRepository.existsByHeadUserId("admin-1")).thenReturn(true);
         CreateDepartmentRequest request = new CreateDepartmentRequest("Facilities", "Facilities dept", "admin-1");
 
-        assertThatThrownBy(() -> departmentService.createDepartment("actor-1", request))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("This user is already the head of another department.")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(409);
+        DepartmentResponse response = departmentService.createDepartment("actor-1", request);
+
+        assertThat(response.headUserId()).isEqualTo("admin-1");
+        verify(activityLogService).logDepartmentHeadAssigned(eq("actor-1"), any(), eq(null), eq("admin-1"));
     }
 
     @Test
@@ -283,19 +283,49 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void updateDepartment_headAlreadyHeadsAnotherDepartment_throws409() {
+    void updateDepartment_headAlreadyHeadsAnotherDepartment_succeeds() {
         Department dept = department(true);
         when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
         when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser("admin-1", true, "ADMIN")));
-        when(departmentRepository.existsByHeadUserIdAndIdNot("admin-1", "dept-1")).thenReturn(true);
 
         DepartmentRequest request = new DepartmentRequest(null, null, "admin-1");
 
-        assertThatThrownBy(() -> departmentService.updateDepartment("actor-1", "dept-1", request))
-                .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("This user is already the head of another department.")
-                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
-                .isEqualTo(409);
+        DepartmentResponse response = departmentService.updateDepartment("actor-1", "dept-1", request);
+
+        assertThat(response.headUserId()).isEqualTo("admin-1");
+        verify(activityLogService).logDepartmentHeadAssigned("actor-1", "dept-1", null, "admin-1");
+    }
+
+    @Test
+    void updateDepartment_reassigningSameHeadToSameDepartment_isNoOpAndDoesNotLog() {
+        Department dept = department(true);
+        dept.setHeadUserId("admin-1");
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(dept));
+        when(departmentRepository.save(dept)).thenReturn(dept);
+        when(categoryRepository.findByDepartmentIdAndStatus("dept-1", true)).thenReturn(List.of());
+
+        DepartmentRequest request = new DepartmentRequest(null, null, "admin-1");
+
+        DepartmentResponse response = departmentService.updateDepartment("actor-1", "dept-1", request);
+
+        assertThat(response.headUserId()).isEqualTo("admin-1");
+        verify(userRepository, never()).findById(any());
+        verify(activityLogService, never()).logDepartmentHeadAssigned(any(), any(), any(), any());
+    }
+
+    @Test
+    void listDepartmentsHeadedBy_returnsAllDepartmentsForUser() {
+        Department dept1 = Department.builder().id("dept-1").name("Facilities").status(true).headUserId("admin-1").build();
+        Department dept2 = Department.builder().id("dept-2").name("Support").status(true).headUserId("admin-1").build();
+        when(departmentRepository.findByHeadUserIdOrderByNameAsc("admin-1")).thenReturn(List.of(dept1, dept2));
+        when(categoryRepository.findByDepartmentIdAndStatus(any(), eq(true))).thenReturn(List.of());
+
+        List<DepartmentResponse> responses = departmentService.listDepartmentsHeadedBy("admin-1");
+
+        assertThat(responses).extracting(DepartmentResponse::id).containsExactly("dept-1", "dept-2");
+        assertThat(responses).allMatch(r -> "admin-1".equals(r.headUserId()));
     }
 
     @Test
