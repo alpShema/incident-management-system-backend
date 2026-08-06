@@ -29,6 +29,8 @@ public final class RbacPermissions {
     public static final String DEPARTMENT_CREATE = "department.create";
     public static final String DEPARTMENT_UPDATE = "department.update";
     public static final String DEPARTMENT_DELETE = "department.delete";
+    /** Granted dynamically per-request by UserAuthorityService — never via role_permissions. */
+    public static final String DEPARTMENT_HEAD = "department.head";
     public static final String STATUS_CREATE = "status.create";
     public static final String STATUS_UPDATE = "status.update";
     public static final String STATUS_DELETE = "status.delete";

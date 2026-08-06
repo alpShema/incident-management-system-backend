@@ -15,6 +15,7 @@ public interface DepartmentRepository extends JpaRepository<Department, String> 
     boolean existsByNameIgnoreCase(String name);
     Page<Department> findByStatus(Boolean status, Pageable pageable);
     List<Department> findByHeadUserIdOrderByNameAsc(String headUserId);
+    boolean existsByHeadUserId(String headUserId);
 
     @Query("""
             SELECT d FROM Department d
