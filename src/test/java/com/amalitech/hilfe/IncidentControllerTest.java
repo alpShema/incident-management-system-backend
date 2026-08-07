@@ -279,6 +279,53 @@ class IncidentControllerTest {
         verify(incidentService).assignIncident(eq("admin-1"), eq(true), eq("inc-1"), any());
     }
 
+    // ── PATCH /incidents/{id}/read-status ─────────────────────────────────────
+
+    @Test
+    void updateReadStatus_agentAuth_returns200() throws Exception {
+        when(incidentService.updateReadStatus(anyString(), any(RoleCode.class), eq("inc-1"), eq(false))).thenReturn(stubResponse());
+
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentReadStatusRequest(false)))
+                        .with(authentication(agentAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident read status updated successfully"));
+
+        verify(incidentService).updateReadStatus("agent-user-1", RoleCode.AGENT, "inc-1", false);
+    }
+
+    @Test
+    void updateReadStatus_adminAuth_returns200() throws Exception {
+        when(incidentService.updateReadStatus(anyString(), any(RoleCode.class), eq("inc-1"), eq(true))).thenReturn(stubResponse());
+
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentReadStatusRequest(true)))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk());
+
+        verify(incidentService).updateReadStatus("admin-1", RoleCode.ADMIN, "inc-1", true);
+    }
+
+    @Test
+    void updateReadStatus_clientAuth_returns403() throws Exception {
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentReadStatusRequest(false)))
+                        .with(authentication(clientAuth())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateReadStatus_missingReadField_returns400() throws Exception {
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .with(authentication(agentAuth())))
+                .andExpect(status().isBadRequest());
+    }
+
     // ── GET /incidents (admin all) ────────────────────────────────────────────
 
     @Test

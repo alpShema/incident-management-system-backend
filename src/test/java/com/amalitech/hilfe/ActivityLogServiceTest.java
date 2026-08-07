@@ -126,12 +126,12 @@ class ActivityLogServiceTest {
     @Test
     void getActivityLogs_clientOwner_allowedForOwnIncident() {
         when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "u1", null)));
-        when(activityLogRepository.findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class)))
+        when(activityLogRepository.findActivityLogResponsesByIncidentIdExcludingAction(eq("inc-1"), eq("INCIDENT_VIEWED"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         activityLogService.getActivityLogs("inc-1", PageRequest.of(0, 10), "u1", "CLIENT");
 
-        verify(activityLogRepository).findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class));
+        verify(activityLogRepository).findActivityLogResponsesByIncidentIdExcludingAction(eq("inc-1"), eq("INCIDENT_VIEWED"), any(Pageable.class));
     }
 
     @Test
@@ -273,5 +273,23 @@ class ActivityLogServiceTest {
         verify(activityLogRepository).save(captor.capture());
         assertThat(captor.getValue().getAction()).isEqualTo("INCIDENT_ASSIGNED");
         assertThat(captor.getValue().getMetadata()).contains("agent-1");
+    }
+
+    // ── logIncidentViewed ────────────────────────────────────────────────────
+
+    @Test
+    void logIncidentViewed_savesActivityLogWithCorrectAction() {
+        when(userRepository.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").fullName("Alice").build()));
+        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(
+                Incident.builder().id("inc-1").incidentNo(9).build()));
+        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        activityLogService.logIncidentViewed("actor", "inc-1");
+
+        ArgumentCaptor<ActivityLog> captor = ArgumentCaptor.forClass(ActivityLog.class);
+        verify(activityLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo("INCIDENT_VIEWED");
+        assertThat(captor.getValue().getSubjectId()).isEqualTo("inc-1");
+        assertThat(captor.getValue().getDescription()).contains("Alice");
     }
 }

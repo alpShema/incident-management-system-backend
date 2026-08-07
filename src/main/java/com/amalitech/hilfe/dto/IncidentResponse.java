@@ -18,7 +18,8 @@ public record IncidentResponse(
         @Schema(description = "Current lifecycle status", nullable = true) LookupResponse status,
         @Schema(description = "The user who created this incident") CreatorResponse createdBy,
         @Schema(description = "Assigned agent details, or null if unassigned", nullable = true) AssignedAgentResponse assignedTo,
-        @Schema(description = "Whether the incident has been read/acknowledged by the assigned agent") boolean read,
+        @Schema(description = "Whether the incident has been read. Shared across all viewers of the All Incidents, "
+                + "Department Assigned Incidents, and Assigned Incidents tables — not private to any one user.") boolean read,
         @Schema(description = "Reason provided when the status was set to Pending or Reopened, null otherwise", nullable = true) String statusReason,
         @Schema(description = "Timestamp when the incident was marked resolved, or null if not yet resolved", nullable = true) Instant resolvedAt,
         @Schema(description = "Timestamp when the incident was closed, or null if still open", nullable = true) Instant closedAt,

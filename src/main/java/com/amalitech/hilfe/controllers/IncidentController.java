@@ -330,6 +330,28 @@ public class IncidentController {
     }
 
     @Operation(
+        summary = "Update incident read status",
+        description = "Marks an incident as read or unread. The read status is shared across every viewer of the "
+                    + "All Incidents, Department Assigned Incidents, and Assigned Incidents tabs — once set, it is "
+                    + "visible to everyone, not just the caller. "
+                    + "Requires `dashboard.admin` or `dashboard.agent` permission, and the caller must otherwise "
+                    + "have access to the incident (creator, assignee, same-department agent, or admin)."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Read status updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
+    @PatchMapping("/{id}/read-status")
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public ResponseEntity<ApiResponse<IncidentResponse>> updateReadStatus(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Incident ID") @PathVariable String id,
+            @Valid @RequestBody UpdateIncidentReadStatusRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident read status updated successfully",
+                incidentService.updateReadStatus(principal.userId(), parseRoleCode(principal.roleCode()), id, request.read())));
+    }
+
+    @Operation(
         summary = "Get incident history",
         description = "Returns a paginated, reverse-chronological audit log for a specific incident. "
                     + "Accessible to the incident reporter, assigned agent, or any admin."

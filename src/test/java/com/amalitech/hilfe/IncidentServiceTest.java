@@ -1011,6 +1011,84 @@ class IncidentServiceTest {
                 .isEqualTo(404);
     }
 
+    // ── getIncident: mark-as-viewed side effects ────────────────────────────────
+
+    @Test
+    void getIncident_unreadIncident_agentOpens_marksReadAndLogsView() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-row-1");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
+
+        assertThat(incident.isRead()).isTrue();
+        verify(incidentRepository).markReadIfUnread("inc-1");
+        verify(activityLogService).logIncidentViewed("agent-user-1", "inc-1");
+    }
+
+    @Test
+    void getIncident_alreadyRead_agentReopens_doesNotIssueUpdateButStillLogsView() {
+        Incident incident = buildIncident();
+        incident.setRead(true);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        incidentService.getIncident("admin-1", RoleCode.ADMIN, "inc-1");
+
+        verify(incidentRepository, never()).markReadIfUnread(any());
+        verify(activityLogService).logIncidentViewed("admin-1", "inc-1");
+    }
+
+    @Test
+    void getIncident_clientOwnerOpens_doesNotMarkReadOrLogView() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1");
+
+        assertThat(incident.isRead()).isFalse();
+        verify(incidentRepository, never()).markReadIfUnread(any());
+        verify(activityLogService, never()).logIncidentViewed(any(), any());
+    }
+
+    // ── updateReadStatus ──────────────────────────────────────────────────────
+
+    @Test
+    void updateReadStatus_admin_marksIncidentUnread() {
+        Incident incident = buildIncident();
+        incident.setRead(true);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        incidentService.updateReadStatus("admin-1", RoleCode.ADMIN, "inc-1", false);
+
+        assertThat(incident.isRead()).isFalse();
+        verify(incidentRepository).save(incident);
+    }
+
+    @Test
+    void updateReadStatus_unrelatedAgent_throws403() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("different-agent");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+
+        assertThatThrownBy(() -> incidentService.updateReadStatus("agent-user-1", RoleCode.AGENT, "inc-1", false))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+        verify(incidentRepository, never()).save(any());
+    }
+
     // ── updateStatus ──────────────────────────────────────────────────────────
 
     @Test
