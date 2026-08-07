@@ -6,7 +6,6 @@ import com.amalitech.hilfe.models.Incident;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -778,22 +777,16 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """)
     long countHighCriticalByAgent(@Param("agentId") String agentId);
 
-    // Currently unused. `read` is now set by any qualifying viewer opening the incident (see
-    // IncidentService#markAsViewed), not specifically by the assigned agent — if this is wired
-    // up, "unacknowledged" now means "nobody has opened it yet", not "the assignee hasn't".
+    // Currently unused. `read` is now set by explicitly marking an incident read (see
+    // IncidentService#doUpdateReadStatus), not specifically by the assigned agent — if this is
+    // wired up, "unacknowledged" now means "nobody has marked it read yet", not "the assignee
+    // hasn't acknowledged it".
     @Query("""
             SELECT COUNT(i) FROM Incident i
             WHERE i.assignedToId = :agentId
             AND i.read = false
             """)
     long countUnacknowledgedByAgent(@Param("agentId") String agentId);
-
-    // Bulk update (bypasses @PreUpdate) so viewing an incident doesn't bump updatedAt — that
-    // field is user-sortable, so touching it on every read-only open would reorder incident
-    // lists just from someone looking at a row.
-    @Modifying
-    @Query("UPDATE Incident i SET i.read = true WHERE i.id = :id AND i.read = false")
-    void markReadIfUnread(@Param("id") String id);
 
     @Query("""
             SELECT COUNT(i) FROM Incident i
