@@ -402,6 +402,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -424,6 +425,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -468,6 +470,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -494,6 +497,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -533,6 +537,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -554,6 +559,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -593,6 +599,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -615,6 +622,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})

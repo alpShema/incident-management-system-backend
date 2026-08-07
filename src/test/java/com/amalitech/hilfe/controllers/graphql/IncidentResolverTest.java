@@ -2,6 +2,8 @@ package com.amalitech.hilfe.controllers.graphql;
 
 import com.amalitech.hilfe.config.GraphQlConfig;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
+import com.amalitech.hilfe.dto.IncidentDateFilter;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.ActivityLogService;
@@ -10,10 +12,12 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.graphql.test.autoconfigure.GraphQlTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.graphql.test.tester.GraphQlTester;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,6 +30,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
@@ -178,5 +183,31 @@ class IncidentResolverTest {
                 .verify();
 
         verify(incidentService, never()).updateReadStatus(any(String.class), any(String.class), any(String.class), anyBoolean());
+    }
+
+    // ── incidents(filter: { read }) ──────────────────────────────────────────
+
+    private static final String INCIDENTS_QUERY = """
+            query($read: Boolean) {
+              incidents(filter: { read: $read }) {
+                items { id }
+              }
+            }
+            """;
+
+    @Test
+    void incidents_readFilter_bindsToFilterParams() {
+        setAuthority("dashboard.admin");
+        when(incidentService.queryAllIncidents(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(new PageImpl<>(List.of(stubResponse())));
+
+        graphQlTester.document(INCIDENTS_QUERY)
+                .variable("read", true)
+                .execute()
+                .path("incidents.items[0].id").entity(String.class).isEqualTo("incident-1");
+
+        ArgumentCaptor<IncidentFilterParams> captor = ArgumentCaptor.forClass(IncidentFilterParams.class);
+        verify(incidentService).queryAllIncidents(any(), captor.capture(), any(IncidentDateFilter.class), any());
+        assertThat(captor.getValue().read()).isTrue();
     }
 }

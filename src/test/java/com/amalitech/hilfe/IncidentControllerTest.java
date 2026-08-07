@@ -14,6 +14,7 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -376,6 +378,19 @@ class IncidentControllerTest {
         mvc.perform(get("/incidents").param("statusId", "status-open").with(authentication(adminAuth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].id").value("inc-1"));
+    }
+
+    @Test
+    void listAllIncidents_readFilter_isPassedToService() throws Exception {
+        when(incidentService.queryAllIncidents(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(new PageImpl<>(List.of(stubResponse())));
+
+        mvc.perform(get("/incidents").param("read", "true").with(authentication(adminAuth())))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<IncidentFilterParams> captor = ArgumentCaptor.forClass(IncidentFilterParams.class);
+        verify(incidentService).queryAllIncidents(isNull(), captor.capture(), any(IncidentDateFilter.class), any());
+        assertThat(captor.getValue().read()).isTrue();
     }
 
     @Test
