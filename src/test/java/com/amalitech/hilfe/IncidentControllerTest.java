@@ -292,7 +292,7 @@ class IncidentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Incident read status updated successfully"));
 
-        verify(incidentService).updateReadStatus(eq("agent-user-1"), eq(RoleCode.AGENT), eq("inc-1"), eq(false));
+        verify(incidentService).updateReadStatus("agent-user-1", RoleCode.AGENT, "inc-1", false);
     }
 
     @Test
@@ -305,7 +305,7 @@ class IncidentControllerTest {
                         .with(authentication(adminAuth())))
                 .andExpect(status().isOk());
 
-        verify(incidentService).updateReadStatus(eq("admin-1"), eq(RoleCode.ADMIN), eq("inc-1"), eq(true));
+        verify(incidentService).updateReadStatus("admin-1", RoleCode.ADMIN, "inc-1", true);
     }
 
     @Test

@@ -253,6 +253,15 @@ public class IncidentService {
 
     @Transactional
     public IncidentResponse getIncident(String userId, String roleCode, String incidentId) {
+        return doGetIncident(userId, roleCode, incidentId);
+    }
+
+    @Transactional
+    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
+        return doGetIncident(userId, roleCode == null ? null : roleCode.name(), incidentId);
+    }
+
+    private IncidentResponse doGetIncident(String userId, String roleCode, String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
 
@@ -262,10 +271,6 @@ public class IncidentService {
         List<Media> mediaList = mediaRepository.findByIncidentId(incidentId);
         List<MediaResponse> mediaResponses = mediaService.toMediaResponses(mediaList);
         return slaService.toIncidentResponse(incident, mediaResponses);
-    }
-
-    public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
-        return getIncident(userId, roleCode == null ? null : roleCode.name(), incidentId);
     }
 
     // Clients never flip the shared read flag or generate a "Viewed" history entry.
@@ -282,6 +287,15 @@ public class IncidentService {
 
     @Transactional
     public IncidentResponse updateReadStatus(String actorUserId, String roleCode, String incidentId, boolean read) {
+        return doUpdateReadStatus(actorUserId, roleCode, incidentId, read);
+    }
+
+    @Transactional
+    public IncidentResponse updateReadStatus(String actorUserId, RoleCode roleCode, String incidentId, boolean read) {
+        return doUpdateReadStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, read);
+    }
+
+    private IncidentResponse doUpdateReadStatus(String actorUserId, String roleCode, String incidentId, boolean read) {
         Incident incident = findIncident(incidentId);
         enforceAccess(actorUserId, roleCode, incident);
         incident.setRead(read);
@@ -289,11 +303,6 @@ public class IncidentService {
         entityManager.flush();
         entityManager.clear();
         return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
-    }
-
-    @Transactional
-    public IncidentResponse updateReadStatus(String actorUserId, RoleCode roleCode, String incidentId, boolean read) {
-        return updateReadStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, read);
     }
 
     @Transactional
