@@ -141,7 +141,7 @@ class IncidentResolverTest {
     @Test
     void markIncidentRead_agentAuthority_succeeds() {
         setAuthority("dashboard.agent");
-        when(incidentService.updateReadStatus(eq("user-1"), eq("CLIENT"), eq("incident-1"), eq(true)))
+        when(incidentService.updateReadStatus("user-1", "CLIENT", "incident-1", true))
                 .thenReturn(stubResponse());
 
         graphQlTester.document(MARK_READ_MUTATION)
@@ -155,7 +155,7 @@ class IncidentResolverTest {
     @Test
     void markIncidentUnread_adminAuthority_succeeds() {
         setAuthority("dashboard.admin");
-        when(incidentService.updateReadStatus(eq("user-1"), eq("CLIENT"), eq("incident-1"), eq(false)))
+        when(incidentService.updateReadStatus("user-1", "CLIENT", "incident-1", false))
                 .thenReturn(stubResponse());
 
         graphQlTester.document(MARK_UNREAD_MUTATION)
