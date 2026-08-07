@@ -27,6 +27,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -115,5 +116,67 @@ class IncidentResolverTest {
                 .path("createIncident.id").entity(String.class).isEqualTo("incident-1");
 
         verify(incidentService).createIncident(eq("user-1"), any(CreateIncidentRequest.class));
+    }
+
+    // ── markIncidentRead / markIncidentUnread ───────────────────────────────
+
+    private static final String MARK_READ_MUTATION = """
+            mutation($id: ID!) {
+              markIncidentRead(id: $id) {
+                id
+                read
+              }
+            }
+            """;
+
+    private static final String MARK_UNREAD_MUTATION = """
+            mutation($id: ID!) {
+              markIncidentUnread(id: $id) {
+                id
+                read
+              }
+            }
+            """;
+
+    @Test
+    void markIncidentRead_agentAuthority_succeeds() {
+        setAuthority("dashboard.agent");
+        when(incidentService.updateReadStatus("user-1", "CLIENT", "incident-1", true))
+                .thenReturn(stubResponse());
+
+        graphQlTester.document(MARK_READ_MUTATION)
+                .variable("id", "incident-1")
+                .execute()
+                .path("markIncidentRead.id").entity(String.class).isEqualTo("incident-1");
+
+        verify(incidentService).updateReadStatus("user-1", "CLIENT", "incident-1", true);
+    }
+
+    @Test
+    void markIncidentUnread_adminAuthority_succeeds() {
+        setAuthority("dashboard.admin");
+        when(incidentService.updateReadStatus("user-1", "CLIENT", "incident-1", false))
+                .thenReturn(stubResponse());
+
+        graphQlTester.document(MARK_UNREAD_MUTATION)
+                .variable("id", "incident-1")
+                .execute()
+                .path("markIncidentUnread.id").entity(String.class).isEqualTo("incident-1");
+
+        verify(incidentService).updateReadStatus("user-1", "CLIENT", "incident-1", false);
+    }
+
+    @Test
+    void markIncidentUnread_noDashboardAuthority_isDenied() {
+        setAuthority("incident.read.own");
+
+        graphQlTester.document(MARK_UNREAD_MUTATION)
+                .variable("id", "incident-1")
+                .execute()
+                .errors()
+                .expect(error -> error.getMessage() != null)
+                .verify();
+
+        verify(incidentService, never()).updateReadStatus(any(String.class), any(String.class), any(String.class), anyBoolean());
     }
 }

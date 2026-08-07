@@ -997,6 +997,8 @@ type Mutation {
   updateIncidentStatus(id: ID!, input: UpdateIncidentStatusInput!): Incident
   updateIncidentSeverity(id: ID!, input: UpdateIncidentSeverityInput!): Incident
   assignIncident(id: ID!, input: AssignIncidentInput!): Incident
+  markIncidentRead(id: ID!): Incident
+  markIncidentUnread(id: ID!): Incident
 
   # Messages
   sendMessage(incidentId: ID!, input: SendMessageInput!): Message
