@@ -1011,10 +1011,13 @@ class IncidentServiceTest {
                 .isEqualTo(404);
     }
 
-    // ── getIncident: mark-as-viewed side effects ────────────────────────────────
+    // ── getIncident: no longer has read/view side effects ───────────────────────
+    // Fetching an incident is also used for row prefetching (loading detail screens ahead of a
+    // click), so it must stay a pure read — marking read and logging a view are driven solely by
+    // the explicit updateReadStatus action (markIncidentRead / PATCH read-status), never by GET.
 
     @Test
-    void getIncident_unreadIncident_agentOpens_marksReadAndLogsView() {
+    void getIncident_agentOpens_doesNotMarkReadOrLogView() {
         Incident incident = buildIncident();
         incident.setAssignedToId("agent-row-1");
         Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
@@ -1026,23 +1029,9 @@ class IncidentServiceTest {
 
         incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
 
-        assertThat(incident.isRead()).isTrue();
-        verify(incidentRepository).markReadIfUnread("inc-1");
-        verify(activityLogService).logIncidentViewed("agent-user-1", "inc-1");
-    }
-
-    @Test
-    void getIncident_alreadyRead_agentReopens_doesNotIssueUpdateButStillLogsView() {
-        Incident incident = buildIncident();
-        incident.setRead(true);
-        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
-        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
-        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
-
-        incidentService.getIncident("admin-1", RoleCode.ADMIN, "inc-1");
-
-        verify(incidentRepository, never()).markReadIfUnread(any());
-        verify(activityLogService).logIncidentViewed("admin-1", "inc-1");
+        assertThat(incident.isRead()).isFalse();
+        verify(incidentRepository, never()).save(any());
+        verify(activityLogService, never()).logIncidentViewed(any(), any());
     }
 
     @Test
@@ -1055,7 +1044,7 @@ class IncidentServiceTest {
         incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1");
 
         assertThat(incident.isRead()).isFalse();
-        verify(incidentRepository, never()).markReadIfUnread(any());
+        verify(incidentRepository, never()).save(any());
         verify(activityLogService, never()).logIncidentViewed(any(), any());
     }
 
@@ -1071,6 +1060,19 @@ class IncidentServiceTest {
 
         assertThat(incident.isRead()).isFalse();
         verify(incidentRepository).save(incident);
+        verify(activityLogService, never()).logIncidentViewed(any(), any());
+    }
+
+    @Test
+    void updateReadStatus_admin_marksIncidentRead_logsView() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        incidentService.updateReadStatus("admin-1", RoleCode.ADMIN, "inc-1", true);
+
+        assertThat(incident.isRead()).isTrue();
+        verify(incidentRepository).save(incident);
+        verify(activityLogService).logIncidentViewed("admin-1", "inc-1");
     }
 
     @Test

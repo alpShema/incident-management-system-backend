@@ -694,6 +694,7 @@ input IncidentFilterInput {
   categoryId: String
   locationId: String
   slaStatus: SlaStatus
+  read: Boolean
 }
 
 input AttachmentInput {
