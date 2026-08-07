@@ -39,6 +39,7 @@ public class ActivityLogService {
     private static final String SYSTEM = "System";
     private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
     private static final String AS_HEAD_OF_DEPARTMENT = " as head of department ";
+    private static final String ACTION_INCIDENT_VIEWED = "INCIDENT_VIEWED";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -79,6 +80,12 @@ public class ActivityLogService {
         Incident incident = incidentRepository.findById(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         enforceIncidentAccess(userId, roleCode, incident);
+        // Clients aren't shown staff "Viewed" activity — it's an internal detail, not something
+        // they were ever meant to audit.
+        if ("CLIENT".equalsIgnoreCase(roleCode)) {
+            return activityLogRepository.findActivityLogResponsesByIncidentIdExcludingAction(
+                    incidentId, ACTION_INCIDENT_VIEWED, sortedPageable);
+        }
         return activityLogRepository.findActivityLogResponsesByIncidentId(incidentId, sortedPageable);
     }
 
@@ -203,6 +210,24 @@ public class ActivityLogService {
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log status change for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentViewed(String actorUserId, String incidentId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(ACTION_INCIDENT_VIEWED)
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(incidentLabel + " viewed by " + actorName)
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log view for incident {}", incidentId, ex);
         }
     }
 

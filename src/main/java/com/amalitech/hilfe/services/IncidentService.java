@@ -251,11 +251,13 @@ public class IncidentService {
         );
     }
 
+    @Transactional
     public IncidentResponse getIncident(String userId, String roleCode, String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
 
         enforceAccess(userId, roleCode, incident);
+        markAsViewed(userId, roleCode, incident);
 
         List<Media> mediaList = mediaRepository.findByIncidentId(incidentId);
         List<MediaResponse> mediaResponses = mediaService.toMediaResponses(mediaList);
@@ -264,6 +266,34 @@ public class IncidentService {
 
     public IncidentResponse getIncident(String userId, RoleCode roleCode, String incidentId) {
         return getIncident(userId, roleCode == null ? null : roleCode.name(), incidentId);
+    }
+
+    // Clients never flip the shared read flag or generate a "Viewed" history entry.
+    private void markAsViewed(String userId, String roleCode, Incident incident) {
+        if (ROLE_CLIENT.equalsIgnoreCase(roleCode)) {
+            return;
+        }
+        if (!incident.isRead()) {
+            incidentRepository.markReadIfUnread(incident.getId());
+            incident.setRead(true);
+        }
+        activityLogService.logIncidentViewed(userId, incident.getId());
+    }
+
+    @Transactional
+    public IncidentResponse updateReadStatus(String actorUserId, String roleCode, String incidentId, boolean read) {
+        Incident incident = findIncident(incidentId);
+        enforceAccess(actorUserId, roleCode, incident);
+        incident.setRead(read);
+        incidentRepository.save(incident);
+        entityManager.flush();
+        entityManager.clear();
+        return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+    }
+
+    @Transactional
+    public IncidentResponse updateReadStatus(String actorUserId, RoleCode roleCode, String incidentId, boolean read) {
+        return updateReadStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, read);
     }
 
     @Transactional
