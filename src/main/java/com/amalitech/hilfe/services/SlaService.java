@@ -8,14 +8,19 @@ import com.amalitech.hilfe.dto.UpdateSlaConfigRequest;
 import com.amalitech.hilfe.dto.dashboard.SlaReportResponse;
 import com.amalitech.hilfe.dto.dashboard.SlaSeverityBreakdown;
 import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentSla;
+import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Severity;
 import com.amalitech.hilfe.models.SystemConfig;
 import com.amalitech.hilfe.notifications.NotificationEventPublisher;
 import com.amalitech.hilfe.notifications.events.IncidentSlaAtRiskEvent;
 import com.amalitech.hilfe.notifications.events.IncidentSlaBreachedEvent;
 import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentSlaRepository;
 import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
@@ -58,6 +63,7 @@ public class SlaService {
     private final SystemConfigRepository systemConfigRepository;
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
+    private final IncidentCategoryRepository incidentCategoryRepository;
     private final NotificationEventPublisher notificationEventPublisher;
     private final ActivityLogService activityLogService;
 
@@ -463,13 +469,42 @@ public class SlaService {
             recipients.add(agentUserId);
         }
         if (!suppressAdmins) {
-            for (String adminId : userRepository.findActiveAdminUserIds()) {
+            for (String adminId : resolveEscalationRecipientUserIds(incident)) {
                 if (!recipients.contains(adminId)) {
                     recipients.add(adminId);
                 }
             }
         }
         return recipients;
+    }
+
+    // Escalate to the incident's department head instead of broadcasting to all admins. Falls
+    // back to all admins when there's no category/department link, no head is set, or the
+    // stored head is no longer an active admin-capable user (role/status can change after
+    // assignment). Mirrors IncidentService#resolveEscalationRecipientUserIds.
+    private List<String> resolveEscalationRecipientUserIds(Incident incident) {
+        IncidentType incidentType = incident.getIncidentType();
+        String categoryId = incidentType != null ? incidentType.getCategoryId() : null;
+        if (categoryId != null) {
+            String headUserId = incidentCategoryRepository.findByIdWithDepartment(categoryId)
+                    .map(IncidentCategory::getDepartment)
+                    .map(Department::getHeadUserId)
+                    .orElse(null);
+            if (headUserId != null && isActiveAdminCapableUser(headUserId)) {
+                return List.of(headUserId);
+            }
+        }
+        return userRepository.findActiveAdminUserIds();
+    }
+
+    private boolean isActiveAdminCapableUser(String userId) {
+        return userRepository.findById(userId)
+                .filter(u -> Boolean.TRUE.equals(u.getStatus()))
+                .map(u -> {
+                    RoleCode role = RoleCode.valueOf(u.getRoleCode().toUpperCase());
+                    return role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN;
+                })
+                .orElse(false);
     }
 
     private IncidentSlaResponse toResponse(IncidentSla sla, int atRiskPct) {

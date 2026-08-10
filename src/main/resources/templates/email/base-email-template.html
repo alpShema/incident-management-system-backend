@@ -74,6 +74,13 @@
     .footer-logo-light { display: block; }
     .footer-logo-dark { display: none; }
 
+    /* Header HILFE logo and icon collage are the same kind of color-baked raster as the
+       AMALITECH footer logo above — same light/dark pair, same data-ogsc/data-ogsb toggle. */
+    .header-logo-light,
+    .header-icon-light { display: block; }
+    .header-logo-dark,
+    .header-icon-dark { display: none; }
+
     .email-cta-link {
       color: #08283B;
       text-decoration: underline;
@@ -162,6 +169,20 @@
       display: block !important;
     }
 
+    [data-ogsc] .header-logo-light,
+    [data-ogsb] .header-logo-light,
+    [data-ogsc] .header-icon-light,
+    [data-ogsb] .header-icon-light {
+      display: none !important;
+    }
+
+    [data-ogsc] .header-logo-dark,
+    [data-ogsb] .header-logo-dark,
+    [data-ogsc] .header-icon-dark,
+    [data-ogsb] .header-icon-dark {
+      display: block !important;
+    }
+
   </style>
 </head>
 <body bgcolor="#f5f5f5" style="margin:0;padding:0;background-color:#f5f5f5;width:100%;">
@@ -176,10 +197,12 @@
         <!-- Header -->
         <tr class="email-header">
           <td bgcolor="#ECECEB" style="padding:0 0 0 24px;text-align:left;vertical-align:middle;width:auto;background-color:#ECECEB;">
-            <img src="{{app_base_url}}/images/email/hilfe-logo-email.png" width="120" height="63" alt="HILFE" style="display:block;width:120px;height:63px;">
+            <img class="header-logo-light" src="{{app_base_url}}/images/email/hilfe-logo-email.png" width="120" height="63" alt="HILFE" style="width:120px;height:63px;">
+            <img class="header-logo-dark" src="{{app_base_url}}/images/email/hilfe-logo-email-dark.png" width="120" height="63" alt="HILFE" style="width:120px;height:63px;">
           </td>
           <td bgcolor="#ECECEB" style="text-align:right;padding:0;line-height:0;vertical-align:middle;background-color:#ECECEB;white-space:nowrap;">
-            <img src="{{app_base_url}}/images/email/hilfe-icon-collage-email.png" width="330" height="193" alt="" style="display:block;width:330px;height:193px;">
+            <img class="header-icon-light" src="{{app_base_url}}/images/email/hilfe-icon-collage-email.png" width="330" height="193" alt="" style="width:330px;height:193px;">
+            <img class="header-icon-dark" src="{{app_base_url}}/images/email/hilfe-icon-collage-email-dark.png" width="330" height="193" alt="" style="width:330px;height:193px;">
           </td>
         </tr>
 

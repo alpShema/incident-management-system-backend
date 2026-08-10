@@ -88,7 +88,7 @@ public class IncidentController {
         description = "Returns a paginated list of all incidents in the system. "
                     + "Restricted to admins and super admins — agents and clients receive 403. "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
-                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId, read). "
                     + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
@@ -107,13 +107,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
             @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
+            @Parameter(description = "Filter by read/unread status") @RequestParam(required = false) Boolean read,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAllIncidents(
                 query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus, read),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
@@ -124,7 +125,7 @@ public class IncidentController {
         description = "Returns a paginated list of incidents raised by the authenticated user. "
                     + "Accessible by all roles (CLIENT, AGENT, ADMIN). "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
-                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId, read). "
                     + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`)."
@@ -141,13 +142,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
             @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
+            @Parameter(description = "Filter by read/unread status") @RequestParam(required = false) Boolean read,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus, read),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
@@ -159,7 +161,7 @@ public class IncidentController {
                     + "Accessible by admins and agents. "
                     + "Returns an empty list if the caller has no agent group memberships. "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
-                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId, read). "
                     + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
@@ -179,13 +181,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
             @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
+            @Parameter(description = "Filter by read/unread status") @RequestParam(required = false) Boolean read,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryDeptIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus, read),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Department incidents retrieved successfully", PageResponse.from(page)));
@@ -197,7 +200,7 @@ public class IncidentController {
                     + "Accessible by admins and agents. "
                     + "Returns an empty list if the caller has no agent record. "
                     + "Accepts an optional `query` keyword that searches across title, description, topic name, and category name. "
-                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId). "
+                    + "Accepts optional filter parameters (statusId, severityId, incidentTypeId, categoryId, locationId, read). "
                     + "Accepts optional date range filters (fromDate, toDate) to filter by creation date. "
                     + "Both `query` and filters can be supplied together to narrow results simultaneously. "
                     + "Supports sorting via `sort=field,direction` (e.g. `sort=createdAt,desc`). "
@@ -217,13 +220,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
             @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
+            @Parameter(description = "Filter by read/unread status") @RequestParam(required = false) Boolean read,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAssignedIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus, read),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(page)));
@@ -327,6 +331,28 @@ public class IncidentController {
         boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
         return ResponseEntity.ok(ApiResponse.success("Incident assigned successfully",
                 incidentService.assignIncident(principal.userId(), hasUpdateAny, id, request)));
+    }
+
+    @Operation(
+        summary = "Update incident read status",
+        description = "Marks an incident as read or unread. The read status is shared across every viewer of the "
+                    + "All Incidents, Department Assigned Incidents, and Assigned Incidents tabs — once set, it is "
+                    + "visible to everyone, not just the caller. "
+                    + "Requires `dashboard.admin` or `dashboard.agent` permission, and the caller must otherwise "
+                    + "have access to the incident (creator, assignee, same-department agent, or admin)."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Read status updated")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Incident not found")
+    @PatchMapping("/{id}/read-status")
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public ResponseEntity<ApiResponse<IncidentResponse>> updateReadStatus(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Parameter(description = "Incident ID") @PathVariable String id,
+            @Valid @RequestBody UpdateIncidentReadStatusRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Incident read status updated successfully",
+                incidentService.updateReadStatus(principal.userId(), parseRoleCode(principal.roleCode()), id, request.read())));
     }
 
     @Operation(

@@ -187,6 +187,7 @@ chatbot:
   rate-limit: ${CHATBOT_RATE_LIMIT:30}
   conversation-window-size: ${CHATBOT_CONVERSATION_WINDOW_SIZE:10}
   summary-trigger-interval: ${CHATBOT_SUMMARY_TRIGGER_INTERVAL:5}
+  max-sub-questions: ${CHATBOT_MAX_SUB_QUESTIONS:5}
 
 # ──────────────────────────────────────────
 # AmaliAI Proxy (shared key for both LLM and embeddings)

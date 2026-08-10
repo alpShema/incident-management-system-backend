@@ -10,6 +10,7 @@ import com.amalitech.hilfe.repositories.ActivityLogRepository;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
+import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
@@ -37,6 +38,8 @@ public class ActivityLogService {
     private static final String UNKNOWN = "Unknown";
     private static final String SYSTEM = "System";
     private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
+    private static final String AS_HEAD_OF_DEPARTMENT = " as head of department ";
+    private static final String ACTION_INCIDENT_VIEWED = "INCIDENT_VIEWED";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -45,6 +48,7 @@ public class ActivityLogService {
     private final AgentGroupRepository agentGroupRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final RoleRepository roleRepository;
+    private final DepartmentRepository departmentRepository;
 
     public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
         Pageable sortedPageable = pageable.getSort().isSorted()
@@ -76,6 +80,12 @@ public class ActivityLogService {
         Incident incident = incidentRepository.findById(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         enforceIncidentAccess(userId, roleCode, incident);
+        // Clients aren't shown staff "Viewed" activity — it's an internal detail, not something
+        // they were ever meant to audit.
+        if ("CLIENT".equalsIgnoreCase(roleCode)) {
+            return activityLogRepository.findActivityLogResponsesByIncidentIdExcludingAction(
+                    incidentId, ACTION_INCIDENT_VIEWED, sortedPageable);
+        }
         return activityLogRepository.findActivityLogResponsesByIncidentId(incidentId, sortedPageable);
     }
 
@@ -200,6 +210,24 @@ public class ActivityLogService {
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log status change for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentViewed(String actorUserId, String incidentId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(ACTION_INCIDENT_VIEWED)
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(incidentLabel + " viewed by " + actorName)
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log view for incident {}", incidentId, ex);
         }
     }
 
@@ -355,6 +383,53 @@ public class ActivityLogService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logDepartmentHeadAssigned(String actorUserId, String departmentId, String previousHeadUserId, String newHeadUserId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String departmentName = resolveDepartmentName(departmentId);
+            String newHeadName = resolveUserName(newHeadUserId);
+            String description = previousHeadUserId == null
+                    ? actorName + " assigned " + newHeadName + AS_HEAD_OF_DEPARTMENT + departmentName
+                    : actorName + " replaced " + resolveUserName(previousHeadUserId) + " with " + newHeadName
+                            + AS_HEAD_OF_DEPARTMENT + departmentName;
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .targetUserId(newHeadUserId)
+                    .action("DEPARTMENT_HEAD_ASSIGNED")
+                    .subjectType("DEPARTMENT")
+                    .subjectId(departmentId)
+                    .description(description)
+                    .metadata("{\"previousHeadUserId\":" + (previousHeadUserId == null ? "null" : "\"" + previousHeadUserId + "\"")
+                            + ",\"newHeadUserId\":\"" + newHeadUserId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log department head assignment for department {}", departmentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logDepartmentHeadRemoved(String actorUserId, String departmentId, String previousHeadUserId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String departmentName = resolveDepartmentName(departmentId);
+            String previousHeadName = resolveUserName(previousHeadUserId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .targetUserId(previousHeadUserId)
+                    .action("DEPARTMENT_HEAD_REMOVED")
+                    .subjectType("DEPARTMENT")
+                    .subjectId(departmentId)
+                    .description(actorName + " removed " + previousHeadName + AS_HEAD_OF_DEPARTMENT + departmentName)
+                    .metadata("{\"previousHeadUserId\":\"" + previousHeadUserId + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log department head removal for department {}", departmentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logInternalNoteCreated(String actorUserId, String incidentId, String noteId) {
         try {
             String actorName = resolveUserName(actorUserId);
@@ -414,6 +489,13 @@ public class ActivityLogService {
         if (agentGroupId == null) return UNKNOWN;
         return agentGroupRepository.findById(agentGroupId)
                 .map(g -> g.getName())
+                .orElse(UNKNOWN);
+    }
+
+    private String resolveDepartmentName(String departmentId) {
+        if (departmentId == null) return UNKNOWN;
+        return departmentRepository.findById(departmentId)
+                .map(d -> d.getName())
                 .orElse(UNKNOWN);
     }
 

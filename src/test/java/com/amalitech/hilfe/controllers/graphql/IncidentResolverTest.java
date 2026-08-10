@@ -2,6 +2,8 @@ package com.amalitech.hilfe.controllers.graphql;
 
 import com.amalitech.hilfe.config.GraphQlConfig;
 import com.amalitech.hilfe.dto.CreateIncidentRequest;
+import com.amalitech.hilfe.dto.IncidentDateFilter;
+import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.services.ActivityLogService;
@@ -10,10 +12,12 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.graphql.test.autoconfigure.GraphQlTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.graphql.test.tester.GraphQlTester;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,7 +30,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -115,5 +121,93 @@ class IncidentResolverTest {
                 .path("createIncident.id").entity(String.class).isEqualTo("incident-1");
 
         verify(incidentService).createIncident(eq("user-1"), any(CreateIncidentRequest.class));
+    }
+
+    // ── markIncidentRead / markIncidentUnread ───────────────────────────────
+
+    private static final String MARK_READ_MUTATION = """
+            mutation($id: ID!) {
+              markIncidentRead(id: $id) {
+                id
+                read
+              }
+            }
+            """;
+
+    private static final String MARK_UNREAD_MUTATION = """
+            mutation($id: ID!) {
+              markIncidentUnread(id: $id) {
+                id
+                read
+              }
+            }
+            """;
+
+    @Test
+    void markIncidentRead_agentAuthority_succeeds() {
+        setAuthority("dashboard.agent");
+        when(incidentService.updateReadStatus("user-1", "CLIENT", "incident-1", true))
+                .thenReturn(stubResponse());
+
+        graphQlTester.document(MARK_READ_MUTATION)
+                .variable("id", "incident-1")
+                .execute()
+                .path("markIncidentRead.id").entity(String.class).isEqualTo("incident-1");
+
+        verify(incidentService).updateReadStatus("user-1", "CLIENT", "incident-1", true);
+    }
+
+    @Test
+    void markIncidentUnread_adminAuthority_succeeds() {
+        setAuthority("dashboard.admin");
+        when(incidentService.updateReadStatus("user-1", "CLIENT", "incident-1", false))
+                .thenReturn(stubResponse());
+
+        graphQlTester.document(MARK_UNREAD_MUTATION)
+                .variable("id", "incident-1")
+                .execute()
+                .path("markIncidentUnread.id").entity(String.class).isEqualTo("incident-1");
+
+        verify(incidentService).updateReadStatus("user-1", "CLIENT", "incident-1", false);
+    }
+
+    @Test
+    void markIncidentUnread_noDashboardAuthority_isDenied() {
+        setAuthority("incident.read.own");
+
+        graphQlTester.document(MARK_UNREAD_MUTATION)
+                .variable("id", "incident-1")
+                .execute()
+                .errors()
+                .expect(error -> error.getMessage() != null)
+                .verify();
+
+        verify(incidentService, never()).updateReadStatus(any(String.class), any(String.class), any(String.class), anyBoolean());
+    }
+
+    // ── incidents(filter: { read }) ──────────────────────────────────────────
+
+    private static final String INCIDENTS_QUERY = """
+            query($read: Boolean) {
+              incidents(filter: { read: $read }) {
+                items { id }
+              }
+            }
+            """;
+
+    @Test
+    void incidents_readFilter_bindsToFilterParams() {
+        setAuthority("dashboard.admin");
+        when(incidentService.queryAllIncidents(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(new PageImpl<>(List.of(stubResponse())));
+
+        graphQlTester.document(INCIDENTS_QUERY)
+                .variable("read", true)
+                .execute()
+                .path("incidents.items[0].id").entity(String.class).isEqualTo("incident-1");
+
+        ArgumentCaptor<IncidentFilterParams> captor = ArgumentCaptor.forClass(IncidentFilterParams.class);
+        verify(incidentService).queryAllIncidents(any(), captor.capture(), any(IncidentDateFilter.class), any());
+        assertThat(captor.getValue().read()).isTrue();
     }
 }

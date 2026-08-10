@@ -15,6 +15,7 @@ import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.graphql.execution.DataFetcherExceptionResolverAdapter;
 import org.springframework.graphql.execution.ErrorType;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authorization.AuthorizationDeniedException;
@@ -85,7 +86,9 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
 
     private GraphQLError handleArmsAuthError(ArmsAuthException ae, DataFetchingEnvironment env) {
         log.warn("GraphQL ARMS auth error: {}", ae.getMessage());
-        return buildError(env, ae.getMessage(), ae.getHttpStatus(), "Bad Gateway");
+        HttpStatus status = HttpStatus.resolve(ae.getHttpStatus());
+        String error = status != null ? status.getReasonPhrase() : "Bad Gateway";
+        return buildError(env, ae.getMessage(), ae.getHttpStatus(), error);
     }
 
     private GraphQLError handleConstraintViolationError(ConstraintViolationException cve, DataFetchingEnvironment env) {
@@ -196,6 +199,8 @@ public class GraphQlExceptionResolver extends DataFetcherExceptionResolverAdapte
             case 403 -> ErrorType.FORBIDDEN;
             case 404 -> ErrorType.NOT_FOUND;
             case 409 -> ErrorType.BAD_REQUEST;
+            case 422 -> ErrorType.BAD_REQUEST;
+            case 429 -> ErrorType.BAD_REQUEST;
             case 500 -> ErrorType.INTERNAL_ERROR;
             case 501 -> ErrorType.INTERNAL_ERROR;
             case 502 -> ErrorType.INTERNAL_ERROR;

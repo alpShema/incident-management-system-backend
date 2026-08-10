@@ -88,6 +88,7 @@ public class IncidentService {
     private final LocationRepository locationRepository;
     private final AutoCloseService autoCloseService;
     private final SlaService slaService;
+    private final IncidentCategoryRepository incidentCategoryRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -133,7 +134,7 @@ public class IncidentService {
         String incidentId = saved.getId();
         String assignedToId = saved.getAssignedToId();
         String agentUserId = resolveAgentUserId(assignedToId);
-        List<String> adminUserIds = assignedToId == null ? findAllActiveAdminUserIds() : List.of();
+        List<String> adminUserIds = assignedToId == null ? resolveEscalationRecipientUserIds(incidentType) : List.of();
 
         if (assignedToId != null) {
             String assigneeName = resolveAgentFullName(assignedToId);
@@ -266,6 +267,32 @@ public class IncidentService {
     }
 
     @Transactional
+    public IncidentResponse updateReadStatus(String actorUserId, String roleCode, String incidentId, boolean read) {
+        return doUpdateReadStatus(actorUserId, roleCode, incidentId, read);
+    }
+
+    @Transactional
+    public IncidentResponse updateReadStatus(String actorUserId, RoleCode roleCode, String incidentId, boolean read) {
+        return doUpdateReadStatus(actorUserId, roleCode == null ? null : roleCode.name(), incidentId, read);
+    }
+
+    // The frontend prefetches rows to speed up incident-detail navigation, which would fire
+    // getIncident() speculatively — so marking read/logging a view can't live there. This is the
+    // one explicit trigger for both, called only when the user actually opens the incident.
+    private IncidentResponse doUpdateReadStatus(String actorUserId, String roleCode, String incidentId, boolean read) {
+        Incident incident = findIncident(incidentId);
+        enforceAccess(actorUserId, roleCode, incident);
+        incident.setRead(read);
+        incidentRepository.save(incident);
+        if (read) {
+            activityLogService.logIncidentViewed(actorUserId, incidentId);
+        }
+        entityManager.flush();
+        entityManager.clear();
+        return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+    }
+
+    @Transactional
     public IncidentResponse updateStatus(String actorUserId, String roleCode, boolean hasForceClose, String incidentId, UpdateIncidentStatusRequest request) {
         return doUpdateStatus(actorUserId, roleCode, hasForceClose, incidentId, request);
     }
@@ -366,13 +393,17 @@ public class IncidentService {
 
         // Capture the previous agent's userId BEFORE overwriting assignedToId
         String previousAgentUserId = resolveAgentUserId(incident.getAssignedToId());
+        boolean isFirstAssignment = incident.getAssignedToId() == null;
 
         incident.setAssignedToId(request.agentId());
 
-        String inProgressStatusId = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
-                .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
-                .getId();
-        incident.setStatusId(inProgressStatusId);
+        // Only auto-activate on first pickup; never clobber a status set in the same edit.
+        if (isFirstAssignment) {
+            String inProgressStatusId = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
+                    .getId();
+            incident.setStatusId(inProgressStatusId);
+        }
 
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
@@ -683,6 +714,33 @@ public class IncidentService {
         // Query User table directly — does not depend on Admin table being populated,
         // so admins who were promoted before ensureAdminRecord was added are included.
         return userRepository.findActiveAdminUserIds();
+    }
+
+    // HV-1533: escalate to the incident's department head instead of broadcasting to all admins.
+    // Falls back to all admins when there's no category/department link, no head is set, or the
+    // stored head is no longer an active admin-capable user (role/status can change after assignment).
+    private List<String> resolveEscalationRecipientUserIds(IncidentType incidentType) {
+        String categoryId = incidentType != null ? incidentType.getCategoryId() : null;
+        if (categoryId != null) {
+            String headUserId = incidentCategoryRepository.findByIdWithDepartment(categoryId)
+                    .map(IncidentCategory::getDepartment)
+                    .map(Department::getHeadUserId)
+                    .orElse(null);
+            if (headUserId != null && isActiveAdminCapableUser(headUserId)) {
+                return List.of(headUserId);
+            }
+        }
+        return findAllActiveAdminUserIds();
+    }
+
+    private boolean isActiveAdminCapableUser(String userId) {
+        return userRepository.findById(userId)
+                .filter(u -> Boolean.TRUE.equals(u.getStatus()))
+                .map(u -> {
+                    RoleCode role = RoleCode.valueOf(u.getRoleCode().toUpperCase());
+                    return role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN;
+                })
+                .orElse(false);
     }
 
     private void enforceReopenWindow(Incident incident, Status newStatus) {

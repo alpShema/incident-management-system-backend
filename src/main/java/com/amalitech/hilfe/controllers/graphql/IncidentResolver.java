@@ -163,6 +163,24 @@ public class IncidentResolver {
         return incidentService.assignIncident(principal.userId(), hasUpdateAny, id, input);
     }
 
+    @MutationMapping
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public IncidentResponse markIncidentRead(
+            @Argument String id,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Incident marked as read successfully");
+        return incidentService.updateReadStatus(principal.userId(), principal.roleCode(), id, true);
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasAnyAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "', '" + RbacPermissions.DASHBOARD_AGENT + "')")
+    public IncidentResponse markIncidentUnread(
+            @Argument String id,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Incident marked as unread successfully");
+        return incidentService.updateReadStatus(principal.userId(), principal.roleCode(), id, false);
+    }
+
     private static IncidentFilterParams orEmpty(IncidentFilterParams f) {
         return f != null ? f : new IncidentFilterParams(null, null, null, null, null);
     }

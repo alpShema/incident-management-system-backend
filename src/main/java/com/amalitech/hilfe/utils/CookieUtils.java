@@ -18,7 +18,7 @@ public final class CookieUtils {
 
     /**
      * Sets the single HttpOnly session cookie, holding the raw ARMS token, with a maxAge
-     * matching the ARMS token's own remaining lifetime.
+     * matching the ARMS token's own remaining duration
      */
     public static void addSessionCookie(HttpServletResponse response, String armsToken,
                                          long ttlSeconds, boolean secure, String sameSite) {

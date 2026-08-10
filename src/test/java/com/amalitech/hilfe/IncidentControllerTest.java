@@ -14,6 +14,7 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -279,6 +281,53 @@ class IncidentControllerTest {
         verify(incidentService).assignIncident(eq("admin-1"), eq(true), eq("inc-1"), any());
     }
 
+    // ── PATCH /incidents/{id}/read-status ─────────────────────────────────────
+
+    @Test
+    void updateReadStatus_agentAuth_returns200() throws Exception {
+        when(incidentService.updateReadStatus(anyString(), any(RoleCode.class), eq("inc-1"), eq(false))).thenReturn(stubResponse());
+
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentReadStatusRequest(false)))
+                        .with(authentication(agentAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident read status updated successfully"));
+
+        verify(incidentService).updateReadStatus("agent-user-1", RoleCode.AGENT, "inc-1", false);
+    }
+
+    @Test
+    void updateReadStatus_adminAuth_returns200() throws Exception {
+        when(incidentService.updateReadStatus(anyString(), any(RoleCode.class), eq("inc-1"), eq(true))).thenReturn(stubResponse());
+
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentReadStatusRequest(true)))
+                        .with(authentication(adminAuth())))
+                .andExpect(status().isOk());
+
+        verify(incidentService).updateReadStatus("admin-1", RoleCode.ADMIN, "inc-1", true);
+    }
+
+    @Test
+    void updateReadStatus_clientAuth_returns403() throws Exception {
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateIncidentReadStatusRequest(false)))
+                        .with(authentication(clientAuth())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateReadStatus_missingReadField_returns400() throws Exception {
+        mvc.perform(patch("/incidents/inc-1/read-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .with(authentication(agentAuth())))
+                .andExpect(status().isBadRequest());
+    }
+
     // ── GET /incidents (admin all) ────────────────────────────────────────────
 
     @Test
@@ -329,6 +378,19 @@ class IncidentControllerTest {
         mvc.perform(get("/incidents").param("statusId", "status-open").with(authentication(adminAuth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].id").value("inc-1"));
+    }
+
+    @Test
+    void listAllIncidents_readFilter_isPassedToService() throws Exception {
+        when(incidentService.queryAllIncidents(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(new PageImpl<>(List.of(stubResponse())));
+
+        mvc.perform(get("/incidents").param("read", "true").with(authentication(adminAuth())))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<IncidentFilterParams> captor = ArgumentCaptor.forClass(IncidentFilterParams.class);
+        verify(incidentService).queryAllIncidents(isNull(), captor.capture(), any(IncidentDateFilter.class), any());
+        assertThat(captor.getValue().read()).isTrue();
     }
 
     @Test

@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,6 +34,7 @@ public class OpenAiLlmService implements LlmService {
     private static final String ROLE_USER   = "user";
     private static final String SSE_DATA_PREFIX = "data:";
     private static final String SSE_DONE_MARKER = "[DONE]";
+    private static final String CONVERSATION_CONTEXT_PREFIX = "Conversation context: ";
 
     private static final String REWRITE_SYSTEM_PROMPT = """
             You are a query rewriter for a support FAQ chatbot.
@@ -52,6 +54,32 @@ public class OpenAiLlmService implements LlmService {
             If the FAQ content does not fully address the question, say so clearly and \
             suggest the user raise a support ticket.
             Keep your answer concise and directly relevant to how the user asked.
+            """;
+
+    private static final String SPLIT_SYSTEM_PROMPT = """
+            You are a query understanding step for a support FAQ chatbot.
+            Given the user's latest message and the recent conversation history, resolve any \
+            pronouns or references using the history so each question can be understood on its own.
+            Then check whether the message contains more than one distinct question.
+            Output each distinct, self-contained question on its own line, with no numbering, \
+            bullets, or explanation — just the question text.
+            If there is only one question, output exactly one line containing it, resolved \
+            against the history but otherwise unchanged.
+            Output only the questions, one per line, and nothing else.
+            """;
+
+    private static final String MULTI_ANSWER_SYSTEM_PROMPT = """
+            You are a helpful support assistant for a helpdesk system.
+            The user asked multiple questions in one message. You are given one or more FAQ \
+            entries, each paired with the specific sub-question it answers, and possibly a list \
+            of sub-questions with no matching FAQ.
+            Every fact in your answer must come from the FAQ content provided — do not add \
+            information, speculate, or infer anything beyond what is written there.
+            Compose a single conversational reply that addresses each sub-question in turn, \
+            in your own words rather than copying the FAQ text verbatim.
+            For each sub-question with no matching FAQ, clearly say you couldn't find an answer \
+            to it and suggest the user raise a support ticket for that part.
+            Keep the reply concise and organized so the user can tell which part answers which question.
             """;
 
     private final RestClient restClient;
@@ -93,17 +121,8 @@ public class OpenAiLlmService implements LlmService {
                 userQuery, faqQuestion, conversationSummary != null && !conversationSummary.isBlank());
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, ANSWER_SYSTEM_PROMPT));
-
-        StringBuilder userContent = new StringBuilder();
-        if (conversationSummary != null && !conversationSummary.isBlank()) {
-            userContent.append("Conversation context: ").append(conversationSummary).append("\n\n");
-        }
-        userContent.append("FAQ content:\n")
-                .append("Q: ").append(faqQuestion).append("\n")
-                .append("A: ").append(faqAnswer).append("\n\n")
-                .append("User's question: ").append(userQuery);
-
-        messages.add(Map.of(ROLE, ROLE_USER, CONTENT, userContent.toString()));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
+                buildAnswerUserContent(userQuery, faqQuestion, faqAnswer, conversationSummary)));
 
         return callChatCompletion("answer", messages);
     }
@@ -115,19 +134,96 @@ public class OpenAiLlmService implements LlmService {
                 userQuery, faqQuestion, conversationSummary != null && !conversationSummary.isBlank());
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, ANSWER_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
+                buildAnswerUserContent(userQuery, faqQuestion, faqAnswer, conversationSummary)));
 
+        streamChatCompletion("answer-stream", messages, onChunk);
+    }
+
+    private static String buildAnswerUserContent(String userQuery, String faqQuestion, String faqAnswer,
+                                                  String conversationSummary) {
         StringBuilder userContent = new StringBuilder();
         if (conversationSummary != null && !conversationSummary.isBlank()) {
-            userContent.append("Conversation context: ").append(conversationSummary).append("\n\n");
+            userContent.append(CONVERSATION_CONTEXT_PREFIX).append(conversationSummary).append("\n\n");
         }
         userContent.append("FAQ content:\n")
                 .append("Q: ").append(faqQuestion).append("\n")
                 .append("A: ").append(faqAnswer).append("\n\n")
                 .append("User's question: ").append(userQuery);
+        return userContent.toString();
+    }
 
-        messages.add(Map.of(ROLE, ROLE_USER, CONTENT, userContent.toString()));
+    @Override
+    public List<String> splitQuestions(String rawQuery, List<String> recentTurns) {
+        log.debug("LLM split | query=\"{}\" | historyTurns={}", rawQuery, recentTurns.size());
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, SPLIT_SYSTEM_PROMPT));
 
-        streamChatCompletion("answer-stream", messages, onChunk);
+        if (!recentTurns.isEmpty()) {
+            String history = String.join("\n", recentTurns);
+            messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
+                    "Conversation so far:\n" + history + "\n\nLatest message: " + rawQuery));
+        } else {
+            messages.add(Map.of(ROLE, ROLE_USER, CONTENT, rawQuery));
+        }
+
+        String raw = callChatCompletion("split", messages);
+        List<String> parsed = parseSplitLines(raw);
+        return parsed.isEmpty() ? List.of(rawQuery) : parsed;
+    }
+
+    private static List<String> parseSplitLines(String raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        return Arrays.stream(raw.split("\n"))
+                .map(line -> line.replaceFirst("^[\\s\\-*•]+", "").replaceFirst("^\\d+[.)]\\s*", "").trim())
+                .filter(line -> !line.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    @Override
+    public String generateMultiAnswer(List<FaqMatchForAnswer> matches, List<String> unansweredSubQuestions,
+                                       String conversationSummary) {
+        log.debug("LLM multi-answer | matches={} | unanswered={}", matches.size(), unansweredSubQuestions.size());
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, MULTI_ANSWER_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
+                buildMultiAnswerUserContent(matches, unansweredSubQuestions, conversationSummary)));
+
+        return callChatCompletion("multi-answer", messages);
+    }
+
+    @Override
+    public void streamMultiAnswer(List<FaqMatchForAnswer> matches, List<String> unansweredSubQuestions,
+                                   String conversationSummary, Consumer<String> onChunk) {
+        log.debug("LLM stream multi-answer | matches={} | unanswered={}", matches.size(), unansweredSubQuestions.size());
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of(ROLE, ROLE_SYSTEM, CONTENT, MULTI_ANSWER_SYSTEM_PROMPT));
+        messages.add(Map.of(ROLE, ROLE_USER, CONTENT,
+                buildMultiAnswerUserContent(matches, unansweredSubQuestions, conversationSummary)));
+
+        streamChatCompletion("multi-answer-stream", messages, onChunk);
+    }
+
+    private static String buildMultiAnswerUserContent(List<FaqMatchForAnswer> matches, List<String> unansweredSubQuestions,
+                                                        String conversationSummary) {
+        StringBuilder userContent = new StringBuilder();
+        if (conversationSummary != null && !conversationSummary.isBlank()) {
+            userContent.append(CONVERSATION_CONTEXT_PREFIX).append(conversationSummary).append("\n\n");
+        }
+        for (int i = 0; i < matches.size(); i++) {
+            FaqMatchForAnswer m = matches.get(i);
+            userContent.append("Sub-question ").append(i + 1).append(": ").append(m.subQuestion()).append("\n")
+                    .append("Matched FAQ Q: ").append(m.faqQuestion()).append("\n")
+                    .append("Matched FAQ A: ").append(m.faqAnswer()).append("\n\n");
+        }
+        if (!unansweredSubQuestions.isEmpty()) {
+            userContent.append("Sub-questions with no FAQ match:\n");
+            unansweredSubQuestions.forEach(q -> userContent.append("- ").append(q).append("\n"));
+        }
+        return userContent.toString();
     }
 
     private void streamChatCompletion(String operation, List<Map<String, String>> messages, Consumer<String> onChunk) {

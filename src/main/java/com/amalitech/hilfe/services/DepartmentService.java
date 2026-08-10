@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.dto.CreateDepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentRequest;
 import com.amalitech.hilfe.dto.DepartmentResponse;
 import com.amalitech.hilfe.dto.IncidentCategoryResponse;
@@ -8,10 +9,13 @@ import com.amalitech.hilfe.models.AgentGroup;
 import com.amalitech.hilfe.models.Department;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentTypeRepository;
+import com.amalitech.hilfe.repositories.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -33,6 +37,8 @@ public class DepartmentService {
     private final AgentGroupRepository agentGroupRepository;
     private final IncidentCategoryRepository categoryRepository;
     private final IncidentTypeRepository typeRepository;
+    private final UserRepository userRepository;
+    private final ActivityLogService activityLogService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -53,26 +59,41 @@ public class DepartmentService {
         return toResponse(findDepartmentByIdOrThrow(id));
     }
 
+    /**
+     * Returns every department for which the given user is currently the HOD.
+     * A user may head multiple departments simultaneously, so this can return
+     * more than one result.
+     */
+    public List<DepartmentResponse> listDepartmentsHeadedBy(String userId) {
+        return departmentRepository.findByHeadUserIdOrderByNameAsc(userId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
-    public DepartmentResponse createDepartment(DepartmentRequest request) {
+    public DepartmentResponse createDepartment(String actorUserId, CreateDepartmentRequest request) {
         String name = request.name() == null ? null : request.name().trim();
         String description = request.description() == null ? null : request.description().trim();
 
         if (departmentRepository.existsByNameIgnoreCase(name)) {
             throw new ArmsAuthException(DEPARTMENT_ALREADY_EXISTS_MESSAGE, 409);
         }
+        validateEligibleHead(request.headUserId());
 
         Department department = Department.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name)
                 .description(description)
                 .status(true)
+                .headUserId(request.headUserId())
                 .build();
-        return toResponse(departmentRepository.save(department));
+        DepartmentResponse response = toResponse(departmentRepository.save(department));
+        activityLogService.logDepartmentHeadAssigned(actorUserId, department.getId(), null, request.headUserId());
+        return response;
     }
 
     @Transactional
-    public DepartmentResponse updateDepartment(String id, DepartmentRequest request) {
+    public DepartmentResponse updateDepartment(String actorUserId, String id, DepartmentRequest request) {
         String name = request.name() == null ? null : request.name().trim();
         String description = request.description() == null ? null : request.description().trim();
 
@@ -87,6 +108,9 @@ public class DepartmentService {
         }
         if (description != null) {
             department.setDescription(description);
+        }
+        if (request.headUserId() != null && !request.headUserId().isBlank()) {
+            assignHead(department, actorUserId, request.headUserId());
         }
         return toResponse(departmentRepository.save(department));
     }
@@ -140,6 +164,18 @@ public class DepartmentService {
         }
     }
 
+    @Transactional
+    public DepartmentResponse removeDepartmentHead(String actorUserId, String departmentId) {
+        Department department = findDepartmentByIdOrThrow(departmentId);
+        String previousHeadUserId = department.getHeadUserId();
+        department.setHeadUserId(null);
+        DepartmentResponse response = toResponse(departmentRepository.save(department));
+        if (previousHeadUserId != null) {
+            activityLogService.logDepartmentHeadRemoved(actorUserId, departmentId, previousHeadUserId);
+        }
+        return response;
+    }
+
     public List<IncidentCategoryResponse> listCategories(String departmentId) {
         findDepartmentByIdOrThrow(departmentId);
         return categoryRepository.findByDepartmentIdAndStatusWithDepartment(departmentId, true).stream()
@@ -167,6 +203,41 @@ public class DepartmentService {
         }
         category.setDepartmentId(null);
         return IncidentCategoryResponse.from(categoryRepository.save(category));
+    }
+
+    private void assignHead(Department department, String actorUserId, String headUserId) {
+        String previousHeadUserId = department.getHeadUserId();
+        if (headUserId.equals(previousHeadUserId)) {
+            // No-op: this user is already the head of this department. A user may
+            // legitimately head multiple *other* departments, so this is only a
+            // same-department duplicate-assignment guard, not a cross-department one.
+            return;
+        }
+        validateEligibleHead(headUserId);
+        department.setHeadUserId(headUserId);
+        activityLogService.logDepartmentHeadAssigned(actorUserId, department.getId(), previousHeadUserId, headUserId);
+    }
+
+    private void validateEligibleHead(String userId) {
+        User user = userRepository.findById(userId)
+                .filter(u -> Boolean.TRUE.equals(u.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("User not found or inactive", 404));
+        if (!isAdminOrAdminAgent(user.getRoleCode())) {
+            throw new ArmsAuthException("Department head must be an Admin or Admin-Agent", 400);
+        }
+        // Intentionally no longer checks whether the user already heads another
+        // department: a single user may be HOD of multiple departments at once.
+        // Per-department uniqueness (one head per department) is still enforced
+        // simply by `headUserId` being a single-valued field on Department.
+    }
+
+    private boolean isAdminOrAdminAgent(String roleCode) {
+        try {
+            RoleCode role = RoleCode.valueOf(roleCode.toUpperCase());
+            return role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private DepartmentResponse toResponse(Department department) {

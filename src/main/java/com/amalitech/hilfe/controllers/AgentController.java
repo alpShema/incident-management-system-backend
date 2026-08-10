@@ -33,14 +33,16 @@ public class AgentController {
                     + "Accepts an optional `query` keyword that searches across full name, email, and office location. "
                     + "Accepts optional `status` and `locationId` filters that can be combined with each other and with `query`/`departmentId`. "
                     + "When `departmentId` is omitted, returns active agents only. "
-                    + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
+                    + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents, "
+                    + "regardless of the department's own active/inactive status. "
                     + "Both `query` and `departmentId` can be supplied together to narrow results simultaneously. "
-                    + "If the department is missing or inactive, returns an empty page. "
+                    + "If the department does not exist, returns a 404. "
                     + "Requires `agent.read` permission."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Agents retrieved")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Department not found")
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAgents(
@@ -61,14 +63,16 @@ public class AgentController {
                     + "Accepts an optional `query` keyword that searches across full name, email, and office location. "
                     + "Accepts optional `status` and `locationId` filters that can be combined with each other and with `query`/`departmentId`. "
                     + "When `departmentId` is omitted, all agents are returned regardless of status. "
-                    + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
+                    + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents, "
+                    + "regardless of the department's own active/inactive status. "
                     + "Both `query` and `departmentId` can be supplied together to narrow results simultaneously. "
-                    + "If the department is missing or inactive, returns an empty page. "
+                    + "If the department does not exist, returns a 404. "
                     + "Requires `agent.read` permission."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Agents retrieved")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Department not found")
     @GetMapping("/all")
     @PreAuthorize("hasAuthority('" + RbacPermissions.AGENT_READ + "')")
     public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAllAgents(

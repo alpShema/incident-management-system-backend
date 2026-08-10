@@ -62,6 +62,7 @@ class IncidentServiceTest {
     @Mock MediaService mediaService;
     @Mock MediaRepository mediaRepository;
     @Mock SlaService slaService;
+    @Mock IncidentCategoryRepository incidentCategoryRepository;
     @Mock EntityManager entityManager;
     @InjectMocks IncidentService incidentService;
 
@@ -293,6 +294,111 @@ class IncidentServiceTest {
         verify(agentRepository, never()).findAvailableByAgentGroupIdViaMembership(any());
         verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
         verify(notificationEventPublisher, never()).publish(isA(IncidentAutoAssignedClientEvent.class));
+    }
+
+    // ── escalation → department head targeting (HV-1533) ───────────────────────
+
+    private IncidentCategory categoryWithHead(String headUserId) {
+        Department department = Department.builder().id("dept-1").name("Facilities").headUserId(headUserId).build();
+        return IncidentCategory.builder().id("cat-1").name("Networking").departmentId("dept-1").department(department).build();
+    }
+
+    @Test
+    void createIncident_departmentHasActiveHead_notifiesOnlyHead() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = buildIncidentType();
+        incidentType.setAgentGroupId("group-1");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead("hod-1")));
+        when(userRepository.findById("hod-1")).thenReturn(Optional.of(
+                User.builder().id("hod-1").fullName("Head Person").status(true).roleCode(RoleCode.ADMIN).build()));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("hod-1", incident.getId(), 1));
+        verify(userRepository, never()).findActiveAdminUserIds();
+    }
+
+    @Test
+    void createIncident_departmentHeadDeactivated_fallsBackToAllAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = buildIncidentType();
+        incidentType.setAgentGroupId("group-1");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead("hod-1")));
+        when(userRepository.findById("hod-1")).thenReturn(Optional.of(
+                User.builder().id("hod-1").fullName("Ex Head").status(false).roleCode(RoleCode.ADMIN).build()));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1"));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
+        verify(notificationEventPublisher, never()).publish(argThat(e ->
+                e instanceof IncidentEscalatedEvent ev && "hod-1".equals(ev.recipientUserId())));
+    }
+
+    @Test
+    void createIncident_departmentHasNoHead_fallsBackToAllAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = buildIncidentType();
+        incidentType.setAgentGroupId("group-1");
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(incidentCategoryRepository.findByIdWithDepartment("cat-1")).thenReturn(Optional.of(categoryWithHead(null)));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1"));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
+        verify(userRepository, never()).findById("hod-1");
+    }
+
+    @Test
+    void createIncident_noCategoryLinked_fallsBackToAllAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Test Group").status(false).build();
+        IncidentType incidentType = IncidentType.builder()
+                .id("type-1")
+                .name("Topic")
+                .agentGroupId("group-1")
+                .build(); // no categoryId
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-user-1"));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
+        verify(incidentCategoryRepository, never()).findByIdWithDepartment(any());
     }
 
     // ── creator agent-status check (HV-1464) ────────────────────────────────────
@@ -903,6 +1009,86 @@ class IncidentServiceTest {
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    // ── getIncident: no longer has read/view side effects ───────────────────────
+    // Fetching an incident is also used for row prefetching (loading detail screens ahead of a
+    // click), so it must stay a pure read — marking read and logging a view are driven solely by
+    // the explicit updateReadStatus action (markIncidentRead / PATCH read-status), never by GET.
+
+    @Test
+    void getIncident_agentOpens_doesNotMarkReadOrLogView() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("agent-row-1");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        incidentService.getIncident("agent-user-1", RoleCode.AGENT, "inc-1");
+
+        assertThat(incident.isRead()).isFalse();
+        verify(incidentRepository, never()).save(any());
+        verify(activityLogService, never()).logIncidentViewed(any(), any());
+    }
+
+    @Test
+    void getIncident_clientOwnerOpens_doesNotMarkReadOrLogView() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1");
+
+        assertThat(incident.isRead()).isFalse();
+        verify(incidentRepository, never()).save(any());
+        verify(activityLogService, never()).logIncidentViewed(any(), any());
+    }
+
+    // ── updateReadStatus ──────────────────────────────────────────────────────
+
+    @Test
+    void updateReadStatus_admin_marksIncidentUnread() {
+        Incident incident = buildIncident();
+        incident.setRead(true);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        incidentService.updateReadStatus("admin-1", RoleCode.ADMIN, "inc-1", false);
+
+        assertThat(incident.isRead()).isFalse();
+        verify(incidentRepository).save(incident);
+        verify(activityLogService, never()).logIncidentViewed(any(), any());
+    }
+
+    @Test
+    void updateReadStatus_admin_marksIncidentRead_logsView() {
+        Incident incident = buildIncident();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        incidentService.updateReadStatus("admin-1", RoleCode.ADMIN, "inc-1", true);
+
+        assertThat(incident.isRead()).isTrue();
+        verify(incidentRepository).save(incident);
+        verify(activityLogService).logIncidentViewed("admin-1", "inc-1");
+    }
+
+    @Test
+    void updateReadStatus_unrelatedAgent_throws403() {
+        Incident incident = buildIncident();
+        incident.setAssignedToId("different-agent");
+        Agent agent = Agent.builder().id("agent-row-1").userId("agent-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("agent-user-1")).thenReturn(Optional.of(agent));
+
+        assertThatThrownBy(() -> incidentService.updateReadStatus("agent-user-1", RoleCode.AGENT, "inc-1", false))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+        verify(incidentRepository, never()).save(any());
     }
 
     // ── updateStatus ──────────────────────────────────────────────────────────
@@ -1755,20 +1941,42 @@ class IncidentServiceTest {
     @Test
     void assignIncident_agentIsOwner_succeeds() {
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
         Agent agent1 = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
         Agent agent2 = Agent.builder().id("agent-2").userId("other-user").status(true).build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent1));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(agent2));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         // actor-1 is the userId of agent-1, who is the assigned agent — should be allowed
         incidentService.assignIncident("actor-1", false, "inc-1", new AssignIncidentRequest("agent-2"));
 
         assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
+    }
+
+    @Test
+    void assignIncident_reassignment_doesNotRevertStatus() {
+        // Incident already assigned to agent-1, and its status was deliberately set to
+        // Pending earlier in the same edit — reassigning must not clobber it back to In Progress.
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        incident.setStatusId("status-pending");
+        Status pendingStatus = buildStatus("status-pending", "Pending");
+        incident.setStatus(pendingStatus);
+
+        Agent agent1 = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        Agent agent2 = Agent.builder().id("agent-2").userId("other-user").status(true).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(agent1));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(agent2));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-2"));
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
+        assertThat(incident.getStatusId()).isEqualTo("status-pending");
+        verify(statusRepository, never()).findByNameIgnoreCase(any());
     }
 
     // ── notification: sendReopenedNotification ────────────────────────────────
@@ -1927,7 +2135,6 @@ class IncidentServiceTest {
     void assignIncident_withPreviousAgent_sendsUnassignedNotificationBeforeOverwrite() {
         // Incident already assigned to agent-1 (userId "actor-1")
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         // agent-1 is the previous agent (userId "actor-1")
         Agent previousAgent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
@@ -1937,7 +2144,6 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(previousAgent));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(newAgent));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-2"));
@@ -1975,14 +2181,12 @@ class IncidentServiceTest {
     void assignIncident_sameAgentReassigned_doesNotSendUnassignedNotification() {
         // Reassigning to the same agent: unassigned notification should be suppressed
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         Agent sameAgent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
 
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         // findById("agent-1") is called twice: once to resolve previousAgentUserId, once for the new agentUserId
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(sameAgent));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-1"));
@@ -2016,7 +2220,6 @@ class IncidentServiceTest {
     void assignIncident_reassignedToDifferentAgent_sendsReassignmentNotificationToNewAgent() {
         // Incident already assigned to agent-1; being reassigned to agent-2 by an admin
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
-        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
 
         Agent previousAgent = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
         Agent newAgent = Agent.builder().id("agent-2").userId("new-agent-user").status(true).build();
@@ -2024,7 +2227,6 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(previousAgent));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(newAgent));
-        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-2"));

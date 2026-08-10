@@ -254,6 +254,7 @@ type Department {
   description: String
   status: Boolean
   categoryCount: Long
+  headUserId: ID
 }
 
 type DepartmentPage {
@@ -693,6 +694,7 @@ input IncidentFilterInput {
   categoryId: String
   locationId: String
   slaStatus: SlaStatus
+  read: Boolean
 }
 
 input AttachmentInput {
@@ -767,9 +769,17 @@ input ChatbotQueryInput {
   query: String!
 }
 
+# HV-1575: name is optional — fields omitted from the input are left at their current stored value.
 input DepartmentInput {
+  name: String
+  description: String
+  headUserId: ID
+}
+
+input CreateDepartmentInput {
   name: String!
   description: String
+  headUserId: ID!
 }
 
 input UpdateDepartmentStatusInput {
@@ -794,8 +804,10 @@ input UpdateAvailabilityInput {
   available: Boolean!
 }
 
+# HV-1575: name is optional — omitted fields are left at their current stored value on update;
+# createAgentGroup still requires it (enforced in AgentGroupService).
 input AgentGroupInput {
-  name: String!
+  name: String
   description: String
   departmentId: String
   agentIds: [String!]
@@ -907,6 +919,8 @@ type Query {
   departments(query: String, status: Boolean, page: PageInput): DepartmentPage
   department(id: ID!): Department
   departmentCategories(departmentId: ID!): [IncidentCategory!]
+  # HV-1586: departments this user currently heads (a user may be HOD of more than one)
+  departmentsHeadedBy(userId: ID!): [Department!]!
 
   # Locations
   locations(query: String, status: Boolean, page: PageInput): LocationPage
@@ -984,6 +998,8 @@ type Mutation {
   updateIncidentStatus(id: ID!, input: UpdateIncidentStatusInput!): Incident
   updateIncidentSeverity(id: ID!, input: UpdateIncidentSeverityInput!): Incident
   assignIncident(id: ID!, input: AssignIncidentInput!): Incident
+  markIncidentRead(id: ID!): Incident
+  markIncidentUnread(id: ID!): Incident
 
   # Messages
   sendMessage(incidentId: ID!, input: SendMessageInput!): Message
@@ -1012,11 +1028,12 @@ type Mutation {
   generateMediaPresignedUrl(input: PresignedUrlInput!): PresignedUrl
 
   # Departments
-  createDepartment(input: DepartmentInput!): Department
+  createDepartment(input: CreateDepartmentInput!): Department
   updateDepartment(id: ID!, input: DepartmentInput!): Department
   updateDepartmentStatus(id: ID!, input: UpdateDepartmentStatusInput!): Department
   linkCategoryToDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
   unlinkCategoryFromDepartment(departmentId: ID!, categoryId: ID!): IncidentCategory
+  removeDepartmentHead(id: ID!): Department
 
   # Locations
   createLocation(input: CreateLocationInput!): Location

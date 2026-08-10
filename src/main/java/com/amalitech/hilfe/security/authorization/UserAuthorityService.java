@@ -2,6 +2,7 @@ package com.amalitech.hilfe.security.authorization;
 
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,15 +45,18 @@ public class UserAuthorityService {
 
     private final UserRepository userRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final DepartmentRepository departmentRepository;
     private final String bootstrapSuperAdminUserId;
 
     public UserAuthorityService(
             UserRepository userRepository,
             RolePermissionRepository rolePermissionRepository,
+            DepartmentRepository departmentRepository,
             @Value("${app.rbac.bootstrap-super-admin-user-id:}") String bootstrapSuperAdminUserId
     ) {
         this.userRepository = userRepository;
         this.rolePermissionRepository = rolePermissionRepository;
+        this.departmentRepository = departmentRepository;
         this.bootstrapSuperAdminUserId = bootstrapSuperAdminUserId;
     }
 
@@ -69,6 +73,9 @@ public class UserAuthorityService {
         authorities.add(toRoleAuthority(roleCode));
         authorities.addAll(loadRolePermissionCodes(roleCode));
         authorities.addAll(mapLegacyPermissions(user));
+        if (departmentRepository.existsByHeadUserId(user.getId())) {
+            authorities.add(RbacPermissions.DEPARTMENT_HEAD);
+        }
 
         return new ResolvedAuthorities(
                 user.getId(),

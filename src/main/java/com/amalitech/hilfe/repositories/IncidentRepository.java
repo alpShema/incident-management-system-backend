@@ -401,6 +401,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -423,6 +424,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -467,6 +469,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -493,6 +496,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -532,6 +536,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -553,6 +558,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -592,6 +598,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -614,6 +621,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
             AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
             AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
             """ + SLA_STATUS_FILTER + """
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
@@ -769,6 +777,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """)
     long countHighCriticalByAgent(@Param("agentId") String agentId);
 
+    // Currently unused. `read` is now set by explicitly marking an incident read (see
+    // IncidentService#doUpdateReadStatus), not specifically by the assigned agent — if this is
+    // wired up, "unacknowledged" now means "nobody has marked it read yet", not "the assignee
+    // hasn't acknowledged it".
     @Query("""
             SELECT COUNT(i) FROM Incident i
             WHERE i.assignedToId = :agentId

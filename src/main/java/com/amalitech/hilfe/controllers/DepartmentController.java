@@ -3,6 +3,7 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.DepartmentService;
+import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,22 +44,27 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success("Department retrieved successfully", departmentService.getDepartment(id)));
     }
 
-    @Operation(summary = "Create a department", description = "Creates an internal department. Requires `department.create` permission.")
+    @Operation(summary = "Create a department", description = "Creates an internal department with a required department head. Requires `department.create` permission.")
     @PostMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_CREATE + "')")
-    public ResponseEntity<ApiResponse<DepartmentResponse>> createDepartment(@Valid @RequestBody DepartmentRequest request) {
+    public ResponseEntity<ApiResponse<DepartmentResponse>> createDepartment(
+            @Valid @RequestBody CreateDepartmentRequest request,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Department created successfully", departmentService.createDepartment(request)));
+                .body(ApiResponse.success("Department created successfully",
+                        departmentService.createDepartment(principal.userId(), request)));
     }
 
-    @Operation(summary = "Update a department", description = "Updates an internal department. Requires `department.update` permission.")
+    @Operation(summary = "Update a department", description = "Updates an internal department, optionally including its head. Requires `department.update` permission.")
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_UPDATE + "')")
     public ResponseEntity<ApiResponse<DepartmentResponse>> updateDepartment(
             @PathVariable String id,
-            @Valid @RequestBody DepartmentRequest request
+            @Valid @RequestBody DepartmentRequest request,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
-        return ResponseEntity.ok(ApiResponse.success("Department updated successfully", departmentService.updateDepartment(id, request)));
+        return ResponseEntity.ok(ApiResponse.success("Department updated successfully",
+                departmentService.updateDepartment(principal.userId(), id, request)));
     }
 
     @Operation(
@@ -75,6 +82,13 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Department status updated successfully",
                 departmentService.updateDepartmentStatus(id, request.status())));
+    }
+
+    @Operation(summary = "List departments headed by a user", description = "Returns every department for which the given user is currently the HOD (Head of Department). A user may be HOD of more than one department at a time. Requires `department.read` permission.")
+    @GetMapping("/heads/{userId}")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.DEPARTMENT_READ + "')")
+    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> listDepartmentsHeadedBy(@PathVariable String userId) {
+        return ResponseEntity.ok(ApiResponse.success("Departments retrieved successfully", departmentService.listDepartmentsHeadedBy(userId)));
     }
 
     @Operation(summary = "List department categories", description = "Returns active incident categories linked to a department. Requires `department.read` permission.")

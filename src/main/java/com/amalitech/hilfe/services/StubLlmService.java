@@ -35,4 +35,27 @@ public class StubLlmService implements LlmService {
         log.debug("StubLlmService: streaming FAQ answer verbatim as a single chunk");
         onChunk.accept(faqAnswer);
     }
+
+    @Override
+    public List<String> splitQuestions(String rawQuery, List<String> recentTurns) {
+        log.debug("StubLlmService: returning single question unchanged");
+        return List.of(rawQuery);
+    }
+
+    @Override
+    public String generateMultiAnswer(List<FaqMatchForAnswer> matches, List<String> unansweredSubQuestions,
+                                       String conversationSummary) {
+        log.debug("StubLlmService: concatenating FAQ answers verbatim");
+        StringBuilder sb = new StringBuilder();
+        matches.forEach(m -> sb.append(m.faqAnswer()).append("\n\n"));
+        unansweredSubQuestions.forEach(q -> sb.append("I couldn't find an answer for: ").append(q).append("\n"));
+        return sb.toString().stripTrailing();
+    }
+
+    @Override
+    public void streamMultiAnswer(List<FaqMatchForAnswer> matches, List<String> unansweredSubQuestions,
+                                   String conversationSummary, Consumer<String> onChunk) {
+        log.debug("StubLlmService: streaming concatenated FAQ answers as a single chunk");
+        onChunk.accept(generateMultiAnswer(matches, unansweredSubQuestions, conversationSummary));
+    }
 }

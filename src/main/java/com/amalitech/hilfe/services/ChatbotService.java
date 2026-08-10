@@ -22,7 +22,11 @@ import reactor.core.scheduler.Schedulers;
 import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -63,28 +67,48 @@ public class ChatbotService {
 
     private record FaqMatch(Optional<Faq> faq, double similarity) {}
 
-    private record AnswerContext(String userId, String rawQuery, String rewrittenQuery, String rollingSummary,
+    private record AnswerContext(String userId, String rawQuery, String resolvedQuery, String rollingSummary,
                                   Faq faq, double similarity, double roundedSimilarity) {}
+
+    private record SubQuestionResolution(
+            List<LlmService.FaqMatchForAnswer> matched,
+            List<Double> matchedSimilarities,
+            List<String> matchedFaqIds,
+            List<String> unanswered,
+            double bestSimilaritySeen
+    ) {}
+
+    private record MultiAnswerContext(String userId, String rawQuery, String rollingSummary, SubQuestionResolution resolution) {}
 
     public ChatbotQueryResponse query(String userId, String rawQuery) {
         log.debug("Chatbot query start | userId={} | rawQuery=\"{}\"", userId, rawQuery);
         ConversationContext ctx = contextService.getContext(userId);
 
         try {
-            String rewrittenQuery = llmService.rewriteQuery(rawQuery, ctx.recentTurns());
-            log.debug("Step 1 rewrite | rewrittenQuery=\"{}\"", rewrittenQuery);
+            List<String> subQuestions = safeSplit(rawQuery, ctx.recentTurns());
+            log.debug("Step 1 split | subQuestions={}", subQuestions.size());
 
-            float[] vector = embeddingService.embed(rewrittenQuery);
-            log.debug("Step 2 embed | dims={}", vector != null ? vector.length : 0);
+            if (subQuestions.size() == 1) {
+                String resolvedQuery = subQuestions.get(0);
+                float[] vector = embeddingService.embed(resolvedQuery);
+                log.debug("Step 2 embed | dims={}", vector != null ? vector.length : 0);
 
-            FaqMatch match = findNearestFaq(vector);
-            double roundedSimilarity = Math.round(match.similarity() * 100.0) / 100.0;
+                FaqMatch match = findNearestFaq(vector);
+                double roundedSimilarity = round2(match.similarity());
 
-            if (match.faq().isEmpty() || match.similarity() < props.confidenceThreshold()) {
-                return escalate(userId, rawQuery, match, roundedSimilarity);
+                if (match.faq().isEmpty() || match.similarity() < props.confidenceThreshold()) {
+                    return escalate(userId, rawQuery, match, roundedSimilarity);
+                }
+
+                return respondWithAnswer(userId, rawQuery, resolvedQuery, ctx, match, roundedSimilarity);
             }
 
-            return respondWithAnswer(userId, rawQuery, rewrittenQuery, ctx, match, roundedSimilarity);
+            SubQuestionResolution resolution = resolveSubQuestions(subQuestions);
+            if (resolution.matched().isEmpty()) {
+                FaqMatch synthetic = new FaqMatch(Optional.empty(), resolution.bestSimilaritySeen());
+                return escalate(userId, rawQuery, synthetic, round2(synthetic.similarity()));
+            }
+            return respondWithMultiAnswer(userId, rawQuery, ctx, resolution);
 
         } catch (ServiceUnavailableException e) {
             throw e;
@@ -93,6 +117,66 @@ public class ChatbotService {
             interactionLogService.logInteraction(userId, rawQuery, null, 0.0, OUTCOME_ERROR);
             throw new ServiceUnavailableException(CHATBOT_UNAVAILABLE_MESSAGE, e);
         }
+    }
+
+    private List<String> safeSplit(String rawQuery, List<String> recentTurns) {
+        List<String> split = llmService.splitQuestions(rawQuery, recentTurns);
+        if (split == null || split.isEmpty()) {
+            log.warn("splitQuestions returned empty — falling back to whole message");
+            return List.of(rawQuery);
+        }
+        return split.size() > props.maxSubQuestions() ? split.subList(0, props.maxSubQuestions()) : split;
+    }
+
+    private SubQuestionResolution resolveSubQuestions(List<String> subQuestions) {
+        Map<String, LlmService.FaqMatchForAnswer> byFaqId = new LinkedHashMap<>();
+        Map<String, Double> similarityByFaqId = new HashMap<>();
+        List<String> unanswered = new ArrayList<>();
+        double best = 0.0;
+
+        for (String sub : subQuestions) {
+            try {
+                float[] vector = embeddingService.embed(sub);
+                FaqMatch match = findNearestFaq(vector);
+                best = Math.max(best, match.similarity());
+                if (match.faq().isPresent() && match.similarity() >= props.confidenceThreshold()) {
+                    Faq faq = match.faq().get();
+                    byFaqId.putIfAbsent(faq.getId(), new LlmService.FaqMatchForAnswer(sub, faq.getQuestion(), faq.getAnswer()));
+                    similarityByFaqId.merge(faq.getId(), match.similarity(), Math::max);
+                } else {
+                    unanswered.add(sub);
+                }
+            } catch (Exception e) {
+                log.warn("Sub-question resolution failed, treating as unanswered | subQuestion=\"{}\" | {}", sub, e.getMessage());
+                unanswered.add(sub);
+            }
+        }
+
+        List<String> matchedFaqIds = new ArrayList<>(byFaqId.keySet());
+        return new SubQuestionResolution(
+                new ArrayList<>(byFaqId.values()),
+                matchedFaqIds.stream().map(similarityByFaqId::get).toList(),
+                matchedFaqIds,
+                unanswered,
+                best);
+    }
+
+    private static double round2(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
+    private static double average(List<Double> values) {
+        return values.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+    }
+
+    private static String highestSimilarityFaqId(SubQuestionResolution r) {
+        int bestIdx = 0;
+        for (int i = 1; i < r.matchedSimilarities().size(); i++) {
+            if (r.matchedSimilarities().get(i) > r.matchedSimilarities().get(bestIdx)) {
+                bestIdx = i;
+            }
+        }
+        return r.matchedFaqIds().get(bestIdx);
     }
 
     private FaqMatch findNearestFaq(float[] vector) {
@@ -146,13 +230,13 @@ public class ChatbotService {
         return new ChatbotQueryResponse(ESCALATION_HINT, roundedSimilarity, OUTCOME_ESCALATED);
     }
 
-    private ChatbotQueryResponse respondWithAnswer(String userId, String rawQuery, String rewrittenQuery,
+    private ChatbotQueryResponse respondWithAnswer(String userId, String rawQuery, String resolvedQuery,
                                                      ConversationContext ctx, FaqMatch match, double roundedSimilarity) {
         Faq faq = match.faq().get();
         log.debug("Step 4 threshold | PASSED | similarity={} >= threshold={}", roundedSimilarity, props.confidenceThreshold());
 
         String answer = llmService.generateAnswer(
-                rewrittenQuery,
+                resolvedQuery,
                 faq.getQuestion(),
                 faq.getAnswer(),
                 ctx.rollingSummary()
@@ -163,6 +247,21 @@ public class ChatbotService {
 
         interactionLogService.logInteraction(userId, rawQuery, faq.getId(), match.similarity(), OUTCOME_ANSWERED);
         log.debug("Chatbot query done | outcome=ANSWERED | userId={}", userId);
+
+        return new ChatbotQueryResponse(answer, roundedSimilarity, OUTCOME_ANSWERED);
+    }
+
+    private ChatbotQueryResponse respondWithMultiAnswer(String userId, String rawQuery, ConversationContext ctx,
+                                                          SubQuestionResolution r) {
+        String answer = llmService.generateMultiAnswer(r.matched(), r.unanswered(), ctx.rollingSummary());
+        double avgSimilarity = average(r.matchedSimilarities());
+        double roundedSimilarity = round2(avgSimilarity);
+        String primaryFaqId = highestSimilarityFaqId(r);
+
+        contextService.addTurn(userId, rawQuery, answer);
+        interactionLogService.logInteraction(userId, rawQuery, primaryFaqId, avgSimilarity, OUTCOME_ANSWERED);
+        log.debug("Chatbot query done | outcome=ANSWERED (multi, {} matched, {} unanswered) | userId={}",
+                r.matched().size(), r.unanswered().size(), userId);
 
         return new ChatbotQueryResponse(answer, roundedSimilarity, OUTCOME_ANSWERED);
     }
@@ -185,18 +284,29 @@ public class ChatbotService {
         log.debug("Chatbot stream start | userId={} | rawQuery=\"{}\"", userId, rawQuery);
         ConversationContext ctx = contextService.getContext(userId);
 
-        String rewrittenQuery = llmService.rewriteQuery(rawQuery, ctx.recentTurns());
-        float[] vector = embeddingService.embed(rewrittenQuery);
-        FaqMatch match = findNearestFaq(vector);
-        double roundedSimilarity = Math.round(match.similarity() * 100.0) / 100.0;
+        List<String> subQuestions = safeSplit(rawQuery, ctx.recentTurns());
 
-        if (match.faq().isEmpty() || match.similarity() < props.confidenceThreshold()) {
-            return escalationStream(userId, rawQuery, match, roundedSimilarity);
+        if (subQuestions.size() == 1) {
+            String resolvedQuery = subQuestions.get(0);
+            float[] vector = embeddingService.embed(resolvedQuery);
+            FaqMatch match = findNearestFaq(vector);
+            double roundedSimilarity = round2(match.similarity());
+
+            if (match.faq().isEmpty() || match.similarity() < props.confidenceThreshold()) {
+                return escalationStream(userId, rawQuery, match, roundedSimilarity);
+            }
+
+            AnswerContext answerContext = new AnswerContext(
+                    userId, rawQuery, resolvedQuery, ctx.rollingSummary(), match.faq().get(), match.similarity(), roundedSimilarity);
+            return answerStream(answerContext);
         }
 
-        AnswerContext answerContext = new AnswerContext(
-                userId, rawQuery, rewrittenQuery, ctx.rollingSummary(), match.faq().get(), match.similarity(), roundedSimilarity);
-        return answerStream(answerContext);
+        SubQuestionResolution resolution = resolveSubQuestions(subQuestions);
+        if (resolution.matched().isEmpty()) {
+            FaqMatch synthetic = new FaqMatch(Optional.empty(), resolution.bestSimilaritySeen());
+            return escalationStream(userId, rawQuery, synthetic, round2(synthetic.similarity()));
+        }
+        return multiAnswerStream(new MultiAnswerContext(userId, rawQuery, ctx.rollingSummary(), resolution));
     }
 
     private Flux<ChatbotAnswerChunk> escalationStream(String userId, String rawQuery, FaqMatch match, double roundedSimilarity) {
@@ -214,7 +324,7 @@ public class ChatbotService {
     private void emitAnswer(FluxSink<ChatbotAnswerChunk> sink, AnswerContext context) {
         StringBuilder fullAnswer = new StringBuilder();
         try {
-            llmService.streamAnswer(context.rewrittenQuery(), context.faq().getQuestion(), context.faq().getAnswer(),
+            llmService.streamAnswer(context.resolvedQuery(), context.faq().getQuestion(), context.faq().getAnswer(),
                     context.rollingSummary(), delta -> emitDelta(sink, fullAnswer, delta));
 
             String answer = fullAnswer.toString();
@@ -223,6 +333,41 @@ public class ChatbotService {
             log.debug("Chatbot stream done | outcome=ANSWERED | userId={}", context.userId());
 
             sink.next(ChatbotAnswerChunk.done(context.roundedSimilarity(), OUTCOME_ANSWERED));
+            sink.complete();
+        } catch (StreamCancelledException e) {
+            log.debug("Chatbot stream cancelled by client | userId={}", context.userId());
+        } catch (ServiceUnavailableException e) {
+            interactionLogService.logInteraction(context.userId(), context.rawQuery(), null, 0.0, OUTCOME_ERROR);
+            sink.error(e);
+        } catch (Exception e) {
+            log.error("Chatbot stream failed for user {}: {}", context.userId(), e.getMessage(), e);
+            interactionLogService.logInteraction(context.userId(), context.rawQuery(), null, 0.0, OUTCOME_ERROR);
+            sink.error(new ServiceUnavailableException(CHATBOT_UNAVAILABLE_MESSAGE, e));
+        }
+    }
+
+    private Flux<ChatbotAnswerChunk> multiAnswerStream(MultiAnswerContext context) {
+        return Flux.<ChatbotAnswerChunk>create(sink -> emitMultiAnswer(sink, context));
+    }
+
+    private void emitMultiAnswer(FluxSink<ChatbotAnswerChunk> sink, MultiAnswerContext context) {
+        StringBuilder fullAnswer = new StringBuilder();
+        SubQuestionResolution r = context.resolution();
+        double avgSimilarity = average(r.matchedSimilarities());
+        double roundedSimilarity = round2(avgSimilarity);
+        String primaryFaqId = highestSimilarityFaqId(r);
+
+        try {
+            llmService.streamMultiAnswer(r.matched(), r.unanswered(), context.rollingSummary(),
+                    delta -> emitDelta(sink, fullAnswer, delta));
+
+            String answer = fullAnswer.toString();
+            contextService.addTurn(context.userId(), context.rawQuery(), answer);
+            interactionLogService.logInteraction(context.userId(), context.rawQuery(), primaryFaqId, avgSimilarity, OUTCOME_ANSWERED);
+            log.debug("Chatbot stream done | outcome=ANSWERED (multi, {} matched, {} unanswered) | userId={}",
+                    r.matched().size(), r.unanswered().size(), context.userId());
+
+            sink.next(ChatbotAnswerChunk.done(roundedSimilarity, OUTCOME_ANSWERED));
             sink.complete();
         } catch (StreamCancelledException e) {
             log.debug("Chatbot stream cancelled by client | userId={}", context.userId());

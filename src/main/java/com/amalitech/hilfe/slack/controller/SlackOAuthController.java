@@ -64,28 +64,6 @@ public class SlackOAuthController {
                 .body(buildAuthorizePage(state));
     }
 
-    @GetMapping("/start")
-    @Operation(summary = "Start OAuth flow", description = "Initiates the OAuth flow for a Slack user")
-    public ResponseEntity<Map<String, String>> startOAuth(
-            @RequestParam("slack_user_id") String slackUserId,
-            @RequestParam("team_id") String teamId
-    ) {
-        if (!rateLimiter.tryAcquire(slackUserId)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(Map.of(ERROR_KEY, "Rate limit exceeded. Please try again later."));
-        }
-
-        String state = oauthService.generateOAuthState(slackUserId, teamId);
-        String oauthUrl = oauthService.buildOAuthUrl(state);
-
-        log.info("OAuth flow started for Slack user: {}", slackUserId);
-
-        return ResponseEntity.ok(Map.of(
-                "oauth_url", oauthUrl,
-                "state", state
-        ));
-    }
-
     @GetMapping("/callback")
     @Operation(summary = "OAuth callback", description = "Handles the OAuth callback after ARMS SSO authentication")
     public ResponseEntity<String> handleCallback(
