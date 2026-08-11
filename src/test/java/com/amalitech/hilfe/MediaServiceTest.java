@@ -14,6 +14,9 @@ import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.MediaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -30,6 +33,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -171,8 +175,9 @@ class MediaServiceTest {
 
     // ── video attachments ────────────────────────────────────────────────────
 
-    @Test
-    void generatePresignedUploadUrl_mp4File_returnsPresignedUrl() throws Exception {
+    @ParameterizedTest(name = "{0} ({1})")
+    @MethodSource("supportedVideoFormats")
+    void generatePresignedUploadUrl_supportedVideoFormat_returnsPresignedUrl(String fileName, String contentType) throws Exception {
         when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
         when(mediaProperties.maxVideoFileSize()).thenReturn(104_857_600L);
         when(s3Properties.bucketName()).thenReturn("test-bucket");
@@ -182,47 +187,18 @@ class MediaServiceTest {
         when(presigned.url()).thenReturn(URI.create("https://s3.example.com/presigned-put").toURL());
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
 
-        PresignedUrlRequest request = new PresignedUrlRequest("clip.mp4", "video/mp4", 52_428_800L);
+        PresignedUrlRequest request = new PresignedUrlRequest(fileName, contentType, 52_428_800L);
         PresignedUrlResponse response = mediaService.generatePresignedUploadUrl(request);
 
         assertThat(response.uploadUrl()).contains("presigned-put");
-        assertThat(response.fileKey()).endsWith("/clip.mp4");
+        assertThat(response.fileKey()).endsWith("/" + fileName);
     }
 
-    @Test
-    void generatePresignedUploadUrl_movFile_returnsPresignedUrl() throws Exception {
-        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
-        when(mediaProperties.maxVideoFileSize()).thenReturn(104_857_600L);
-        when(s3Properties.bucketName()).thenReturn("test-bucket");
-        when(s3Properties.presignExpiry()).thenReturn(Duration.ofMinutes(15));
-
-        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
-        when(presigned.url()).thenReturn(URI.create("https://s3.example.com/presigned-put").toURL());
-        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
-
-        PresignedUrlRequest request = new PresignedUrlRequest("clip.mov", "video/quicktime", 52_428_800L);
-        PresignedUrlResponse response = mediaService.generatePresignedUploadUrl(request);
-
-        assertThat(response.uploadUrl()).contains("presigned-put");
-        assertThat(response.fileKey()).endsWith("/clip.mov");
-    }
-
-    @Test
-    void generatePresignedUploadUrl_webmFile_returnsPresignedUrl() throws Exception {
-        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
-        when(mediaProperties.maxVideoFileSize()).thenReturn(104_857_600L);
-        when(s3Properties.bucketName()).thenReturn("test-bucket");
-        when(s3Properties.presignExpiry()).thenReturn(Duration.ofMinutes(15));
-
-        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
-        when(presigned.url()).thenReturn(URI.create("https://s3.example.com/presigned-put").toURL());
-        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
-
-        PresignedUrlRequest request = new PresignedUrlRequest("clip.webm", "video/webm", 52_428_800L);
-        PresignedUrlResponse response = mediaService.generatePresignedUploadUrl(request);
-
-        assertThat(response.uploadUrl()).contains("presigned-put");
-        assertThat(response.fileKey()).endsWith("/clip.webm");
+    private static Stream<Arguments> supportedVideoFormats() {
+        return Stream.of(
+                Arguments.of("clip.mp4", "video/mp4"),
+                Arguments.of("clip.mov", "video/quicktime"),
+                Arguments.of("clip.webm", "video/webm"));
     }
 
     @Test
