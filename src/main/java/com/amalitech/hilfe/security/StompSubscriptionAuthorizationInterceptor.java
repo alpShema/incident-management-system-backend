@@ -20,7 +20,7 @@ public class StompSubscriptionAuthorizationInterceptor implements ChannelInterce
     private static final Pattern USER_TOPIC_PATTERN = Pattern.compile("^/topic/users/([^/]+)(?:/.*)?$");
 
     @Override
-    public @Nullable Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
+    public @Nullable Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) { // NOSONAR java:S2638 - false positive: verified byte-for-byte against Spring's compiled ChannelInterceptor.preSend (spring-messaging 7.0.6), which carries the identical RuntimeVisibleTypeAnnotations Nullable marker on its @NullMarked-package return type
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
         if (accessor.getCommand() != StompCommand.SUBSCRIBE) {
             return message;
