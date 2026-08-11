@@ -40,6 +40,8 @@ public class ActivityLogService {
     private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
     private static final String AS_HEAD_OF_DEPARTMENT = " as head of department ";
     private static final String ACTION_INCIDENT_VIEWED = "INCIDENT_VIEWED";
+    private static final String ACTION_ATTACHMENT_UPLOADED = "INCIDENT_ATTACHMENT_UPLOADED";
+    private static final String ACTION_ATTACHMENT_UPLOAD_FAILED = "INCIDENT_ATTACHMENT_UPLOAD_FAILED";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -483,6 +485,58 @@ public class ActivityLogService {
         } catch (RuntimeException ex) {
             log.error("Failed to log internal note deletion for incident {}", incidentId, ex);
         }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logAttachmentUploaded(String actorUserId, String incidentId, String fileName, String contentType, Long fileSize) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(ACTION_ATTACHMENT_UPLOADED)
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " attached " + fileName + " to " + incidentLabel)
+                    .metadata(buildAttachmentMetadata(fileName, contentType, fileSize, null))
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log attachment upload for incident {}", incidentId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logAttachmentUploadFailed(String actorUserId, String incidentId, String fileName, String contentType, Long fileSize, String reason) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(ACTION_ATTACHMENT_UPLOAD_FAILED)
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " failed to attach " + fileName + " to " + incidentLabel + " — " + reason)
+                    .metadata(buildAttachmentMetadata(fileName, contentType, fileSize, reason))
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log attachment upload failure for incident {}", incidentId, ex);
+        }
+    }
+
+    private String buildAttachmentMetadata(String fileName, String contentType, Long fileSize, String reason) {
+        StringBuilder metadata = new StringBuilder("{\"fileName\":\"").append(escapeJson(fileName))
+                .append("\",\"contentType\":\"").append(escapeJson(contentType))
+                .append("\",\"fileSize\":").append(fileSize);
+        if (reason != null) {
+            metadata.append(",\"reason\":\"").append(escapeJson(reason)).append('"');
+        }
+        return metadata.append('}').toString();
+    }
+
+    private String escapeJson(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String resolveAgentGroupName(String agentGroupId) {

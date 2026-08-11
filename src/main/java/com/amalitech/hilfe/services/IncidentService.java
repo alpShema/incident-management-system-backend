@@ -149,7 +149,7 @@ public class IncidentService {
 
         List<MediaResponse> mediaResponses = List.of();
         if (request.attachments() != null && !request.attachments().isEmpty()) {
-            List<Media> mediaList = mediaService.createMediaForIncident(saved.getId(), request.attachments());
+            List<Media> mediaList = mediaService.createMediaForIncident(saved.getId(), request.attachments(), userId);
             mediaResponses = mediaService.toMediaResponses(mediaList);
         }
 

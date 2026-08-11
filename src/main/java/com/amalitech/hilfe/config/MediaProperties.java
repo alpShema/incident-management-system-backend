@@ -15,6 +15,12 @@ public record MediaProperties(
         long maxFileSize,
 
         @Positive
+        long maxVideoFileSize,
+
+        @Positive
+        long maxTotalAttachmentSize,
+
+        @Positive
         int maxAttachments,
 
         @NotEmpty

@@ -32,16 +32,25 @@ import java.util.UUID;
 public class MediaService {
     private static final String FILE_NOT_FOUND_MESSAGE = "One of the uploaded files could not be found.";
     private static final String FILE_VERIFICATION_FAILED_MESSAGE = "The uploaded file could not be verified. Please try again.";
-    private static final Map<String, Set<String>> ALLOWED_EXTENSIONS_BY_CONTENT_TYPE = Map.of(
-            "image/jpeg", Set.of("jpg", "jpeg"),
-            "image/png", Set.of("png"),
-            "image/gif", Set.of("gif"),
-            "image/webp", Set.of("webp"),
-            "application/pdf", Set.of("pdf"),
-            "image/svg+xml", Set.of("svg"),
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Set.of("docx"),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Set.of("xlsx"),
-            "text/plain", Set.of("txt")
+    private static final String VIDEO_CONTENT_TYPE_PREFIX = "video/";
+    private static final Map<String, Set<String>> ALLOWED_EXTENSIONS_BY_CONTENT_TYPE = Map.ofEntries(
+            Map.entry("image/jpeg", Set.of("jpg", "jpeg")),
+            Map.entry("image/png", Set.of("png")),
+            Map.entry("image/gif", Set.of("gif")),
+            Map.entry("image/webp", Set.of("webp")),
+            Map.entry("application/pdf", Set.of("pdf")),
+            Map.entry("image/svg+xml", Set.of("svg")),
+            Map.entry("application/vnd.openxmlformats-officedocument.wordprocessingml.document", Set.of("docx")),
+            Map.entry("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Set.of("xlsx")),
+            Map.entry("text/plain", Set.of("txt")),
+            Map.entry("video/mp4", Set.of("mp4")),
+            Map.entry("video/quicktime", Set.of("mov", "qt")),
+            Map.entry("video/webm", Set.of("webm"))
+    );
+    private static final Map<String, String> VIDEO_FORMAT_LABELS = Map.of(
+            "video/mp4", "MP4",
+            "video/quicktime", "MOV",
+            "video/webm", "WEBM"
     );
 
     private final S3Presigner s3Presigner;
@@ -50,10 +59,11 @@ public class MediaService {
     private final MediaProperties mediaProperties;
     private final MediaRepository mediaRepository;
     private final MessageMediaRepository messageMediaRepository;
+    private final ActivityLogService activityLogService;
 
     public PresignedUrlResponse generatePresignedUploadUrl(PresignedUrlRequest request) {
         validateContentType(request.contentType());
-        validateFileSize(request.fileSize());
+        validateFileSize(request.contentType(), request.fileSize());
         validateFileNameAndExtension(request.fileName(), request.contentType());
 
         String mediaId = UUID.randomUUID().toString();
@@ -63,7 +73,7 @@ public class MediaService {
 
     public PresignedUrlResponse generateMessagePresignedUploadUrl(PresignedUrlRequest request) {
         validateContentType(request.contentType());
-        validateFileSize(request.fileSize());
+        validateFileSize(request.contentType(), request.fileSize());
         validateFileNameAndExtension(request.fileName(), request.contentType());
 
         String messageMediaId = UUID.randomUUID().toString();
@@ -72,26 +82,37 @@ public class MediaService {
     }
 
     public List<MessageMedia> createMediaForMessage(String incidentId, String messageId, List<AttachmentRef> attachments) {
+        return createMediaForMessage(incidentId, messageId, attachments, null);
+    }
+
+    public List<MessageMedia> createMediaForMessage(String incidentId, String messageId, List<AttachmentRef> attachments, String actorUserId) {
         validateAttachments(attachments);
 
         return attachments.stream()
                 .map(ref -> {
-                    validateFileKey(ref.fileKey(), "messages/");
-                    validateContentType(ref.contentType());
-                    validateFileSize(ref.fileSize());
-                    validateFileNameAndExtension(ref.originalName(), ref.contentType());
-                    verifyUploadedObject(ref);
+                    try {
+                        validateFileKey(ref.fileKey(), "messages/");
+                        validateContentType(ref.contentType());
+                        validateFileSize(ref.contentType(), ref.fileSize());
+                        validateFileNameAndExtension(ref.originalName(), ref.contentType());
+                        verifyUploadedObject(ref);
 
-                    MessageMedia messageMedia = MessageMedia.builder()
-                            .id(UUID.randomUUID().toString())
-                            .messageId(messageId)
-                            .incidentId(incidentId)
-                            .originalName(ref.originalName())
-                            .fileKey(ref.fileKey())
-                            .contentType(ref.contentType())
-                            .fileSize(ref.fileSize())
-                            .build();
-                    return messageMediaRepository.save(messageMedia);
+                        MessageMedia messageMedia = MessageMedia.builder()
+                                .id(UUID.randomUUID().toString())
+                                .messageId(messageId)
+                                .incidentId(incidentId)
+                                .originalName(ref.originalName())
+                                .fileKey(ref.fileKey())
+                                .contentType(ref.contentType())
+                                .fileSize(ref.fileSize())
+                                .build();
+                        MessageMedia saved = messageMediaRepository.save(messageMedia);
+                        activityLogService.logAttachmentUploaded(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize());
+                        return saved;
+                    } catch (ArmsAuthException ex) {
+                        activityLogService.logAttachmentUploadFailed(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize(), ex.getMessage());
+                        throw ex;
+                    }
                 })
                 .toList();
     }
@@ -124,26 +145,37 @@ public class MediaService {
     }
 
     public List<Media> createMediaForIncident(String incidentId, List<AttachmentRef> attachments) {
+        return createMediaForIncident(incidentId, attachments, null);
+    }
+
+    public List<Media> createMediaForIncident(String incidentId, List<AttachmentRef> attachments, String actorUserId) {
         validateAttachments(attachments);
 
         return attachments.stream()
                 .map(ref -> {
-                    validateFileKey(ref.fileKey(), "media/");
-                    validateContentType(ref.contentType());
-                    validateFileSize(ref.fileSize());
-                    validateFileNameAndExtension(ref.originalName(), ref.contentType());
-                    verifyUploadedObject(ref);
+                    try {
+                        validateFileKey(ref.fileKey(), "media/");
+                        validateContentType(ref.contentType());
+                        validateFileSize(ref.contentType(), ref.fileSize());
+                        validateFileNameAndExtension(ref.originalName(), ref.contentType());
+                        verifyUploadedObject(ref);
 
-                    Media media = Media.builder()
-                            .id(UUID.randomUUID().toString())
-                            .incidentId(incidentId)
-                            .originalName(ref.originalName())
-                            .fileKey(ref.fileKey())
-                            .url(stableObjectUrl(ref.fileKey()))
-                            .contentType(ref.contentType())
-                            .fileSize(ref.fileSize())
-                            .build();
-                    return mediaRepository.save(media);
+                        Media media = Media.builder()
+                                .id(UUID.randomUUID().toString())
+                                .incidentId(incidentId)
+                                .originalName(ref.originalName())
+                                .fileKey(ref.fileKey())
+                                .url(stableObjectUrl(ref.fileKey()))
+                                .contentType(ref.contentType())
+                                .fileSize(ref.fileSize())
+                                .build();
+                        Media saved = mediaRepository.save(media);
+                        activityLogService.logAttachmentUploaded(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize());
+                        return saved;
+                    } catch (ArmsAuthException ex) {
+                        activityLogService.logAttachmentUploadFailed(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize(), ex.getMessage());
+                        throw ex;
+                    }
                 })
                 .toList();
     }
@@ -179,6 +211,13 @@ public class MediaService {
                 throw new ArmsAuthException("This file has already been attached.", 400);
             }
         }
+
+        long totalSize = attachments.stream().mapToLong(AttachmentRef::fileSize).sum();
+        if (totalSize > mediaProperties.maxTotalAttachmentSize()) {
+            throw new ArmsAuthException(
+                    "The combined size of all attachments exceeds the maximum allowed total of "
+                            + mediaProperties.maxTotalAttachmentSize() + " bytes.", 400);
+        }
     }
 
     private void validateFileKey(String fileKey, String prefix) {
@@ -187,20 +226,41 @@ public class MediaService {
         }
     }
 
-    private void validateContentType(String contentType) {
-        if (!mediaProperties.allowedContentTypes().contains(contentType)) {
-            throw new ArmsAuthException(
-                    "This file type is not supported. Allowed file types: "
-                            + String.join(", ", mediaProperties.allowedContentTypes()) + ".",
-                    400);
-        }
+    private boolean isVideoContentType(String contentType) {
+        return contentType != null && contentType.startsWith(VIDEO_CONTENT_TYPE_PREFIX);
     }
 
-    private void validateFileSize(long fileSize) {
-        if (fileSize > mediaProperties.maxFileSize()) {
+    private void validateContentType(String contentType) {
+        if (mediaProperties.allowedContentTypes().contains(contentType)) {
+            return;
+        }
+
+        if (isVideoContentType(contentType)) {
+            List<String> supportedVideoFormats = mediaProperties.allowedContentTypes().stream()
+                    .filter(this::isVideoContentType)
+                    .map(ct -> VIDEO_FORMAT_LABELS.getOrDefault(ct, ct) + " (" + ct + ")")
+                    .toList();
             throw new ArmsAuthException(
-                    "This file exceeds the maximum allowed size of "
-                            + mediaProperties.maxFileSize() + " bytes.",
+                    supportedVideoFormats.isEmpty()
+                            ? "Video attachments are not currently supported."
+                            : "This video format is not supported. Supported video formats: "
+                                    + String.join(", ", supportedVideoFormats) + ".",
+                    400);
+        }
+
+        throw new ArmsAuthException(
+                "This file type is not supported. Allowed file types: "
+                        + String.join(", ", mediaProperties.allowedContentTypes()) + ".",
+                400);
+    }
+
+    private void validateFileSize(String contentType, long fileSize) {
+        boolean isVideo = isVideoContentType(contentType);
+        long limit = isVideo ? mediaProperties.maxVideoFileSize() : mediaProperties.maxFileSize();
+        if (fileSize > limit) {
+            throw new ArmsAuthException(
+                    "This " + (isVideo ? "video" : "file") + " exceeds the maximum allowed size of "
+                            + limit + " bytes.",
                     400);
         }
     }

@@ -49,8 +49,10 @@ services:
       S3_SECRET_ACCESS_KEY:        ${S3_SECRET_ACCESS_KEY:-}
       S3_PRESIGN_EXPIRY:           ${S3_PRESIGN_EXPIRY:-3600}
       MEDIA_MAX_FILE_SIZE:         ${MEDIA_MAX_FILE_SIZE:-10485760}
+      MEDIA_MAX_VIDEO_FILE_SIZE:   ${MEDIA_MAX_VIDEO_FILE_SIZE:-104857600}
+      MEDIA_MAX_TOTAL_ATTACHMENT_SIZE: ${MEDIA_MAX_TOTAL_ATTACHMENT_SIZE:-314572800}
       MEDIA_MAX_ATTACHMENTS:       ${MEDIA_MAX_ATTACHMENTS:-5}
-      MEDIA_ALLOWED_CONTENT_TYPES: ${MEDIA_ALLOWED_CONTENT_TYPES:-image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain}
+      MEDIA_ALLOWED_CONTENT_TYPES: ${MEDIA_ALLOWED_CONTENT_TYPES:-image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,video/mp4,video/quicktime,video/webm}
       SLACK_ENABLED: ${SLACK_ENABLED}
       SLACK_NOTIFICATIONS_ENABLED: ${SLACK_NOTIFICATIONS_ENABLED}
       SLACK_AGENT_FEATURES_ENABLED: ${SLACK_AGENT_FEATURES_ENABLED}
