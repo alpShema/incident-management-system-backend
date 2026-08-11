@@ -7,6 +7,7 @@ import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AdminService;
+import com.amalitech.hilfe.services.IncidentService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -28,6 +29,7 @@ class AdminServiceTest {
 
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
+    @Mock IncidentService incidentService;
     @InjectMocks AdminService adminService;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -166,6 +168,7 @@ class AdminServiceTest {
         verify(agentRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isFalse();
         assertThat(result.status()).isFalse();
+        verify(incidentService).unassignAllForDeactivatedAgent("agent-1", null);
     }
 
     // ── revokeAgentAccess ─────────────────────────────────────────────────────
@@ -216,6 +219,7 @@ class AdminServiceTest {
         verify(agentRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isFalse();
         assertThat(result.status()).isFalse();
+        verify(incidentService).unassignAllForDeactivatedAgent("agent-1", null);
     }
 
     @Test
@@ -228,6 +232,7 @@ class AdminServiceTest {
 
         verify(agentRepository, never()).save(any(Agent.class));
         assertThat(result.status()).isFalse();
+        verify(incidentService, never()).unassignAllForDeactivatedAgent(any(), any());
     }
 
     // ── getAgentAccess ────────────────────────────────────────────────────────

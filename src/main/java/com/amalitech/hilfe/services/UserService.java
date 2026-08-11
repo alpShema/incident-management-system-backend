@@ -27,6 +27,7 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final ActivityLogService activityLogService;
     private final RoleAccessSyncService roleAccessSyncService;
+    private final IncidentService incidentService;
 
     public Page<UserRoleSummaryResponse> getUsers(
             String query, String roleCode, String locationId, Boolean status,
@@ -97,6 +98,9 @@ public class UserService {
         agentRepository.findByUserId(targetUserId).ifPresent(agent -> {
             agent.setStatus(status);
             agentRepository.save(agent);
+            if (!status) {
+                incidentService.unassignAllForDeactivatedAgent(agent.getId(), actorUserId);
+            }
         });
 
         return new UserRoleSummaryResponse(

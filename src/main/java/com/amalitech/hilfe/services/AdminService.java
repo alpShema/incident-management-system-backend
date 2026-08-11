@@ -20,6 +20,7 @@ public class AdminService {
 
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
+    private final IncidentService incidentService;
 
     @Transactional
     public AgentResponse grantAgentAccess(String adminUserId) {
@@ -64,6 +65,7 @@ public class AdminService {
         if (Boolean.TRUE.equals(agent.getStatus())) {
             agent.setStatus(false);
             agentRepository.save(agent);
+            incidentService.unassignAllForDeactivatedAgent(agent.getId(), null);
         }
 
         return agentRepository.findByUserIdWithUser(adminUserId)

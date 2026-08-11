@@ -18,6 +18,7 @@ import com.amalitech.hilfe.repositories.MessageMediaRepository;
 import com.amalitech.hilfe.repositories.MessageRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.notifications.NotificationEventPublisher;
+import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.MessageService;
 import com.amalitech.hilfe.services.SlaService;
@@ -54,6 +55,7 @@ class MessageServiceTest {
     @Mock SlaService slaService;
     @Mock SimpMessagingTemplate messagingTemplate;
     @Mock NotificationEventPublisher notificationEventPublisher;
+    @Mock IncidentService incidentService;
     @InjectMocks MessageService messageService;
 
     @Test
@@ -198,6 +200,54 @@ class MessageServiceTest {
         assertThat(result.id()).isEqualTo("msg-1");
         verify(slaService).onAgentMessageSent(incident, "u-assignee");
         verify(messagingTemplate).convertAndSend(eq("/topic/incidents/inc-1/messages"), any(MessageResponse.class));
+    }
+
+    @Test
+    void sendMessage_firstAgentResponse_triggersOpenToInProgressTransition() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .userId("u1")
+                .assignedToId("agent-assignee")
+                .build();
+        Agent assigneeAgent = Agent.builder().id("agent-assignee").userId("u-assignee").status(true).build();
+        User sender = User.builder().id("u-assignee").fullName("Assignee").email("a@test.com").build();
+        Message saved = Message.builder()
+                .id("msg-1").incidentId("inc-1").senderId("u-assignee").content("hi")
+                .createdAt(FIXED_NOW).updatedAt(FIXED_NOW).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("u-assignee")).thenReturn(Optional.of(assigneeAgent));
+        when(userRepository.findById("u-assignee")).thenReturn(Optional.of(sender));
+        when(messageRepository.save(any(Message.class))).thenReturn(saved);
+        when(slaService.onAgentMessageSent(incident, "u-assignee")).thenReturn(true);
+
+        messageService.sendMessage("u-assignee", "AGENT", "inc-1", "hi", List.of());
+
+        verify(incidentService).onFirstAgentResponse(incident, "u-assignee");
+    }
+
+    @Test
+    void sendMessage_notFirstAgentResponse_doesNotTriggerTransition() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .userId("u1")
+                .assignedToId("agent-assignee")
+                .build();
+        Agent assigneeAgent = Agent.builder().id("agent-assignee").userId("u-assignee").status(true).build();
+        User sender = User.builder().id("u-assignee").fullName("Assignee").email("a@test.com").build();
+        Message saved = Message.builder()
+                .id("msg-1").incidentId("inc-1").senderId("u-assignee").content("hi")
+                .createdAt(FIXED_NOW).updatedAt(FIXED_NOW).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("u-assignee")).thenReturn(Optional.of(assigneeAgent));
+        when(userRepository.findById("u-assignee")).thenReturn(Optional.of(sender));
+        when(messageRepository.save(any(Message.class))).thenReturn(saved);
+        when(slaService.onAgentMessageSent(incident, "u-assignee")).thenReturn(false);
+
+        messageService.sendMessage("u-assignee", "AGENT", "inc-1", "hi", List.of());
+
+        verify(incidentService, never()).onFirstAgentResponse(any(), any());
     }
 
     @Test

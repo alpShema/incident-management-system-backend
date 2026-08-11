@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +42,7 @@ public class DashboardService {
     private static final String STATUS_IN_PROGRESS = "in progress";
     private static final String STATUS_RESOLVED = "resolved";
     private static final String STATUS_CLOSED = "closed";
+    private static final String STATUS_UNASSIGNED = "unassigned";
 
     // Reopened is a transition trigger (IncidentService.applyReopenTransition immediately flips it
     // back to In Progress within the same transaction), never a resting status — excluded here so
@@ -48,6 +50,12 @@ public class DashboardService {
     private static final Set<String> DASHBOARD_STATUS_NAMES = Set.of(
             STATUS_OPEN, STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_RESOLVED, STATUS_CLOSED
     );
+
+    // Unassigned is only meaningful to admin-level dashboards -- ADMIN, ADMIN_AGENT, or SUPER_ADMIN --
+    // agents never see this card, so it's layered on top of the base set rather than included in it.
+    private static final Set<String> ADMIN_DASHBOARD_STATUS_NAMES = Stream.concat(
+            DASHBOARD_STATUS_NAMES.stream(), Stream.of(STATUS_UNASSIGNED)
+    ).collect(Collectors.toUnmodifiableSet());
 
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
@@ -64,9 +72,9 @@ public class DashboardService {
                         return new DashboardStats(total,
                                 countFor(byStatus, STATUS_OPEN), countFor(byStatus, STATUS_PENDING),
                                 countFor(byStatus, STATUS_IN_PROGRESS),
-                                countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED));
+                                countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED), 0);
                     })
-                    .orElse(new DashboardStats(0, 0, 0, 0, 0, 0));
+                    .orElse(new DashboardStats(0, 0, 0, 0, 0, 0, 0));
         }
 
         if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
@@ -75,7 +83,8 @@ public class DashboardService {
             return new DashboardStats(total,
                     countFor(byStatus, STATUS_OPEN), countFor(byStatus, STATUS_PENDING),
                     countFor(byStatus, STATUS_IN_PROGRESS),
-                    countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED));
+                    countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED),
+                    countFor(byStatus, STATUS_UNASSIGNED));
         }
 
         throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
@@ -92,7 +101,7 @@ public class DashboardService {
             case ADMIN, ADMIN_AGENT, SUPER_ADMIN -> {
                 byStatus = fillStatusGaps(toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
-                        : incidentRepository.countByStatusGlobal()));
+                        : incidentRepository.countByStatusGlobal()), ADMIN_DASHBOARD_STATUS_NAMES);
                 List<MonthlyCount> allTrend = fillMonthGaps(
                         toMonthlyCount(incidentRepository.countByMonthSince(trendSince)),
                         trendSince);
@@ -101,8 +110,8 @@ public class DashboardService {
             case AGENT -> {
                 var agentOpt = agentRepository.findByUserId(userId);
                 byStatus = agentOpt.map(agent -> fillStatusGaps(toLabel(
-                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince))))
-                        .orElseGet(this::allStatusesZero);
+                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince)), DASHBOARD_STATUS_NAMES))
+                        .orElseGet(() -> allStatusesZero(DASHBOARD_STATUS_NAMES));
                 List<MonthlyCount> myTrend = fillMonthGaps(
                         toMonthlyCount(incidentRepository.countByMonthForUser(userId, trendSince)),
                         trendSince);
@@ -223,25 +232,25 @@ public class DashboardService {
         return full;
     }
 
-    private List<String> dashboardStatusNames() {
+    private List<String> dashboardStatusNames(Set<String> statusNames) {
         return statusRepository.findAll().stream()
                 .map(Status::getName)
-                .filter(name -> name != null && DASHBOARD_STATUS_NAMES.contains(name.toLowerCase()))
+                .filter(name -> name != null && statusNames.contains(name.toLowerCase()))
                 .sorted()
                 .toList();
     }
 
-    private List<LabelCount> fillStatusGaps(List<LabelCount> counted) {
+    private List<LabelCount> fillStatusGaps(List<LabelCount> counted, Set<String> statusNames) {
         Map<String, Integer> countByName = counted.stream()
                 .filter(c -> c.label() != null)
                 .collect(Collectors.toMap(c -> c.label().toLowerCase(), LabelCount::count));
-        return dashboardStatusNames().stream()
+        return dashboardStatusNames(statusNames).stream()
                 .map(name -> new LabelCount(name, countByName.getOrDefault(name.toLowerCase(), 0)))
                 .toList();
     }
 
-    private List<LabelCount> allStatusesZero() {
-        return dashboardStatusNames().stream()
+    private List<LabelCount> allStatusesZero(Set<String> statusNames) {
+        return dashboardStatusNames(statusNames).stream()
                 .map(name -> new LabelCount(name, 0))
                 .toList();
     }

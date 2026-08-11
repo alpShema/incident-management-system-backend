@@ -25,6 +25,7 @@ public class IncidentService {
 
     private static final String DEFAULT_PRIORITY_NAME = "Low";
     private static final String STATUS_OPEN = "status-open";
+    private static final String STATUS_UNASSIGNED = "status-unassigned";
     private static final String STATUS_PENDING = "status-pending";
     private static final String STATUS_RESOLVED = "status-resolved";
     private static final String STATUS_CLOSED = "status-closed";
@@ -394,28 +395,35 @@ public class IncidentService {
         // Capture the previous agent's userId BEFORE overwriting assignedToId
         String previousAgentUserId = resolveAgentUserId(incident.getAssignedToId());
         boolean isFirstAssignment = incident.getAssignedToId() == null;
+        String agentUserId = resolveAgentUserId(request.agentId());
+
+        // A reassignment is a previous agent being replaced by a different agent; anything else
+        // (no previous agent, or reassigning to the same agent) is treated as an initial assignment.
+        boolean isReassignment = previousAgentUserId != null && !previousAgentUserId.equals(agentUserId);
 
         incident.setAssignedToId(request.agentId());
 
-        // Only auto-activate on first pickup; never clobber a status set in the same edit.
-        if (isFirstAssignment) {
-            String inProgressStatusId = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
-                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
-                    .getId();
-            incident.setStatusId(inProgressStatusId);
+        // A first pickup and a reassignment both hand the incident to someone who hasn't replied
+        // yet, so both land on Open -- never re-activate straight to In Progress here; that only
+        // happens once the newly assigned agent actually sends their first chat reply (see
+        // onFirstAgentResponse). Never clobber a status set in the same edit otherwise.
+        if (isFirstAssignment || isReassignment) {
+            incident.setStatusId(STATUS_OPEN);
+        }
+        if (isReassignment) {
+            // The new agent hasn't responded yet -- restart the response timer so their first
+            // reply still triggers Open->In Progress instead of being silently swallowed by the
+            // "already responded" guard left over from the previous agent.
+            resetFirstResponseTracking(incident);
         }
 
         incidentRepository.save(incident);
         activityLogService.logIncidentAssignment(actorUserId, incidentId, request.agentId());
 
-        String agentUserId = resolveAgentUserId(request.agentId());
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
         String actorName = resolveActorName(actorUserId);
         String newAssigneeName = resolveAgentFullName(request.agentId());
 
-        // A reassignment is a previous agent being replaced by a different agent; anything else
-        // (no previous agent, or reassigning to the same agent) is treated as an initial assignment.
-        boolean isReassignment = previousAgentUserId != null && !previousAgentUserId.equals(agentUserId);
         if (isReassignment) {
             notificationEventPublisher.publish(new IncidentReassignedEvent(agentUserId, incidentId, incidentNo, actorName));
             notificationEventPublisher.publish(new IncidentUnassignedEvent(previousAgentUserId, incidentId, incidentNo, actorName, newAssigneeName));
@@ -512,7 +520,8 @@ public class IncidentService {
             assignViaSingleAgent(incident, incidentType, creatorAgentId);
             return;
         }
-        incident.setStatusId(STATUS_OPEN);
+        // No topic owner configured at all -- nobody to route this to.
+        incident.setStatusId(STATUS_UNASSIGNED);
     }
 
     private void assignViaAgentGroup(Incident incident, IncidentType incidentType, String creatorAgentId) {
@@ -520,7 +529,7 @@ public class IncidentService {
                 .orElseThrow(() -> new ArmsAuthException("Topic agent group not found", 404));
 
         if (!Boolean.TRUE.equals(agentGroup.getStatus())) {
-            incident.setStatusId(STATUS_OPEN);
+            incident.setStatusId(STATUS_UNASSIGNED);
             return;
         }
 
@@ -529,14 +538,16 @@ public class IncidentService {
             assignedAgent.setLastAssignedAt(Instant.now());
             agentRepository.save(assignedAgent);
             incident.setAssignedToId(assignedAgent.getId());
-            incident.setStatusId(statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
-                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
-                    .getId());
+            // Auto-assigned but not yet responded to -- Open, not In Progress. The transition to
+            // In Progress happens only once this agent sends their first chat reply (see
+            // onFirstAgentResponse).
+            incident.setStatusId(STATUS_OPEN);
             if (creatorAgentId != null) {
                 activityLogService.logSelfAssignmentPrevented(incident.getId(), creatorAgentId, assignedAgent.getId());
             }
         } else {
-            incident.setStatusId(STATUS_OPEN);
+            // No agent available to auto-assign -- nobody is on this yet.
+            incident.setStatusId(STATUS_UNASSIGNED);
             if (creatorAgentId != null) {
                 activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
             }
@@ -553,11 +564,11 @@ public class IncidentService {
             agent.setLastAssignedAt(Instant.now());
             agentRepository.save(agent);
             incident.setAssignedToId(incidentType.getAgentId());
-            incident.setStatusId(statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
-                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
-                    .getId());
-        } else {
+            // Auto-assigned but not yet responded to -- Open, not In Progress (see above).
             incident.setStatusId(STATUS_OPEN);
+        } else {
+            // No agent available to auto-assign -- nobody is on this yet.
+            incident.setStatusId(STATUS_UNASSIGNED);
             if (isSelf) {
                 activityLogService.logSelfAssignmentEscalated(incident.getId(), creatorAgentId);
             }
@@ -629,23 +640,27 @@ public class IncidentService {
     }
 
     private void applyReopenTransition(String actorUserId, Incident incident, String incidentId) {
-        Status inProgressStatus = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
-                .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500));
-
         String previousAgentId = incident.getAssignedToId();
-        if (previousAgentId != null) {
-            boolean agentActive = agentRepository.findById(previousAgentId)
-                    .map(a -> Boolean.TRUE.equals(a.getStatus()))
-                    .orElse(false);
-            if (!agentActive) {
-                incident.setAssignedToId(null);
-            }
+        boolean agentActive = previousAgentId != null && agentRepository.findById(previousAgentId)
+                .map(a -> Boolean.TRUE.equals(a.getStatus()))
+                .orElse(false);
+
+        String newStatusName;
+        if (previousAgentId != null && !agentActive) {
+            // No live agent to hand this back to -- Unassigned, not a phantom "In Progress" with
+            // nobody actually assigned to it.
+            resetToUnassigned(incident);
+            newStatusName = "Unassigned";
+        } else {
+            Status inProgressStatus = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                    .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500));
+            incident.setStatusId(inProgressStatus.getId());
+            newStatusName = STATUS_NAME_IN_PROGRESS;
         }
 
-        incident.setStatusId(inProgressStatus.getId());
         incident.setResolvedAt(null);
         incidentRepository.save(incident);
-        activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", STATUS_NAME_IN_PROGRESS);
+        activityLogService.logIncidentStatusChange(actorUserId, incidentId, "Reopened", newStatusName);
         if (incident.getAssignedToId() == null && previousAgentId != null) {
             activityLogService.logIncidentUnassignment(actorUserId, incidentId, previousAgentId);
         }
@@ -654,6 +669,64 @@ public class IncidentService {
         String agentUserId = resolveAgentUserId(incident.getAssignedToId());
         int incidentNo = incident.getIncidentNo() != null ? incident.getIncidentNo() : 0;
         notificationEventPublisher.publish(new IncidentReopenedEvent(agentUserId, incidentId, incidentNo, resolveActorName(actorUserId)));
+    }
+
+    /**
+     * Puts an incident back to square one: no assignee, Unassigned status, and a clean response
+     * timer for whoever picks it up next. Shared by the reopen flow above (previous agent has
+     * gone inactive) and agent-deactivation handling (unassignAllForDeactivatedAgent) so both
+     * "this incident has no one who can respond to it right now" cases behave identically.
+     * Callers are responsible for persisting the incident afterward.
+     */
+    private void resetToUnassigned(Incident incident) {
+        incident.setAssignedToId(null);
+        incident.setStatusId(STATUS_UNASSIGNED);
+        slaService.resetFirstResponse(incident.getId());
+    }
+
+    /**
+     * Restarts response-SLA tracking without touching assignment/status -- used when the caller
+     * is already setting those fields itself (e.g. assignIncident's reassignment branch).
+     */
+    private void resetFirstResponseTracking(Incident incident) {
+        slaService.resetFirstResponse(incident.getId());
+    }
+
+    /**
+     * Moves an incident from Open to In Progress the moment its assigned agent sends their first
+     * chat reply. A no-op for any other current status -- this only ever fires once per incident
+     * per assignment, driven by SlaService#onAgentMessageSent reporting a genuine first response.
+     */
+    @Transactional
+    public void onFirstAgentResponse(Incident incident, String actorUserId) {
+        if (!STATUS_OPEN.equals(incident.getStatusId())) {
+            return;
+        }
+        String inProgressId = statusRepository.findByNameIgnoreCase(STATUS_NAME_IN_PROGRESS)
+                .orElseThrow(() -> new ArmsAuthException(IN_PROGRESS_NOT_CONFIGURED, 500))
+                .getId();
+        incident.setStatusId(inProgressId);
+        incidentRepository.save(incident);
+        activityLogService.logIncidentStatusChange(actorUserId, incident.getId(), "Open", STATUS_NAME_IN_PROGRESS);
+        dispatchStatusNotifications(incident, "Open", STATUS_NAME_IN_PROGRESS, null, actorUserId);
+    }
+
+    /**
+     * Called whenever an agent account is deactivated (UserService#updateUserStatus,
+     * AdminService, RoleAccessSyncService) -- any incident still assigned to them that hasn't
+     * reached a terminal status goes back to Unassigned rather than silently staying "assigned"
+     * to an agent who can no longer act on it. actorUserId may be null for system-driven
+     * deactivations that have no human actor to attribute the resulting unassignment to.
+     */
+    @Transactional
+    public void unassignAllForDeactivatedAgent(String agentId, String actorUserId) {
+        List<Incident> openIncidents = incidentRepository
+                .findByAssignedToIdAndStatusIdNotIn(agentId, List.of(STATUS_RESOLVED, STATUS_CLOSED));
+        for (Incident incident : openIncidents) {
+            resetToUnassigned(incident);
+            incidentRepository.save(incident);
+            activityLogService.logIncidentUnassignment(actorUserId, incident.getId(), agentId);
+        }
     }
 
     private boolean requiresReason(Status newStatus) {
@@ -768,6 +841,17 @@ public class IncidentService {
         // Holders of incident.forceclose may force-close any incident regardless of current status
         if (hasForceClose && STATUS_CLOSED.equals(toId)) {
             return;
+        }
+
+        // Open has no VALID_TRANSITIONS entry by design -- the only way out of Open is the
+        // assigned agent's first chat reply (see onFirstAgentResponse), never a direct status
+        // update. Give a friendly, specific message instead of falling through to the generic
+        // "cannot be moved from X to Y" below.
+        if (STATUS_OPEN.equals(fromId)) {
+            throw new ArmsAuthException(
+                    "This incident is Open. Send a message in the chat to move it to 'In Progress' before changing its status.",
+                    422
+            );
         }
 
         // If the requester is the incident creator, treat them as CLIENT for this incident

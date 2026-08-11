@@ -23,6 +23,7 @@ public class RoleAccessSyncService {
     private final AgentRepository agentRepository;
     private final AdminRepository adminRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final IncidentService incidentService;
 
     public void syncAgentRecord(User user, String roleCode) {
         boolean needsAgentRecord = "AGENT".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
@@ -49,6 +50,7 @@ public class RoleAccessSyncService {
             if (Boolean.TRUE.equals(agent.getStatus())) {
                 agent.setStatus(false);
                 agentRepository.save(agent);
+                incidentService.unassignAllForDeactivatedAgent(agent.getId(), null);
             }
             agentGroupMemberRepository.deleteByAgentId(agent.getId());
         });

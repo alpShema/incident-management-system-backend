@@ -11,6 +11,7 @@ import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.RoleAccessSyncService;
 import com.amalitech.hilfe.services.UserService;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ class UserServiceTest {
     @Mock RoleRepository roleRepository;
     @Mock ActivityLogService activityLogService;
     @Mock RoleAccessSyncService roleAccessSyncService;
+    @Mock IncidentService incidentService;
     @InjectMocks UserService userService;
 
     private Role role(String code, String name) {
@@ -111,6 +113,7 @@ class UserServiceTest {
         assertThat(agent.getStatus()).isFalse();
         verify(userRepository).save(user);
         verify(agentRepository).save(agent);
+        verify(incidentService).unassignAllForDeactivatedAgent("agent-1", "admin-1");
     }
 
     @Test
@@ -128,6 +131,7 @@ class UserServiceTest {
         assertThat(agent.getStatus()).isTrue();
         verify(userRepository).save(user);
         verify(agentRepository).save(agent);
+        verify(incidentService, never()).unassignAllForDeactivatedAgent(any(), any());
     }
 
     @Test
@@ -142,6 +146,7 @@ class UserServiceTest {
         assertThat(user.getStatus()).isFalse();
         verify(userRepository).save(user);
         verify(agentRepository, never()).save(any(Agent.class));
+        verify(incidentService, never()).unassignAllForDeactivatedAgent(any(), any());
     }
 
     @Test
@@ -159,6 +164,7 @@ class UserServiceTest {
         assertThat(agent.getStatus()).isFalse();
         verify(userRepository).save(user);
         verify(agentRepository).save(agent);
+        verify(incidentService).unassignAllForDeactivatedAgent("agent-1", "admin-1");
     }
 
     @Test

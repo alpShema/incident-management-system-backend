@@ -531,6 +531,7 @@ type DashboardStats {
   inProgressCount: Long!
   closedCount: Long!
   resolvedCount: Long!
+  unassignedCount: Long!
 }
 
 type DashboardCharts {

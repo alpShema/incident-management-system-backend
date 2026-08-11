@@ -93,20 +93,26 @@ public class SlaService {
         incidentSlaRepository.save(sla);
     }
 
+    /**
+     * Returns true only when this call just recorded the assigned agent's very first response
+     * (false for messages from anyone else, or subsequent messages from the assigned agent) --
+     * callers use this to detect the exact moment that should drive an Open-&gt;In-Progress
+     * incident status transition (see IncidentService#onFirstAgentResponse).
+     */
     @Transactional
-    public void onAgentMessageSent(Incident incident, String senderUserId) {
+    public boolean onAgentMessageSent(Incident incident, String senderUserId) {
         if (incident == null || incident.getId() == null || senderUserId == null) {
-            return;
+            return false;
         }
 
         String assignedAgentUserId = resolveAssignedAgentUserId(incident);
         if (assignedAgentUserId == null || !assignedAgentUserId.equals(senderUserId)) {
-            return;
+            return false;
         }
 
-        incidentSlaRepository.findById(incident.getId()).ifPresent(sla -> {
+        return incidentSlaRepository.findById(incident.getId()).map(sla -> {
             if (sla.getFirstResponseAt() != null) {
-                return;
+                return false;
             }
 
             Instant now = Instant.now();
@@ -114,6 +120,30 @@ public class SlaService {
             sla.setResponseElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
             if (sla.getResponseDueAt() != null && now.isAfter(sla.getResponseDueAt()) && sla.getResponseBreachedAt() == null) {
                 sla.setResponseBreachedAt(sla.getResponseDueAt());
+            }
+            refreshMaterializedStatus(sla, now, readAtRiskPercentage());
+            incidentSlaRepository.save(sla);
+            return true;
+        }).orElse(false);
+    }
+
+    /**
+     * Reassignment (or unassignment) hands the incident to someone who hasn't replied yet, so the
+     * response timer needs to restart from now -- otherwise onAgentMessageSent's "already
+     * responded" guard would permanently block the next Open-&gt;In-Progress transition, and any
+     * prior breach/at-risk state would misleadingly carry over to the new agent.
+     */
+    @Transactional
+    public void resetFirstResponse(String incidentId) {
+        incidentSlaRepository.findById(incidentId).ifPresent(sla -> {
+            sla.setFirstResponseAt(null);
+            sla.setResponseElapsedMs(null);
+            sla.setResponseBreachedAt(null);
+            sla.setResponseAtRiskNotifiedAt(null);
+            sla.setResponseBreachNotifiedAt(null);
+            Instant now = Instant.now();
+            if (sla.getResponseThresholdMinutes() != null) {
+                sla.setResponseDueAt(addMinutes(now, sla.getResponseThresholdMinutes()));
             }
             refreshMaterializedStatus(sla, now, readAtRiskPercentage());
             incidentSlaRepository.save(sla);

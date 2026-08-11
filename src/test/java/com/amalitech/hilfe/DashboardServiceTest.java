@@ -58,7 +58,10 @@ class DashboardServiceTest {
                 Status.builder().id("status-closed").name("Closed").build(),
                 // Reopened is a real seeded Status row (transition trigger, never a resting state —
                 // see IncidentService.applyReopenTransition) and must never surface in dashboard charts.
-                Status.builder().id("status-reopened").name("Reopened").build()
+                Status.builder().id("status-reopened").name("Reopened").build(),
+                // Unassigned is a real seeded Status row, surfaced only on admin-level dashboards
+                // (ADMIN/ADMIN_AGENT/SUPER_ADMIN); it must never appear on the AGENT dashboard.
+                Status.builder().id("status-unassigned").name("Unassigned").build()
         );
     }
 
@@ -74,16 +77,18 @@ class DashboardServiceTest {
                 new Object[]{"Open", 10L},
                 new Object[]{"In Progress", 3L},
                 new Object[]{"Closed", 5L},
-                new Object[]{"Resolved", 3L}
+                new Object[]{"Resolved", 3L},
+                new Object[]{"Unassigned", 2L}
         ));
 
         DashboardStats stats = dashboardService.getStats("admin-1", RoleCode.ADMIN);
 
-        assertThat(stats.totalIncidents()).isEqualTo(21L);
+        assertThat(stats.totalIncidents()).isEqualTo(23L);
         assertThat(stats.openCount()).isEqualTo(10L);
         assertThat(stats.inProgressCount()).isEqualTo(3L);
         assertThat(stats.closedCount()).isEqualTo(5L);
         assertThat(stats.resolvedCount()).isEqualTo(3L);
+        assertThat(stats.unassignedCount()).isEqualTo(2L);
         verify(incidentRepository).countByStatusGlobal();
     }
 
@@ -99,6 +104,7 @@ class DashboardServiceTest {
 
         assertThat(stats.totalIncidents()).isEqualTo(18L);
         assertThat(stats.inProgressCount()).isZero();
+        assertThat(stats.unassignedCount()).isZero();
         verify(incidentRepository).countByStatusGlobal();
     }
 
@@ -120,6 +126,7 @@ class DashboardServiceTest {
         assertThat(stats.inProgressCount()).isEqualTo(2L);
         assertThat(stats.closedCount()).isEqualTo(2L);
         assertThat(stats.resolvedCount()).isEqualTo(1L);
+        assertThat(stats.unassignedCount()).isZero();
     }
 
     @Test
@@ -133,6 +140,7 @@ class DashboardServiceTest {
         assertThat(stats.inProgressCount()).isZero();
         assertThat(stats.closedCount()).isZero();
         assertThat(stats.resolvedCount()).isZero();
+        assertThat(stats.unassignedCount()).isZero();
     }
 
     @Test
@@ -185,7 +193,8 @@ class DashboardServiceTest {
 
         assertThat(charts.byStatus()).hasSize(5);
         assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
-                .noneMatch(label -> label.equalsIgnoreCase("Reopened"));
+                .noneMatch(label -> label.equalsIgnoreCase("Reopened"))
+                .noneMatch(label -> label.equalsIgnoreCase("Unassigned"));
         assertThat(charts.byStatus()).allMatch(lc -> lc.count() == 0);
         assertThat(charts.trends()).hasSize(2);
         assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
@@ -258,7 +267,7 @@ class DashboardServiceTest {
 
         DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, null);
 
-        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(charts.byStatus()).hasSize(6);
         assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
                 .noneMatch(label -> label.equalsIgnoreCase("Reopened"));
         assertThat(countFor(charts.byStatus(), "Open")).isEqualTo(10);
@@ -266,6 +275,7 @@ class DashboardServiceTest {
         assertThat(countFor(charts.byStatus(), "Pending")).isZero();
         assertThat(countFor(charts.byStatus(), "In Progress")).isZero();
         assertThat(countFor(charts.byStatus(), "Resolved")).isZero();
+        assertThat(countFor(charts.byStatus(), "Unassigned")).isZero();
     }
 
     @Test
@@ -278,12 +288,30 @@ class DashboardServiceTest {
 
         DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, "7d");
 
-        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(charts.byStatus()).hasSize(6);
         assertThat(countFor(charts.byStatus(), "In Progress")).isEqualTo(3);
         assertThat(countFor(charts.byStatus(), "Open")).isZero();
         assertThat(countFor(charts.byStatus(), "Pending")).isZero();
         assertThat(countFor(charts.byStatus(), "Resolved")).isZero();
         assertThat(countFor(charts.byStatus(), "Closed")).isZero();
+        assertThat(countFor(charts.byStatus(), "Unassigned")).isZero();
+    }
+
+    @Test
+    void getCharts_adminRole_includesUnassignedStatusWithCount() {
+        givenAllStatuses();
+        when(incidentRepository.countByStatusGlobal()).thenReturn(List.of(
+                new Object[]{"Open", 10L},
+                new Object[]{"Unassigned", 4L}
+        ));
+        when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, null);
+
+        assertThat(charts.byStatus()).hasSize(6);
+        assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
+                .anyMatch(label -> label.equalsIgnoreCase("Unassigned"));
+        assertThat(countFor(charts.byStatus(), "Unassigned")).isEqualTo(4);
     }
 
     @Test
@@ -305,6 +333,8 @@ class DashboardServiceTest {
         assertThat(countFor(charts.byStatus(), "Pending")).isZero();
         assertThat(countFor(charts.byStatus(), "In Progress")).isZero();
         assertThat(countFor(charts.byStatus(), "Closed")).isZero();
+        assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
+                .noneMatch(label -> label.equalsIgnoreCase("Unassigned"));
     }
 
     private int countFor(List<com.amalitech.hilfe.dto.dashboard.LabelCount> list, String statusName) {
@@ -376,6 +406,7 @@ class DashboardServiceTest {
         DashboardStats stats = dashboardService.getStats("aa-1", RoleCode.ADMIN_AGENT);
 
         assertThat(stats.totalIncidents()).isEqualTo(6L);
+        assertThat(stats.unassignedCount()).isZero();
         verify(incidentRepository).countByStatusGlobal();
     }
 
