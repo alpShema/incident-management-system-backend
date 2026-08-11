@@ -27,6 +27,7 @@ class RoleAccessSyncServiceTest {
     @Mock AgentRepository agentRepository;
     @Mock AdminRepository adminRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
+    @Mock IncidentService incidentService;
     @InjectMocks RoleAccessSyncService roleAccessSyncService;
 
     private User user() {
@@ -97,6 +98,7 @@ class RoleAccessSyncServiceTest {
         assertThat(agent.getStatus()).isFalse();
         verify(agentRepository).save(agent);
         verify(agentGroupMemberRepository).deleteByAgentId("agent-1");
+        verify(incidentService).unassignAllForDeactivatedAgent("agent-1", null);
     }
 
     @Test
@@ -110,6 +112,7 @@ class RoleAccessSyncServiceTest {
 
         assertThat(agent.getStatus()).isFalse();
         verify(agentGroupMemberRepository).deleteByAgentId("agent-1");
+        verify(incidentService).unassignAllForDeactivatedAgent("agent-1", null);
     }
 
     @Test
@@ -122,6 +125,7 @@ class RoleAccessSyncServiceTest {
 
         verify(agentRepository, never()).save(any(Agent.class));
         verify(agentGroupMemberRepository).deleteByAgentId("agent-1");
+        verify(incidentService, never()).unassignAllForDeactivatedAgent(any(), any());
     }
 
     @Test
@@ -133,6 +137,7 @@ class RoleAccessSyncServiceTest {
 
         verify(agentRepository, never()).save(any(Agent.class));
         verify(agentGroupMemberRepository, never()).deleteByAgentId(any());
+        verify(incidentService, never()).unassignAllForDeactivatedAgent(any(), any());
     }
 
     // ── syncAdminRecord ──────────────────────────────────────────────────────

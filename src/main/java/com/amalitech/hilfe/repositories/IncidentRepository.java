@@ -870,6 +870,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """)
     List<Incident> findOverdueResolved(@Param("cutoff") Instant cutoff);
 
+    List<Incident> findByAssignedToIdAndStatusIdNotIn(String assignedToId, List<String> excludedStatusIds);
+
     boolean existsByIncidentTypeId(String incidentTypeId);
 
     boolean existsBySeverityId(String severityId);

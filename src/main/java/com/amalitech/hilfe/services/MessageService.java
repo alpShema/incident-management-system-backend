@@ -50,6 +50,7 @@ public class MessageService {
     private final SimpMessagingTemplate messagingTemplate;
     private final SlaService slaService;
     private final NotificationEventPublisher notificationEventPublisher;
+    private final IncidentService incidentService;
 
     public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
@@ -85,7 +86,10 @@ public class MessageService {
         }
 
         messageRepository.flush();
-        slaService.onAgentMessageSent(incident, userId);
+        boolean firstResponse = slaService.onAgentMessageSent(incident, userId);
+        if (firstResponse) {
+            incidentService.onFirstAgentResponse(incident, userId);
+        }
         MessageResponse response = MessageResponse.withAttachments(
                 MessageResponse.from(saved, sender),
                 mediaService.toMediaResponsesForMessage(media)

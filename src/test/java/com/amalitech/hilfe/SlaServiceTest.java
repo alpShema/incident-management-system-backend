@@ -124,12 +124,112 @@ class SlaServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(Agent.builder().id("agent-1").userId("agent-user-1").build()));
         when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
 
-        slaService.onAgentMessageSent(incident, "agent-user-1");
+        boolean firstResponse = slaService.onAgentMessageSent(incident, "agent-user-1");
 
+        assertThat(firstResponse).isTrue();
         verify(incidentSlaRepository).save(sla);
         assertThat(sla.getFirstResponseAt()).isNotNull();
         assertThat(sla.getResponseElapsedMs()).isNotNull();
         assertThat(sla.getResponseStatus()).isEqualTo("NOT_TRACKED");
+    }
+
+    @Test
+    void onAgentMessageSent_senderNotAssignedAgent_returnsFalseAndDoesNotSave() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .assignedToId("agent-1")
+                .createdAt(FIXED_NOW.minus(Duration.ofMinutes(5)))
+                .build();
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(Agent.builder().id("agent-1").userId("agent-user-1").build()));
+
+        boolean firstResponse = slaService.onAgentMessageSent(incident, "someone-else");
+
+        assertThat(firstResponse).isFalse();
+        verify(incidentSlaRepository, never()).save(any());
+    }
+
+    @Test
+    void onAgentMessageSent_incidentHasNoAssignee_returnsFalse() {
+        Incident incident = Incident.builder().id("inc-1").createdAt(FIXED_NOW).build();
+
+        boolean firstResponse = slaService.onAgentMessageSent(incident, "agent-user-1");
+
+        assertThat(firstResponse).isFalse();
+        verify(incidentSlaRepository, never()).save(any());
+    }
+
+    @Test
+    void onAgentMessageSent_alreadyResponded_returnsFalseAndDoesNotOverwrite() {
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .assignedToId("agent-1")
+                .createdAt(FIXED_NOW.minus(Duration.ofMinutes(5)))
+                .build();
+        Instant firstReply = FIXED_NOW.minus(Duration.ofMinutes(2));
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseDueAt(FIXED_NOW.plus(Duration.ofMinutes(30)))
+                .firstResponseAt(firstReply)
+                .build();
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(Agent.builder().id("agent-1").userId("agent-user-1").build()));
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        boolean firstResponse = slaService.onAgentMessageSent(incident, "agent-user-1");
+
+        assertThat(firstResponse).isFalse();
+        assertThat(sla.getFirstResponseAt()).isEqualTo(firstReply);
+        verify(incidentSlaRepository, never()).save(any());
+    }
+
+    @Test
+    void onAgentMessageSent_nullIncidentOrSenderId_returnsFalse() {
+        assertThat(slaService.onAgentMessageSent(null, "agent-user-1")).isFalse();
+        assertThat(slaService.onAgentMessageSent(Incident.builder().id("inc-1").build(), null)).isFalse();
+    }
+
+    @Test
+    void resetFirstResponse_clearsFirstResponseAndRecomputesDueAt() {
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(30)
+                .firstResponseAt(FIXED_NOW.minus(Duration.ofMinutes(10)))
+                .responseBreachedAt(FIXED_NOW.minus(Duration.ofMinutes(1)))
+                .responseAtRiskNotifiedAt(FIXED_NOW.minus(Duration.ofMinutes(5)))
+                .responseBreachNotifiedAt(FIXED_NOW.minus(Duration.ofMinutes(1)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.resetFirstResponse("inc-1");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getFirstResponseAt()).isNull();
+        assertThat(sla.getResponseElapsedMs()).isNull();
+        assertThat(sla.getResponseBreachedAt()).isNull();
+        assertThat(sla.getResponseAtRiskNotifiedAt()).isNull();
+        assertThat(sla.getResponseBreachNotifiedAt()).isNull();
+        assertThat(sla.getResponseDueAt()).isAfter(FIXED_NOW);
+    }
+
+    @Test
+    void resetFirstResponse_noThreshold_leavesResponseDueAtNull() {
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .firstResponseAt(FIXED_NOW.minus(Duration.ofMinutes(10)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.resetFirstResponse("inc-1");
+
+        assertThat(sla.getResponseDueAt()).isNull();
+    }
+
+    @Test
+    void resetFirstResponse_noSlaRow_doesNothing() {
+        when(incidentSlaRepository.findById("missing")).thenReturn(Optional.empty());
+
+        slaService.resetFirstResponse("missing");
+
+        verify(incidentSlaRepository, never()).save(any());
     }
 
     @Test
