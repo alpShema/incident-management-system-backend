@@ -59,7 +59,6 @@ public class MediaService {
     private final MediaProperties mediaProperties;
     private final MediaRepository mediaRepository;
     private final MessageMediaRepository messageMediaRepository;
-    private final ActivityLogService activityLogService;
 
     public PresignedUrlResponse generatePresignedUploadUrl(PresignedUrlRequest request) {
         validateContentType(request.contentType(), true);
@@ -82,37 +81,26 @@ public class MediaService {
     }
 
     public List<MessageMedia> createMediaForMessage(String incidentId, String messageId, List<AttachmentRef> attachments) {
-        return createMediaForMessage(incidentId, messageId, attachments, null);
-    }
-
-    public List<MessageMedia> createMediaForMessage(String incidentId, String messageId, List<AttachmentRef> attachments, String actorUserId) {
         validateAttachments(attachments);
 
         return attachments.stream()
                 .map(ref -> {
-                    try {
-                        validateFileKey(ref.fileKey(), "messages/");
-                        validateContentType(ref.contentType(), false);
-                        validateFileSize(ref.contentType(), ref.fileSize());
-                        validateFileNameAndExtension(ref.originalName(), ref.contentType());
-                        verifyUploadedObject(ref);
+                    validateFileKey(ref.fileKey(), "messages/");
+                    validateContentType(ref.contentType(), false);
+                    validateFileSize(ref.contentType(), ref.fileSize());
+                    validateFileNameAndExtension(ref.originalName(), ref.contentType());
+                    verifyUploadedObject(ref);
 
-                        MessageMedia messageMedia = MessageMedia.builder()
-                                .id(UUID.randomUUID().toString())
-                                .messageId(messageId)
-                                .incidentId(incidentId)
-                                .originalName(ref.originalName())
-                                .fileKey(ref.fileKey())
-                                .contentType(ref.contentType())
-                                .fileSize(ref.fileSize())
-                                .build();
-                        MessageMedia saved = messageMediaRepository.save(messageMedia);
-                        activityLogService.logAttachmentUploaded(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize());
-                        return saved;
-                    } catch (ArmsAuthException ex) {
-                        activityLogService.logAttachmentUploadFailed(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize(), ex.getMessage());
-                        throw ex;
-                    }
+                    MessageMedia messageMedia = MessageMedia.builder()
+                            .id(UUID.randomUUID().toString())
+                            .messageId(messageId)
+                            .incidentId(incidentId)
+                            .originalName(ref.originalName())
+                            .fileKey(ref.fileKey())
+                            .contentType(ref.contentType())
+                            .fileSize(ref.fileSize())
+                            .build();
+                    return messageMediaRepository.save(messageMedia);
                 })
                 .toList();
     }
@@ -145,37 +133,26 @@ public class MediaService {
     }
 
     public List<Media> createMediaForIncident(String incidentId, List<AttachmentRef> attachments) {
-        return createMediaForIncident(incidentId, attachments, null);
-    }
-
-    public List<Media> createMediaForIncident(String incidentId, List<AttachmentRef> attachments, String actorUserId) {
         validateAttachments(attachments);
 
         return attachments.stream()
                 .map(ref -> {
-                    try {
-                        validateFileKey(ref.fileKey(), "media/");
-                        validateContentType(ref.contentType(), true);
-                        validateFileSize(ref.contentType(), ref.fileSize());
-                        validateFileNameAndExtension(ref.originalName(), ref.contentType());
-                        verifyUploadedObject(ref);
+                    validateFileKey(ref.fileKey(), "media/");
+                    validateContentType(ref.contentType(), true);
+                    validateFileSize(ref.contentType(), ref.fileSize());
+                    validateFileNameAndExtension(ref.originalName(), ref.contentType());
+                    verifyUploadedObject(ref);
 
-                        Media media = Media.builder()
-                                .id(UUID.randomUUID().toString())
-                                .incidentId(incidentId)
-                                .originalName(ref.originalName())
-                                .fileKey(ref.fileKey())
-                                .url(stableObjectUrl(ref.fileKey()))
-                                .contentType(ref.contentType())
-                                .fileSize(ref.fileSize())
-                                .build();
-                        Media saved = mediaRepository.save(media);
-                        activityLogService.logAttachmentUploaded(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize());
-                        return saved;
-                    } catch (ArmsAuthException ex) {
-                        activityLogService.logAttachmentUploadFailed(actorUserId, incidentId, ref.originalName(), ref.contentType(), ref.fileSize(), ex.getMessage());
-                        throw ex;
-                    }
+                    Media media = Media.builder()
+                            .id(UUID.randomUUID().toString())
+                            .incidentId(incidentId)
+                            .originalName(ref.originalName())
+                            .fileKey(ref.fileKey())
+                            .url(stableObjectUrl(ref.fileKey()))
+                            .contentType(ref.contentType())
+                            .fileSize(ref.fileSize())
+                            .build();
+                    return mediaRepository.save(media);
                 })
                 .toList();
     }

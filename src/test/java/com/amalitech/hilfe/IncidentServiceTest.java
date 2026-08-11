@@ -657,7 +657,7 @@ class IncidentServiceTest {
         when(locationRepository.existsById("loc-1")).thenReturn(true);
         when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
-        when(mediaService.createMediaForIncident("inc-1", List.of(attachment), "user-1")).thenReturn(List.of(media));
+        when(mediaService.createMediaForIncident("inc-1", List.of(attachment))).thenReturn(List.of(media));
         when(mediaService.toMediaResponses(List.of(media))).thenReturn(List.of(mediaResponse));
         when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
 
@@ -667,7 +667,7 @@ class IncidentServiceTest {
 
         assertThat(response.id()).isEqualTo("inc-1");
         assertThat(response.attachments()).containsExactly(mediaResponse);
-        verify(mediaService).createMediaForIncident("inc-1", List.of(attachment), "user-1");
+        verify(mediaService).createMediaForIncident("inc-1", List.of(attachment));
         verify(mediaService).toMediaResponses(List.of(media));
         verify(entityManager, times(2)).flush();
     }

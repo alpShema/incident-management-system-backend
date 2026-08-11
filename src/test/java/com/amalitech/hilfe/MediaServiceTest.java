@@ -10,7 +10,6 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.repositories.MediaRepository;
 import com.amalitech.hilfe.repositories.MessageMediaRepository;
-import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.MediaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,7 +48,6 @@ class MediaServiceTest {
     @Mock MediaProperties mediaProperties;
     @Mock MediaRepository mediaRepository;
     @Mock MessageMediaRepository messageMediaRepository;
-    @Mock ActivityLogService activityLogService;
     @InjectMocks MediaService mediaService;
 
     private static final List<String> ALLOWED_TYPES = List.of(
@@ -462,51 +460,6 @@ class MediaServiceTest {
                 .hasMessageContaining("combined size of all attachments exceeds")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
-    }
-
-    // ── attachment audit logging ─────────────────────────────────────────────
-
-    @Test
-    void createMediaForIncident_successfulUpload_logsAuditSuccess() {
-        when(mediaProperties.maxAttachments()).thenReturn(5);
-        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
-        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
-        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
-        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
-                .contentType("image/png")
-                .contentLength(2048L)
-                .build());
-        when(s3Properties.bucketName()).thenReturn("test-bucket");
-        when(mediaRepository.save(any(Media.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        List<AttachmentRef> attachments = List.of(
-                new AttachmentRef("media/uuid1/photo.png", "photo.png", "image/png", 2048L));
-
-        mediaService.createMediaForIncident("inc-1", attachments, "user-42");
-
-        verify(activityLogService).logAttachmentUploaded("user-42", "inc-1", "photo.png", "image/png", 2048L);
-        verify(activityLogService, never()).logAttachmentUploadFailed(any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void createMediaForIncident_rejectedUpload_logsAuditFailureAndRethrows() {
-        when(mediaProperties.maxAttachments()).thenReturn(5);
-        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
-        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
-        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
-        when(s3Properties.bucketName()).thenReturn("test-bucket");
-        when(s3Client.headObject(any(HeadObjectRequest.class)))
-                .thenThrow(NoSuchKeyException.builder().message("not found").build());
-
-        List<AttachmentRef> attachments = List.of(
-                new AttachmentRef("media/missing/file.png", "file.png", "image/png", 1024L));
-
-        assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments, "user-42"))
-                .isInstanceOf(ArmsAuthException.class);
-
-        verify(activityLogService).logAttachmentUploadFailed(
-                eq("user-42"), eq("inc-1"), eq("file.png"), eq("image/png"), eq(1024L), anyString());
-        verify(activityLogService, never()).logAttachmentUploaded(any(), any(), any(), any(), any());
     }
 
     // ── toMediaResponses ─────────────────────────────────────────────────────
