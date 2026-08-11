@@ -51,7 +51,7 @@ public class DashboardService {
             STATUS_OPEN, STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_RESOLVED, STATUS_CLOSED
     );
 
-    // Unassigned is only meaningful to admin-level dashboards (ADMIN/ADMIN_AGENT/SUPER_ADMIN);
+    // Unassigned is only meaningful to admin-level dashboards -- ADMIN, ADMIN_AGENT, or SUPER_ADMIN --
     // agents never see this card, so it's layered on top of the base set rather than included in it.
     private static final Set<String> ADMIN_DASHBOARD_STATUS_NAMES = Stream.concat(
             DASHBOARD_STATUS_NAMES.stream(), Stream.of(STATUS_UNASSIGNED)
