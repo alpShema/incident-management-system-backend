@@ -62,7 +62,7 @@ public class MediaService {
     private final ActivityLogService activityLogService;
 
     public PresignedUrlResponse generatePresignedUploadUrl(PresignedUrlRequest request) {
-        validateContentType(request.contentType());
+        validateContentType(request.contentType(), true);
         validateFileSize(request.contentType(), request.fileSize());
         validateFileNameAndExtension(request.fileName(), request.contentType());
 
@@ -72,7 +72,7 @@ public class MediaService {
     }
 
     public PresignedUrlResponse generateMessagePresignedUploadUrl(PresignedUrlRequest request) {
-        validateContentType(request.contentType());
+        validateContentType(request.contentType(), false);
         validateFileSize(request.contentType(), request.fileSize());
         validateFileNameAndExtension(request.fileName(), request.contentType());
 
@@ -92,7 +92,7 @@ public class MediaService {
                 .map(ref -> {
                     try {
                         validateFileKey(ref.fileKey(), "messages/");
-                        validateContentType(ref.contentType());
+                        validateContentType(ref.contentType(), false);
                         validateFileSize(ref.contentType(), ref.fileSize());
                         validateFileNameAndExtension(ref.originalName(), ref.contentType());
                         verifyUploadedObject(ref);
@@ -155,7 +155,7 @@ public class MediaService {
                 .map(ref -> {
                     try {
                         validateFileKey(ref.fileKey(), "media/");
-                        validateContentType(ref.contentType());
+                        validateContentType(ref.contentType(), true);
                         validateFileSize(ref.contentType(), ref.fileSize());
                         validateFileNameAndExtension(ref.originalName(), ref.contentType());
                         verifyUploadedObject(ref);
@@ -230,12 +230,18 @@ public class MediaService {
         return contentType != null && contentType.startsWith(VIDEO_CONTENT_TYPE_PREFIX);
     }
 
-    private void validateContentType(String contentType) {
+    private void validateContentType(String contentType, boolean allowVideo) {
+        boolean isVideo = isVideoContentType(contentType);
+
+        if (isVideo && !allowVideo) {
+            throw new ArmsAuthException("Video attachments are not supported here.", 400);
+        }
+
         if (mediaProperties.allowedContentTypes().contains(contentType)) {
             return;
         }
 
-        if (isVideoContentType(contentType)) {
+        if (isVideo) {
             List<String> supportedVideoFormats = mediaProperties.allowedContentTypes().stream()
                     .filter(this::isVideoContentType)
                     .map(ct -> VIDEO_FORMAT_LABELS.getOrDefault(ct, ct) + " (" + ct + ")")

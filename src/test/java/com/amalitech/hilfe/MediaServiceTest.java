@@ -259,6 +259,34 @@ class MediaServiceTest {
                 .isEqualTo(400);
     }
 
+    // ── video attachments are incident-only, not chat messages ──────────────
+
+    @Test
+    void generateMessagePresignedUploadUrl_videoContentType_throws400() {
+        PresignedUrlRequest request = new PresignedUrlRequest("clip.mp4", "video/mp4", 1024L);
+
+        assertThatThrownBy(() -> mediaService.generateMessagePresignedUploadUrl(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("not supported")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void createMediaForMessage_videoAttachment_throws400() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("messages/uuid1/clip.mp4", "clip.mp4", "video/mp4", 1024L));
+
+        assertThatThrownBy(() -> mediaService.createMediaForMessage("inc-1", "msg-1", attachments))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("not supported")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
     // ── createMediaForIncident ───────────────────────────────────────────────
 
     @Test
