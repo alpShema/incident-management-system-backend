@@ -66,9 +66,11 @@ services:
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       S3_REGION: ${S3_REGION}
       S3_PRESIGN_EXPIRY: ${S3_PRESIGN_EXPIRY}
-      MEDIA_MAX_FILE_SIZE: ${MEDIA_MAX_FILE_SIZE}  # Max file size in bytes, e.g. 10485760 for 10 MB
-      MEDIA_MAX_ATTACHMENTS: ${MEDIA_MAX_ATTACHMENTS}  # Max number of attachments per ticket, e.g. 5
-      MEDIA_ALLOWED_CONTENT_TYPES: ${MEDIA_ALLOWED_CONTENT_TYPES:-image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain}
+      MEDIA_MAX_FILE_SIZE: ${MEDIA_MAX_FILE_SIZE:-10485760}  # Max file size in bytes for images/docs, e.g. 10485760 for 10 MB
+      MEDIA_MAX_VIDEO_FILE_SIZE: ${MEDIA_MAX_VIDEO_FILE_SIZE:-104857600}  # Max file size in bytes for video attachments, e.g. 104857600 for 100 MB
+      MEDIA_MAX_TOTAL_ATTACHMENT_SIZE: ${MEDIA_MAX_TOTAL_ATTACHMENT_SIZE:-314572800}  # Max combined size in bytes of all attachments on one incident/message, e.g. 314572800 for 300 MB
+      MEDIA_MAX_ATTACHMENTS: ${MEDIA_MAX_ATTACHMENTS:-5}  # Max number of attachments per ticket, e.g. 5
+      MEDIA_ALLOWED_CONTENT_TYPES: ${MEDIA_ALLOWED_CONTENT_TYPES:-image/jpeg,image/png,image/gif,image/webp,application/pdf,image/svg+xml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,video/mp4,video/quicktime,video/webm}
       SLACK_ENABLED: ${SLACK_ENABLED}
       SLACK_NOTIFICATIONS_ENABLED: ${SLACK_NOTIFICATIONS_ENABLED}
       SLACK_AGENT_FEATURES_ENABLED: ${SLACK_AGENT_FEATURES_ENABLED}

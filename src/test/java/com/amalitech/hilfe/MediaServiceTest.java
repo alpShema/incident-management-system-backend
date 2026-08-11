@@ -10,9 +10,13 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Media;
 import com.amalitech.hilfe.repositories.MediaRepository;
 import com.amalitech.hilfe.repositories.MessageMediaRepository;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.MediaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -29,6 +33,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,12 +49,14 @@ class MediaServiceTest {
     @Mock MediaProperties mediaProperties;
     @Mock MediaRepository mediaRepository;
     @Mock MessageMediaRepository messageMediaRepository;
+    @Mock ActivityLogService activityLogService;
     @InjectMocks MediaService mediaService;
 
     private static final List<String> ALLOWED_TYPES = List.of(
             "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "video/mp4", "video/quicktime", "video/webm");
 
     // ── generatePresignedUploadUrl ───────────────────────────────────────────
 
@@ -166,11 +173,98 @@ class MediaServiceTest {
                 .isEqualTo(400);
     }
 
+    // ── video attachments ────────────────────────────────────────────────────
+
+    @ParameterizedTest(name = "{0} ({1})")
+    @MethodSource("supportedVideoFormats")
+    void generatePresignedUploadUrl_supportedVideoFormat_returnsPresignedUrl(String fileName, String contentType) throws Exception {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxVideoFileSize()).thenReturn(104_857_600L);
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(s3Properties.presignExpiry()).thenReturn(Duration.ofMinutes(15));
+
+        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
+        when(presigned.url()).thenReturn(URI.create("https://s3.example.com/presigned-put").toURL());
+        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
+
+        PresignedUrlRequest request = new PresignedUrlRequest(fileName, contentType, 52_428_800L);
+        PresignedUrlResponse response = mediaService.generatePresignedUploadUrl(request);
+
+        assertThat(response.uploadUrl()).contains("presigned-put");
+        assertThat(response.fileKey()).endsWith("/" + fileName);
+    }
+
+    private static Stream<Arguments> supportedVideoFormats() {
+        return Stream.of(
+                Arguments.of("clip.mp4", "video/mp4"),
+                Arguments.of("clip.mov", "video/quicktime"),
+                Arguments.of("clip.webm", "video/webm"));
+    }
+
+    @Test
+    void generatePresignedUploadUrl_aviContentType_throws400WithSupportedVideoFormats() {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("clip.avi", "video/x-msvideo", 1024L);
+
+        assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("video/mp4")
+                .hasMessageContaining("video/quicktime")
+                .hasMessageContaining("video/webm")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void generatePresignedUploadUrl_oversizedVideo_throws400() {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxVideoFileSize()).thenReturn(104_857_600L);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("huge.mp4", "video/mp4", 999_999_999L);
+
+        assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("exceeds the maximum")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void generatePresignedUploadUrl_imageStillUsesImageLimit_throws400() {
+        // The video limit (250MB) must not leak into image/doc validation.
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("big.png", "image/png", 52_428_800L);
+
+        assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("exceeds the maximum")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void generatePresignedUploadUrl_videoMimeWithMismatchedExtension_throws400() {
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxVideoFileSize()).thenReturn(104_857_600L);
+
+        PresignedUrlRequest request = new PresignedUrlRequest("movie.exe", "video/mp4", 1024L);
+
+        assertThatThrownBy(() -> mediaService.generatePresignedUploadUrl(request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("are not supported for this file type")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
     // ── createMediaForIncident ───────────────────────────────────────────────
 
     @Test
     void createMediaForIncident_validAttachments_savesAll() throws Exception {
         when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
         when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
         when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
         when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
@@ -212,6 +306,7 @@ class MediaServiceTest {
     @Test
     void createMediaForIncident_fileNotInS3_throws400() {
         when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
         when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
         when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
         when(s3Properties.bucketName()).thenReturn("test-bucket");
@@ -231,6 +326,7 @@ class MediaServiceTest {
     @Test
     void createMediaForIncident_fileKeyOutsideMediaNamespace_throws400() {
         when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
 
         List<AttachmentRef> attachments = List.of(
                 new AttachmentRef("other/path/file.png", "file.png", "image/png", 1024L));
@@ -260,6 +356,7 @@ class MediaServiceTest {
     @Test
     void createMediaForIncident_uploadedSizeMismatch_throws400() {
         when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
         when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
         when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
         when(s3Properties.bucketName()).thenReturn("test-bucket");
@@ -281,6 +378,7 @@ class MediaServiceTest {
     @Test
     void createMediaForIncident_uploadedContentTypeMismatch_throws400() {
         when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
         when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
         when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
         when(s3Properties.bucketName()).thenReturn("test-bucket");
@@ -297,6 +395,90 @@ class MediaServiceTest {
                 .hasMessageContaining("file type")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
+    }
+
+    @Test
+    void createMediaForIncident_mixedImageAndVideo_savesAll() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+        when(mediaProperties.maxVideoFileSize()).thenReturn(104_857_600L);
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(
+                HeadObjectResponse.builder().contentType("image/png").contentLength(2048L).build(),
+                HeadObjectResponse.builder().contentType("video/mp4").contentLength(52_428_800L).build());
+        when(mediaRepository.save(any(Media.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("media/uuid1/photo.png", "photo.png", "image/png", 2048L),
+                new AttachmentRef("media/uuid2/clip.mp4", "clip.mp4", "video/mp4", 52_428_800L));
+
+        List<Media> result = mediaService.createMediaForIncident("inc-1", attachments);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(Media::getContentType).containsExactly("image/png", "video/mp4");
+    }
+
+    @Test
+    void createMediaForIncident_combinedSizeExceedsLimit_throws400() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("media/uuid1/clip1.mp4", "clip1.mp4", "video/mp4", 209_715_200L),
+                new AttachmentRef("media/uuid2/clip2.mp4", "clip2.mp4", "video/mp4", 209_715_200L));
+
+        assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("combined size of all attachments exceeds")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    // ── attachment audit logging ─────────────────────────────────────────────
+
+    @Test
+    void createMediaForIncident_successfulUpload_logsAuditSuccess() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("image/png")
+                .contentLength(2048L)
+                .build());
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(mediaRepository.save(any(Media.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("media/uuid1/photo.png", "photo.png", "image/png", 2048L));
+
+        mediaService.createMediaForIncident("inc-1", attachments, "user-42");
+
+        verify(activityLogService).logAttachmentUploaded("user-42", "inc-1", "photo.png", "image/png", 2048L);
+        verify(activityLogService, never()).logAttachmentUploadFailed(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createMediaForIncident_rejectedUpload_logsAuditFailureAndRethrows() {
+        when(mediaProperties.maxAttachments()).thenReturn(5);
+        when(mediaProperties.maxTotalAttachmentSize()).thenReturn(314_572_800L);
+        when(mediaProperties.allowedContentTypes()).thenReturn(ALLOWED_TYPES);
+        when(mediaProperties.maxFileSize()).thenReturn(10_485_760L);
+        when(s3Properties.bucketName()).thenReturn("test-bucket");
+        when(s3Client.headObject(any(HeadObjectRequest.class)))
+                .thenThrow(NoSuchKeyException.builder().message("not found").build());
+
+        List<AttachmentRef> attachments = List.of(
+                new AttachmentRef("media/missing/file.png", "file.png", "image/png", 1024L));
+
+        assertThatThrownBy(() -> mediaService.createMediaForIncident("inc-1", attachments, "user-42"))
+                .isInstanceOf(ArmsAuthException.class);
+
+        verify(activityLogService).logAttachmentUploadFailed(
+                eq("user-42"), eq("inc-1"), eq("file.png"), eq("image/png"), eq(1024L), anyString());
+        verify(activityLogService, never()).logAttachmentUploaded(any(), any(), any(), any(), any());
     }
 
     // ── toMediaResponses ─────────────────────────────────────────────────────

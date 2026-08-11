@@ -138,7 +138,7 @@ class MessageServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(userRepository.findById("u1")).thenReturn(Optional.of(sender));
         when(messageRepository.save(any(Message.class))).thenReturn(saved);
-        when(mediaService.createMediaForMessage("inc-1", "msg-1", List.of(attachment))).thenReturn(List.of(messageMedia));
+        when(mediaService.createMediaForMessage("inc-1", "msg-1", List.of(attachment), "u1")).thenReturn(List.of(messageMedia));
         when(mediaService.toMediaResponsesForMessage(List.of(messageMedia))).thenReturn(List.of(mediaResponse));
 
         MessageResponse result = messageService.sendMessage("u1", "CLIENT", "inc-1", null, List.of(attachment));
