@@ -101,8 +101,16 @@ pipeline {
                             echo "Trivy not found — installing..."
                             curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
                         fi
-                        trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${env.appName}:${env.IMAGE_TAG} > trivy-image-scan.txt
+
+                        # /tmp on this agent is too small for Trivy's ~900MB Java DB download
+                        # (fails with "no space left on device"). Stage the download/cache on the
+                        # workspace disk instead, which has room, and clean up afterwards.
+                        export TMPDIR="${env.WORKSPACE}/.trivy-tmp"
+                        mkdir -p "\$TMPDIR"
+                        trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table \\
+                            --cache-dir "${env.WORKSPACE}/.trivy-cache" ${env.appName}:${env.IMAGE_TAG} > trivy-image-scan.txt
                         cat trivy-image-scan.txt
+                        rm -rf "\$TMPDIR" "${env.WORKSPACE}/.trivy-cache"
                     """
                 }
             }
