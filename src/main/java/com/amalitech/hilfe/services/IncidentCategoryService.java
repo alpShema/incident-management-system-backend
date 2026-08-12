@@ -382,8 +382,8 @@ public class IncidentCategoryService {
 
     // HV-1619: a confidential topic must have someone to route its incidents to, since
     // routing, escalation, and access are all keyed off that owner. Checked after the group
-    // change is applied so removeAgentGroup=true + confidential=true in the same request is
-    // rejected instead of silently leaving the topic confidential with no owner.
+    // change is applied so a request that both drops the agent group and marks the topic
+    // confidential is rejected, instead of silently leaving it confidential with no owner.
     private void requireConfidentialOwner(IncidentType topic) {
         if (!topic.isConfidential()) {
             return;

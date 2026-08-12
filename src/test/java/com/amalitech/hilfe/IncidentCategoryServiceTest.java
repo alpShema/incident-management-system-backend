@@ -742,8 +742,6 @@ class IncidentCategoryServiceTest {
 
     @Test
     void updateTopicById_removeAgentGroupWithConfidential_throws400() {
-        // Group-routed topic with no legacy single agent to fall back on -- removing its only
-        // owner while (re)confirming confidential=true in the same request must be rejected.
         IncidentType topic = IncidentType.builder()
                 .id("type-1").name("Projector").description("Projector issues")
                 .categoryId("cat-1").adminId("admin-1").agentGroupId("group-1")
