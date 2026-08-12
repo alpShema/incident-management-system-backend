@@ -10,6 +10,7 @@ import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentSla;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Severity;
 import com.amalitech.hilfe.models.SystemConfig;
@@ -19,6 +20,7 @@ import com.amalitech.hilfe.notifications.events.IncidentSlaAtRiskEvent;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentSlaRepository;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
@@ -33,6 +35,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -55,6 +60,7 @@ class SlaServiceTest {
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
     @Mock IncidentCategoryRepository incidentCategoryRepository;
+    @Mock LocationRepository locationRepository;
     @Mock NotificationEventPublisher notificationEventPublisher;
     @Mock ActivityLogService activityLogService;
 
@@ -62,6 +68,10 @@ class SlaServiceTest {
 
     @Test
     void onIncidentCreated_savesThresholdSnapshotAndDeadlines() {
+        // 2026-06-04 is a Thursday. With no location set, business hours default to UTC 08:00-17:30:
+        // the 60-min response threshold fits same-day, but the 480-min resolution threshold
+        // (8 hours) only has 7.5 business hours left in the day (10:00-17:30) and rolls the
+        // remaining 30 minutes into Friday morning.
         Instant createdAt = Instant.parse("2026-06-04T10:00:00Z");
         Incident incident = Incident.builder()
                 .id("inc-1")
@@ -82,8 +92,77 @@ class SlaServiceTest {
         verify(incidentSlaRepository).save(captor.capture());
         assertThat(captor.getValue().getResponseThresholdMinutes()).isEqualTo(60);
         assertThat(captor.getValue().getResolutionThresholdMinutes()).isEqualTo(480);
-        assertThat(captor.getValue().getResponseDueAt()).isEqualTo(createdAt.plus(Duration.ofMinutes(60)));
-        assertThat(captor.getValue().getResolutionDueAt()).isEqualTo(createdAt.plus(Duration.ofMinutes(480)));
+        assertThat(captor.getValue().getResponseDueAt()).isEqualTo(Instant.parse("2026-06-04T11:00:00Z"));
+        assertThat(captor.getValue().getResolutionDueAt()).isEqualTo(Instant.parse("2026-06-05T08:30:00Z"));
+    }
+
+    @Test
+    void onIncidentCreated_thresholdCrossesWeekend_rollsToMonday() {
+        // Friday 16:00 UTC, default hours 08:00-17:30 -- only 90 min left before close, so a
+        // 120-min threshold rolls the remaining 30 min into Monday morning, skipping the weekend.
+        Instant createdAt = Instant.parse("2026-06-05T16:00:00Z");
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .severityId("sev-1")
+                .createdAt(createdAt)
+                .build();
+        Severity severity = Severity.builder().id("sev-1").responseTimeMinutes(120).build();
+        when(severityRepository.findById("sev-1")).thenReturn(Optional.of(severity));
+
+        slaService.onIncidentCreated(incident);
+
+        ArgumentCaptor<IncidentSla> captor = ArgumentCaptor.forClass(IncidentSla.class);
+        verify(incidentSlaRepository).save(captor.capture());
+        assertThat(captor.getValue().getResponseDueAt()).isEqualTo(Instant.parse("2026-06-08T08:30:00Z"));
+    }
+
+    @Test
+    void onIncidentCreated_respectsLocationCustomHours() {
+        ZoneId kigali = ZoneId.of("Africa/Kigali");
+        Location location = Location.builder()
+                .id("loc-kgl")
+                .timezone("Africa/Kigali")
+                .businessHoursStart(LocalTime.of(9, 0))
+                .businessHoursEnd(LocalTime.of(16, 0))
+                .build();
+        when(locationRepository.findById("loc-kgl")).thenReturn(Optional.of(location));
+
+        Instant createdAt = ZonedDateTime.of(2026, 6, 4, 12, 0, 0, 0, kigali).toInstant();
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .severityId("sev-1")
+                .locationId("loc-kgl")
+                .createdAt(createdAt)
+                .build();
+        Severity severity = Severity.builder().id("sev-1").responseTimeMinutes(60).build();
+        when(severityRepository.findById("sev-1")).thenReturn(Optional.of(severity));
+
+        slaService.onIncidentCreated(incident);
+
+        ArgumentCaptor<IncidentSla> captor = ArgumentCaptor.forClass(IncidentSla.class);
+        verify(incidentSlaRepository).save(captor.capture());
+        assertThat(captor.getValue().getResponseDueAt())
+                .isEqualTo(ZonedDateTime.of(2026, 6, 4, 13, 0, 0, 0, kigali).toInstant());
+    }
+
+    @Test
+    void onIncidentCreated_locationNotFound_fallsBackToUtcDefaultHours() {
+        when(locationRepository.findById("loc-missing")).thenReturn(Optional.empty());
+        Instant createdAt = Instant.parse("2026-06-04T10:00:00Z");
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .severityId("sev-1")
+                .locationId("loc-missing")
+                .createdAt(createdAt)
+                .build();
+        Severity severity = Severity.builder().id("sev-1").responseTimeMinutes(60).build();
+        when(severityRepository.findById("sev-1")).thenReturn(Optional.of(severity));
+
+        slaService.onIncidentCreated(incident);
+
+        ArgumentCaptor<IncidentSla> captor = ArgumentCaptor.forClass(IncidentSla.class);
+        verify(incidentSlaRepository).save(captor.capture());
+        assertThat(captor.getValue().getResponseDueAt()).isEqualTo(Instant.parse("2026-06-04T11:00:00Z"));
     }
 
     @Test
@@ -199,7 +278,7 @@ class SlaServiceTest {
                 .build();
         when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
 
-        slaService.resetFirstResponse("inc-1");
+        slaService.resetFirstResponse("inc-1", null);
 
         verify(incidentSlaRepository).save(sla);
         assertThat(sla.getFirstResponseAt()).isNull();
@@ -218,7 +297,7 @@ class SlaServiceTest {
                 .build();
         when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
 
-        slaService.resetFirstResponse("inc-1");
+        slaService.resetFirstResponse("inc-1", null);
 
         assertThat(sla.getResponseDueAt()).isNull();
     }
@@ -227,7 +306,7 @@ class SlaServiceTest {
     void resetFirstResponse_noSlaRow_doesNothing() {
         when(incidentSlaRepository.findById("missing")).thenReturn(Optional.empty());
 
-        slaService.resetFirstResponse("missing");
+        slaService.resetFirstResponse("missing", null);
 
         verify(incidentSlaRepository, never()).save(any());
     }
@@ -240,7 +319,11 @@ class SlaServiceTest {
                 .incidentId("inc-1")
                 .responseDueAt(now.plus(Duration.ofMinutes(10)))
                 .resolutionDueAt(now.plus(Duration.ofHours(2)))
-                .pauseStartedAt(now.minus(Duration.ofMinutes(5)))
+                // A pause spanning a full week (rather than a tight few minutes) guarantees several
+                // business days have elapsed by the time this runs, regardless of what time of day
+                // or day of week the test suite happens to execute -- avoids flakiness from the
+                // pause window landing entirely outside business hours.
+                .pauseStartedAt(now.minus(Duration.ofDays(7)))
                 .build();
         Instant originalResponseDueAt = sla.getResponseDueAt();
         Instant originalResolutionDueAt = sla.getResolutionDueAt();
@@ -283,7 +366,10 @@ class SlaServiceTest {
         Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofMinutes(1))).build();
         IncidentSla sla = IncidentSla.builder()
                 .incidentId("inc-1")
-                .resolutionDueAt(now.plus(Duration.ofMinutes(5)))
+                // A week out (rather than 5 minutes) guarantees at least one full business day sits
+                // between now and the due date regardless of what time of day/week this test runs,
+                // so resolutionRemainingMsOnResolve is reliably positive.
+                .resolutionDueAt(now.plus(Duration.ofDays(7)))
                 .build();
         when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
 

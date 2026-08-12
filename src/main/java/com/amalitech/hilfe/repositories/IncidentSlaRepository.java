@@ -19,6 +19,7 @@ public interface IncidentSlaRepository extends JpaRepository<IncidentSla, String
             SELECT sla
             FROM IncidentSla sla
             JOIN FETCH sla.incident incident
+            LEFT JOIN FETCH incident.location location
             WHERE sla.responseDueAt IS NOT NULL
               AND sla.firstResponseAt IS NULL
               AND sla.resolvedAtSnapshot IS NULL
@@ -30,6 +31,7 @@ public interface IncidentSlaRepository extends JpaRepository<IncidentSla, String
             SELECT sla
             FROM IncidentSla sla
             JOIN FETCH sla.incident incident
+            LEFT JOIN FETCH incident.location location
             WHERE sla.resolutionDueAt IS NOT NULL
               AND sla.resolvedAtSnapshot IS NULL
               AND sla.pauseStartedAt IS NULL

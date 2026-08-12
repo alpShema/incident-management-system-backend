@@ -3,11 +3,13 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.AutoCloseConfigResponse;
 import com.amalitech.hilfe.dto.SlaConfigResponse;
+import com.amalitech.hilfe.dto.TimezoneOptionResponse;
 import com.amalitech.hilfe.dto.UpdateAutoCloseConfigRequest;
 import com.amalitech.hilfe.dto.UpdateSlaConfigRequest;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.SlaService;
+import com.amalitech.hilfe.services.TimezoneService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @Tag(name = "System Config", description = "Admin-managed global system settings")
 @RestController
 @RequestMapping("/config")
@@ -28,6 +32,7 @@ public class SystemConfigController {
 
     private final AutoCloseService autoCloseService;
     private final SlaService slaService;
+    private final TimezoneService timezoneService;
 
     @Operation(
         summary = "Get auto-close configuration",
@@ -84,5 +89,16 @@ public class SystemConfigController {
         return ResponseEntity.ok(ApiResponse.success(
                 "SLA configuration updated successfully",
                 slaService.updateConfig(request)));
+    }
+
+    @Operation(
+        summary = "List selectable timezones",
+        description = "Returns every IANA timezone id the backend accepts for a location's `timezone` field, with a display label and current UTC offset. Same visibility as any other dropdown-source lookup (e.g. /statuses) -- no admin-only gate."
+    )
+    @GetMapping("/timezones")
+    public ResponseEntity<ApiResponse<List<TimezoneOptionResponse>>> listTimezones() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Timezones retrieved successfully",
+                timezoneService.listTimezones()));
     }
 }

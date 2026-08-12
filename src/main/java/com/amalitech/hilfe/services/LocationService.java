@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalTime;
 import java.util.UUID;
 
 @Service
@@ -19,6 +20,7 @@ import java.util.UUID;
 public class LocationService {
 
     private static final String LOCATION_ALREADY_EXISTS_MESSAGE = "A location with this name already exists. Please choose a different name.";
+    private static final String INVALID_BUSINESS_HOURS_MESSAGE = "Business hours start must be before business hours end.";
 
     private final LocationRepository locationRepository;
 
@@ -44,6 +46,16 @@ public class LocationService {
                 .description(request.description() != null ? request.description().trim() : null)
                 .status(true)
                 .build();
+        if (request.timezone() != null) {
+            location.setTimezone(request.timezone());
+        }
+        if (request.businessHoursStart() != null) {
+            location.setBusinessHoursStart(request.businessHoursStart());
+        }
+        if (request.businessHoursEnd() != null) {
+            location.setBusinessHoursEnd(request.businessHoursEnd());
+        }
+        validateBusinessHours(location.getBusinessHoursStart(), location.getBusinessHoursEnd());
         return LocationResponse.from(locationRepository.save(location));
     }
 
@@ -61,7 +73,23 @@ public class LocationService {
         if (request.description() != null) {
             location.setDescription(request.description().trim());
         }
+        if (request.timezone() != null) {
+            location.setTimezone(request.timezone());
+        }
+        if (request.businessHoursStart() != null) {
+            location.setBusinessHoursStart(request.businessHoursStart());
+        }
+        if (request.businessHoursEnd() != null) {
+            location.setBusinessHoursEnd(request.businessHoursEnd());
+        }
+        validateBusinessHours(location.getBusinessHoursStart(), location.getBusinessHoursEnd());
         return LocationResponse.from(locationRepository.save(location));
+    }
+
+    private void validateBusinessHours(LocalTime start, LocalTime end) {
+        if (start != null && end != null && !start.isBefore(end)) {
+            throw new ArmsAuthException(INVALID_BUSINESS_HOURS_MESSAGE, 409);
+        }
     }
 
     @Transactional
