@@ -8,6 +8,7 @@ import com.amalitech.hilfe.dto.PresignedUrlResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.Message;
 import com.amalitech.hilfe.models.MessageMedia;
 import com.amalitech.hilfe.models.User;
@@ -18,6 +19,7 @@ import com.amalitech.hilfe.repositories.MessageMediaRepository;
 import com.amalitech.hilfe.repositories.MessageRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.notifications.NotificationEventPublisher;
+import com.amalitech.hilfe.services.ConfidentialIncidentAccess;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.MessageService;
@@ -56,7 +58,16 @@ class MessageServiceTest {
     @Mock SimpMessagingTemplate messagingTemplate;
     @Mock NotificationEventPublisher notificationEventPublisher;
     @Mock IncidentService incidentService;
+    @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
     @InjectMocks MessageService messageService;
+
+    private Incident confidentialIncident(String userId, String assignedToId) {
+        IncidentType topic = IncidentType.builder()
+                .id("type-1").agentGroupId("group-1").confidential(true).build();
+        Incident incident = Incident.builder().id("inc-1").userId(userId).assignedToId(assignedToId).build();
+        incident.setIncidentType(topic);
+        return incident;
+    }
 
     @Test
     void generateMessagePresignedUrl_withAccess_returnsPresignedResponse() {
@@ -111,6 +122,23 @@ class MessageServiceTest {
         PresignedUrlResponse result = messageService.generateMessagePresignedUrl("u-assignee", "AGENT", "inc-1", request);
 
         assertThat(result).isEqualTo(presigned);
+    }
+
+    @Test
+    void generateMessagePresignedUrl_confidentialIncident_nonMemberAdmin_throws403() {
+        // HV-1619: the admin bypass above must not apply to a confidential incident's chat --
+        // messages are exactly the kind of detail this feature hides elsewhere.
+        Incident incident = confidentialIncident("u1", null);
+        PresignedUrlRequest request = new PresignedUrlRequest("img.png", "image/png", 1024L);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("outside-admin", incident)).thenReturn(false);
+
+        assertThatThrownBy(() -> messageService.generateMessagePresignedUrl("outside-admin", "ADMIN", "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(mediaService, never()).generateMessagePresignedUploadUrl(any(PresignedUrlRequest.class));
     }
 
     @Test
@@ -308,6 +336,37 @@ class MessageServiceTest {
     }
 
     @Test
+    void deleteMessage_confidentialIncident_authorNoLongerAMember_throws403() {
+        // HV-1619: re-checks membership at delete time in case it changed since the message
+        // was sent (e.g. the sender was removed from the linked group).
+        Message message = Message.builder().id("msg-1").senderId("u1").incidentId("inc-1").build();
+        Incident incident = confidentialIncident("creator-1", null);
+        when(messageRepository.findById("msg-1")).thenReturn(Optional.of(message));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("u1", incident)).thenReturn(false);
+
+        assertThatThrownBy(() -> messageService.deleteMessage("u1", "AGENT", "msg-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(messageRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteMessage_confidentialIncident_stillAMember_succeeds() {
+        Message message = Message.builder().id("msg-1").senderId("u1").incidentId("inc-1").build();
+        Incident incident = confidentialIncident("creator-1", null);
+        when(messageRepository.findById("msg-1")).thenReturn(Optional.of(message));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("u1", incident)).thenReturn(true);
+
+        messageService.deleteMessage("u1", "AGENT", "msg-1");
+
+        verify(messageRepository).delete(message);
+    }
+
+    @Test
     void deleteMessage_notFound_throws404() {
         when(messageRepository.findById("missing")).thenReturn(Optional.empty());
 
@@ -350,5 +409,22 @@ class MessageServiceTest {
         assertThat(page.getContent()).hasSize(1);
         assertThat(page.getContent().getFirst().attachments()).hasSize(1);
         assertThat(page.getContent().getFirst().attachments().getFirst().originalName()).isEqualTo("file.pdf");
+    }
+
+    @Test
+    void listMessages_confidentialIncident_nonMemberAgentInSameDepartment_throws403() {
+        // HV-1619: the same-department fallback that lets a teammate read a normal incident's
+        // chat must not apply once the incident is confidential.
+        Incident incident = confidentialIncident("u1", "assigned-agent");
+        Agent teammateAgent = Agent.builder().id("agent-teammate").userId("u-teammate").status(true).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("u-teammate", incident)).thenReturn(false);
+
+        assertThatThrownBy(() -> messageService.listMessages("u-teammate", "AGENT", "inc-1", PageRequest.of(0, 50)))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verifyNoInteractions(messageRepository);
     }
 }

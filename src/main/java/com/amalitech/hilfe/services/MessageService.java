@@ -51,6 +51,7 @@ public class MessageService {
     private final SlaService slaService;
     private final NotificationEventPublisher notificationEventPublisher;
     private final IncidentService incidentService;
+    private final ConfidentialIncidentAccess confidentialIncidentAccess;
 
     public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
@@ -167,6 +168,15 @@ public class MessageService {
         if (!message.getSenderId().equals(userId)) {
             throw new ArmsAuthException("You can only delete your own messages", 403);
         }
+        // HV-1619: the sender's own message on a confidential incident could still leak by a
+        // stale membership -- re-check in case group membership changed since it was sent.
+        incidentRepository.findByIdWithDetails(message.getIncidentId())
+                .filter(this::requiresConfidentialAccess)
+                .ifPresent(incident -> {
+                    if (!confidentialIncidentAccess.canAccess(userId, incident)) {
+                        throw new ArmsAuthException("You do not have access to this incident", 403);
+                    }
+                });
 
         messageRepository.delete(message);
     }
@@ -190,6 +200,15 @@ public class MessageService {
     }
 
     private void enforceAccess(String userId, String role, Incident incident) {
+        // HV-1619: chat messages are exactly the kind of detail (assignee identity, incident
+        // specifics) this feature hides elsewhere -- confidential incidents override every
+        // other rule below, including the admin bypass.
+        if (requiresConfidentialAccess(incident)) {
+            if (!confidentialIncidentAccess.canAccess(userId, incident)) {
+                throw new ArmsAuthException("You do not have access to this incident", 403);
+            }
+            return;
+        }
         if ("ADMIN".equalsIgnoreCase(role) || "ADMIN_AGENT".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
         if (userId.equals(incident.getUserId())) return;
         if (ROLE_AGENT.equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
@@ -198,10 +217,20 @@ public class MessageService {
     }
 
     private void enforceSendAccess(String userId, String role, Incident incident) {
+        if (requiresConfidentialAccess(incident)) {
+            if (!confidentialIncidentAccess.canAccess(userId, incident)) {
+                throw new ArmsAuthException("You do not have access to this incident", 403);
+            }
+            return;
+        }
         if ("ADMIN".equalsIgnoreCase(role) || "ADMIN_AGENT".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) return;
         if (userId.equals(incident.getUserId())) return;
         if (ROLE_AGENT.equalsIgnoreCase(role) && isAssignedToActor(userId, incident)) return;
         throw new ArmsAuthException("You do not have access to this incident", 403);
+    }
+
+    private boolean requiresConfidentialAccess(Incident incident) {
+        return incident.getIncidentType() != null && incident.getIncidentType().isConfidential();
     }
 
     private boolean isAssignedToActor(String userId, Incident incident) {

@@ -11,6 +11,8 @@ import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.ConfidentialEscalationResolver;
+import com.amalitech.hilfe.services.ConfidentialIncidentAccess;
+import com.amalitech.hilfe.services.ConfidentialIncidentMasker;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.SlaService;
@@ -65,12 +67,18 @@ class IncidentServiceTest {
     @Mock SlaService slaService;
     @Mock IncidentCategoryRepository incidentCategoryRepository;
     @Mock ConfidentialEscalationResolver confidentialEscalationResolver;
+    @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
     @Mock EntityManager entityManager;
     @InjectMocks IncidentService incidentService;
 
     @BeforeEach
     void injectEntityManager() {
         ReflectionTestUtils.setField(incidentService, "entityManager", entityManager);
+        // ConfidentialIncidentMasker was extracted out of IncidentService (DashboardService
+        // needed it too) -- built for real here, from the same mocked repos/slaService, so the
+        // list-masking tests below keep exercising the real masking logic instead of a mock.
+        ReflectionTestUtils.setField(incidentService, "confidentialIncidentMasker",
+                new ConfidentialIncidentMasker(slaService, agentRepository, agentGroupMemberRepository));
         lenient().when(slaService.toIncidentResponse(any(Incident.class)))
                 .thenAnswer(invocation -> IncidentResponse.from(invocation.getArgument(0), null, null));
         lenient().when(slaService.toIncidentResponse(any(Incident.class), anyList()))
@@ -84,6 +92,10 @@ class IncidentServiceTest {
                     return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
                 });
         lenient().when(agentRepository.hasActiveGroup(any(), any())).thenReturn(true);
+        // Default: unrelated to confidentiality unless a test overrides it -- most incidents in
+        // this suite aren't confidential, and ConfidentialIncidentAccess#canAccess is itself
+        // always true for those, so this keeps existing non-confidential tests unaffected.
+        lenient().when(confidentialIncidentAccess.canAccess(any(), any())).thenReturn(true);
     }
 
     @AfterEach
@@ -1070,14 +1082,11 @@ class IncidentServiceTest {
     }
 
     @Test
-    void getIncident_confidential_groupMember_canAccess() {
+    void getIncident_confidential_accessGranted_returnsResponse() {
         Incident incident = buildIncident();
         incident.setIncidentType(buildConfidentialIncidentType());
-        Agent agent = Agent.builder().id("agent-row-1").userId("group-user-1").build();
-
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
-        when(agentRepository.findByUserId("group-user-1")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("group-1"));
+        when(confidentialIncidentAccess.canAccess("group-user-1", incident)).thenReturn(true);
         when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
         when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
 
@@ -1088,28 +1097,13 @@ class IncidentServiceTest {
     }
 
     @Test
-    void getIncident_confidential_creator_canAccess() {
-        Incident incident = buildIncident(); // userId = "user-1"
-        incident.setIncidentType(buildConfidentialIncidentType());
-
-        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
-        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
-        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
-
-        IncidentResponse response = incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1");
-
-        assertThat(response.id()).isEqualTo("inc-1");
-    }
-
-    @Test
-    void getIncident_confidential_agentOutsideGroup_throws403AndLogsAttempt() {
+    void getIncident_confidential_accessDenied_throws403AndLogsAttempt() {
+        // HV-1619: confidential incidents override the normal admin bypass entirely -- denial
+        // here doesn't depend on role, only on ConfidentialIncidentAccess#canAccess.
         Incident incident = buildIncident();
         incident.setIncidentType(buildConfidentialIncidentType());
-        Agent agent = Agent.builder().id("agent-row-1").userId("outside-agent").build();
-
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
-        when(agentRepository.findByUserId("outside-agent")).thenReturn(Optional.of(agent));
-        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("group-2"));
+        when(confidentialIncidentAccess.canAccess("outside-agent", incident)).thenReturn(false);
 
         assertThatThrownBy(() -> incidentService.getIncident("outside-agent", RoleCode.AGENT, "inc-1"))
                 .isInstanceOf(ArmsAuthException.class)
@@ -1121,12 +1115,12 @@ class IncidentServiceTest {
 
     @Test
     void getIncident_confidential_nonMemberAdmin_throws403() {
-        // HV-1619: confidential incidents override the normal admin bypass entirely -- only
-        // group members (creator/assignee already covered above) may view full detail.
+        // Even ADMIN/SUPER_ADMIN, which bypass every other incident's access check, are denied
+        // once ConfidentialIncidentAccess says no.
         Incident incident = buildIncident();
         incident.setIncidentType(buildConfidentialIncidentType());
-
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("other-admin", incident)).thenReturn(false);
 
         assertThatThrownBy(() -> incidentService.getIncident("other-admin", RoleCode.ADMIN, "inc-1"))
                 .isInstanceOf(ArmsAuthException.class)
@@ -1357,6 +1351,27 @@ class IncidentServiceTest {
         incidentService.updateStatus("actor-1", RoleCode.ADMIN, true, "inc-1", new UpdateIncidentStatusRequest("status-closed", null));
 
         verify(incidentRepository).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_confidentialIncident_nonMemberWithForceClose_throws403() {
+        // HV-1619: status changes have no ownership check at all today (any agent with the
+        // right role/permission can transition any incident) -- confidential incidents are the
+        // one place that must be gated, even for a force-close override.
+        Status openStatus = buildStatus("status-open", "Open");
+        Incident incident = buildIncident();
+        incident.setStatus(openStatus);
+        incident.setIncidentType(buildConfidentialIncidentType());
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("outside-admin", incident)).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                incidentService.updateStatus("outside-admin", RoleCode.ADMIN, true, "inc-1", new UpdateIncidentStatusRequest("status-closed", null)))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
     }
 
     @Test
@@ -2020,6 +2035,24 @@ class IncidentServiceTest {
         verify(incidentRepository).save(any(Incident.class));
     }
 
+    @Test
+    void updateSeverity_confidentialIncident_nonMemberWithUpdateAny_throws403() {
+        // HV-1619: incident.update.any normally lets an admin bypass the assignee-only rule --
+        // it must not also let them reach into a confidential incident they're not a member of.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("outside-admin", incident)).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                incidentService.updateSeverity("outside-admin", true, "inc-1", new UpdateIncidentSeverityRequest("sev-high")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+    }
+
     // ── assignIncident ────────────────────────────────────────────────────────
 
     @Test
@@ -2130,6 +2163,26 @@ class IncidentServiceTest {
                 .hasMessage("You do not have permission to reassign this incident.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
+    }
+
+    @Test
+    void assignIncident_confidentialIncident_nonMemberWithUpdateAny_throws403() {
+        // HV-1619: incident.update.any normally lets an admin reassign any incident -- it must
+        // not let them move a confidential incident to an agent outside its linked group, or
+        // reach it at all if they aren't a member themselves.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("outside-admin", incident)).thenReturn(false);
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() -> incidentService.assignIncident("outside-admin", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+        verify(agentRepository, never()).findById(any());
     }
 
     @Test

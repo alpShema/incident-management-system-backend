@@ -14,8 +14,11 @@ import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.StatusRepository;
+import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.services.ConfidentialIncidentMasker;
 import com.amalitech.hilfe.services.DashboardService;
 import com.amalitech.hilfe.services.SlaService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -44,6 +48,14 @@ class DashboardServiceTest {
     @Mock StatusRepository statusRepository;
     @Mock SlaService slaService;
     @InjectMocks DashboardService dashboardService;
+
+    @BeforeEach
+    void injectConfidentialIncidentMasker() {
+        // HV-1619: built for real from the same mocked repos/slaService so getIncidents'
+        // confidential-masking tests below exercise the real masking logic, not a mock.
+        ReflectionTestUtils.setField(dashboardService, "confidentialIncidentMasker",
+                new ConfidentialIncidentMasker(slaService, agentRepository, agentGroupMemberRepository));
+    }
 
     private Agent buildAgent(String agentId) {
         return Agent.builder().id(agentId).userId("user-1").build();
@@ -394,6 +406,81 @@ class DashboardServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getTotalElements()).isZero();
+    }
+
+    // ── HV-1619: getIncidents must mask confidential rows too ───────────────────
+    // (this endpoint is a separate implementation from IncidentService's queryAllIncidents/
+    // queryDeptIncidents -- easy for masking to be added to one and missed on the other)
+
+    private Incident confidentialIncident(String assignedToId) {
+        IncidentType topic = IncidentType.builder()
+                .id("type-1").name("Confidential Topic").agentGroupId("group-1").confidential(true).build();
+        Incident incident = Incident.builder().id("inc-1").userId("creator-1").title("Secret title").assignedToId(assignedToId).build();
+        incident.setIncidentNo(1);
+        incident.setIncidentType(topic);
+        return incident;
+    }
+
+    private void stubSlaConversion(Page<Incident> page) {
+        when(slaService.toIncidentResponsePage(page)).thenAnswer(inv ->
+                new PageImpl<>(page.getContent().stream().map(i -> IncidentResponse.from(i, null, null)).toList(),
+                        page.getPageable(), page.getTotalElements()));
+    }
+
+    @Test
+    void getIncidents_adminRole_confidentialIncidentOutsideGroup_isMasked() {
+        Incident incident = confidentialIncident(null);
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(page);
+        stubSlaConversion(page);
+        when(agentRepository.findByUserId("outside-admin")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = dashboardService.getIncidents(
+                "outside-admin", RoleCode.ADMIN, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
+
+        IncidentResponse row = result.getContent().get(0);
+        assertThat(row.confidential()).isTrue();
+        assertThat(row.title()).isNull();
+        assertThat(row.createdBy()).isNull();
+    }
+
+    @Test
+    void getIncidents_agentRole_confidentialIncidentInOwnGroup_isNotMasked() {
+        Incident incident = confidentialIncident(null);
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        Agent agent = buildAgent("agent-1");
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(page);
+        stubSlaConversion(page);
+
+        Page<IncidentResponse> result = dashboardService.getIncidents(
+                "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
+
+        IncidentResponse row = result.getContent().get(0);
+        assertThat(row.confidential()).isTrue();
+        assertThat(row.title()).isEqualTo("Secret title");
+    }
+
+    @Test
+    void getIncidents_agentRole_confidentialIncidentOutsideOwnGroup_isMasked() {
+        Incident incident = confidentialIncident(null);
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        Agent agent = buildAgent("agent-1");
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A"));
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(page);
+        stubSlaConversion(page);
+
+        Page<IncidentResponse> result = dashboardService.getIncidents(
+                "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
+
+        IncidentResponse row = result.getContent().get(0);
+        assertThat(row.confidential()).isTrue();
+        assertThat(row.title()).isNull();
     }
 
     @Test

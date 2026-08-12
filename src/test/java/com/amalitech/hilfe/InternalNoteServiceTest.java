@@ -3,13 +3,16 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.dto.InternalNoteRequest;
 import com.amalitech.hilfe.dto.InternalNoteResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.InternalNote;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.InternalNoteRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.services.ConfidentialIncidentAccess;
 import com.amalitech.hilfe.services.InternalNoteService;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -39,8 +42,20 @@ class InternalNoteServiceTest {
     @Mock InternalNoteRepository noteRepository;
     @Mock IncidentRepository incidentRepository;
     @Mock ActivityLogService activityLogService;
+    @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
     @Mock EntityManager entityManager;
     @InjectMocks InternalNoteService noteService;
+
+    @BeforeEach
+    void stubConfidentialAccessDefault() {
+        // Default: none of these incidents are confidential, and canAccess is itself always
+        // true for those -- keeps the existing non-confidential tests unaffected.
+        lenient().when(confidentialIncidentAccess.canAccess(any(), any())).thenReturn(true);
+    }
+
+    private Incident incident(String id) {
+        return Incident.builder().id(id).build();
+    }
 
     private User author(String userId) {
         User u = User.builder().id(userId).build();
@@ -64,7 +79,7 @@ class InternalNoteServiceTest {
 
     @Test
     void createNote_success_persistsNoteAndLogsActivity() {
-        when(incidentRepository.existsById("inc-1")).thenReturn(true);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote saved = note("n1", "inc-1", "u1");
         when(noteRepository.save(any(InternalNote.class))).thenReturn(saved);
         when(noteRepository.findByIdWithAuthor(any())).thenReturn(Optional.of(saved));
@@ -79,7 +94,7 @@ class InternalNoteServiceTest {
 
     @Test
     void createNote_incidentNotFound_throws404() {
-        when(incidentRepository.existsById("bad-inc")).thenReturn(false);
+        when(incidentRepository.findByIdWithDetails("bad-inc")).thenReturn(Optional.empty());
         var request = new InternalNoteRequest("body");
 
         assertThatThrownBy(() -> noteService.createNote("u1", "bad-inc", request))
@@ -91,11 +106,28 @@ class InternalNoteServiceTest {
         verify(noteRepository, never()).save(any());
     }
 
+    @Test
+    void createNote_confidentialIncident_nonMember_throws403() {
+        // HV-1619: notes are otherwise only role-gated (any AGENT/ADMIN/SUPER_ADMIN can write on
+        // any incident) -- confidential incidents are the one place still restricted to the
+        // topic's linked owner.
+        Incident inc = incident("inc-1");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(inc));
+        when(confidentialIncidentAccess.canAccess("outsider", inc)).thenReturn(false);
+
+        assertThatThrownBy(() -> noteService.createNote("outsider", "inc-1", new InternalNoteRequest("body")))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(noteRepository, never()).save(any());
+    }
+
     // ── listNotes ─────────────────────────────────────────────────────────────
 
     @Test
     void listNotes_returnsPagedNotesForIncident() {
-        when(incidentRepository.existsById("inc-1")).thenReturn(true);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         Page<InternalNote> page = new PageImpl<>(List.of(n));
         when(noteRepository.findByIncidentId(eq("inc-1"), any(Pageable.class))).thenReturn(page);
@@ -109,7 +141,7 @@ class InternalNoteServiceTest {
 
     @Test
     void listNotes_incidentNotFound_throws404() {
-        when(incidentRepository.existsById("bad")).thenReturn(false);
+        when(incidentRepository.findByIdWithDetails("bad")).thenReturn(Optional.empty());
         var pageable = PageRequest.of(0, 20);
 
         assertThatThrownBy(() -> noteService.listNotes("u1", "bad", pageable))
@@ -120,7 +152,7 @@ class InternalNoteServiceTest {
 
     @Test
     void listNotes_isOwnerTrue_forAuthor() {
-        when(incidentRepository.existsById("inc-1")).thenReturn(true);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIncidentId(eq("inc-1"), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(n)));
 
@@ -131,7 +163,7 @@ class InternalNoteServiceTest {
 
     @Test
     void listNotes_isOwnerFalse_forOtherUser() {
-        when(incidentRepository.existsById("inc-1")).thenReturn(true);
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIncidentId(eq("inc-1"), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(n)));
 
@@ -140,10 +172,26 @@ class InternalNoteServiceTest {
         assertThat(result.getContent().get(0).isOwner()).isFalse();
     }
 
+    @Test
+    void listNotes_confidentialIncident_nonMember_throws403() {
+        Incident inc = incident("inc-1");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(inc));
+        when(confidentialIncidentAccess.canAccess("outsider", inc)).thenReturn(false);
+        var pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> noteService.listNotes("outsider", "inc-1", pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verifyNoInteractions(noteRepository);
+    }
+
     // ── updateNote ────────────────────────────────────────────────────────────
 
     @Test
     void updateNote_byAuthor_updatesBodyAndLogs() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
         when(noteRepository.save(n)).thenReturn(n);
@@ -156,6 +204,7 @@ class InternalNoteServiceTest {
 
     @Test
     void updateNote_noteNotFound_throws404() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         when(noteRepository.findByIdWithAuthor("bad")).thenReturn(Optional.empty());
         var request = new InternalNoteRequest("body");
 
@@ -168,6 +217,7 @@ class InternalNoteServiceTest {
 
     @Test
     void updateNote_incidentMismatch_throws404() {
+        when(incidentRepository.findByIdWithDetails("other-inc")).thenReturn(Optional.of(incident("other-inc")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
         var request = new InternalNoteRequest("body");
@@ -181,6 +231,7 @@ class InternalNoteServiceTest {
 
     @Test
     void updateNote_notAuthor_throws403() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
         var request = new InternalNoteRequest("body");
@@ -192,10 +243,26 @@ class InternalNoteServiceTest {
                 .isEqualTo(403);
     }
 
+    @Test
+    void updateNote_confidentialIncident_nonMember_throws403() {
+        Incident inc = incident("inc-1");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(inc));
+        when(confidentialIncidentAccess.canAccess("u1", inc)).thenReturn(false);
+        var request = new InternalNoteRequest("body");
+
+        assertThatThrownBy(() -> noteService.updateNote("u1", "inc-1", "n1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verifyNoInteractions(noteRepository);
+    }
+
     // ── deleteNote ────────────────────────────────────────────────────────────
 
     @Test
     void deleteNote_byAuthor_deletesAndLogs() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
 
@@ -207,6 +274,7 @@ class InternalNoteServiceTest {
 
     @Test
     void deleteNote_byAdmin_deletesAnyNote() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
 
@@ -218,6 +286,7 @@ class InternalNoteServiceTest {
 
     @Test
     void deleteNote_bySuperAdmin_deletesAnyNote() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
 
@@ -228,6 +297,7 @@ class InternalNoteServiceTest {
 
     @Test
     void deleteNote_noteNotFound_throws404() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         when(noteRepository.findByIdWithAuthor("bad")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> noteService.deleteNote("u1", "AGENT", "inc-1", "bad"))
@@ -239,6 +309,7 @@ class InternalNoteServiceTest {
 
     @Test
     void deleteNote_incidentMismatch_throws404() {
+        when(incidentRepository.findByIdWithDetails("other-inc")).thenReturn(Optional.of(incident("other-inc")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
 
@@ -251,6 +322,7 @@ class InternalNoteServiceTest {
 
     @Test
     void deleteNote_notAuthorAndNotAdmin_throws403() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1")));
         InternalNote n = note("n1", "inc-1", "u1");
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
 
@@ -259,5 +331,19 @@ class InternalNoteServiceTest {
                 .hasMessageContaining("You can only delete your own notes")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
+    }
+
+    @Test
+    void deleteNote_confidentialIncident_nonMember_throws403() {
+        Incident inc = incident("inc-1");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(inc));
+        when(confidentialIncidentAccess.canAccess("outsider-admin", inc)).thenReturn(false);
+
+        assertThatThrownBy(() -> noteService.deleteNote("outsider-admin", "ADMIN", "inc-1", "n1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verifyNoInteractions(noteRepository);
     }
 }
