@@ -39,7 +39,7 @@ public class SlackOAuthController {
             • View your tickets with `/hilfe my`
             • Receive real-time DM notifications for all incident updates
 
-            Open the *Home* tab to manage your notification preferences.""";
+            Open the *Home* tab of the HILFE Slack app (click *HILFE* in your sidebar) to manage your notification preferences.""";
 
     private final SlackOAuthService oauthService;
     private final SlackAuditLogService auditLogService;
