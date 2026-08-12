@@ -31,8 +31,6 @@ class StompSubscriptionAuthorizationInterceptorTest {
     @Mock IncidentRepository incidentRepository;
     @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
 
-    private StompSubscriptionAuthorizationInterceptor interceptor;
-
     private final MessageChannel channel = new MessageChannel() {
         @Override
         public boolean send(Message<?> message) {
@@ -101,16 +99,18 @@ class StompSubscriptionAuthorizationInterceptorTest {
     @Test
     void subscribingToAnotherUsersTopic_isRejected() {
         Message<byte[]> message = subscribeMessage("/topic/users/user-2/notifications", authenticationFor("user-1"));
+        var interceptor = interceptor();
 
-        assertThatThrownBy(() -> interceptor().preSend(message, channel))
+        assertThatThrownBy(() -> interceptor.preSend(message, channel))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     void subscribingWithoutAuthenticatedPrincipal_isRejected() {
         Message<byte[]> message = subscribeMessage("/topic/users/user-1/notifications", null);
+        var interceptor = interceptor();
 
-        assertThatThrownBy(() -> interceptor().preSend(message, channel))
+        assertThatThrownBy(() -> interceptor.preSend(message, channel))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -118,7 +118,7 @@ class StompSubscriptionAuthorizationInterceptorTest {
     void nonSubscribeCommands_passThroughUnchecked() {
         Message<byte[]> connect = commandMessage(StompCommand.CONNECT, null);
         Message<byte[]> send = commandMessage(StompCommand.SEND, "/topic/users/user-2/notifications");
-        StompSubscriptionAuthorizationInterceptor interceptor = interceptor();
+        var interceptor = interceptor();
 
         assertThat(interceptor.preSend(connect, channel)).isSameAs(connect);
         assertThat(interceptor.preSend(send, channel)).isSameAs(send);
@@ -169,8 +169,9 @@ class StompSubscriptionAuthorizationInterceptorTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(confidentialIncidentAccess.canAccess("outsider", incident)).thenReturn(false);
         Message<byte[]> message = subscribeMessage("/topic/incidents/inc-1/messages", authenticationFor("outsider"));
+        var interceptor = interceptor();
 
-        assertThatThrownBy(() -> interceptor().preSend(message, channel))
+        assertThatThrownBy(() -> interceptor.preSend(message, channel))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -179,8 +180,9 @@ class StompSubscriptionAuthorizationInterceptorTest {
         Incident incident = confidentialIncident("inc-1");
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         Message<byte[]> message = subscribeMessage("/topic/incidents/inc-1/messages", null);
+        var interceptor = interceptor();
 
-        assertThatThrownBy(() -> interceptor().preSend(message, channel))
+        assertThatThrownBy(() -> interceptor.preSend(message, channel))
                 .isInstanceOf(AccessDeniedException.class);
     }
 }
