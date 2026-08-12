@@ -25,6 +25,7 @@ import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.services.ConfidentialEscalationResolver;
 import com.amalitech.hilfe.services.SlaService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,6 +64,7 @@ class SlaServiceTest {
     @Mock LocationRepository locationRepository;
     @Mock NotificationEventPublisher notificationEventPublisher;
     @Mock ActivityLogService activityLogService;
+    @Mock ConfidentialEscalationResolver confidentialEscalationResolver;
 
     @InjectMocks SlaService slaService;
 
@@ -561,6 +563,40 @@ class SlaServiceTest {
         verify(notificationEventPublisher, times(1)).publish(captor.capture());
         assertThat(captor.getValue().recipientUserId()).isEqualTo("agent-user-1");
         verify(userRepository, never()).findActiveAdminUserIds();
+    }
+
+    // ── HV-1619: confidential-incident escalation stays in-group ───────────────
+
+    @Test
+    void scanAndNotify_confidentialIncident_unassigned_escalatesToGroupNotAdmins() {
+        Instant now = FIXED_NOW;
+        IncidentType confidentialType = IncidentType.builder()
+                .id("type-1").name("Confidential Topic").categoryId("cat-1")
+                .agentGroupId("group-1").confidential(true).build();
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(15)
+                .incidentType(confidentialType)
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(confidentialEscalationResolver.resolveRecipientUserIds(confidentialType)).thenReturn(List.of("group-user-1"));
+
+        slaService.scanAndNotify();
+
+        ArgumentCaptor<IncidentSlaAtRiskEvent> captor = ArgumentCaptor.forClass(IncidentSlaAtRiskEvent.class);
+        verify(notificationEventPublisher, times(1)).publish(captor.capture());
+        assertThat(captor.getValue().recipientUserId()).isEqualTo("group-user-1");
+        verify(userRepository, never()).findActiveAdminUserIds();
+        verify(incidentCategoryRepository, never()).findByIdWithDepartment(any());
     }
 
     @Test

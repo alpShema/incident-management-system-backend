@@ -65,6 +65,7 @@ class IncidentCategoryControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
+                false,
                 true,
                 null,
                 null);
@@ -375,7 +376,7 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listTopics_returns200WithAllTopics() throws Exception {
-        IncidentTopicResponse inactiveTopic = new IncidentTopicResponse("type-2", "Old Topic", "Deprecated", true, false, null, null);
+        IncidentTopicResponse inactiveTopic = new IncidentTopicResponse("type-2", "Old Topic", "Deprecated", true, false, false, null, null);
         when(categoryService.listTopicsByCategory("cat-1", null))
                 .thenReturn(List.of(stubTopic(), inactiveTopic));
 
@@ -420,7 +421,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateTopicRequest("Projector", "Projector issues", "group-1", true)))
+                                new CreateTopicRequest("Projector", "Projector issues", "group-1", true, false)))
                         .with(authentication(auth)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Incident topic created successfully"))
@@ -437,7 +438,7 @@ class IncidentCategoryControllerTest {
         mvc.perform(post("/incident-categories/cat-1/topics")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateTopicRequest("Projector", "Projector issues", null, true)))
+                                new CreateTopicRequest("Projector", "Projector issues", null, true, false)))
                         .with(authentication(auth)))
                 .andExpect(status().isBadRequest());
     }

@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.*;
@@ -90,6 +91,7 @@ public class IncidentService {
     private final AutoCloseService autoCloseService;
     private final SlaService slaService;
     private final IncidentCategoryRepository incidentCategoryRepository;
+    private final ConfidentialEscalationResolver confidentialEscalationResolver;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -184,13 +186,15 @@ public class IncidentService {
     }
 
     public Page<IncidentResponse> queryAllIncidents(
+            String userId,
             String query,
             IncidentFilterParams filters,
             IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
-        return slaService.toIncidentResponsePage(incidentRepository
-                .findAllUnified(buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable)));
+        Page<Incident> incidents = incidentRepository
+                .findAllUnified(buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable));
+        return maskConfidentialRows(userId, null, incidents);
     }
 
     public Page<IncidentResponse> queryDeptIncidents(
@@ -217,8 +221,46 @@ public class IncidentService {
             groupIdsToQuery = agentGroupRepository.findIdsByDepartmentIds(deptIds);
         }
 
-        return slaService.toIncidentResponsePage(incidentRepository
-                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters, dateFilter, sorted));
+        Page<Incident> incidents = incidentRepository
+                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters, dateFilter, sorted);
+        // userGroupIds is the viewer's own group membership -- reuse it directly instead of
+        // re-querying, since it's exactly what the confidentiality mask check needs too.
+        return maskConfidentialRows(userId, userGroupIds, incidents);
+    }
+
+    // HV-1619: "All Incidents" and "Department Assigned Incidents" are the only two tabs that
+    // can show a confidential incident to someone outside its owning group -- every other list
+    // (my-incidents, assigned-incidents, search) is already scoped to rows the caller
+    // unconditionally owns. Group IDs are resolved once per page, not per row, to avoid N+1s.
+    private Page<IncidentResponse> maskConfidentialRows(String userId, List<String> precomputedViewerGroupIds, Page<Incident> incidents) {
+        Page<IncidentResponse> responses = slaService.toIncidentResponsePage(incidents);
+        List<String> viewerGroupIds = precomputedViewerGroupIds != null
+                ? precomputedViewerGroupIds
+                : findAgentGroupIds(userId).orElse(List.of());
+        String viewerAgentId = agentRepository.findByUserId(userId).map(Agent::getId).orElse(null);
+
+        List<Incident> incidentList = incidents.getContent();
+        List<IncidentResponse> responseList = responses.getContent();
+        List<IncidentResponse> masked = new ArrayList<>(responseList.size());
+        for (int i = 0; i < responseList.size(); i++) {
+            boolean mask = shouldMaskForViewer(userId, viewerGroupIds, viewerAgentId, incidentList.get(i));
+            masked.add(mask ? responseList.get(i).masked() : responseList.get(i));
+        }
+        return new PageImpl<>(masked, responses.getPageable(), responses.getTotalElements());
+    }
+
+    private boolean shouldMaskForViewer(String userId, List<String> viewerGroupIds, String viewerAgentId, Incident incident) {
+        IncidentType topic = incident.getIncidentType();
+        if (topic == null || !topic.isConfidential()) {
+            return false;
+        }
+        if (userId.equals(incident.getUserId())) {
+            return false;
+        }
+        if (viewerAgentId != null && viewerAgentId.equals(incident.getAssignedToId())) {
+            return false;
+        }
+        return !isMemberOfTopicOwner(topic, viewerGroupIds, viewerAgentId);
     }
 
     public Page<IncidentResponse> queryAssignedIncidents(
@@ -478,6 +520,11 @@ public class IncidentService {
     }
 
     private void enforceAccess(String userId, String roleCode, Incident incident) {
+        IncidentType topic = incident.getIncidentType();
+        if (topic != null && topic.isConfidential()) {
+            enforceConfidentialAccess(userId, incident, topic);
+            return;
+        }
         if (ROLE_ADMIN.equalsIgnoreCase(roleCode) || ROLE_ADMIN_AGENT.equalsIgnoreCase(roleCode) || ROLE_SUPER_ADMIN.equalsIgnoreCase(roleCode)) {
             return;
         }
@@ -485,13 +532,53 @@ public class IncidentService {
             return;
         }
         if (ROLE_AGENT.equalsIgnoreCase(roleCode)) {
-            boolean isAssignee = agentRepository.findByUserId(userId)
-                    .map(a -> a.getId().equals(incident.getAssignedToId()))
-                    .orElse(false);
-            if (isAssignee) return;
+            if (isAssignee(userId, incident)) return;
             if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
         throw new ArmsAuthException("You do not have permission to access this incident.", 403);
+    }
+
+    // HV-1619: a confidential incident's rules replace the normal ones entirely -- the admin/
+    // admin-agent/super-admin bypass above does NOT apply here. Only the creator, the assignee,
+    // and members of the topic's linked agent group (or single agent, for legacy topics) may
+    // view full detail; everyone else is denied and the attempt is written to incident history.
+    private void enforceConfidentialAccess(String userId, Incident incident, IncidentType topic) {
+        if (userId.equals(incident.getUserId())) return;
+        if (isAssignee(userId, incident)) return;
+        if (isMemberOfTopicOwner(userId, topic)) return;
+        activityLogService.logUnauthorizedConfidentialAccess(userId, incident.getId());
+        throw new ArmsAuthException("You do not have permission to access this incident.", 403);
+    }
+
+    private boolean isAssignee(String userId, Incident incident) {
+        return agentRepository.findByUserId(userId)
+                .map(a -> a.getId().equals(incident.getAssignedToId()))
+                .orElse(false);
+    }
+
+    private boolean isMemberOfTopicOwner(String userId, IncidentType topic) {
+        if (StringUtils.hasText(topic.getAgentGroupId())) {
+            return findAgentGroupIds(userId).orElse(List.of()).contains(topic.getAgentGroupId());
+        }
+        if (StringUtils.hasText(topic.getAgentId())) {
+            return agentRepository.findByUserId(userId)
+                    .map(a -> a.getId().equals(topic.getAgentId()))
+                    .orElse(false);
+        }
+        return false;
+    }
+
+    // Same "is this viewer the topic's owner" check as above, but for list rows where the
+    // viewer's group IDs/agent ID were already resolved once for the whole page -- avoids
+    // repeating that lookup per row (see maskConfidentialRows).
+    private boolean isMemberOfTopicOwner(IncidentType topic, List<String> viewerGroupIds, String viewerAgentId) {
+        if (StringUtils.hasText(topic.getAgentGroupId())) {
+            return viewerGroupIds.contains(topic.getAgentGroupId());
+        }
+        if (StringUtils.hasText(topic.getAgentId())) {
+            return topic.getAgentId().equals(viewerAgentId);
+        }
+        return false;
     }
 
     /**
@@ -793,6 +880,9 @@ public class IncidentService {
     // Falls back to all admins when there's no category/department link, no head is set, or the
     // stored head is no longer an active admin-capable user (role/status can change after assignment).
     private List<String> resolveEscalationRecipientUserIds(IncidentType incidentType) {
+        if (incidentType != null && incidentType.isConfidential()) {
+            return confidentialEscalationResolver.resolveRecipientUserIds(incidentType);
+        }
         String categoryId = incidentType != null ? incidentType.getCategoryId() : null;
         if (categoryId != null) {
             String headUserId = incidentCategoryRepository.findByIdWithDepartment(categoryId)

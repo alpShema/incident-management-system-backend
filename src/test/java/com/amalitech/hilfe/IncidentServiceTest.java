@@ -10,6 +10,7 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AutoCloseService;
+import com.amalitech.hilfe.services.ConfidentialEscalationResolver;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.SlaService;
@@ -63,6 +64,7 @@ class IncidentServiceTest {
     @Mock MediaRepository mediaRepository;
     @Mock SlaService slaService;
     @Mock IncidentCategoryRepository incidentCategoryRepository;
+    @Mock ConfidentialEscalationResolver confidentialEscalationResolver;
     @Mock EntityManager entityManager;
     @InjectMocks IncidentService incidentService;
 
@@ -293,6 +295,34 @@ class IncidentServiceTest {
         verify(agentRepository, never()).findAvailableByAgentGroupIdViaMembership(any());
         verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("admin-user-1", incident.getId(), 1));
         verify(notificationEventPublisher, never()).publish(isA(IncidentAutoAssignedClientEvent.class));
+    }
+
+    // ── HV-1619: confidential-topic escalation stays in-group ──────────────────
+
+    @Test
+    void createIncident_confidentialTopic_noAvailableAgent_escalatesToGroupNotAdmins() {
+        AgentGroup deactivatedGroup = AgentGroup.builder().id("group-1").name("Confidential Group").status(false).build();
+        IncidentType incidentType = buildIncidentType();
+        incidentType.setAgentGroupId("group-1");
+        incidentType.setConfidential(true);
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(incidentType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(deactivatedGroup));
+        when(confidentialEscalationResolver.resolveRecipientUserIds(incidentType)).thenReturn(List.of("group-user-1"));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        verify(notificationEventPublisher).publish(new IncidentEscalatedEvent("group-user-1", incident.getId(), 1));
+        verify(notificationEventPublisher, never()).publish(argThat(e ->
+                e instanceof IncidentEscalatedEvent ev && "admin-user-1".equals(ev.recipientUserId())));
+        verify(userRepository, never()).findActiveAdminUserIds();
+        verify(incidentCategoryRepository, never()).findByIdWithDepartment(any());
     }
 
     // ── escalation → department head targeting (HV-1533) ───────────────────────
@@ -1025,6 +1055,85 @@ class IncidentServiceTest {
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    // ── HV-1619: confidential incidents lock out non-members, including admins ─
+
+    private IncidentType buildConfidentialIncidentType() {
+        return IncidentType.builder()
+                .id("type-1")
+                .name("Confidential Topic")
+                .categoryId("cat-1")
+                .agentGroupId("group-1")
+                .confidential(true)
+                .build();
+    }
+
+    @Test
+    void getIncident_confidential_groupMember_canAccess() {
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        Agent agent = Agent.builder().id("agent-row-1").userId("group-user-1").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("group-user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("group-1"));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("group-user-1", RoleCode.AGENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+        verify(activityLogService, never()).logUnauthorizedConfidentialAccess(any(), any());
+    }
+
+    @Test
+    void getIncident_confidential_creator_canAccess() {
+        Incident incident = buildIncident(); // userId = "user-1"
+        incident.setIncidentType(buildConfidentialIncidentType());
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(mediaRepository.findByIncidentId("inc-1")).thenReturn(List.of());
+        when(mediaService.toMediaResponses(List.of())).thenReturn(List.of());
+
+        IncidentResponse response = incidentService.getIncident("user-1", RoleCode.CLIENT, "inc-1");
+
+        assertThat(response.id()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void getIncident_confidential_agentOutsideGroup_throws403AndLogsAttempt() {
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        Agent agent = Agent.builder().id("agent-row-1").userId("outside-agent").build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findByUserId("outside-agent")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-row-1")).thenReturn(List.of("group-2"));
+
+        assertThatThrownBy(() -> incidentService.getIncident("outside-agent", RoleCode.AGENT, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(activityLogService).logUnauthorizedConfidentialAccess("outside-agent", "inc-1");
+    }
+
+    @Test
+    void getIncident_confidential_nonMemberAdmin_throws403() {
+        // HV-1619: confidential incidents override the normal admin bypass entirely -- only
+        // group members (creator/assignee already covered above) may view full detail.
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+
+        assertThatThrownBy(() -> incidentService.getIncident("other-admin", RoleCode.ADMIN, "inc-1"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(activityLogService).logUnauthorizedConfidentialAccess("other-admin", "inc-1");
     }
 
     // ── getIncident: no longer has read/view side effects ───────────────────────
@@ -2398,7 +2507,7 @@ class IncidentServiceTest {
         when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
-        Page<IncidentResponse> result = incidentService.queryAllIncidents(null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
+        Page<IncidentResponse> result = incidentService.queryAllIncidents("admin-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
         verify(incidentRepository).findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
@@ -2410,11 +2519,48 @@ class IncidentServiceTest {
         when(incidentRepository.findAllUnified(anyString(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
-        incidentService.queryAllIncidents("fire", new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
+        incidentService.queryAllIncidents("admin-1", "fire", new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         var captor = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(incidentRepository).findAllUnified(captor.capture(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
         assertThat(captor.getValue()).startsWith("%").endsWith("%").contains("fire");
+    }
+
+    @Test
+    void queryAllIncidents_confidentialIncidentNonMemberAdmin_isMasked() {
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType()); // owning group is "group-1"
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+        when(agentRepository.findByUserId("admin-1")).thenReturn(Optional.empty());
+
+        Page<IncidentResponse> result = incidentService.queryAllIncidents("admin-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
+
+        IncidentResponse row = result.getContent().get(0);
+        assertThat(row.confidential()).isTrue();
+        assertThat(row.title()).isNull();
+        assertThat(row.createdBy()).isNull();
+        assertThat(row.assignedTo()).isNull();
+        assertThat(row.incidentTopic()).isNull();
+    }
+
+    @Test
+    void queryAllIncidents_confidentialIncidentGroupMember_isNotMasked() {
+        Agent agent = Agent.builder().id("agent-9").userId("group-user-1").build();
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType()); // owning group is "group-1"
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+        when(agentRepository.findByUserId("group-user-1")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-9")).thenReturn(List.of("group-1"));
+
+        Page<IncidentResponse> result = incidentService.queryAllIncidents("group-user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
+
+        IncidentResponse row = result.getContent().get(0);
+        assertThat(row.confidential()).isTrue();
+        assertThat(row.title()).isEqualTo("Test Incident");
     }
 
     // ── queryDeptIncidents ────────────────────────────────────────────────────
@@ -2491,6 +2637,53 @@ class IncidentServiceTest {
 
         assertThat(result.getTotalElements()).isZero();
         verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any());
+    }
+
+    // ── HV-1619: confidential-incident masking in list views ───────────────────
+
+    @Test
+    void queryDeptIncidents_confidentialIncidentOutsideOwnGroup_isMasked() {
+        // Viewer ("dept-viewer") is deliberately distinct from the incident's creator
+        // ("user-1", from buildIncident()) so the creator bypass can't mask the group check.
+        Agent agent = Agent.builder().id("agent-1").userId("dept-viewer").build();
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType()); // owning group is "group-1"
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(agentRepository.findByUserId("dept-viewer")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-A"))).thenReturn(List.of());
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("dept-viewer", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
+
+        IncidentResponse row = result.getContent().get(0);
+        assertThat(row.confidential()).isTrue();
+        assertThat(row.title()).isNull();
+        assertThat(row.description()).isNull();
+        assertThat(row.createdBy()).isNull();
+        assertThat(row.assignedTo()).isNull();
+        assertThat(row.incidentTopic()).isNull();
+        assertThat(row.incidentNo()).isEqualTo(1);
+    }
+
+    @Test
+    void queryDeptIncidents_confidentialIncidentInOwnGroup_isNotMasked() {
+        Agent agent = Agent.builder().id("agent-1").userId("dept-viewer").build();
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType()); // owning group is "group-1"
+        Page<Incident> page = new PageImpl<>(List.of(incident));
+        when(agentRepository.findByUserId("dept-viewer")).thenReturn(Optional.of(agent));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of());
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(page);
+
+        Page<IncidentResponse> result = incidentService.queryDeptIncidents("dept-viewer", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
+
+        IncidentResponse row = result.getContent().get(0);
+        assertThat(row.confidential()).isTrue();
+        assertThat(row.title()).isEqualTo("Test Incident");
     }
 
     @Test
@@ -2587,7 +2780,7 @@ class IncidentServiceTest {
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
-        incidentService.queryAllIncidents(null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), categorySort);
+        incidentService.queryAllIncidents("admin-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), categorySort);
 
         var captor = forClass(Pageable.class);
         verify(incidentRepository).findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());

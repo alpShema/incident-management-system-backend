@@ -18,5 +18,10 @@ public record CreateTopicRequest(
         String agentGroupId,
 
         @Schema(description = "Whether this topic is visible to group members (non-admin reporters)", example = "true")
-        boolean visibleToGroup
+        boolean visibleToGroup,
+
+        @Schema(description = "Whether incidents under this topic are confidential. Confidential incidents auto-route "
+                + "to, and stay within, the linked agent group — escalation never reaches admins, and agents outside "
+                + "the group see only a masked entry.", example = "false")
+        boolean confidential
 ) {}

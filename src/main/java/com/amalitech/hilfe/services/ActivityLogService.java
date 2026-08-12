@@ -40,6 +40,7 @@ public class ActivityLogService {
     private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
     private static final String AS_HEAD_OF_DEPARTMENT = " as head of department ";
     private static final String ACTION_INCIDENT_VIEWED = "INCIDENT_VIEWED";
+    private static final String ACTION_UNAUTHORIZED_CONFIDENTIAL_ACCESS = "UNAUTHORIZED_CONFIDENTIAL_ACCESS";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -228,6 +229,28 @@ public class ActivityLogService {
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log view for incident {}", incidentId, ex);
+        }
+    }
+
+    // HV-1619: an agent/admin outside a confidential topic's linked agent group tried to open
+    // the incident directly and was denied. Recorded on its own -- separate from
+    // logIncidentViewed, which only fires on a successful view -- since this is exactly the
+    // "attempt recorded in incident history" acceptance criterion.
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logUnauthorizedConfidentialAccess(String actorUserId, String incidentId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(ACTION_UNAUTHORIZED_CONFIDENTIAL_ACCESS)
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " attempted to view confidential " + incidentLabel + " without authorization")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log unauthorized confidential access attempt for incident {}", incidentId, ex);
         }
     }
 

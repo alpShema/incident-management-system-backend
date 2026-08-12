@@ -16,8 +16,11 @@ public record IncidentResponse(
         @Schema(description = "Location where the incident occurred") LocationResponse location,
         @Schema(description = "Current priority level", nullable = true) LookupResponse priority,
         @Schema(description = "Current lifecycle status", nullable = true) LookupResponse status,
-        @Schema(description = "The user who created this incident") CreatorResponse createdBy,
-        @Schema(description = "Assigned agent details, or null if unassigned", nullable = true) AssignedAgentResponse assignedTo,
+        @Schema(description = "The user who created this incident, or null when masked for confidentiality", nullable = true) CreatorResponse createdBy,
+        @Schema(description = "Assigned agent details, or null if unassigned or masked for confidentiality", nullable = true) AssignedAgentResponse assignedTo,
+        @Schema(description = "Whether this incident belongs to a confidential topic. When true and the caller isn't "
+                + "a member of the topic's linked agent group, title/description/createdBy/assignedTo/incidentTopic "
+                + "are masked (null) in list views.") boolean confidential,
         @Schema(description = "Whether the incident has been read. Shared across all viewers of the All Incidents, "
                 + "Department Assigned Incidents, and Assigned Incidents tables — not private to any one user.") boolean read,
         @Schema(description = "Reason provided when the status was set to Pending or Reopened, null otherwise", nullable = true) String statusReason,
@@ -37,6 +40,7 @@ public record IncidentResponse(
     }
 
     public static IncidentResponse from(Incident incident, List<MediaResponse> attachments, IncidentSlaResponse sla) {
+        boolean confidential = incident.getIncidentType() != null && incident.getIncidentType().isConfidential();
         return new IncidentResponse(
                 incident.getId(),
                 incident.getIncidentNo(),
@@ -48,6 +52,7 @@ public record IncidentResponse(
                 incident.getStatus() != null ? LookupResponse.from(incident.getStatus().getId(), incident.getStatus().getName()) : null,
                 CreatorResponse.from(incident.getCreatedBy()),
                 AssignedAgentResponse.from(incident.getAssignedTo()),
+                confidential,
                 incident.isRead(),
                 incident.getStatusReason(),
                 incident.getResolvedAt(),
@@ -57,5 +62,17 @@ public record IncidentResponse(
                 sla,
                 attachments
         );
+    }
+
+    /**
+     * HV-1619: list-view row for a confidential incident, seen by someone outside the topic's
+     * linked agent group. Only the incident number and the confidential flag (drives the lock
+     * icon) survive — creator, title, description, category/topic, and assignee are masked.
+     */
+    public IncidentResponse masked() {
+        return new IncidentResponse(
+                id, incidentNo, null, null, null, location, priority, status,
+                null, null, true, read, statusReason, resolvedAt, closedAt,
+                createdAt, updatedAt, sla, null);
     }
 }

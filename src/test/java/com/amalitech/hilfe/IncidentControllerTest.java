@@ -75,7 +75,7 @@ class IncidentControllerTest {
                 "inc-1", 1, "Test Incident", "Description",
                 null, null, new LookupResponse("sev-low", "Low"), null,
                 new com.amalitech.hilfe.dto.CreatorResponse("user-1", "John Doe", "http://img.png"),
-                null, false, null, null, null, null, null, null, null);
+                null, false, false, null, null, null, null, null, null, null);
     }
 
     // ── POST /incidents ───────────────────────────────────────────────────────
@@ -351,7 +351,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_adminAuth_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentService.queryAllIncidents(any(), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").with(authentication(adminAuth())))
@@ -362,7 +362,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_keywordOnly_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(eq("projector"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentService.queryAllIncidents(any(), eq("projector"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").param("query", "projector").with(authentication(adminAuth())))
@@ -372,7 +372,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_filterOnly_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentService.queryAllIncidents(any(), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").param("statusId", "status-open").with(authentication(adminAuth())))
@@ -382,20 +382,20 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_readFilter_isPassedToService() throws Exception {
-        when(incidentService.queryAllIncidents(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentService.queryAllIncidents(any(), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").param("read", "true").with(authentication(adminAuth())))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<IncidentFilterParams> captor = ArgumentCaptor.forClass(IncidentFilterParams.class);
-        verify(incidentService).queryAllIncidents(isNull(), captor.capture(), any(IncidentDateFilter.class), any());
+        verify(incidentService).queryAllIncidents(any(), isNull(), captor.capture(), any(IncidentDateFilter.class), any());
         assertThat(captor.getValue().read()).isTrue();
     }
 
     @Test
     void listAllIncidents_combinedKeywordAndFilter_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(eq("fire"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentService.queryAllIncidents(any(), eq("fire"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         mvc.perform(get("/incidents").param("query", "fire").param("statusId", "status-open").with(authentication(adminAuth())))
@@ -405,7 +405,7 @@ class IncidentControllerTest {
 
     @Test
     void listAllIncidents_emptyResult_returns200() throws Exception {
-        when(incidentService.queryAllIncidents(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentService.queryAllIncidents(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/incidents").with(authentication(adminAuth())))

@@ -20,5 +20,10 @@ public record UpdateTopicRequest(
         Boolean removeAgentGroup,
 
         @Schema(description = "Whether this topic is visible to group members", nullable = true)
-        Boolean visibleToGroup
+        Boolean visibleToGroup,
+
+        @Schema(description = "Whether incidents under this topic are confidential. Requires the topic to have a "
+                + "responsible agent group (or legacy single agent) — cannot be enabled together with removeAgentGroup.",
+                nullable = true)
+        Boolean confidential
 ) {}
