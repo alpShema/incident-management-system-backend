@@ -20,6 +20,11 @@ import java.util.Map;
 public class SlackEventHandler {
 
     private static final String CONNECT_FIRST_MSG = "Please connect your account first with `/hilfe connect`.";
+    // Single source of truth for how the bot describes its own Home tab (HV-1590) --
+    // distinguishes it from HILFE's own web-app home page and gives a navigational
+    // hint, so every message referencing it stays worded consistently.
+    private static final String HILFE_HOME_TAB =
+            "the *Home* tab of the HILFE Slack app (click *HILFE* in your sidebar)";
     private static final String HELP_RESPONSE = """
             {
                 "response_type": "ephemeral",
@@ -43,7 +48,7 @@ public class SlackEventHandler {
                         "elements": [
                             {
                                 "type": "mrkdwn",
-                                "text": "You can also use the *Home* tab for quick access to all features."
+                                "text": "You can also use the *Home* tab of the HILFE Slack app (click *HILFE* in your sidebar) for quick access to all features."
                             }
                         ]
                     }
@@ -123,7 +128,7 @@ public class SlackEventHandler {
                     "Hi! To use the HILFE bot, please connect your account first using `/hilfe connect`.");
         } else {
             slackClient.chatPostMessage(channelId,
-                    "Hi! Use `/hilfe help` to see available commands, or click *Add New Incident* in the Home tab.");
+                    "Hi! Use `/hilfe help` to see available commands, or open " + HILFE_HOME_TAB + " and select *Add New Incident*.");
         }
     }
 
@@ -185,7 +190,7 @@ public class SlackEventHandler {
         }
 
         return buildEphemeralResponse(
-                "Open the *Home* tab and click *⚙️ Notification Settings* to manage your preferences.");
+                "Open " + HILFE_HOME_TAB + " and select *⚙️ Notification Settings* to manage your preferences.");
     }
 
     private String handleNewIncidentCommand(String userId, String triggerId) {
