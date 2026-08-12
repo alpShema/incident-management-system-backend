@@ -82,7 +82,7 @@ public class MessageService {
 
         List<MessageMedia> media = List.of();
         if (attachments != null && !attachments.isEmpty()) {
-            media = mediaService.createMediaForMessage(incidentId, saved.getId(), attachments, userId);
+            media = mediaService.createMediaForMessage(incidentId, saved.getId(), attachments);
         }
 
         messageRepository.flush();

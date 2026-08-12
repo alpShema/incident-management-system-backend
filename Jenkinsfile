@@ -101,8 +101,33 @@ pipeline {
                             echo "Trivy not found — installing..."
                             curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
                         fi
-                        trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table ${env.appName}:${env.IMAGE_TAG} > trivy-image-scan.txt
+
+                        # /tmp on this agent is too small for Trivy's ~900MB Java DB download
+                        # (fails with "no space left on device"). Stage the download/cache on the
+                        # workspace disk instead, which has room, and clean up afterwards.
+                        export TMPDIR="${env.WORKSPACE}/.trivy-tmp"
+                        mkdir -p "\$TMPDIR"
+
+                        # The mirror.gcr.io pull-through cache for the Java DB artifact
+                        # intermittently 404s on individual object fetches. Retry a few times
+                        # before failing the build, since this is a transient upstream registry
+                        # issue rather than anything wrong locally — the cache dir persists
+                        # across attempts so a successful partial download isn't redone.
+                        attempt=1
+                        until trivy image --timeout 30m --exit-code 0 --skip-dirs .git --scanners vuln --format table \\
+                            --cache-dir "${env.WORKSPACE}/.trivy-cache" ${env.appName}:${env.IMAGE_TAG} > trivy-image-scan.txt; do
+                            if [ "\$attempt" -ge 3 ]; then
+                                echo "Trivy scan failed after 3 attempts"
+                                cat trivy-image-scan.txt || true
+                                rm -rf "\$TMPDIR" "${env.WORKSPACE}/.trivy-cache"
+                                exit 1
+                            fi
+                            echo "Trivy scan attempt \$attempt failed, retrying in 15s..."
+                            sleep 15
+                            attempt=\$((attempt + 1))
+                        done
                         cat trivy-image-scan.txt
+                        rm -rf "\$TMPDIR" "${env.WORKSPACE}/.trivy-cache"
                     """
                 }
             }
