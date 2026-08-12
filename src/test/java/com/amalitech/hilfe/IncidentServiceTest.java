@@ -1365,8 +1365,8 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(confidentialIncidentAccess.canAccess("outside-admin", incident)).thenReturn(false);
 
-        assertThatThrownBy(() ->
-                incidentService.updateStatus("outside-admin", RoleCode.ADMIN, true, "inc-1", new UpdateIncidentStatusRequest("status-closed", null)))
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-closed", null);
+        assertThatThrownBy(() -> incidentService.updateStatus("outside-admin", RoleCode.ADMIN, true, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
@@ -2044,8 +2044,8 @@ class IncidentServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(confidentialIncidentAccess.canAccess("outside-admin", incident)).thenReturn(false);
 
-        assertThatThrownBy(() ->
-                incidentService.updateSeverity("outside-admin", true, "inc-1", new UpdateIncidentSeverityRequest("sev-high")))
+        UpdateIncidentSeverityRequest request = new UpdateIncidentSeverityRequest("sev-high");
+        assertThatThrownBy(() -> incidentService.updateSeverity("outside-admin", true, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);

@@ -416,11 +416,11 @@ class MessageServiceTest {
         // HV-1619: the same-department fallback that lets a teammate read a normal incident's
         // chat must not apply once the incident is confidential.
         Incident incident = confidentialIncident("u1", "assigned-agent");
-        Agent teammateAgent = Agent.builder().id("agent-teammate").userId("u-teammate").status(true).build();
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
         when(confidentialIncidentAccess.canAccess("u-teammate", incident)).thenReturn(false);
 
-        assertThatThrownBy(() -> messageService.listMessages("u-teammate", "AGENT", "inc-1", PageRequest.of(0, 50)))
+        var pageable = PageRequest.of(0, 50);
+        assertThatThrownBy(() -> messageService.listMessages("u-teammate", "AGENT", "inc-1", pageable))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);

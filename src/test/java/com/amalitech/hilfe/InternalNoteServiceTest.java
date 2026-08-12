@@ -115,7 +115,8 @@ class InternalNoteServiceTest {
         when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(inc));
         when(confidentialIncidentAccess.canAccess("outsider", inc)).thenReturn(false);
 
-        assertThatThrownBy(() -> noteService.createNote("outsider", "inc-1", new InternalNoteRequest("body")))
+        InternalNoteRequest request = new InternalNoteRequest("body");
+        assertThatThrownBy(() -> noteService.createNote("outsider", "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
