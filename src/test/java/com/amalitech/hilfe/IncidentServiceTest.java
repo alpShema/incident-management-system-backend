@@ -2009,6 +2009,45 @@ class IncidentServiceTest {
     }
 
     @Test
+    void assignIncident_agentIsCreator_throws400() {
+        // HV-1623: an incident can never be assigned to its own creator, regardless of who
+        // performs the assignment or what role the creator holds.
+        Incident incident = buildIncident(); // creator userId = "user-1"
+        Agent creatorAsAgent = Agent.builder().id("agent-1").userId("user-1").status(true).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(creatorAsAgent));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-1");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("admin-1", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("An incident cannot be assigned to its own creator.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        verify(agentRepository, never()).save(any());
+        verify(incidentRepository, never()).save(any());
+    }
+
+    @Test
+    void assignIncident_creatorSelfAssigns_throws400() {
+        // Same rule applies when the creator is the one performing the assignment (self-pickup),
+        // not just when a different actor (e.g. an admin) tries to assign it to them.
+        Incident incident = buildIncident(); // creator userId = "user-1"
+        Agent creatorAsAgent = Agent.builder().id("agent-1").userId("user-1").status(true).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(creatorAsAgent));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-1");
+        assertThatThrownBy(() ->
+                incidentService.assignIncident("user-1", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("An incident cannot be assigned to its own creator.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
     void assignIncident_agentNotOwner_throws403() {
         Incident incident = buildAssignedIncident(); // assignedToId = "agent-1", agent userId = "actor-1"
         stubAssignedAgent(); // agent-1 → userId "actor-1"

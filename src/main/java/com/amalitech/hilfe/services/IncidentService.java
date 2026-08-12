@@ -388,6 +388,11 @@ public class IncidentService {
         if (agent.getAgentGroupId() != null && !agentRepository.hasActiveGroup(agent.getAgentGroupId(), agent.getId())) {
             throw new ArmsAuthException("This incident cannot be assigned to an agent in a deactivated group.", 400);
         }
+        // HV-1623: an incident can never be assigned to its own creator, regardless of who
+        // performs the assignment or what role the creator holds (agent, admin-agent, or admin).
+        if (agent.getUserId() != null && agent.getUserId().equals(incident.getUserId())) {
+            throw new ArmsAuthException("An incident cannot be assigned to its own creator.", 400);
+        }
 
         agent.setLastAssignedAt(Instant.now());
         agentRepository.save(agent);
