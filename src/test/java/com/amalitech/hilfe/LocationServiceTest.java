@@ -89,7 +89,7 @@ class LocationServiceTest {
         when(locationRepository.findByNameIgnoreCase("  Accra  ")).thenReturn(Optional.empty());
         when(locationRepository.save(any(Location.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        locationService.createLocation(new CreateLocationRequest("  Accra  ", null));
+        locationService.createLocation(new CreateLocationRequest("  Accra  ", null, null, null, null));
 
         ArgumentCaptor<Location> captor = ArgumentCaptor.forClass(Location.class);
         verify(locationRepository).save(captor.capture());
@@ -102,7 +102,7 @@ class LocationServiceTest {
         when(locationRepository.findByNameIgnoreCase("Accra")).thenReturn(Optional.empty());
         when(locationRepository.save(any(Location.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        locationService.createLocation(new CreateLocationRequest("Accra", "  Regional office  "));
+        locationService.createLocation(new CreateLocationRequest("Accra", "  Regional office  ", null, null, null));
 
         ArgumentCaptor<Location> captor = ArgumentCaptor.forClass(Location.class);
         verify(locationRepository).save(captor.capture());
@@ -113,7 +113,7 @@ class LocationServiceTest {
     void createLocation_duplicateName_throws409() {
         when(locationRepository.findByNameIgnoreCase("Accra")).thenReturn(Optional.of(loc("existing", "Accra", true)));
 
-        var request = new CreateLocationRequest("Accra", null);
+        var request = new CreateLocationRequest("Accra", null, null, null, null);
         assertThatThrownBy(() -> locationService.createLocation(request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessageContaining("already exists")
@@ -128,7 +128,7 @@ class LocationServiceTest {
         when(locationRepository.findByNameIgnoreCase("  New Name  ")).thenReturn(Optional.empty());
         when(locationRepository.save(existing)).thenReturn(existing);
 
-        locationService.updateLocation("loc-1", new UpdateLocationRequest("  New Name  ", null));
+        locationService.updateLocation("loc-1", new UpdateLocationRequest("  New Name  ", null, null, null, null));
 
         assertThat(existing.getName()).isEqualTo("New Name");
     }
@@ -140,7 +140,7 @@ class LocationServiceTest {
         when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
         when(locationRepository.findByNameIgnoreCase("New")).thenReturn(Optional.of(conflict));
 
-        var updateRequest = new UpdateLocationRequest("New", null);
+        var updateRequest = new UpdateLocationRequest("New", null, null, null, null);
         assertThatThrownBy(() -> locationService.updateLocation("loc-1", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
@@ -154,7 +154,7 @@ class LocationServiceTest {
         when(locationRepository.findByNameIgnoreCase("Accra")).thenReturn(Optional.of(existing));
         when(locationRepository.save(existing)).thenReturn(existing);
 
-        locationService.updateLocation("loc-1", new UpdateLocationRequest("Accra", null));
+        locationService.updateLocation("loc-1", new UpdateLocationRequest("Accra", null, null, null, null));
 
         verify(locationRepository).save(existing);
     }
@@ -165,7 +165,7 @@ class LocationServiceTest {
         when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
         when(locationRepository.save(existing)).thenReturn(existing);
 
-        locationService.updateLocation("loc-1", new UpdateLocationRequest(null, "  Branch office  "));
+        locationService.updateLocation("loc-1", new UpdateLocationRequest(null, "  Branch office  ", null, null, null));
 
         assertThat(existing.getDescription()).isEqualTo("Branch office");
     }
@@ -174,7 +174,7 @@ class LocationServiceTest {
     void updateLocation_notFound_throws404() {
         when(locationRepository.findById("missing")).thenReturn(Optional.empty());
 
-        var updateRequest = new UpdateLocationRequest("X", null);
+        var updateRequest = new UpdateLocationRequest("X", null, null, null, null);
         assertThatThrownBy(() -> locationService.updateLocation("missing", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())

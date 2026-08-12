@@ -13,6 +13,7 @@ import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.IncidentCategory;
 import com.amalitech.hilfe.models.IncidentSla;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Severity;
 import com.amalitech.hilfe.models.SystemConfig;
@@ -22,9 +23,12 @@ import com.amalitech.hilfe.notifications.events.IncidentSlaBreachedEvent;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentCategoryRepository;
 import com.amalitech.hilfe.repositories.IncidentSlaRepository;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.SeverityRepository;
 import com.amalitech.hilfe.repositories.SystemConfigRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
+import com.amalitech.hilfe.utils.BusinessHoursCalculator;
+import com.amalitech.hilfe.utils.BusinessHoursCalculator.BusinessHours;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,14 +38,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -58,14 +64,45 @@ public class SlaService {
     private static final String SLA_TYPE_RESOLUTION = "RESOLUTION";
     private static final String STATUS_BREACHED = "BREACHED";
 
+    private static final BusinessHours DEFAULT_BUSINESS_HOURS =
+            new BusinessHours(ZoneId.of("UTC"), LocalTime.of(8, 0), LocalTime.of(17, 30));
+
     private final IncidentSlaRepository incidentSlaRepository;
     private final SeverityRepository severityRepository;
     private final SystemConfigRepository systemConfigRepository;
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
     private final IncidentCategoryRepository incidentCategoryRepository;
+    private final LocationRepository locationRepository;
     private final NotificationEventPublisher notificationEventPublisher;
     private final ActivityLogService activityLogService;
+
+    /**
+     * Falls back to UTC 08:00-17:30 when the location, its timezone, or its hours are missing or
+     * invalid -- this is what keeps every SLA calculation defined even for incidents whose
+     * location record predates this feature or was deleted after the fact.
+     */
+    private BusinessHours resolveBusinessHours(Location location) {
+        if (location == null || location.getTimezone() == null
+                || location.getBusinessHoursStart() == null || location.getBusinessHoursEnd() == null) {
+            return DEFAULT_BUSINESS_HOURS;
+        }
+        try {
+            return new BusinessHours(ZoneId.of(location.getTimezone()),
+                    location.getBusinessHoursStart(), location.getBusinessHoursEnd());
+        } catch (Exception e) {
+            return DEFAULT_BUSINESS_HOURS;
+        }
+    }
+
+    private BusinessHours resolveBusinessHoursByLocationId(String locationId) {
+        if (locationId == null) {
+            return DEFAULT_BUSINESS_HOURS;
+        }
+        return locationRepository.findById(locationId)
+                .map(this::resolveBusinessHours)
+                .orElse(DEFAULT_BUSINESS_HOURS);
+    }
 
     @Transactional
     public void onIncidentCreated(Incident incident) {
@@ -81,15 +118,16 @@ public class SlaService {
         Integer responseThreshold = severity != null ? severity.getResponseTimeMinutes() : null;
         Integer resolutionThreshold = severity != null ? severity.getResolutionTimeMinutes() : null;
         Instant createdAt = incident.getCreatedAt() != null ? incident.getCreatedAt() : Instant.now();
+        BusinessHours hours = resolveBusinessHoursByLocationId(incident.getLocationId());
 
         IncidentSla sla = IncidentSla.builder()
                 .incidentId(incident.getId())
                 .responseThresholdMinutes(responseThreshold)
                 .resolutionThresholdMinutes(resolutionThreshold)
-                .responseDueAt(addMinutes(createdAt, responseThreshold))
-                .resolutionDueAt(addMinutes(createdAt, resolutionThreshold))
+                .responseDueAt(addBusinessMinutes(createdAt, responseThreshold, hours))
+                .resolutionDueAt(addBusinessMinutes(createdAt, resolutionThreshold, hours))
                 .build();
-        refreshMaterializedStatus(sla, Instant.now(), readAtRiskPercentage());
+        refreshMaterializedStatus(sla, Instant.now(), readAtRiskPercentage(), hours);
         incidentSlaRepository.save(sla);
     }
 
@@ -110,6 +148,7 @@ public class SlaService {
             return false;
         }
 
+        BusinessHours hours = resolveBusinessHoursByLocationId(incident.getLocationId());
         return incidentSlaRepository.findById(incident.getId()).map(sla -> {
             if (sla.getFirstResponseAt() != null) {
                 return false;
@@ -117,11 +156,11 @@ public class SlaService {
 
             Instant now = Instant.now();
             sla.setFirstResponseAt(now);
-            sla.setResponseElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
+            sla.setResponseElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now, hours));
             if (sla.getResponseDueAt() != null && now.isAfter(sla.getResponseDueAt()) && sla.getResponseBreachedAt() == null) {
                 sla.setResponseBreachedAt(sla.getResponseDueAt());
             }
-            refreshMaterializedStatus(sla, now, readAtRiskPercentage());
+            refreshMaterializedStatus(sla, now, readAtRiskPercentage(), hours);
             incidentSlaRepository.save(sla);
             return true;
         }).orElse(false);
@@ -134,7 +173,8 @@ public class SlaService {
      * prior breach/at-risk state would misleadingly carry over to the new agent.
      */
     @Transactional
-    public void resetFirstResponse(String incidentId) {
+    public void resetFirstResponse(String incidentId, String locationId) {
+        BusinessHours hours = resolveBusinessHoursByLocationId(locationId);
         incidentSlaRepository.findById(incidentId).ifPresent(sla -> {
             sla.setFirstResponseAt(null);
             sla.setResponseElapsedMs(null);
@@ -143,9 +183,9 @@ public class SlaService {
             sla.setResponseBreachNotifiedAt(null);
             Instant now = Instant.now();
             if (sla.getResponseThresholdMinutes() != null) {
-                sla.setResponseDueAt(addMinutes(now, sla.getResponseThresholdMinutes()));
+                sla.setResponseDueAt(addBusinessMinutes(now, sla.getResponseThresholdMinutes(), hours));
             }
-            refreshMaterializedStatus(sla, now, readAtRiskPercentage());
+            refreshMaterializedStatus(sla, now, readAtRiskPercentage(), hours);
             incidentSlaRepository.save(sla);
         });
     }
@@ -161,6 +201,7 @@ public class SlaService {
         }
         IncidentSla sla = optionalSla.get();
         Instant now = Instant.now();
+        BusinessHours hours = resolveBusinessHoursByLocationId(incident.getLocationId());
         boolean changed = false;
 
         boolean enteringPending = isTransitionTo(STATUS_PENDING, previousStatusId, newStatusId);
@@ -173,19 +214,19 @@ public class SlaService {
             changed = true;
         }
         if (leavingPending && sla.getPauseStartedAt() != null) {
-            applyPauseDelta(sla, now);
+            applyPauseDelta(sla, now, hours);
             changed = true;
         }
         if (resolving) {
-            applyResolution(sla, incident, now);
+            applyResolution(sla, incident, now, hours);
             changed = true;
         }
         if (reopening) {
-            applyReopening(sla, now);
+            applyReopening(sla, now, hours);
             changed = true;
         }
         if (changed) {
-            refreshMaterializedStatus(sla, now, readAtRiskPercentage());
+            refreshMaterializedStatus(sla, now, readAtRiskPercentage(), hours);
             incidentSlaRepository.save(sla);
         }
     }
@@ -205,24 +246,24 @@ public class SlaService {
         return viaResolved || viaClosed;
     }
 
-    private void applyPauseDelta(IncidentSla sla, Instant now) {
-        long delta = Math.max(0L, Duration.between(sla.getPauseStartedAt(), now).toMillis());
-        sla.setAccumulatedPauseMs(sla.getAccumulatedPauseMs() + delta);
+    private void applyPauseDelta(IncidentSla sla, Instant now, BusinessHours hours) {
+        long pausedMinutes = BusinessHoursCalculator.businessMinutesBetween(sla.getPauseStartedAt(), now, hours);
+        sla.setAccumulatedPauseMs(sla.getAccumulatedPauseMs() + pausedMinutes * 60_000L);
         if (sla.getResponseDueAt() != null && sla.getFirstResponseAt() == null && sla.getResponseBreachedAt() == null) {
-            sla.setResponseDueAt(sla.getResponseDueAt().plusMillis(delta));
+            sla.setResponseDueAt(BusinessHoursCalculator.addBusinessMinutes(sla.getResponseDueAt(), pausedMinutes, hours));
         }
         if (sla.getResolutionDueAt() != null && sla.getResolvedAtSnapshot() == null) {
-            sla.setResolutionDueAt(sla.getResolutionDueAt().plusMillis(delta));
+            sla.setResolutionDueAt(BusinessHoursCalculator.addBusinessMinutes(sla.getResolutionDueAt(), pausedMinutes, hours));
         }
         sla.setPauseStartedAt(null);
     }
 
-    private void applyResolution(IncidentSla sla, Incident incident, Instant now) {
+    private void applyResolution(IncidentSla sla, Incident incident, Instant now, BusinessHours hours) {
         sla.setResolvedAtSnapshot(now);
-        sla.setResolutionElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
+        sla.setResolutionElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now, hours));
         if (sla.getResolutionDueAt() != null) {
-            long remainingMs = Math.max(0L, Duration.between(now, sla.getResolutionDueAt()).toMillis());
-            sla.setResolutionRemainingMsOnResolve(remainingMs);
+            long remainingMinutes = BusinessHoursCalculator.businessMinutesBetween(now, sla.getResolutionDueAt(), hours);
+            sla.setResolutionRemainingMsOnResolve(remainingMinutes * 60_000L);
             if (now.isAfter(sla.getResolutionDueAt()) && sla.getResolutionBreachedAt() == null) {
                 sla.setResolutionBreachedAt(sla.getResolutionDueAt());
             }
@@ -233,16 +274,17 @@ public class SlaService {
         // otherwise its status keeps recomputing against now() forever, and
         // findActiveResponseTimers() keeps returning this row on every SlaMonitorScheduler tick.
         if (sla.getFirstResponseAt() == null && sla.getResponseDueAt() != null) {
-            sla.setResponseElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now));
+            sla.setResponseElapsedMs(computeElapsedMs(sla, incident.getCreatedAt(), now, hours));
             if (now.isAfter(sla.getResponseDueAt()) && sla.getResponseBreachedAt() == null) {
                 sla.setResponseBreachedAt(sla.getResponseDueAt());
             }
         }
     }
 
-    private void applyReopening(IncidentSla sla, Instant now) {
+    private void applyReopening(IncidentSla sla, Instant now, BusinessHours hours) {
         if (sla.getResolutionRemainingMsOnResolve() != null && sla.getResolutionDueAt() != null) {
-            sla.setResolutionDueAt(now.plusMillis(sla.getResolutionRemainingMsOnResolve()));
+            long remainingMinutes = sla.getResolutionRemainingMsOnResolve() / 60_000L;
+            sla.setResolutionDueAt(BusinessHoursCalculator.addBusinessMinutes(now, remainingMinutes, hours));
         }
         sla.setResolvedAtSnapshot(null);
         sla.setPauseStartedAt(null);
@@ -269,37 +311,51 @@ public class SlaService {
     }
 
     public IncidentSlaResponse getIncidentSlaResponse(String incidentId) {
+        return getIncidentSlaResponse(incidentId, null);
+    }
+
+    public IncidentSlaResponse getIncidentSlaResponse(String incidentId, String locationId) {
         int atRiskPct = readAtRiskPercentage();
+        BusinessHours hours = resolveBusinessHoursByLocationId(locationId);
         return incidentSlaRepository.findById(incidentId)
-                .map(sla -> toResponse(sla, atRiskPct))
+                .map(sla -> toResponse(sla, atRiskPct, hours))
                 .orElse(null);
     }
 
-    public Map<String, IncidentSlaResponse> getIncidentSlaResponses(Collection<String> incidentIds) {
-        if (incidentIds == null || incidentIds.isEmpty()) {
+    /**
+     * Keyed by incidentId -&gt; locationId (not just a bare id collection) so each row's business
+     * hours can be resolved without lazily loading incident.location per SLA row.
+     */
+    public Map<String, IncidentSlaResponse> getIncidentSlaResponses(Map<String, String> locationIdByIncidentId) {
+        if (locationIdByIncidentId == null || locationIdByIncidentId.isEmpty()) {
             return Map.of();
         }
 
         int atRiskPct = readAtRiskPercentage();
+        Map<String, BusinessHours> hoursByLocationId = new HashMap<>();
         Map<String, IncidentSlaResponse> responses = new HashMap<>();
-        for (IncidentSla sla : incidentSlaRepository.findByIncidentIdIn(incidentIds)) {
-            responses.put(sla.getIncidentId(), toResponse(sla, atRiskPct));
+        for (IncidentSla sla : incidentSlaRepository.findByIncidentIdIn(locationIdByIncidentId.keySet())) {
+            String locationId = locationIdByIncidentId.get(sla.getIncidentId());
+            BusinessHours hours = locationId == null
+                    ? DEFAULT_BUSINESS_HOURS
+                    : hoursByLocationId.computeIfAbsent(locationId, this::resolveBusinessHoursByLocationId);
+            responses.put(sla.getIncidentId(), toResponse(sla, atRiskPct, hours));
         }
         return responses;
     }
 
     public IncidentResponse toIncidentResponse(Incident incident) {
-        return IncidentResponse.from(incident, null, getIncidentSlaResponse(incident.getId()));
+        return IncidentResponse.from(incident, null, getIncidentSlaResponse(incident.getId(), incident.getLocationId()));
     }
 
     public IncidentResponse toIncidentResponse(Incident incident, List<MediaResponse> attachments) {
-        return IncidentResponse.from(incident, attachments, getIncidentSlaResponse(incident.getId()));
+        return IncidentResponse.from(incident, attachments, getIncidentSlaResponse(incident.getId(), incident.getLocationId()));
     }
 
     public Page<IncidentResponse> toIncidentResponsePage(Page<Incident> incidents) {
-        Map<String, IncidentSlaResponse> byIncidentId = getIncidentSlaResponses(
-                incidents.getContent().stream().map(Incident::getId).toList()
-        );
+        Map<String, String> locationIdByIncidentId = incidents.getContent().stream()
+                .collect(Collectors.toMap(Incident::getId, Incident::getLocationId));
+        Map<String, IncidentSlaResponse> byIncidentId = getIncidentSlaResponses(locationIdByIncidentId);
         List<IncidentResponse> content = incidents.getContent().stream()
                 .map(incident -> IncidentResponse.from(incident, List.of(), byIncidentId.get(incident.getId())))
                 .toList();
@@ -362,23 +418,24 @@ public class SlaService {
             if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
                 continue; // no incident, or frozen on resolve/force-close -- never notify
             }
-            String freshStatus = computeResponseStatus(sla, now, atRiskPct);
+            BusinessHours hours = resolveBusinessHours(sla.getIncident().getLocation());
+            String freshStatus = computeResponseStatus(sla, now, atRiskPct, hours);
             boolean statusChanged = !freshStatus.equals(sla.getResponseStatus());
             sla.setResponseStatus(freshStatus);
 
             boolean saved = isBreached(now, sla.getResponseDueAt())
                     ? handleResponseBreach(sla, now)
-                    : checkResponseAtRisk(sla, now, atRiskPct);
+                    : checkResponseAtRisk(sla, now, atRiskPct, hours);
             if (statusChanged && !saved) {
                 incidentSlaRepository.save(sla);
             }
         }
     }
 
-    private boolean checkResponseAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
+    private boolean checkResponseAtRisk(IncidentSla sla, Instant now, int atRiskPct, BusinessHours hours) {
         if (sla.getResponseAtRiskNotifiedAt() == null
-                && isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
-            publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESPONSE, remainingMinutes(now, sla.getResponseDueAt()));
+                && isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct, hours)) {
+            publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESPONSE, remainingMinutes(now, sla.getResponseDueAt(), hours));
             sla.setResponseAtRiskNotifiedAt(now);
             incidentSlaRepository.save(sla);
             return true;
@@ -392,23 +449,24 @@ public class SlaService {
             if (sla.getIncident() == null || sla.getResolvedAtSnapshot() != null) {
                 continue; // no incident, or frozen on resolve/force-close -- never notify
             }
-            String freshStatus = computeResolutionStatus(sla, now, atRiskPct);
+            BusinessHours hours = resolveBusinessHours(sla.getIncident().getLocation());
+            String freshStatus = computeResolutionStatus(sla, now, atRiskPct, hours);
             boolean statusChanged = !freshStatus.equals(sla.getResolutionStatus());
             sla.setResolutionStatus(freshStatus);
 
             boolean saved = isBreached(now, sla.getResolutionDueAt())
                     ? handleResolutionBreach(sla, now)
-                    : checkResolutionAtRisk(sla, now, atRiskPct);
+                    : checkResolutionAtRisk(sla, now, atRiskPct, hours);
             if (statusChanged && !saved) {
                 incidentSlaRepository.save(sla);
             }
         }
     }
 
-    private boolean checkResolutionAtRisk(IncidentSla sla, Instant now, int atRiskPct) {
+    private boolean checkResolutionAtRisk(IncidentSla sla, Instant now, int atRiskPct, BusinessHours hours) {
         if (sla.getResolutionAtRiskNotifiedAt() == null
-                && isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
-            publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESOLUTION, remainingMinutes(now, sla.getResolutionDueAt()));
+                && isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct, hours)) {
+            publishAtRiskNotifications(sla.getIncident(), SLA_TYPE_RESOLUTION, remainingMinutes(now, sla.getResolutionDueAt(), hours));
             sla.setResolutionAtRiskNotifiedAt(now);
             incidentSlaRepository.save(sla);
             return true;
@@ -537,7 +595,7 @@ public class SlaService {
                 .orElse(false);
     }
 
-    private IncidentSlaResponse toResponse(IncidentSla sla, int atRiskPct) {
+    private IncidentSlaResponse toResponse(IncidentSla sla, int atRiskPct, BusinessHours hours) {
         Instant effectiveNow = sla.getPauseStartedAt() != null ? sla.getPauseStartedAt() : Instant.now();
         return new IncidentSlaResponse(
                 sla.getResponseThresholdMinutes(),
@@ -549,8 +607,8 @@ public class SlaService {
                 sla.getFirstResponseAt(),
                 sla.getResponseBreachedAt(),
                 sla.getResolutionBreachedAt(),
-                computeResponseStatus(sla, effectiveNow, atRiskPct),
-                computeResolutionStatus(sla, effectiveNow, atRiskPct),
+                computeResponseStatus(sla, effectiveNow, atRiskPct, hours),
+                computeResolutionStatus(sla, effectiveNow, atRiskPct, hours),
                 sla.getPauseStartedAt() != null,
                 sla.getResponseElapsedMs(),
                 sla.getResolutionElapsedMs()
@@ -561,7 +619,7 @@ public class SlaService {
         return minutes != null ? minutes * 60L : null;
     }
 
-    private String computeResponseStatus(IncidentSla sla, Instant now, int atRiskPct) {
+    private String computeResponseStatus(IncidentSla sla, Instant now, int atRiskPct, BusinessHours hours) {
         if (sla.getResponseThresholdMinutes() == null || sla.getResponseDueAt() == null) {
             return "NOT_TRACKED";
         }
@@ -571,13 +629,13 @@ public class SlaService {
         if (sla.getResponseBreachedAt() != null || !now.isBefore(sla.getResponseDueAt())) {
             return STATUS_BREACHED;
         }
-        if (isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct)) {
+        if (isAtRisk(now, sla.getResponseDueAt(), sla.getResponseThresholdMinutes(), atRiskPct, hours)) {
             return "AT_RISK";
         }
         return "ON_TRACK";
     }
 
-    private String computeResolutionStatus(IncidentSla sla, Instant now, int atRiskPct) {
+    private String computeResolutionStatus(IncidentSla sla, Instant now, int atRiskPct, BusinessHours hours) {
         if (sla.getResolutionThresholdMinutes() == null || sla.getResolutionDueAt() == null) {
             return "NOT_TRACKED";
         }
@@ -587,16 +645,16 @@ public class SlaService {
         if (sla.getResolutionBreachedAt() != null || !now.isBefore(sla.getResolutionDueAt())) {
             return STATUS_BREACHED;
         }
-        if (isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct)) {
+        if (isAtRisk(now, sla.getResolutionDueAt(), sla.getResolutionThresholdMinutes(), atRiskPct, hours)) {
             return "AT_RISK";
         }
         return "ON_TRACK";
     }
 
-    private void refreshMaterializedStatus(IncidentSla sla, Instant now, int atRiskPct) {
+    private void refreshMaterializedStatus(IncidentSla sla, Instant now, int atRiskPct, BusinessHours hours) {
         Instant effectiveNow = sla.getPauseStartedAt() != null ? sla.getPauseStartedAt() : now;
-        sla.setResponseStatus(computeResponseStatus(sla, effectiveNow, atRiskPct));
-        sla.setResolutionStatus(computeResolutionStatus(sla, effectiveNow, atRiskPct));
+        sla.setResponseStatus(computeResponseStatus(sla, effectiveNow, atRiskPct, hours));
+        sla.setResolutionStatus(computeResolutionStatus(sla, effectiveNow, atRiskPct, hours));
     }
 
     private int readAtRiskPercentage() {
@@ -628,41 +686,40 @@ public class SlaService {
         return agentRepository.findById(incident.getAssignedToId()).orElse(assignedAgent);
     }
 
-    private long computeElapsedMs(IncidentSla sla, Instant createdAt, Instant now) {
+    private long computeElapsedMs(IncidentSla sla, Instant createdAt, Instant now, BusinessHours hours) {
         if (createdAt == null) {
             return 0L;
         }
-        long totalMs = Math.max(0L, Duration.between(createdAt, now).toMillis());
+        long totalMs = BusinessHoursCalculator.businessMinutesBetween(createdAt, now, hours) * 60_000L;
         long pausedMs = sla.getAccumulatedPauseMs();
         if (sla.getPauseStartedAt() != null) {
-            pausedMs += Math.max(0L, Duration.between(sla.getPauseStartedAt(), now).toMillis());
+            pausedMs += BusinessHoursCalculator.businessMinutesBetween(sla.getPauseStartedAt(), now, hours) * 60_000L;
         }
         return Math.max(0L, totalMs - pausedMs);
     }
 
-    private Instant addMinutes(Instant base, Integer minutes) {
-        return base != null && minutes != null ? base.plus(Duration.ofMinutes(minutes)) : null;
+    private Instant addBusinessMinutes(Instant base, Integer minutes, BusinessHours hours) {
+        return base != null && minutes != null ? BusinessHoursCalculator.addBusinessMinutes(base, minutes, hours) : null;
     }
 
     private boolean isBreached(Instant now, Instant dueAt) {
         return dueAt != null && !now.isBefore(dueAt);
     }
 
-    private boolean isAtRisk(Instant now, Instant dueAt, Integer thresholdMinutes, int atRiskPct) {
+    private boolean isAtRisk(Instant now, Instant dueAt, Integer thresholdMinutes, int atRiskPct, BusinessHours hours) {
         if (dueAt == null || thresholdMinutes == null) {
             return false;
         }
-        long thresholdMs = Duration.ofMinutes(thresholdMinutes).toMillis();
-        long bufferMs = thresholdMs - (thresholdMs * atRiskPct / 100);
-        return !now.isBefore(dueAt.minusMillis(bufferMs));
+        long bufferMinutes = thresholdMinutes - ((long) thresholdMinutes * atRiskPct / 100);
+        long remainingBusinessMinutes = BusinessHoursCalculator.businessMinutesBetween(now, dueAt, hours);
+        return remainingBusinessMinutes <= bufferMinutes;
     }
 
-    private long remainingMinutes(Instant now, Instant dueAt) {
+    private long remainingMinutes(Instant now, Instant dueAt, BusinessHours hours) {
         if (dueAt == null) {
             return 0L;
         }
-        long ms = Math.max(0L, Duration.between(now, dueAt).toMillis());
-        return Math.max(1L, (long) Math.ceil(ms / 60000.0));
+        return Math.max(1L, BusinessHoursCalculator.businessMinutesBetween(now, dueAt, hours));
     }
 
     private long overdueMinutes(Instant now, Instant dueAt) {

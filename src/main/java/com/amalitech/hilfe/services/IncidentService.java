@@ -681,7 +681,7 @@ public class IncidentService {
     private void resetToUnassigned(Incident incident) {
         incident.setAssignedToId(null);
         incident.setStatusId(STATUS_UNASSIGNED);
-        slaService.resetFirstResponse(incident.getId());
+        slaService.resetFirstResponse(incident.getId(), incident.getLocationId());
     }
 
     /**
@@ -689,7 +689,7 @@ public class IncidentService {
      * is already setting those fields itself (e.g. assignIncident's reassignment branch).
      */
     private void resetFirstResponseTracking(Incident incident) {
-        slaService.resetFirstResponse(incident.getId());
+        slaService.resetFirstResponse(incident.getId(), incident.getLocationId());
     }
 
     /**

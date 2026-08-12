@@ -1230,7 +1230,7 @@ class IncidentServiceTest {
         assertThat(incident.getAssignedToId()).isNull();
         verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Resolved", "Reopened", "Issue recurred");
         verify(activityLogService).logIncidentStatusChange("actor-1", "inc-1", "Reopened", "Unassigned");
-        verify(slaService).resetFirstResponse("inc-1");
+        verify(slaService).resetFirstResponse("inc-1", "loc-1");
     }
 
     @Test
@@ -1755,8 +1755,8 @@ class IncidentServiceTest {
         assertThat(openIncident.getStatusId()).isEqualTo("status-unassigned");
         assertThat(pendingIncident.getAssignedToId()).isNull();
         assertThat(pendingIncident.getStatusId()).isEqualTo("status-unassigned");
-        verify(slaService).resetFirstResponse("inc-open");
-        verify(slaService).resetFirstResponse("inc-pending");
+        verify(slaService).resetFirstResponse("inc-open", "loc-1");
+        verify(slaService).resetFirstResponse("inc-pending", "loc-1");
         verify(activityLogService).logIncidentUnassignment("admin-1", "inc-open", "agent-1");
         verify(activityLogService).logIncidentUnassignment("admin-1", "inc-pending", "agent-1");
     }
@@ -1769,7 +1769,7 @@ class IncidentServiceTest {
         incidentService.unassignAllForDeactivatedAgent("agent-1", "admin-1");
 
         verify(incidentRepository, never()).save(any(Incident.class));
-        verify(slaService, never()).resetFirstResponse(any());
+        verify(slaService, never()).resetFirstResponse(any(), any());
         verify(activityLogService, never()).logIncidentUnassignment(any(), any(), any());
     }
 
@@ -2115,7 +2115,7 @@ class IncidentServiceTest {
         assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
         assertThat(incident.getStatusId()).isEqualTo("status-open");
         verify(statusRepository, never()).findByNameIgnoreCase(any());
-        verify(slaService).resetFirstResponse("inc-1");
+        verify(slaService).resetFirstResponse("inc-1", "loc-1");
     }
 
     @Test
@@ -2133,7 +2133,7 @@ class IncidentServiceTest {
         incidentService.assignIncident("admin-user", true, "inc-1", new AssignIncidentRequest("agent-1"));
 
         assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
-        verify(slaService, never()).resetFirstResponse(any());
+        verify(slaService, never()).resetFirstResponse(any(), any());
     }
 
     // ── notification: sendReopenedNotification ────────────────────────────────
@@ -2211,7 +2211,7 @@ class IncidentServiceTest {
                 new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
 
         verify(activityLogService).logIncidentUnassignment("user-1", "inc-1", "agent-1");
-        verify(slaService).resetFirstResponse("inc-1");
+        verify(slaService).resetFirstResponse("inc-1", "loc-1");
     }
 
     @Test
@@ -2236,7 +2236,7 @@ class IncidentServiceTest {
 
         verify(activityLogService, never()).logIncidentUnassignment(any(), any(), any());
         assertThat(incident.getStatusId()).isEqualTo("status-in-progress");
-        verify(slaService, never()).resetFirstResponse(any());
+        verify(slaService, never()).resetFirstResponse(any(), any());
     }
 
     // ── notification: sendPendingNotification ─────────────────────────────────

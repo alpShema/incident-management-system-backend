@@ -43,7 +43,7 @@ class LocationControllerTest {
 
     @Test
     void listLocations_returns200WithData() throws Exception {
-        LocationResponse loc = new LocationResponse("loc-1", "Accra", null, true, null);
+        LocationResponse loc = new LocationResponse("loc-1", "Accra", null, true, "UTC", null, null, null);
         PageResponse<LocationResponse> page = new PageResponse<>(List.of(loc), 0, 10, 1L, 1, false, false);
         when(locationService.listLocations(isNull(), isNull(), any(Pageable.class))).thenReturn(page);
 
@@ -58,7 +58,7 @@ class LocationControllerTest {
 
     @Test
     void updateStatus_deactivate_returns200() throws Exception {
-        LocationResponse updated = new LocationResponse("loc-1", "Accra", null, false, null);
+        LocationResponse updated = new LocationResponse("loc-1", "Accra", null, false, "UTC", null, null, null);
         when(locationService.updateStatus("loc-1", false)).thenReturn(updated);
 
         mvc.perform(patch("/locations/loc-1/status")
@@ -72,7 +72,7 @@ class LocationControllerTest {
 
     @Test
     void updateStatus_activate_returns200() throws Exception {
-        LocationResponse updated = new LocationResponse("loc-1", "Accra", null, true, null);
+        LocationResponse updated = new LocationResponse("loc-1", "Accra", null, true, "UTC", null, null, null);
         when(locationService.updateStatus("loc-1", true)).thenReturn(updated);
 
         mvc.perform(patch("/locations/loc-1/status")

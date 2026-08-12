@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,6 +28,18 @@ public class Location {
     @Column(nullable = false)
     @Builder.Default
     private Boolean status = true;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private String timezone = "UTC";
+
+    @Column(name = "business_hours_start", nullable = false)
+    @Builder.Default
+    private LocalTime businessHoursStart = LocalTime.of(8, 0);
+
+    @Column(name = "business_hours_end", nullable = false)
+    @Builder.Default
+    private LocalTime businessHoursEnd = LocalTime.of(17, 30);
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
