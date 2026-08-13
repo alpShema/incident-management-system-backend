@@ -65,7 +65,7 @@ class SystemConfigControllerTest {
 
     @Test
     void listTimezones_returns200WithData_noPermissionRequired() throws Exception {
-        when(timezoneService.listTimezones()).thenReturn(List.of(
+        when(timezoneService.listTimezones(null)).thenReturn(List.of(
                 new TimezoneOptionResponse("Africa/Kigali", "Kigali", "+02:00")));
 
         mvc.perform(get("/config/timezones")
@@ -76,5 +76,17 @@ class SystemConfigControllerTest {
                 .andExpect(jsonPath("$.data[0].id").value("Africa/Kigali"))
                 .andExpect(jsonPath("$.data[0].label").value("Kigali"))
                 .andExpect(jsonPath("$.data[0].offsetNow").value("+02:00"));
+    }
+
+    @Test
+    void listTimezones_withQueryParam_passesSearchTermToService() throws Exception {
+        when(timezoneService.listTimezones("kigali")).thenReturn(List.of(
+                new TimezoneOptionResponse("Africa/Kigali", "Kigali", "+02:00")));
+
+        mvc.perform(get("/config/timezones").param("q", "kigali")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                "user", null, List.of(() -> "ROLE_CLIENT")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value("Africa/Kigali"));
     }
 }
