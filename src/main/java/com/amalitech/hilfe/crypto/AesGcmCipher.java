@@ -1,19 +1,19 @@
 package com.amalitech.hilfe.crypto;
 
 import javax.crypto.Cipher;
-import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
  * AES-256-GCM encryption for individual field values. Deliberately dependency-free (no Spring) so
- * it can run both from {@link FieldEncryptionService} and from the Flyway {@code BaseJavaMigration}
- * that re-encrypts pre-existing rows, which executes before the Spring context exists.
+ * it can run both from {@link FieldEncryptionService} and from the Flyway Java migration that
+ * re-encrypts pre-existing rows, which executes before the Spring context exists.
  * <p>
  * Every encrypted value is stored as {@code "v1:" + base64(iv || ciphertext+tag)}. The prefix lets
  * callers distinguish ciphertext from not-yet-migrated legacy plaintext via {@link #isEncrypted}.
@@ -22,15 +22,7 @@ public final class AesGcmCipher {
 
     public static final String VERSION_PREFIX = "v1:";
 
-    private static final String KDF_ALGORITHM = "PBKDF2WithHmacSHA256";
-    // Only needs to be fixed and non-secret (unlike the GCM IV below, which must be random per
-    // value) -- its job is making key derivation deterministic across app restarts and the data
-    // migration, not hiding the passphrase. Deliberately distinct from TokenEncryptionService's
-    // "deadbeef" salt so the two encryption paths never share derived key material.
-    private static final byte[] KDF_SALT = "hilfe-field-encryption-v1".getBytes(StandardCharsets.UTF_8);
-    private static final int KDF_ITERATIONS = 65536;
-    private static final int KEY_LENGTH_BITS = 256;
-
+    private static final String DIGEST_ALGORITHM = "SHA-256";
     private static final String CIPHER_TRANSFORMATION = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH_BYTES = 12;
     private static final int GCM_TAG_LENGTH_BITS = 128;
@@ -42,13 +34,16 @@ public final class AesGcmCipher {
         this.key = key;
     }
 
+    // No PBKDF2/salt here: the passphrase itself is required (by FieldEncryptionService) to be a
+    // random secret of at least 32 characters, not a human-memorized password -- so there's no
+    // low-entropy input to defend against dictionary/rainbow-table attacks with a salt or
+    // iteration count. A plain SHA-256 hash maps that passphrase onto a 256-bit AES key.
     public static AesGcmCipher fromPassphrase(String passphrase) {
         try {
-            SecretKeyFactory factory = SecretKeyFactory.getInstance(KDF_ALGORITHM);
-            PBEKeySpec spec = new PBEKeySpec(passphrase.toCharArray(), KDF_SALT, KDF_ITERATIONS, KEY_LENGTH_BITS);
-            byte[] keyBytes = factory.generateSecret(spec).getEncoded();
+            MessageDigest digest = MessageDigest.getInstance(DIGEST_ALGORITHM);
+            byte[] keyBytes = digest.digest(passphrase.getBytes(StandardCharsets.UTF_8));
             return new AesGcmCipher(new SecretKeySpec(keyBytes, "AES"));
-        } catch (GeneralSecurityException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Failed to derive field encryption key", e);
         }
     }

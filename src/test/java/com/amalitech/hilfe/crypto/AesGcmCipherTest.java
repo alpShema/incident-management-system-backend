@@ -60,7 +60,8 @@ class AesGcmCipherTest {
 
     @Test
     void decrypt_nonEncryptedValue_throws() {
-        assertThatThrownBy(() -> cipher().decrypt("not-a-v1-payload"))
+        AesGcmCipher cipher = cipher();
+        assertThatThrownBy(() -> cipher.decrypt("not-a-v1-payload"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }
