@@ -441,7 +441,7 @@ class DashboardServiceTest {
 
         IncidentResponse row = result.getContent().get(0);
         assertThat(row.confidential()).isTrue();
-        assertThat(row.title()).isNull();
+        assertThat(row.title()).isEqualTo("**********");
         assertThat(row.createdBy()).isNull();
     }
 
@@ -480,7 +480,7 @@ class DashboardServiceTest {
 
         IncidentResponse row = result.getContent().get(0);
         assertThat(row.confidential()).isTrue();
-        assertThat(row.title()).isNull();
+        assertThat(row.title()).isEqualTo("**********");
     }
 
     @Test

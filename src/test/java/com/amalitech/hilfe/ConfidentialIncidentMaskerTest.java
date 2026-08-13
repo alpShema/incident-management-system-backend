@@ -109,8 +109,8 @@ class ConfidentialIncidentMaskerTest {
 
         IncidentResponse row = result.getContent().get(0);
         assertThat(row.confidential()).isTrue();
-        assertThat(row.title()).isNull();
-        assertThat(row.description()).isNull();
+        assertThat(row.title()).isEqualTo("**********");
+        assertThat(row.description()).isEqualTo("**********");
         assertThat(row.createdBy()).isNull();
         assertThat(row.assignedTo()).isNull();
         assertThat(row.incidentTopic()).isNull();

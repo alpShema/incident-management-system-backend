@@ -554,7 +554,11 @@ public class IncidentService {
         // lets an admin reassign/re-prioritize any *non-confidential* incident, but it must not
         // let a non-member reach into a confidential one.
         requireConfidentialAccess(actorUserId, incident, deniedMessage);
-        if (hasUpdateAny) {
+        // HV-1666: update.any only bypasses the assignee check for a *non-confidential* incident.
+        // For a confidential one, passing the group-membership check above is not enough -- only
+        // the currently assigned agent may act, even an in-group admin-agent who holds update.any.
+        boolean confidential = incident.getIncidentType() != null && incident.getIncidentType().isConfidential();
+        if (hasUpdateAny && !confidential) {
             return;
         }
         String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
