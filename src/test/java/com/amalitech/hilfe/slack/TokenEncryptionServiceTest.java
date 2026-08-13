@@ -11,7 +11,7 @@ class TokenEncryptionServiceTest {
     private static final String VALID_KEY = "super-secret-key-that-is-long-enough!";
 
     private TokenEncryptionService service(String key) {
-        return new TokenEncryptionService(new EncryptionProperties(key));
+        return new TokenEncryptionService(new EncryptionProperties(key, null));
     }
 
     @Test

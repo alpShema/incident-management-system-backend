@@ -15,7 +15,9 @@ import com.amalitech.hilfe.repositories.StatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -132,37 +134,41 @@ public class DashboardService {
         return new DashboardCharts(byStatus, trends);
     }
 
+    // Title/description are encrypted at rest (see com.amalitech.hilfe.crypto), so a search term
+    // can no longer be pushed down as a SQL LIKE -- it now fetches a capped, date-scoped candidate
+    // set and filters/sorts it in memory via IncidentContentMatcher (shared with IncidentService,
+    // which has the same problem for its own incident list/search endpoints).
+    private static final int SEARCH_CANDIDATE_CAP = 5000;
+
     public Page<IncidentResponse> getIncidents(
             String userId, RoleCode role,
             String query,
             IncidentFilterParams filters,
             Pageable pageable
     ) {
-        String queryPattern = null;
-        if (query != null && !query.isBlank()) {
-            String escaped = query.toLowerCase()
-                    .replace("!", "!!")
-                    .replace("%", "!%")
-                    .replace("_", "!_");
-            queryPattern = "%" + escaped + "%";
-        }
-        final String finalQueryPattern = queryPattern;
+        boolean hasQuery = query != null && !query.isBlank();
 
         // HV-1619: this is a system-wide (ADMIN) / department-workload (AGENT) incident browse,
         // exactly the kind of surface that can show a confidential incident to someone outside
         // its owning group -- mask it the same way IncidentService's All Incidents / Department
         // Assigned Incidents do.
         if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
-            Page<Incident> incidents = incidentRepository
-                    .findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable);
+            Page<Incident> incidents = hasQuery
+                    ? filterCandidatesByQuery(
+                            incidentRepository.findAllUnifiedCandidates(filters, new IncidentDateFilter(null, null), candidatePageable()),
+                            query, pageable)
+                    : incidentRepository.findAllUnified(filters, new IncidentDateFilter(null, null), pageable);
             return confidentialIncidentMasker.mask(userId, null, incidents);
         }
         if (role == RoleCode.AGENT) {
             return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
                     .map(agentGroupIds -> {
-                        Page<Incident> incidents = incidentRepository
-                                .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable);
+                        Page<Incident> incidents = hasQuery
+                                ? filterCandidatesByQuery(
+                                        incidentRepository.findByDepartmentUnifiedCandidates(agentGroupIds, filters, new IncidentDateFilter(null, null), candidatePageable()),
+                                        query, pageable)
+                                : incidentRepository.findByDepartmentUnified(agentGroupIds, filters, new IncidentDateFilter(null, null), pageable);
                         // agentGroupIds is the viewer's own group membership -- reuse it directly
                         // instead of re-resolving it inside the masker.
                         return confidentialIncidentMasker.mask(userId, agentGroupIds, incidents);
@@ -170,6 +176,23 @@ public class DashboardService {
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
         throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
+    }
+
+    private Pageable candidatePageable() {
+        return PageRequest.of(0, SEARCH_CANDIDATE_CAP, Sort.by(Sort.Direction.DESC, "createdAt"));
+    }
+
+    private Page<Incident> filterCandidatesByQuery(List<Incident> candidates, String query, Pageable pageable) {
+        List<Incident> filtered = candidates.stream()
+                .filter(i -> IncidentContentMatcher.matches(i, query.toLowerCase()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        filtered.sort(IncidentContentMatcher.buildComparator(pageable.getSort()));
+        if (pageable.isUnpaged()) {
+            return new PageImpl<>(filtered, pageable, filtered.size());
+        }
+        int from = Math.min((int) pageable.getOffset(), filtered.size());
+        int to = Math.min(from + pageable.getPageSize(), filtered.size());
+        return new PageImpl<>(filtered.subList(from, to), pageable, filtered.size());
     }
 
 

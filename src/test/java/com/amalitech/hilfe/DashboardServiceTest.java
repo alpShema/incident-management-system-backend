@@ -369,7 +369,7 @@ class DashboardServiceTest {
     @Test
     void getIncidents_adminRole_callsFindAllUnified() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
@@ -377,7 +377,29 @@ class DashboardServiceTest {
                 "admin-1", RoleCode.ADMIN, null, new IncidentFilterParams(null, null, null, "cat-it", null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findAllUnified(isNull(), eq(new IncidentFilterParams(null, null, null, "cat-it", null)), any(IncidentDateFilter.class), any(Pageable.class));
+        verify(incidentRepository).findAllUnified(eq(new IncidentFilterParams(null, null, null, "cat-it", null)), any(IncidentDateFilter.class), any(Pageable.class));
+    }
+
+    // Title/description are encrypted at rest, so a search term routes through
+    // findAllUnifiedCandidates and gets filtered in memory instead of a SQL LIKE.
+    @Test
+    void getIncidents_adminRole_withQuery_filtersCandidatesInMemory() {
+        Incident matching = Incident.builder().id("inc-1").title("Fire alarm malfunction").build();
+        matching.setIncidentNo(1);
+        Incident nonMatching = Incident.builder().id("inc-2").title("Unrelated ticket").build();
+        nonMatching.setIncidentNo(2);
+        when(incidentRepository.findAllUnifiedCandidates(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(List.of(matching, nonMatching));
+        when(slaService.toIncidentResponsePage(any())).thenAnswer(inv -> {
+            Page<Incident> p = inv.getArgument(0);
+            return new PageImpl<>(p.getContent().stream().map(i -> IncidentResponse.from(i, null, null)).toList(), p.getPageable(), p.getTotalElements());
+        });
+
+        Page<IncidentResponse> result = dashboardService.getIncidents(
+                "admin-1", RoleCode.ADMIN, "fire", new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getContent().get(0).id()).isEqualTo("inc-1");
     }
 
     @Test
@@ -386,7 +408,7 @@ class DashboardServiceTest {
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("dept-1"));
-        when(incidentRepository.findByDepartmentUnified(anyList(), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findByDepartmentUnified(anyList(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
@@ -394,7 +416,7 @@ class DashboardServiceTest {
                 "user-1", RoleCode.AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("dept-1")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     @Test
@@ -431,7 +453,7 @@ class DashboardServiceTest {
     void getIncidents_adminRole_confidentialIncidentOutsideGroup_isMasked() {
         Incident incident = confidentialIncident(null);
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         stubSlaConversion(page);
         when(agentRepository.findByUserId("outside-admin")).thenReturn(Optional.empty());
@@ -452,7 +474,7 @@ class DashboardServiceTest {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         stubSlaConversion(page);
 
@@ -471,7 +493,7 @@ class DashboardServiceTest {
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A"));
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         stubSlaConversion(page);
 
@@ -514,7 +536,7 @@ class DashboardServiceTest {
     @Test
     void getIncidents_adminAgentRole_callsFindAllUnified() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
 
@@ -522,7 +544,7 @@ class DashboardServiceTest {
                 "aa-1", RoleCode.ADMIN_AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
+        verify(incidentRepository).findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     // ── getMyIncidents ────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.models;
 
+import com.amalitech.hilfe.crypto.EncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -24,6 +25,7 @@ public class Message {
     private String incidentId;
 
     @Column
+    @Convert(converter = EncryptedStringConverter.class)
     private String content;
 
     @Column(name = "created_at", nullable = false, updatable = false)
