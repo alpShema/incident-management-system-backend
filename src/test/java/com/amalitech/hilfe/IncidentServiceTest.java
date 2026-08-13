@@ -799,41 +799,64 @@ class IncidentServiceTest {
     void queryIncidents_returnsIncidentsCreatedByUser() {
         Incident incident = buildIncident();
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findByUserIdUnified(anyString(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryIncidents(
                 "user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), PageRequest.of(0, 20));
 
         assertThat(result).isNotNull().hasSize(1);
-        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     @Test
     void queryIncidents_withFilters_passesFiltersToRepository() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findByUserIdUnified(anyString(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
 
         incidentService.queryIncidents(
                 "user-1", null, new IncidentFilterParams("status-open", "sev-high", "type-fire", "cat-facility", null), new IncidentDateFilter(null, null), PageRequest.of(0, 20));
 
         verify(incidentRepository).findByUserIdUnified(
-                eq("user-1"), isNull(), eq(new IncidentFilterParams("status-open", "sev-high", "type-fire", "cat-facility", null)), any(IncidentDateFilter.class), any(Pageable.class));
+                eq("user-1"), eq(new IncidentFilterParams("status-open", "sev-high", "type-fire", "cat-facility", null)), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
+    // Title/description are encrypted at rest, so a search term now routes through the
+    // *Candidates repository method and gets filtered in memory instead of a SQL LIKE.
     @Test
-    void queryIncidents_withKeyword_buildsLikePattern() {
-        Incident incident = buildIncident();
-        Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.findByUserIdUnified(anyString(), eq("%fire%"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
-                .thenReturn(page);
+    void queryIncidents_withKeyword_filtersCandidatesInMemory() {
+        Incident matching = buildIncident();
+        matching.setTitle("Fire alarm malfunction");
+        Incident nonMatching = buildIncident();
+        nonMatching.setId("inc-2");
+        when(incidentRepository.findByUserIdUnifiedCandidates(eq("user-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(List.of(matching, nonMatching));
 
         Page<IncidentResponse> result = incidentService.queryIncidents(
                 "user-1", "fire", new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), PageRequest.of(0, 20));
 
         assertThat(result).hasSize(1);
-        verify(incidentRepository).findByUserIdUnified(eq("user-1"), eq("%fire%"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
+        assertThat(result.getContent().get(0).title()).isEqualTo("Fire alarm malfunction");
+        verify(incidentRepository, never()).findByUserIdUnified(any(), any(), any(), any());
+    }
+
+    // A search term containing "%" or "_" has no special meaning against decrypted plaintext in
+    // Java (unlike the old SQL LIKE path, which needed to escape them) -- it's matched literally.
+    @Test
+    void queryIncidents_withKeywordContainingPercentAndUnderscore_matchesLiterally() {
+        Incident matching = buildIncident();
+        matching.setTitle("Battery at 50%_charged");
+        Incident nonMatching = buildIncident();
+        nonMatching.setId("inc-2");
+        when(incidentRepository.findByUserIdUnifiedCandidates(eq("user-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(List.of(matching, nonMatching));
+
+        Page<IncidentResponse> result = incidentService.queryIncidents(
+                "user-1", "50%_charged", new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), PageRequest.of(0, 20));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("Battery at 50%_charged");
     }
 
     @Test
@@ -854,28 +877,50 @@ class IncidentServiceTest {
     void queryIncidents_withSlaStatusFilter_withAdminAuthority_succeeds() {
         setAuthority(RbacPermissions.DASHBOARD_ADMIN);
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdUnified(anyString(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+        when(incidentRepository.findByUserIdUnified(anyString(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
                 .thenReturn(page);
         IncidentFilterParams filters = new IncidentFilterParams(null, null, null, null, null, SlaStatus.BREACHED);
 
         incidentService.queryIncidents("user-1", null, filters, new IncidentDateFilter(null, null), PageRequest.of(0, 20));
 
         verify(incidentRepository).findByUserIdUnified(
-                eq("user-1"), isNull(), eq(filters), any(IncidentDateFilter.class), any(Pageable.class));
+                eq("user-1"), eq(filters), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     // ── searchIncidents ───────────────────────────────────────────────────────
+    // searchIncidents always goes through the candidates + in-memory-filter path (it never had a
+    // "no search term" fast case -- a blank query is rejected outright).
 
     @Test
     void searchIncidents_searchesByUserId() {
-        Incident incident = buildIncident();
-        Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire%"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class))).thenReturn(page);
+        Incident matching = buildIncident();
+        matching.setTitle("Fire alarm malfunction");
+        when(incidentRepository.searchByUserIdCandidates(eq("user-1"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class)))
+                .thenReturn(List.of(matching));
 
         Page<IncidentResponse> result = incidentService.searchIncidents("user-1", "fire", null, null, Pageable.unpaged());
 
         assertThat(result).hasSize(1);
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire%"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class));
+        verify(incidentRepository).searchByUserIdCandidates(eq("user-1"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class));
+    }
+
+    @Test
+    void searchIncidents_matchesOnDescriptionAndTopicNameToo() {
+        Incident matchesByDescription = buildIncident();
+        matchesByDescription.setId("inc-desc");
+        matchesByDescription.setDescription("Smoke detected near the fire exit");
+        Incident matchesByTopic = buildIncident();
+        matchesByTopic.setId("inc-topic");
+        matchesByTopic.setIncidentType(IncidentType.builder().id("type-1").name("Fire Safety").build());
+        Incident nonMatching = buildIncident();
+        nonMatching.setId("inc-none");
+        when(incidentRepository.searchByUserIdCandidates(eq("user-1"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class)))
+                .thenReturn(List.of(matchesByDescription, matchesByTopic, nonMatching));
+
+        Page<IncidentResponse> result = incidentService.searchIncidents("user-1", "fire", null, null, Pageable.unpaged());
+
+        assertThat(result.getContent()).extracting(IncidentResponse::id)
+                .containsExactlyInAnyOrder("inc-desc", "inc-topic");
     }
 
     @Test
@@ -899,23 +944,27 @@ class IncidentServiceTest {
     }
 
     @Test
-    void searchIncidents_queryWithPercentSign_escapesWildcard() {
-        Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire!%%"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class))).thenReturn(page);
+    void searchIncidents_queryWithPercentSign_matchesLiterally() {
+        Incident matching = buildIncident();
+        matching.setTitle("Battery at 50% charge");
+        when(incidentRepository.searchByUserIdCandidates(eq("user-1"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class)))
+                .thenReturn(List.of(matching));
 
-        incidentService.searchIncidents("user-1", "fire%", null, null, Pageable.unpaged());
+        Page<IncidentResponse> result = incidentService.searchIncidents("user-1", "50%", null, null, Pageable.unpaged());
 
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire!%%"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class));
+        assertThat(result).hasSize(1);
     }
 
     @Test
-    void searchIncidents_queryWithUnderscore_escapesWildcard() {
-        Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.searchByUserId(eq("user-1"), eq("%fire!_test%"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class))).thenReturn(page);
+    void searchIncidents_queryWithUnderscore_matchesLiterally() {
+        Incident matching = buildIncident();
+        matching.setTitle("Server db_prod is down");
+        when(incidentRepository.searchByUserIdCandidates(eq("user-1"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class)))
+                .thenReturn(List.of(matching));
 
-        incidentService.searchIncidents("user-1", "fire_test", null, null, Pageable.unpaged());
+        Page<IncidentResponse> result = incidentService.searchIncidents("user-1", "db_prod", null, null, Pageable.unpaged());
 
-        verify(incidentRepository).searchByUserId(eq("user-1"), eq("%fire!_test%"), any(), anyBoolean(), any(), anyBoolean(), any(Pageable.class));
+        assertThat(result).hasSize(1);
     }
 
     // ── getIncident ───────────────────────────────────────────────────────────
@@ -2596,26 +2645,31 @@ class IncidentServiceTest {
     @Test
     void queryAllIncidents_returnsPageFromRepository() {
         Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
-        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryAllIncidents("admin-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result).isNotNull();
-        verify(incidentRepository).findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
+        verify(incidentRepository).findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
     }
 
+    // Title/description are encrypted at rest, so a search term routes through
+    // findAllUnifiedCandidates and gets filtered in memory instead of a SQL LIKE.
     @Test
-    void queryAllIncidents_withQuery_buildsLikePattern() {
-        Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllUnified(anyString(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
-                .thenReturn(page);
+    void queryAllIncidents_withQuery_filtersCandidatesInMemory() {
+        Incident matching = buildIncident();
+        matching.setTitle("Fire alarm malfunction");
+        Incident nonMatching = buildIncident();
+        nonMatching.setId("inc-2");
+        when(incidentRepository.findAllUnifiedCandidates(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+                .thenReturn(List.of(matching, nonMatching));
 
-        incidentService.queryAllIncidents("admin-1", "fire", new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
+        Page<IncidentResponse> result = incidentService.queryAllIncidents("admin-1", "fire", new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
-        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(incidentRepository).findAllUnified(captor.capture(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
-        assertThat(captor.getValue()).startsWith("%").endsWith("%").contains("fire");
+        assertThat(result).hasSize(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("Fire alarm malfunction");
+        verify(incidentRepository, never()).findAllUnified(any(), any(), any());
     }
 
     @Test
@@ -2623,7 +2677,7 @@ class IncidentServiceTest {
         Incident incident = buildIncident();
         incident.setIncidentType(buildConfidentialIncidentType()); // owning group is "group-1"
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
         when(agentRepository.findByUserId("admin-1")).thenReturn(Optional.empty());
 
@@ -2643,7 +2697,7 @@ class IncidentServiceTest {
         Incident incident = buildIncident();
         incident.setIncidentType(buildConfidentialIncidentType()); // owning group is "group-1"
         Page<Incident> page = new PageImpl<>(List.of(incident));
-        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
         when(agentRepository.findByUserId("group-user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-9")).thenReturn(List.of("group-1"));
@@ -2665,13 +2719,13 @@ class IncidentServiceTest {
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-A"))).thenReturn(List.of("dept-IT"));
         when(agentGroupRepository.findIdsByDepartmentIds(List.of("dept-IT"))).thenReturn(List.of("group-A", "group-B", "group-C"));
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-C")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-C")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result.getTotalElements()).isEqualTo(1);
-        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-C")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-C")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
     }
 
     @Test
@@ -2682,7 +2736,7 @@ class IncidentServiceTest {
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A", "group-X"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-A", "group-X"))).thenReturn(List.of("dept-IT", "dept-HR"));
         when(agentGroupRepository.findIdsByDepartmentIds(List.of("dept-IT", "dept-HR"))).thenReturn(List.of("group-A", "group-B", "group-X", "group-Y"));
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-X", "group-Y")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A", "group-B", "group-X", "group-Y")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
@@ -2699,14 +2753,14 @@ class IncidentServiceTest {
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-orphan"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-orphan"))).thenReturn(List.of());
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-orphan")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-orphan")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result.getTotalElements()).isEqualTo(1);
         verify(agentGroupRepository, never()).findIdsByDepartmentIds(any());
-        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-orphan")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
+        verify(incidentRepository).findByDepartmentUnified(eq(List.of("group-orphan")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
     }
 
     @Test
@@ -2716,7 +2770,7 @@ class IncidentServiceTest {
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result.getTotalElements()).isZero();
-        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any());
+        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any());
     }
 
     @Test
@@ -2728,7 +2782,7 @@ class IncidentServiceTest {
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result.getTotalElements()).isZero();
-        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any(), any());
+        verify(incidentRepository, never()).findByDepartmentUnified(any(), any(), any(), any());
     }
 
     // ── HV-1619: confidential-incident masking in list views ───────────────────
@@ -2744,7 +2798,7 @@ class IncidentServiceTest {
         when(agentRepository.findByUserId("dept-viewer")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-A"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-A"))).thenReturn(List.of());
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-A")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("dept-viewer", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
@@ -2768,7 +2822,7 @@ class IncidentServiceTest {
         when(agentRepository.findByUserId("dept-viewer")).thenReturn(Optional.of(agent));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of());
-        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByDepartmentUnified(eq(List.of("group-1")), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryDeptIncidents("dept-viewer", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
@@ -2799,13 +2853,13 @@ class IncidentServiceTest {
         Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
         Page<Incident> page = new PageImpl<>(List.of(buildIncident()));
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAssignedToIdUnified(eq("agent-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByAssignedToIdUnified(eq("agent-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Page<IncidentResponse> result = incidentService.queryAssignedIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result.getTotalElements()).isEqualTo(1);
-        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any());
     }
 
     @Test
@@ -2815,7 +2869,7 @@ class IncidentServiceTest {
         Page<IncidentResponse> result = incidentService.queryAssignedIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), Pageable.unpaged());
 
         assertThat(result.getTotalElements()).isZero();
-        verify(incidentRepository, never()).findByAssignedToIdUnified(any(), any(), any(), any(), any());
+        verify(incidentRepository, never()).findByAssignedToIdUnified(any(), any(), any(), any());
     }
 
     @Test
@@ -2838,13 +2892,13 @@ class IncidentServiceTest {
         Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAssignedToIdUnified(eq("agent-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByAssignedToIdUnified(eq("agent-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
         IncidentFilterParams filters = new IncidentFilterParams(null, null, null, null, null, SlaStatus.BREACHED);
 
         incidentService.queryAssignedIncidents("user-1", null, filters, new IncidentDateFilter(null, null), Pageable.unpaged());
 
-        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), eq(filters), any(IncidentDateFilter.class), any());
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), eq(filters), any(IncidentDateFilter.class), any());
     }
 
     // ── sort field translation ────────────────────────────────────────────────
@@ -2852,14 +2906,14 @@ class IncidentServiceTest {
     @Test
     void queryIncidents_sortByCategory_translatesToCategoryPath() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByUserIdUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
         incidentService.queryIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
@@ -2868,14 +2922,14 @@ class IncidentServiceTest {
     @Test
     void queryAllIncidents_sortByCategory_translatesToCategoryPath() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findAllUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
         incidentService.queryAllIncidents("admin-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        verify(incidentRepository).findAllUnified(any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
@@ -2889,14 +2943,14 @@ class IncidentServiceTest {
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-1")).thenReturn(List.of("group-1"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of("dept-1"));
         when(agentGroupRepository.findIdsByDepartmentIds(List.of("dept-1"))).thenReturn(List.of("group-1"));
-        when(incidentRepository.findByDepartmentUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByDepartmentUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
         incidentService.queryDeptIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByDepartmentUnified(any(), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        verify(incidentRepository).findByDepartmentUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
@@ -2907,14 +2961,14 @@ class IncidentServiceTest {
         Agent agent = Agent.builder().id("agent-1").userId("user-1").build();
         Page<Incident> page = new PageImpl<>(List.of());
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
-        when(incidentRepository.findByAssignedToIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByAssignedToIdUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Pageable categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "category"));
         incidentService.queryAssignedIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), categorySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        verify(incidentRepository).findByAssignedToIdUnified(eq("agent-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("incidentType.category.name")).isNotNull();
         assertThat(captured.getOrderFor("category")).isNull();
@@ -2923,14 +2977,14 @@ class IncidentServiceTest {
     @Test
     void queryIncidents_sortByStatus_translatesToStatusPath() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByUserIdUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Pageable statusSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "status"));
         incidentService.queryIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), statusSort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("status.name")).isNotNull();
         assertThat(captured.getOrderFor("status")).isNull();
@@ -2939,14 +2993,14 @@ class IncidentServiceTest {
     @Test
     void queryIncidents_sortByPriority_translatesToSeverityPath() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByUserIdUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Pageable prioritySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "priority"));
         incidentService.queryIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), prioritySort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("severity.name")).isNotNull();
         assertThat(captured.getOrderFor("priority")).isNull();
@@ -2955,14 +3009,14 @@ class IncidentServiceTest {
     @Test
     void queryIncidents_sortByUnknownField_fallsBackToDefault() {
         Page<Incident> page = new PageImpl<>(List.of());
-        when(incidentRepository.findByUserIdUnified(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentRepository.findByUserIdUnified(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(page);
 
         Pageable unknownSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "invalidField"));
         incidentService.queryIncidents("user-1", null, new IncidentFilterParams(null, null, null, null, null), new IncidentDateFilter(null, null), unknownSort);
 
         var captor = forClass(Pageable.class);
-        verify(incidentRepository).findByUserIdUnified(eq("user-1"), isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
+        verify(incidentRepository).findByUserIdUnified(eq("user-1"), any(IncidentFilterParams.class), any(IncidentDateFilter.class), captor.capture());
         Sort captured = captor.getValue().getSort();
         assertThat(captured.getOrderFor("createdAt")).isNotNull();
     }

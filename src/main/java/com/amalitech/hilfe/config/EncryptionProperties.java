@@ -6,6 +6,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "encryption")
 @Validated
 public record EncryptionProperties(
-        String key
+        String key,
+        String fieldKey
 ) {
 }

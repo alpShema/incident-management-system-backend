@@ -213,47 +213,14 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             Pageable pageable
     );
 
-    @Query(value = """
-            SELECT i FROM Incident i
-            LEFT JOIN FETCH i.incidentType it
-            LEFT JOIN FETCH it.category
-            LEFT JOIN FETCH it.agent ita
-            LEFT JOIN FETCH ita.user
-            LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH i.location
-            LEFT JOIN FETCH i.severity
-            LEFT JOIN FETCH i.status
-            LEFT JOIN FETCH i.createdBy
-            LEFT JOIN FETCH i.assignedTo assignedAgent
-            LEFT JOIN FETCH assignedAgent.user assignedUser
-            LEFT JOIN FETCH assignedUser.location
-            WHERE EXISTS (
-                SELECT 1 FROM AgentGroupMember m
-                WHERE m.agentId = i.assignedToId
-                AND m.agentGroupId IN :agentGroupIds
-            )
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
-            """,
-            countQuery = """
-            SELECT COUNT(DISTINCT i) FROM Incident i
-            WHERE EXISTS (
-                SELECT 1 FROM AgentGroupMember m
-                WHERE m.agentId = i.assignedToId
-                AND m.agentGroupId IN :agentGroupIds
-            )
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
-            """)
-    Page<Incident> searchByDepartment(
-            @Param("agentGroupIds") List<String> agentGroupIds,
-            @Param("queryPattern") String queryPattern,
-            Pageable pageable
-    );
-
-    @Query(value = """
+    // Title/description now live behind field-level encryption (see com.amalitech.hilfe.crypto)
+    // and can no longer be matched with a SQL LIKE. This returns the
+    // date-range-scoped candidate rows with no search predicate; IncidentService decrypts and
+    // filters/sorts/paginates the result in memory. Pageable here only drives LIMIT/ORDER BY --
+    // same List<Incident>-returning, no-count-query shape as findRecentlyUpdatedByAgent below.
+    // Replaces the old searchByUserId (and the unused searchByDepartment/searchByAgentScope/
+    // searchAll siblings, which had zero callers anywhere in the codebase).
+    @Query("""
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category ic
@@ -268,30 +235,11 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH assignedAgent.user assignedUser
             LEFT JOIN FETCH assignedUser.location
             WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
-            AND (:filterFrom = false OR i.createdAt >= :fromDate)
-            AND (:filterTo = false OR i.createdAt < :toDate)
-            """,
-            countQuery = """
-            SELECT COUNT(i) FROM Incident i
-            LEFT JOIN i.incidentType it
-            LEFT JOIN it.category ic
-            WHERE i.userId = :userId
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
             AND (:filterFrom = false OR i.createdAt >= :fromDate)
             AND (:filterTo = false OR i.createdAt < :toDate)
             """)
-    Page<Incident> searchByUserId(
+    List<Incident> searchByUserIdCandidates(
             @Param("userId") String userId,
-            @Param("queryPattern") String queryPattern,
             @Param("fromDate") Instant fromDate,
             @Param("filterFrom") boolean filterFrom,
             @Param("toDate") Instant toDate,
@@ -313,89 +261,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH i.assignedTo assignedAgent
             LEFT JOIN FETCH assignedAgent.user assignedUser
             LEFT JOIN FETCH assignedUser.location
-            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
-            """,
-            countQuery = """
-            SELECT COUNT(i) FROM Incident i
-            LEFT JOIN i.incidentType it
-            LEFT JOIN it.category ic
-            WHERE (i.userId = :userId OR i.assignedToId = :agentId)
-            AND (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
-            """)
-    Page<Incident> searchByAgentScope(
-            @Param("userId") String userId,
-            @Param("agentId") String agentId,
-            @Param("queryPattern") String queryPattern,
-            Pageable pageable
-    );
-
-    @Query(value = """
-            SELECT i FROM Incident i
-            LEFT JOIN FETCH i.incidentType it
-            LEFT JOIN FETCH it.category ic
-            LEFT JOIN FETCH it.agent ita
-            LEFT JOIN FETCH ita.user
-            LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH i.location
-            LEFT JOIN FETCH i.severity
-            LEFT JOIN FETCH i.status
-            LEFT JOIN FETCH i.createdBy
-            LEFT JOIN FETCH i.assignedTo assignedAgent
-            LEFT JOIN FETCH assignedAgent.user assignedUser
-            LEFT JOIN FETCH assignedUser.location
-            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
-            """,
-            countQuery = """
-            SELECT COUNT(i) FROM Incident i
-            LEFT JOIN i.incidentType it
-            LEFT JOIN it.category ic
-            WHERE (LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-              OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-              OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!')
-            """)
-    Page<Incident> searchAll(
-            @Param("queryPattern") String queryPattern,
-            Pageable pageable
-    );
-
-    @Query(value = """
-            SELECT i FROM Incident i
-            LEFT JOIN FETCH i.incidentType it
-            LEFT JOIN FETCH it.category ic
-            LEFT JOIN FETCH it.agent ita
-            LEFT JOIN FETCH ita.user
-            LEFT JOIN FETCH it.agentGroup ag
-            LEFT JOIN FETCH i.location
-            LEFT JOIN FETCH i.severity
-            LEFT JOIN FETCH i.status
-            LEFT JOIN FETCH i.createdBy
-            LEFT JOIN FETCH i.assignedTo assignedAgent
-            LEFT JOIN FETCH assignedAgent.user assignedUser
-            LEFT JOIN FETCH assignedUser.location
             """ + SLA_JOIN + """
 
             WHERE i.userId = :userId
-            AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -413,12 +281,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """ + SLA_JOIN + """
 
             WHERE i.userId = :userId
-            AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -431,7 +293,43 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """)
     Page<Incident> findByUserIdUnified(
             @Param("userId") String userId,
-            @Param("queryPattern") String queryPattern,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
+            Pageable pageable
+    );
+
+    // Search/title-sort sibling of findByUserIdUnified above -- same structural scoping, no search
+    // predicate, List-returning so Spring Data applies the Pageable's LIMIT/ORDER BY without a
+    // count query. See the searchByUserIdCandidates comment above for why this exists.
+    @Query("""
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user assignedUser
+            LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
+            WHERE i.userId = :userId
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
+            """ + SLA_STATUS_FILTER + """
+            AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
+            """)
+    List<Incident> findByUserIdUnifiedCandidates(
+            @Param("userId") String userId,
             @Param("filters") IncidentFilterParams filters,
             @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable
@@ -458,12 +356,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 WHERE m.agentId = i.assignedToId
                 AND m.agentGroupId IN :agentGroupIds
             )
-            AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -485,12 +377,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
                 WHERE m.agentId = i.assignedToId
                 AND m.agentGroupId IN :agentGroupIds
             )
-            AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -503,13 +389,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """)
     Page<Incident> findByDepartmentUnified(
             @Param("agentGroupIds") List<String> agentGroupIds,
-            @Param("queryPattern") String queryPattern,
             @Param("filters") IncidentFilterParams filters,
             @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable
     );
 
-    @Query(value = """
+    // Search/title-sort sibling of findByDepartmentUnified above. See searchByUserIdCandidates.
+    @Query("""
             SELECT i FROM Incident i
             LEFT JOIN FETCH i.incidentType it
             LEFT JOIN FETCH it.category ic
@@ -525,34 +411,11 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             LEFT JOIN FETCH assignedUser.location
             """ + SLA_JOIN + """
 
-            WHERE (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
-            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
-            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
-            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
-            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
-            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
-            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
-            """ + SLA_STATUS_FILTER + """
-            AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
-            AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
-            """,
-            countQuery = """
-            SELECT COUNT(i) FROM Incident i
-            LEFT JOIN i.incidentType it
-            LEFT JOIN it.category ic
-            """ + SLA_JOIN + """
-
-            WHERE (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
+            WHERE EXISTS (
+                SELECT 1 FROM AgentGroupMember m
+                WHERE m.agentId = i.assignedToId
+                AND m.agentGroupId IN :agentGroupIds
+            )
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -563,8 +426,89 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
             AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
             """)
+    List<Incident> findByDepartmentUnifiedCandidates(
+            @Param("agentGroupIds") List<String> agentGroupIds,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user assignedUser
+            LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
+            WHERE (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
+            """ + SLA_STATUS_FILTER + """
+            AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
+            """,
+            countQuery = """
+            SELECT COUNT(i) FROM Incident i
+            LEFT JOIN i.incidentType it
+            LEFT JOIN it.category ic
+            """ + SLA_JOIN + """
+
+            WHERE (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
+            """ + SLA_STATUS_FILTER + """
+            AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
+            """)
     Page<Incident> findAllUnified(
-            @Param("queryPattern") String queryPattern,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
+            Pageable pageable
+    );
+
+    // Search/title-sort sibling of findAllUnified above. See searchByUserIdCandidates.
+    @Query("""
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user assignedUser
+            LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
+            WHERE (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
+            """ + SLA_STATUS_FILTER + """
+            AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
+            """)
+    List<Incident> findAllUnifiedCandidates(
             @Param("filters") IncidentFilterParams filters,
             @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable
@@ -587,12 +531,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """ + SLA_JOIN + """
 
             WHERE i.assignedToId = :agentId
-            AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -610,12 +548,6 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """ + SLA_JOIN + """
 
             WHERE i.assignedToId = :agentId
-            AND (:queryPattern IS NULL OR (
-                LOWER(i.title) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(i.description) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(it.name) LIKE :queryPattern ESCAPE '!'
-                OR LOWER(ic.name) LIKE :queryPattern ESCAPE '!'
-                OR CAST(i.incidentNo AS string) LIKE :queryPattern ESCAPE '!'))
             AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
             AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
             AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
@@ -628,7 +560,41 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
             """)
     Page<Incident> findByAssignedToIdUnified(
             @Param("agentId") String agentId,
-            @Param("queryPattern") String queryPattern,
+            @Param("filters") IncidentFilterParams filters,
+            @Param("dateFilter") IncidentDateFilter dateFilter,
+            Pageable pageable
+    );
+
+    // Search/title-sort sibling of findByAssignedToIdUnified above. See searchByUserIdCandidates.
+    @Query("""
+            SELECT i FROM Incident i
+            LEFT JOIN FETCH i.incidentType it
+            LEFT JOIN FETCH it.category ic
+            LEFT JOIN FETCH it.agent ita
+            LEFT JOIN FETCH ita.user
+            LEFT JOIN FETCH it.agentGroup ag
+            LEFT JOIN FETCH i.location
+            LEFT JOIN FETCH i.severity
+            LEFT JOIN FETCH i.status
+            LEFT JOIN FETCH i.createdBy
+            LEFT JOIN FETCH i.assignedTo assignedAgent
+            LEFT JOIN FETCH assignedAgent.user assignedUser
+            LEFT JOIN FETCH assignedUser.location
+            """ + SLA_JOIN + """
+
+            WHERE i.assignedToId = :agentId
+            AND (:#{#filters.statusId} IS NULL OR i.statusId = :#{#filters.statusId})
+            AND (:#{#filters.severityId} IS NULL OR i.severityId = :#{#filters.severityId})
+            AND (:#{#filters.incidentTypeId} IS NULL OR i.incidentTypeId = :#{#filters.incidentTypeId})
+            AND (:#{#filters.categoryId} IS NULL OR it.categoryId = :#{#filters.categoryId})
+            AND (:#{#filters.locationId} IS NULL OR i.locationId = :#{#filters.locationId})
+            AND (:#{#filters.read} IS NULL OR i.read = :#{#filters.read})
+            """ + SLA_STATUS_FILTER + """
+            AND (:#{#dateFilter.filterFrom} = false OR i.createdAt >= :#{#dateFilter.fromDate})
+            AND (:#{#dateFilter.filterTo} = false OR i.createdAt < :#{#dateFilter.toDate})
+            """)
+    List<Incident> findByAssignedToIdUnifiedCandidates(
+            @Param("agentId") String agentId,
             @Param("filters") IncidentFilterParams filters,
             @Param("dateFilter") IncidentDateFilter dateFilter,
             Pageable pageable

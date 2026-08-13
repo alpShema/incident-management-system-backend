@@ -12,6 +12,7 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class IncidentService {
 
     private static final String DEFAULT_PRIORITY_NAME = "Low";
@@ -44,6 +46,15 @@ public class IncidentService {
     private static final String SORT_STATUS_NAME = "status.name";
     private static final String STATUS_NAME_IN_PROGRESS = "In Progress";
     private static final String IN_PROGRESS_NOT_CONFIGURED = "Default 'In Progress' status not configured";
+
+    // Title/description are encrypted at rest (see com.amalitech.hilfe.crypto) and can no longer be
+    // matched with a SQL LIKE or ORDER BY, so a search term or a title sort routes through a
+    // capped, unpaginated-at-the-DB "candidates" fetch that gets decrypted and filtered/sorted/
+    // paginated here instead. This cap bounds that in-memory work -- results are only guaranteed
+    // complete within the most recent SEARCH_CANDIDATE_CAP structurally-scoped rows (ordered by
+    // createdAt DESC); a match older than that won't surface. Not a regression from the previous
+    // unindexed LIKE scan, but worth revisiting (e.g. as a config value) if incident volume grows.
+    private static final int SEARCH_CANDIDATE_CAP = 5000;
 
     // Frontend sort alias → JPA field path
     private static final Map<String, String> SORT_FIELD_ALIASES = Map.of(
@@ -172,8 +183,15 @@ public class IncidentService {
             Pageable pageable
     ) {
         requireAdminForSlaStatusFilter(filters);
-        return slaService.toIncidentResponsePage(incidentRepository
-                .findByUserIdUnified(userId, buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable)));
+        Pageable sorted = ensureSorted(pageable);
+        if (!requiresInMemorySearch(query, sorted.getSort())) {
+            return slaService.toIncidentResponsePage(
+                    incidentRepository.findByUserIdUnified(userId, filters, dateFilter, sorted));
+        }
+        List<Incident> candidates = incidentRepository
+                .findByUserIdUnifiedCandidates(userId, filters, dateFilter, candidatePageable());
+        logIfCandidateCapHit(candidates.size(), "queryIncidents userId=" + userId);
+        return slaService.toIncidentResponsePage(resolveInMemory(candidates, query, sorted));
     }
 
     // The SLA status filter is admin-only per HV-1477. queryAllIncidents' endpoint is already
@@ -193,8 +211,18 @@ public class IncidentService {
             IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
-        Page<Incident> incidents = incidentRepository
-                .findAllUnified(buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable));
+        Pageable sorted = ensureSorted(pageable);
+        Page<Incident> incidents;
+        if (!requiresInMemorySearch(query, sorted.getSort())) {
+            incidents = incidentRepository.findAllUnified(filters, dateFilter, sorted);
+        } else {
+            List<Incident> candidates = incidentRepository
+                    .findAllUnifiedCandidates(filters, dateFilter, candidatePageable());
+            logIfCandidateCapHit(candidates.size(), "queryAllIncidents");
+            incidents = resolveInMemory(candidates, query, sorted);
+        }
+        // Filtering/pagination must happen before masking -- ConfidentialIncidentMasker.mask just
+        // propagates whatever totalElements the Page already carries.
         return confidentialIncidentMasker.mask(userId, null, incidents);
     }
 
@@ -207,7 +235,6 @@ public class IncidentService {
     ) {
         requireAdminForSlaStatusFilter(filters);
         Pageable sorted = ensureSorted(pageable);
-        String queryPattern = buildQueryPattern(query);
 
         List<String> userGroupIds = findAgentGroupIds(userId).orElse(List.of());
         if (userGroupIds.isEmpty()) {
@@ -222,8 +249,15 @@ public class IncidentService {
             groupIdsToQuery = agentGroupRepository.findIdsByDepartmentIds(deptIds);
         }
 
-        Page<Incident> incidents = incidentRepository
-                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters, dateFilter, sorted);
+        Page<Incident> incidents;
+        if (!requiresInMemorySearch(query, sorted.getSort())) {
+            incidents = incidentRepository.findByDepartmentUnified(groupIdsToQuery, filters, dateFilter, sorted);
+        } else {
+            List<Incident> candidates = incidentRepository
+                    .findByDepartmentUnifiedCandidates(groupIdsToQuery, filters, dateFilter, candidatePageable());
+            logIfCandidateCapHit(candidates.size(), "queryDeptIncidents userId=" + userId);
+            incidents = resolveInMemory(candidates, query, sorted);
+        }
         // userGroupIds is the viewer's own group membership -- reuse it directly instead of
         // re-querying, since it's exactly what the confidentiality mask check needs too.
         return confidentialIncidentMasker.mask(userId, userGroupIds, incidents);
@@ -238,14 +272,25 @@ public class IncidentService {
     ) {
         requireAdminForSlaStatusFilter(filters);
         Pageable sorted = ensureSorted(pageable);
-        String queryPattern = buildQueryPattern(query);
-        return agentRepository.findByUserId(userId)
-                .map(agent -> incidentRepository
-                        .findByAssignedToIdUnified(agent.getId(), queryPattern, filters, dateFilter, sorted))
-                .map(slaService::toIncidentResponsePage)
-                .orElse(new PageImpl<>(List.of(), sorted, 0));
+        Optional<Agent> agent = agentRepository.findByUserId(userId);
+        if (agent.isEmpty()) {
+            return new PageImpl<>(List.of(), sorted, 0);
+        }
+        String agentId = agent.get().getId();
+        Page<Incident> incidents;
+        if (!requiresInMemorySearch(query, sorted.getSort())) {
+            incidents = incidentRepository.findByAssignedToIdUnified(agentId, filters, dateFilter, sorted);
+        } else {
+            List<Incident> candidates = incidentRepository
+                    .findByAssignedToIdUnifiedCandidates(agentId, filters, dateFilter, candidatePageable());
+            logIfCandidateCapHit(candidates.size(), "queryAssignedIncidents agentId=" + agentId);
+            incidents = resolveInMemory(candidates, query, sorted);
+        }
+        return slaService.toIncidentResponsePage(incidents);
     }
 
+    // Always goes through the candidates path -- unlike the other four query methods, this one
+    // never had a "no search term" fast case (a blank query is rejected below).
     public Page<IncidentResponse> searchIncidents(String userId, String query, Instant fromDate, Instant toDate, Pageable pageable) {
         if (query == null || query.isBlank()) {
             throw new ArmsAuthException("Please enter a search term.", 400);
@@ -255,9 +300,10 @@ public class IncidentService {
                 ? Pageable.unpaged(Sort.by(Sort.Direction.DESC, SORT_CREATED_AT))
                 : ensureSorted(pageable);
 
-        return slaService.toIncidentResponsePage(incidentRepository
-                .searchByUserId(userId, buildQueryPattern(query), fromDate, fromDate != null, toDate, toDate != null, sortedPageable)
-        );
+        List<Incident> candidates = incidentRepository.searchByUserIdCandidates(
+                userId, fromDate, fromDate != null, toDate, toDate != null, candidatePageable());
+        logIfCandidateCapHit(candidates.size(), "searchIncidents userId=" + userId);
+        return slaService.toIncidentResponsePage(resolveInMemory(candidates, query, sortedPageable));
     }
 
     public IncidentResponse getIncident(String userId, String roleCode, String incidentId) {
@@ -461,12 +507,38 @@ public class IncidentService {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private String buildQueryPattern(String query) {
-        if (query == null || query.isBlank()) return null;
-        return "%" + query.toLowerCase()
-                .replace("!", "!!")
-                .replace("%", "!%")
-                .replace("_", "!_") + "%";
+    private boolean requiresInMemorySearch(String query, Sort sort) {
+        return (query != null && !query.isBlank()) || sort.stream().anyMatch(o -> o.getProperty().equals(SORT_TITLE));
+    }
+
+    private Pageable candidatePageable() {
+        return PageRequest.of(0, SEARCH_CANDIDATE_CAP, Sort.by(Sort.Direction.DESC, SORT_CREATED_AT));
+    }
+
+    private void logIfCandidateCapHit(int candidateCount, String context) {
+        if (candidateCount == SEARCH_CANDIDATE_CAP) {
+            log.warn("Incident search candidate cap ({}) hit for {}", SEARCH_CANDIDATE_CAP, context);
+        }
+    }
+
+    // Title/description search moved here from SQL because both are encrypted at rest (see
+    // SEARCH_CANDIDATE_CAP above for why). candidates is already structurally scoped (department/
+    // user/agent/status/date-range) by the repository query that produced it -- this only adds the
+    // free-text filter, the full requested sort, and pagination. Matching/sorting logic itself
+    // lives in IncidentContentMatcher, shared with DashboardService.getIncidents which has the
+    // same problem for its admin/agent-workload incident list.
+    private Page<Incident> resolveInMemory(List<Incident> candidates, String query, Pageable pageable) {
+        List<Incident> filtered = (query == null || query.isBlank())
+                ? candidates
+                : candidates.stream().filter(i -> IncidentContentMatcher.matches(i, query.toLowerCase())).toList();
+        List<Incident> ordered = new ArrayList<>(filtered);
+        ordered.sort(IncidentContentMatcher.buildComparator(pageable.getSort()));
+        if (pageable.isUnpaged()) {
+            return new PageImpl<>(ordered, pageable, ordered.size());
+        }
+        int from = Math.min((int) pageable.getOffset(), ordered.size());
+        int to = Math.min(from + pageable.getPageSize(), ordered.size());
+        return new PageImpl<>(ordered.subList(from, to), pageable, ordered.size());
     }
 
     private Pageable ensureSorted(Pageable pageable) {

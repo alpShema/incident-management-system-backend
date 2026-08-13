@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.models;
 
+import com.amalitech.hilfe.crypto.EncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Generated;
@@ -21,6 +22,7 @@ public class Incident {
     private String id;
 
     @Column(nullable = false)
+    @Convert(converter = EncryptedStringConverter.class)
     private String title;
 
     @Generated(event = EventType.INSERT)
@@ -28,6 +30,7 @@ public class Incident {
     private Integer incidentNo;
 
     @Column(nullable = false)
+    @Convert(converter = EncryptedStringConverter.class)
     private String description;
 
     @Column(name = "user_id", nullable = false)
