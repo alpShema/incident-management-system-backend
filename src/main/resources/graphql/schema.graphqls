@@ -942,7 +942,7 @@ type Query {
   # Locations
   locations(query: String, status: Boolean, page: PageInput): LocationPage
   location(id: ID!): Location
-  timezones: [TimezoneOption!]!
+  timezones(query: String): [TimezoneOption!]!
 
   # Agents
   agents(departmentId: String, query: String, status: Boolean, locationId: String, page: PageInput): AgentPage
