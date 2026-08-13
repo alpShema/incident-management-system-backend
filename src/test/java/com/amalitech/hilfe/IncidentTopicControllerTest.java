@@ -55,6 +55,7 @@ class IncidentTopicControllerTest {
                 "Projector",
                 "Projector issues",
                 true,
+                false,
                 true,
                 LookupResponse.from("cat-1", "Facilities"),
                 new IncidentTopicListResponse.AgentGroupSummary(
@@ -77,10 +78,10 @@ class IncidentTopicControllerTest {
     @Test
     void listTopics_noStatusFilter_returns200WithAllTopics() throws Exception {
         IncidentTopicListResponse active = new IncidentTopicListResponse(
-                "type-1", "Projector", "Projector issues", true, true,
+                "type-1", "Projector", "Projector issues", true, false, true,
                 LookupResponse.from("cat-1", "Facilities"), null);
         IncidentTopicListResponse inactive = new IncidentTopicListResponse(
-                "type-2", "Old Topic", "Deprecated", true, false,
+                "type-2", "Old Topic", "Deprecated", true, false, false,
                 LookupResponse.from("cat-1", "Facilities"), null);
         when(incidentCategoryService.listTopics(any(), any(), any(), eq((Boolean) null), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(active, inactive), PageRequest.of(0, 20), 2));
@@ -97,7 +98,7 @@ class IncidentTopicControllerTest {
     @Test
     void listTopics_statusFalse_returns200WithInactiveTopics() throws Exception {
         IncidentTopicListResponse inactive = new IncidentTopicListResponse(
-                "type-2", "Old Topic", "Deprecated", true, false,
+                "type-2", "Old Topic", "Deprecated", true, false, false,
                 LookupResponse.from("cat-1", "Facilities"), null);
         when(incidentCategoryService.listTopics(any(), any(), any(), eq(false), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
@@ -114,7 +115,7 @@ class IncidentTopicControllerTest {
     @Test
     void updateTopicStatus_deactivate_returns200() throws Exception {
         IncidentTopicResponse response = new IncidentTopicResponse(
-                "type-1", "Projector", "Projector issues", true, false, null, null);
+                "type-1", "Projector", "Projector issues", true, false, false, null, null);
         when(incidentCategoryService.updateTopicStatus("type-1", false)).thenReturn(response);
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -132,7 +133,7 @@ class IncidentTopicControllerTest {
     @Test
     void updateTopicStatus_activate_returns200() throws Exception {
         IncidentTopicResponse response = new IncidentTopicResponse(
-                "type-1", "Projector", "Projector issues", true, true, null, null);
+                "type-1", "Projector", "Projector issues", true, false, true, null, null);
         when(incidentCategoryService.updateTopicStatus("type-1", true)).thenReturn(response);
 
         var auth = new UsernamePasswordAuthenticationToken(

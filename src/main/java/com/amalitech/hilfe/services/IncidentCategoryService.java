@@ -287,7 +287,9 @@ public class IncidentCategoryService {
                 .adminId(creatorUserId)
                 .agentGroupId(assignedGroup.getId())
                 .visibleToGroup(request.visibleToGroup())
+                .confidential(request.confidential())
                 .build();
+        requireConfidentialOwner(topic);
         IncidentType saved = typeRepository.save(topic);
         entityManager.flush();
         entityManager.clear();
@@ -321,6 +323,10 @@ public class IncidentCategoryService {
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
         }
+        if (request.confidential() != null) {
+            topic.setConfidential(request.confidential());
+        }
+        requireConfidentialOwner(topic);
 
         IncidentType saved = typeRepository.save(topic);
         entityManager.flush();
@@ -362,12 +368,32 @@ public class IncidentCategoryService {
         if (request.visibleToGroup() != null) {
             topic.setVisibleToGroup(request.visibleToGroup());
         }
+        if (request.confidential() != null) {
+            topic.setConfidential(request.confidential());
+        }
+        requireConfidentialOwner(topic);
 
         IncidentType saved = typeRepository.save(topic);
         entityManager.flush();
         entityManager.clear();
         return IncidentTopicResponse.from(typeRepository.findByIdWithDetails(saved.getId())
                 .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_AFTER_UPDATE, 500)));
+    }
+
+    // HV-1619: a confidential topic must have someone to route its incidents to, since
+    // routing, escalation, and access are all keyed off that owner. Checked after the group
+    // change is applied so a request that both drops the agent group and marks the topic
+    // confidential is rejected, instead of silently leaving it confidential with no owner.
+    private void requireConfidentialOwner(IncidentType topic) {
+        if (!topic.isConfidential()) {
+            return;
+        }
+        boolean hasGroup = StringUtils.hasText(topic.getAgentGroupId());
+        boolean hasAgent = StringUtils.hasText(topic.getAgentId());
+        if (!hasGroup && !hasAgent) {
+            throw new ArmsAuthException(
+                    "A confidential topic must have a responsible agent group.", 400);
+        }
     }
 
     private void applyAgentGroupChange(IncidentType topic, UpdateTopicRequest request, IncidentCategory category) {

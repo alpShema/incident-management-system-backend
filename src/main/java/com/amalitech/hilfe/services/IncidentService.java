@@ -90,6 +90,9 @@ public class IncidentService {
     private final AutoCloseService autoCloseService;
     private final SlaService slaService;
     private final IncidentCategoryRepository incidentCategoryRepository;
+    private final ConfidentialEscalationResolver confidentialEscalationResolver;
+    private final ConfidentialIncidentAccess confidentialIncidentAccess;
+    private final ConfidentialIncidentMasker confidentialIncidentMasker;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -184,13 +187,15 @@ public class IncidentService {
     }
 
     public Page<IncidentResponse> queryAllIncidents(
+            String userId,
             String query,
             IncidentFilterParams filters,
             IncidentDateFilter dateFilter,
             Pageable pageable
     ) {
-        return slaService.toIncidentResponsePage(incidentRepository
-                .findAllUnified(buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable)));
+        Page<Incident> incidents = incidentRepository
+                .findAllUnified(buildQueryPattern(query), filters, dateFilter, ensureSorted(pageable));
+        return confidentialIncidentMasker.mask(userId, null, incidents);
     }
 
     public Page<IncidentResponse> queryDeptIncidents(
@@ -217,8 +222,11 @@ public class IncidentService {
             groupIdsToQuery = agentGroupRepository.findIdsByDepartmentIds(deptIds);
         }
 
-        return slaService.toIncidentResponsePage(incidentRepository
-                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters, dateFilter, sorted));
+        Page<Incident> incidents = incidentRepository
+                .findByDepartmentUnified(groupIdsToQuery, queryPattern, filters, dateFilter, sorted);
+        // userGroupIds is the viewer's own group membership -- reuse it directly instead of
+        // re-querying, since it's exactly what the confidentiality mask check needs too.
+        return confidentialIncidentMasker.mask(userId, userGroupIds, incidents);
     }
 
     public Page<IncidentResponse> queryAssignedIncidents(
@@ -305,6 +313,10 @@ public class IncidentService {
 
     private IncidentResponse doUpdateStatus(String actorUserId, String roleCode, boolean hasForceClose, String incidentId, UpdateIncidentStatusRequest request) {
         Incident incident = findIncident(incidentId);
+        // HV-1619: status changes aren't otherwise ownership-gated (any agent with the right
+        // role/permission can transition any incident) -- confidential incidents are the
+        // exception, so a non-member can't force-close/resolve/reopen one they can't see.
+        requireConfidentialAccess(actorUserId, incident, "You do not have permission to update this incident.");
 
         Status newStatus = statusRepository.findById(request.statusId())
                 .orElseThrow(() -> new ArmsAuthException("Status not found", 404));
@@ -483,6 +495,11 @@ public class IncidentService {
     }
 
     private void enforceAccess(String userId, String roleCode, Incident incident) {
+        IncidentType topic = incident.getIncidentType();
+        if (topic != null && topic.isConfidential()) {
+            enforceConfidentialAccess(userId, incident);
+            return;
+        }
         if (ROLE_ADMIN.equalsIgnoreCase(roleCode) || ROLE_ADMIN_AGENT.equalsIgnoreCase(roleCode) || ROLE_SUPER_ADMIN.equalsIgnoreCase(roleCode)) {
             return;
         }
@@ -490,13 +507,41 @@ public class IncidentService {
             return;
         }
         if (ROLE_AGENT.equalsIgnoreCase(roleCode)) {
-            boolean isAssignee = agentRepository.findByUserId(userId)
-                    .map(a -> a.getId().equals(incident.getAssignedToId()))
-                    .orElse(false);
-            if (isAssignee) return;
+            if (isAssignee(userId, incident)) return;
             if (isSameDepartmentAsAssignedAgent(userId, incident)) return;
         }
         throw new ArmsAuthException("You do not have permission to access this incident.", 403);
+    }
+
+    // HV-1619: a confidential incident's rules replace the normal ones entirely -- the admin/
+    // admin-agent/super-admin bypass above does NOT apply here. Only the creator, the assignee,
+    // and members of the topic's linked agent group (or single agent, for legacy topics) may
+    // view full detail; everyone else is denied and the attempt is written to incident history.
+    // Used for the "manually view the incident" surface specifically -- mutation paths use
+    // requireConfidentialAccess below, which shares the same predicate without the audit log
+    // (that entry's wording is about viewing, not about reassigning/updating).
+    private void enforceConfidentialAccess(String userId, Incident incident) {
+        if (confidentialIncidentAccess.canAccess(userId, incident)) {
+            return;
+        }
+        activityLogService.logUnauthorizedConfidentialAccess(userId, incident.getId());
+        throw new ArmsAuthException("You do not have permission to access this incident.", 403);
+    }
+
+    // HV-1619: guards the incident mutations (reassign, severity, status) the same way
+    // enforceConfidentialAccess guards viewing -- a non-member can't act on a confidential
+    // incident even when they'd otherwise qualify via incident.update.any or a role-based
+    // status transition. No-ops for non-confidential incidents (canAccess is always true there).
+    private void requireConfidentialAccess(String actorUserId, Incident incident, String deniedMessage) {
+        if (!confidentialIncidentAccess.canAccess(actorUserId, incident)) {
+            throw new ArmsAuthException(deniedMessage, 403);
+        }
+    }
+
+    private boolean isAssignee(String userId, Incident incident) {
+        return agentRepository.findByUserId(userId)
+                .map(a -> a.getId().equals(incident.getAssignedToId()))
+                .orElse(false);
     }
 
     /**
@@ -505,6 +550,10 @@ public class IncidentService {
      * else is restricted to incidents assigned to them.
      */
     private void enforceUpdateOwnership(String actorUserId, boolean hasUpdateAny, Incident incident, String deniedMessage) {
+        // HV-1619: this check runs even for holders of incident.update.any -- that permission
+        // lets an admin reassign/re-prioritize any *non-confidential* incident, but it must not
+        // let a non-member reach into a confidential one.
+        requireConfidentialAccess(actorUserId, incident, deniedMessage);
         if (hasUpdateAny) {
             return;
         }
@@ -798,6 +847,9 @@ public class IncidentService {
     // Falls back to all admins when there's no category/department link, no head is set, or the
     // stored head is no longer an active admin-capable user (role/status can change after assignment).
     private List<String> resolveEscalationRecipientUserIds(IncidentType incidentType) {
+        if (incidentType != null && incidentType.isConfidential()) {
+            return confidentialEscalationResolver.resolveRecipientUserIds(incidentType);
+        }
         String categoryId = incidentType != null ? incidentType.getCategoryId() : null;
         if (categoryId != null) {
             String headUserId = incidentCategoryRepository.findByIdWithDepartment(categoryId)

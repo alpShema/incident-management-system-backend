@@ -3,6 +3,7 @@ package com.amalitech.hilfe;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.ActivityLog;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.models.Role;
@@ -14,7 +15,9 @@ import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
+import com.amalitech.hilfe.services.ConfidentialIncidentAccess;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -47,7 +50,15 @@ class ActivityLogServiceTest {
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock AgentGroupRepository agentGroupRepository;
     @Mock RoleRepository roleRepository;
+    @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
     @InjectMocks ActivityLogService activityLogService;
+
+    @BeforeEach
+    void stubConfidentialAccessDefault() {
+        // Default: none of these incidents are confidential, and canAccess is itself always
+        // true for those -- keeps the existing non-confidential tests unaffected.
+        lenient().when(confidentialIncidentAccess.canAccess(any(), any())).thenReturn(true);
+    }
 
     @AfterEach
     void clearContext() {
@@ -103,7 +114,7 @@ class ActivityLogServiceTest {
 
     @Test
     void getActivityLogs_incidentNotFound_throws404() {
-        when(incidentRepository.findById("missing")).thenReturn(Optional.empty());
+        when(incidentRepository.findByIdWithDetails("missing")).thenReturn(Optional.empty());
 
         var pageable = PageRequest.of(0, 10);
         assertThatThrownBy(() -> activityLogService.getActivityLogs("missing", pageable, "u1", "ADMIN"))
@@ -114,7 +125,7 @@ class ActivityLogServiceTest {
 
     @Test
     void getActivityLogs_adminRole_allowedForAnyIncident() {
-        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", null)));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", null)));
         when(activityLogRepository.findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -125,7 +136,7 @@ class ActivityLogServiceTest {
 
     @Test
     void getActivityLogs_clientOwner_allowedForOwnIncident() {
-        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "u1", null)));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1", "u1", null)));
         when(activityLogRepository.findActivityLogResponsesByIncidentIdExcludingAction(eq("inc-1"), eq("INCIDENT_VIEWED"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -136,7 +147,7 @@ class ActivityLogServiceTest {
 
     @Test
     void getActivityLogs_clientNotOwner_throws403() {
-        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", null)));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", null)));
 
         var pageable = PageRequest.of(0, 10);
         assertThatThrownBy(() -> activityLogService.getActivityLogs("inc-1", pageable, "other", "CLIENT"))
@@ -148,7 +159,7 @@ class ActivityLogServiceTest {
     @Test
     void getActivityLogs_assignedAgent_allowedForAssignedIncident() {
         Agent agent = Agent.builder().id("agent-1").userId("u-agent").build();
-        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "agent-1")));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "agent-1")));
         when(agentRepository.findByUserId("u-agent")).thenReturn(Optional.of(agent));
         when(activityLogRepository.findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
@@ -161,7 +172,7 @@ class ActivityLogServiceTest {
     @Test
     void getActivityLogs_sameDepartmentAgent_allowedForIncidentHistoryView() {
         Agent actor = Agent.builder().id("actor-agent").userId("u-actor").build();
-        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
         when(agentRepository.findByUserId("u-actor")).thenReturn(Optional.of(actor));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("actor-agent")).thenReturn(List.of("g1"));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("assigned-agent")).thenReturn(List.of("g2"));
@@ -178,7 +189,7 @@ class ActivityLogServiceTest {
     @Test
     void getActivityLogs_crossDepartmentAgent_throws403() {
         Agent actor = Agent.builder().id("actor-agent").userId("u-actor").build();
-        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
         when(agentRepository.findByUserId("u-actor")).thenReturn(Optional.of(actor));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("actor-agent")).thenReturn(List.of("g1"));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("assigned-agent")).thenReturn(List.of("g2"));
@@ -195,7 +206,7 @@ class ActivityLogServiceTest {
     @Test
     void getActivityLogs_agentWithNoGroupOrDepartment_throws403() {
         Agent actor = Agent.builder().id("actor-agent").userId("u-actor").build();
-        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
         when(agentRepository.findByUserId("u-actor")).thenReturn(Optional.of(actor));
         when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("actor-agent")).thenReturn(List.of());
 
@@ -204,6 +215,45 @@ class ActivityLogServiceTest {
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(403);
+    }
+
+    // ── HV-1619: confidential incidents lock the history the same way as the detail view ────
+
+    private Incident confidentialIncident(String id, String userId, String assignedToId) {
+        IncidentType topic = IncidentType.builder()
+                .id("type-1").name("Confidential Topic").agentGroupId("group-1").confidential(true).build();
+        Incident incident = incident(id, userId, assignedToId);
+        incident.setIncidentType(topic);
+        return incident;
+    }
+
+    @Test
+    void getActivityLogs_confidentialIncident_accessGranted_returnsHistory() {
+        Incident incident = confidentialIncident("inc-1", "owner", "assigned-agent");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("group-user", incident)).thenReturn(true);
+        when(activityLogRepository.findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        activityLogService.getActivityLogs("inc-1", PageRequest.of(0, 10), "group-user", "AGENT");
+
+        verify(activityLogRepository).findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class));
+    }
+
+    @Test
+    void getActivityLogs_confidentialIncident_nonMemberAdmin_throws403() {
+        // The admin/admin-agent/super-admin bypass a few lines down must not apply once the
+        // incident is confidential -- only ConfidentialIncidentAccess#canAccess decides.
+        Incident incident = confidentialIncident("inc-1", "owner", "assigned-agent");
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("outside-admin", incident)).thenReturn(false);
+
+        var pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> activityLogService.getActivityLogs("inc-1", pageable, "outside-admin", "ADMIN"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+        verifyNoInteractions(activityLogRepository);
     }
 
     // ── logUserRoleChange ────────────────────────────────────────────────────

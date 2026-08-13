@@ -73,6 +73,7 @@ public class SlaService {
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
     private final IncidentCategoryRepository incidentCategoryRepository;
+    private final ConfidentialEscalationResolver confidentialEscalationResolver;
     private final LocationRepository locationRepository;
     private final NotificationEventPublisher notificationEventPublisher;
     private final ActivityLogService activityLogService;
@@ -572,6 +573,9 @@ public class SlaService {
     // assignment). Mirrors IncidentService#resolveEscalationRecipientUserIds.
     private List<String> resolveEscalationRecipientUserIds(Incident incident) {
         IncidentType incidentType = incident.getIncidentType();
+        if (incidentType != null && incidentType.isConfidential()) {
+            return confidentialEscalationResolver.resolveRecipientUserIds(incidentType);
+        }
         String categoryId = incidentType != null ? incidentType.getCategoryId() : null;
         if (categoryId != null) {
             String headUserId = incidentCategoryRepository.findByIdWithDepartment(categoryId)

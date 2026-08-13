@@ -101,6 +101,7 @@ type Incident {
   status: Lookup
   createdBy: Creator
   assignedTo: AssignedAgent
+  confidential: Boolean!
   read: Boolean!
   statusReason: String
   resolvedAt: Instant
@@ -387,6 +388,7 @@ type IncidentTopic {
   name: String!
   description: String
   visibleToGroup: Boolean!
+  confidential: Boolean!
   status: Boolean
   category: Lookup
   updatedAt: Instant
@@ -402,6 +404,7 @@ type IncidentTopicWithGroup {
   name: String!
   description: String
   visibleToGroup: Boolean!
+  confidential: Boolean!
   status: Boolean
   category: Lookup
   agentGroup: AgentGroupSummary
@@ -860,6 +863,7 @@ input CreateTopicInput {
   description: String
   agentGroupId: String
   visibleToGroup: Boolean
+  confidential: Boolean
 }
 
 input UpdateTopicInput {
@@ -867,6 +871,7 @@ input UpdateTopicInput {
   description: String
   agentGroupId: String
   visibleToGroup: Boolean
+  confidential: Boolean
 }
 
 input UpdateTopicStatusInput {

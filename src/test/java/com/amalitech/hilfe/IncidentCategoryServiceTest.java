@@ -393,7 +393,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null, null));
+                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null, null, null));
 
         assertThat(topic.getName()).isEqualTo("New Name");
         assertThat(topic.getDescription()).isEqualTo("New desc");
@@ -412,7 +412,7 @@ class IncidentCategoryServiceTest {
 
         IncidentTopicResponse response = categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("New Name", "New desc", null, "group-1", null, false));
+                new UpdateTopicRequest("New Name", "New desc", null, "group-1", null, false, null));
 
         assertThat(response).isNotNull();
         verify(typeRepository).save(any(IncidentType.class));
@@ -431,7 +431,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest(null, null, null, null, true, null));
+                new UpdateTopicRequest(null, null, null, null, true, null, null));
 
         assertThat(topic.getAgentGroupId()).isNull();
         verify(agentGroupRepository, never()).findById(any());
@@ -444,7 +444,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
         when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
 
-        UpdateTopicRequest request = new UpdateTopicRequest(null, null, null, "group-2", true, null);
+        UpdateTopicRequest request = new UpdateTopicRequest(null, null, null, "group-2", true, null, null);
         assertThatThrownBy(() -> categoryService.updateTopic("cat-1", "type-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Cannot remove and reassign the agent group in the same request")
@@ -605,7 +605,7 @@ class IncidentCategoryServiceTest {
 
         IncidentTopicResponse response = categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "group-1", true));
+                new CreateTopicRequest("Projector", "Projector issues", "group-1", true, false));
 
         assertThat(response.id()).isEqualTo("type-1");
         assertThat(response.name()).isEqualTo("Projector");
@@ -625,7 +625,7 @@ class IncidentCategoryServiceTest {
     void createTopic_categoryNotFound_throws404() {
         when(categoryRepository.findById("missing")).thenReturn(Optional.empty());
 
-        CreateTopicRequest topicRequest = new CreateTopicRequest("Projector", "Projector issues", null, true);
+        CreateTopicRequest topicRequest = new CreateTopicRequest("Projector", "Projector issues", null, true, false);
         assertThatThrownBy(() -> categoryService.createTopic("missing", "admin-1", topicRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Incident category not found")
@@ -645,7 +645,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("  Projector  ", "  Projector issues  ", "group-1", true));
+                new CreateTopicRequest("  Projector  ", "  Projector issues  ", "group-1", true, false));
 
         var captor = forClass(IncidentType.class);
         verify(typeRepository).save(captor.capture());
@@ -658,7 +658,7 @@ class IncidentCategoryServiceTest {
         when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(true);
 
-        CreateTopicRequest dupTopicRequest = new CreateTopicRequest("Projector", "Projector issues", "group-1", true);
+        CreateTopicRequest dupTopicRequest = new CreateTopicRequest("Projector", "Projector issues", "group-1", true, false);
         assertThatThrownBy(() -> categoryService.createTopic("cat-1", "admin-1", dupTopicRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("A topic with this name already exists. Please choose a different name.")
@@ -681,7 +681,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.createTopic(
                 "cat-1", "admin-1",
-                new CreateTopicRequest("Projector", "Projector issues", "group-1", true));
+                new CreateTopicRequest("Projector", "Projector issues", "group-1", true, false));
 
         var captor = forClass(IncidentType.class);
         verify(typeRepository).save(captor.capture());
@@ -694,12 +694,84 @@ class IncidentCategoryServiceTest {
         when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
         when(agentGroupRepository.findById("missing-group")).thenReturn(Optional.empty());
 
-        CreateTopicRequest missingGroupRequest = new CreateTopicRequest("Projector", "Projector issues", "missing-group", true);
+        CreateTopicRequest missingGroupRequest = new CreateTopicRequest("Projector", "Projector issues", "missing-group", true, false);
         assertThatThrownBy(() -> categoryService.createTopic("cat-1", "admin-1", missingGroupRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("Agent group not found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    // ── HV-1619: confidential topics ─────────────────────────────────────────
+
+    @Test
+    void createTopic_confidentialWithAgentGroup_persistsFlag() {
+        IncidentType saved = buildType();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
+        when(typeRepository.existsByNameIgnoreCase("Projector")).thenReturn(false);
+        when(agentGroupRepository.findById("group-1")).thenReturn(Optional.of(
+                AgentGroup.builder().id("group-1").name("IT Support").departmentId("dept-1").status(true).build()));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(saved);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
+
+        categoryService.createTopic(
+                "cat-1", "admin-1",
+                new CreateTopicRequest("Projector", "Projector issues", "group-1", true, true));
+
+        var captor = forClass(IncidentType.class);
+        verify(typeRepository).save(captor.capture());
+        assertThat(captor.getValue().isConfidential()).isTrue();
+    }
+
+    @Test
+    void updateTopicById_confidentialWithoutOwner_throws400() {
+        IncidentType topic = IncidentType.builder()
+                .id("type-1").name("Projector").description("Projector issues")
+                .categoryId("cat-1").adminId("admin-1").build();
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
+
+        UpdateTopicRequest request = new UpdateTopicRequest(null, null, null, null, null, null, true);
+        assertThatThrownBy(() -> categoryService.updateTopicById("type-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("A confidential topic must have a responsible agent group.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+        verify(typeRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTopicById_removeAgentGroupWithConfidential_throws400() {
+        IncidentType topic = IncidentType.builder()
+                .id("type-1").name("Projector").description("Projector issues")
+                .categoryId("cat-1").adminId("admin-1").agentGroupId("group-1")
+                .confidential(true).build();
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
+
+        UpdateTopicRequest request = new UpdateTopicRequest(null, null, null, null, true, null, true);
+        assertThatThrownBy(() -> categoryService.updateTopicById("type-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("A confidential topic must have a responsible agent group.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+        verify(typeRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTopicById_confidentialWithExistingGroup_persistsFlag() {
+        IncidentType topic = buildType();
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(buildCategory()));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(topic);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
+
+        UpdateTopicRequest request = new UpdateTopicRequest(null, null, null, null, null, null, true);
+        categoryService.updateTopicById("type-1", request);
+
+        var captor = forClass(IncidentType.class);
+        verify(typeRepository).save(captor.capture());
+        assertThat(captor.getValue().isConfidential()).isTrue();
     }
 
     // ── searchCategories ──────────────────────────────────────────────────────

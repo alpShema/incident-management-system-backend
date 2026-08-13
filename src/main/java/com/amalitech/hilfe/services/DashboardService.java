@@ -5,6 +5,7 @@ import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
@@ -62,6 +63,7 @@ public class DashboardService {
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final StatusRepository statusRepository;
     private final SlaService slaService;
+    private final ConfidentialIncidentMasker confidentialIncidentMasker;
 
     public DashboardStats getStats(String userId, RoleCode role) {
         if (role == RoleCode.AGENT) {
@@ -146,16 +148,25 @@ public class DashboardService {
         }
         final String finalQueryPattern = queryPattern;
 
+        // HV-1619: this is a system-wide (ADMIN) / department-workload (AGENT) incident browse,
+        // exactly the kind of surface that can show a confidential incident to someone outside
+        // its owning group -- mask it the same way IncidentService's All Incidents / Department
+        // Assigned Incidents do.
         if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
-            return slaService.toIncidentResponsePage(
-                    incidentRepository.findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)
-            );
+            Page<Incident> incidents = incidentRepository
+                    .findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable);
+            return confidentialIncidentMasker.mask(userId, null, incidents);
         }
         if (role == RoleCode.AGENT) {
             return findAgentGroupIds(userId)
                     .filter(agentGroupIds -> !agentGroupIds.isEmpty())
-                    .map(agentGroupIds -> slaService.toIncidentResponsePage(incidentRepository
-                            .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)))
+                    .map(agentGroupIds -> {
+                        Page<Incident> incidents = incidentRepository
+                                .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable);
+                        // agentGroupIds is the viewer's own group membership -- reuse it directly
+                        // instead of re-resolving it inside the masker.
+                        return confidentialIncidentMasker.mask(userId, agentGroupIds, incidents);
+                    })
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
         throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);

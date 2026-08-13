@@ -3,6 +3,7 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.dto.InternalNoteRequest;
 import com.amalitech.hilfe.dto.InternalNoteResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
+import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.InternalNote;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.IncidentRepository;
@@ -25,13 +26,12 @@ public class InternalNoteService {
     private final InternalNoteRepository noteRepository;
     private final IncidentRepository incidentRepository;
     private final ActivityLogService activityLogService;
+    private final ConfidentialIncidentAccess confidentialIncidentAccess;
     private final EntityManager entityManager;
 
     @Transactional
     public InternalNoteResponse createNote(String userId, String incidentId, InternalNoteRequest request) {
-        if (!incidentRepository.existsById(incidentId)) {
-            throw new ArmsAuthException("Incident not found", 404);
-        }
+        requireConfidentialAccess(userId, incidentId);
         String noteId = UUID.randomUUID().toString();
         InternalNote saved = noteRepository.save(InternalNote.builder()
                 .id(noteId)
@@ -52,14 +52,13 @@ public class InternalNoteService {
 
     @Transactional
     public Page<InternalNoteResponse> listNotes(String userId, String incidentId, Pageable pageable) {
-        if (!incidentRepository.existsById(incidentId)) {
-            throw new ArmsAuthException("Incident not found", 404);
-        }
+        requireConfidentialAccess(userId, incidentId);
         return noteRepository.findByIncidentId(incidentId, pageable).map(n -> toResponse(n, userId));
     }
 
     @Transactional
     public InternalNoteResponse updateNote(String userId, String incidentId, String noteId, InternalNoteRequest request) {
+        requireConfidentialAccess(userId, incidentId);
         InternalNote note = noteRepository.findByIdWithAuthor(noteId)
                 .orElseThrow(() -> new ArmsAuthException(NOTE_NOT_FOUND, 404));
         if (!note.getIncidentId().equals(incidentId)) {
@@ -76,6 +75,7 @@ public class InternalNoteService {
 
     @Transactional
     public void deleteNote(String userId, String role, String incidentId, String noteId) {
+        requireConfidentialAccess(userId, incidentId);
         InternalNote note = noteRepository.findByIdWithAuthor(noteId)
                 .orElseThrow(() -> new ArmsAuthException(NOTE_NOT_FOUND, 404));
         if (!note.getIncidentId().equals(incidentId)) {
@@ -88,6 +88,18 @@ public class InternalNoteService {
         }
         noteRepository.delete(note);
         activityLogService.logInternalNoteDeleted(userId, incidentId, noteId);
+    }
+
+    // HV-1619: internal notes are otherwise only role-gated (any AGENT/ADMIN/SUPER_ADMIN can
+    // read/write notes on any incident by ID, department or assignment notwithstanding) --
+    // confidential incidents are the one place that must still be restricted to the topic's
+    // linked owner, since notes are exactly the kind of detail this feature hides elsewhere.
+    private void requireConfidentialAccess(String userId, String incidentId) {
+        Incident incident = incidentRepository.findByIdWithDetails(incidentId)
+                .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
+        if (!confidentialIncidentAccess.canAccess(userId, incident)) {
+            throw new ArmsAuthException("You do not have permission to access this incident.", 403);
+        }
     }
 
     private InternalNoteResponse toResponse(InternalNote note, String currentUserId) {

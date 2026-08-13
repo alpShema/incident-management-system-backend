@@ -90,7 +90,7 @@ class IncidentResolverTest {
 
     private IncidentResponse stubResponse() {
         return new IncidentResponse("incident-1", 1, "", "", null, null, null, null,
-                null, null, false, null, null, null, null, null, null, null);
+                null, null, false, false, null, null, null, null, null, null, null);
     }
 
     @Test
@@ -198,7 +198,7 @@ class IncidentResolverTest {
     @Test
     void incidents_readFilter_bindsToFilterParams() {
         setAuthority("dashboard.admin");
-        when(incidentService.queryAllIncidents(any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
+        when(incidentService.queryAllIncidents(any(), any(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any()))
                 .thenReturn(new PageImpl<>(List.of(stubResponse())));
 
         graphQlTester.document(INCIDENTS_QUERY)
@@ -207,7 +207,7 @@ class IncidentResolverTest {
                 .path("incidents.items[0].id").entity(String.class).isEqualTo("incident-1");
 
         ArgumentCaptor<IncidentFilterParams> captor = ArgumentCaptor.forClass(IncidentFilterParams.class);
-        verify(incidentService).queryAllIncidents(any(), captor.capture(), any(IncidentDateFilter.class), any());
+        verify(incidentService).queryAllIncidents(any(), any(), captor.capture(), any(IncidentDateFilter.class), any());
         assertThat(captor.getValue().read()).isTrue();
     }
 }

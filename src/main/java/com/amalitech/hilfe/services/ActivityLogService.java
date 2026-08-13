@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.ActivityLogResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.ActivityLog;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
@@ -40,6 +41,7 @@ public class ActivityLogService {
     private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
     private static final String AS_HEAD_OF_DEPARTMENT = " as head of department ";
     private static final String ACTION_INCIDENT_VIEWED = "INCIDENT_VIEWED";
+    private static final String ACTION_UNAUTHORIZED_CONFIDENTIAL_ACCESS = "UNAUTHORIZED_CONFIDENTIAL_ACCESS";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -49,6 +51,7 @@ public class ActivityLogService {
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
+    private final ConfidentialIncidentAccess confidentialIncidentAccess;
 
     public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
         Pageable sortedPageable = pageable.getSort().isSorted()
@@ -77,7 +80,10 @@ public class ActivityLogService {
             return activityLogRepository.findActivityLogResponses(sortedPageable);
         }
 
-        Incident incident = incidentRepository.findById(incidentId)
+        // findByIdWithDetails (not findById) -- enforceIncidentAccess reads incident.getIncidentType()
+        // for the confidential check below, and this method isn't @Transactional (open-in-view is
+        // off), so a lazily-fetched incidentType would blow up with LazyInitializationException.
+        Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         enforceIncidentAccess(userId, roleCode, incident);
         // Clients aren't shown staff "Viewed" activity — it's an internal detail, not something
@@ -90,6 +96,18 @@ public class ActivityLogService {
     }
 
     private void enforceIncidentAccess(String userId, String roleCode, Incident incident) {
+        // HV-1619: a confidential incident's history is just as sensitive as the incident
+        // itself -- assignment/severity/status entries would otherwise leak exactly what the
+        // masked list views and blocked detail view are hiding. Same predicate, same override
+        // of the admin bypass below; this surface doesn't add its own history entry on denial
+        // (no dedicated "viewed the log" concept exists here, unlike logIncidentViewed).
+        IncidentType topic = incident.getIncidentType();
+        if (topic != null && topic.isConfidential()) {
+            if (confidentialIncidentAccess.canAccess(userId, incident)) {
+                return;
+            }
+            throw new ArmsAuthException("You do not have access to this incident's activity log", 403);
+        }
         if ("ADMIN".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode)) return;
         if (userId.equals(incident.getUserId())) return;
         if ("AGENT".equalsIgnoreCase(roleCode)) {
@@ -228,6 +246,28 @@ public class ActivityLogService {
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log view for incident {}", incidentId, ex);
+        }
+    }
+
+    // HV-1619: an agent/admin outside a confidential topic's linked agent group tried to open
+    // the incident directly and was denied. Recorded on its own -- separate from
+    // logIncidentViewed, which only fires on a successful view -- since this is exactly the
+    // "attempt recorded in incident history" acceptance criterion.
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logUnauthorizedConfidentialAccess(String actorUserId, String incidentId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(ACTION_UNAUTHORIZED_CONFIDENTIAL_ACCESS)
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " attempted to view confidential " + incidentLabel + " without authorization")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log unauthorized confidential access attempt for incident {}", incidentId, ex);
         }
     }
 

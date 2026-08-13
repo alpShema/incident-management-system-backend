@@ -100,6 +100,7 @@ public class IncidentController {
     @GetMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.DASHBOARD_ADMIN + "')")
     public ResponseEntity<ApiResponse<PageResponse<IncidentResponse>>> listAllIncidents(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @Parameter(description = "Keyword search across title, description, topic name, and category name") @RequestParam(required = false) String query,
             @Parameter(description = "Filter by status ID") @RequestParam(required = false) String statusId,
             @Parameter(description = "Filter by severity ID") @RequestParam(required = false) String severityId,
@@ -113,6 +114,7 @@ public class IncidentController {
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAllIncidents(
+                principal.userId(),
                 query,
                 new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus, read),
                 new IncidentDateFilter(fromDate, toDate),

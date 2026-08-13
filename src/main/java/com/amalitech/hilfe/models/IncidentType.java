@@ -39,6 +39,10 @@ public class IncidentType {
     @Builder.Default
     private boolean visibleToGroup = true;
 
+    @Column(name = "confidential", nullable = false)
+    @Builder.Default
+    private boolean confidential = false;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean status = true;

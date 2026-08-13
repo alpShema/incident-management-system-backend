@@ -1,7 +1,9 @@
 package com.amalitech.hilfe.config;
 
+import com.amalitech.hilfe.repositories.IncidentRepository;
 import com.amalitech.hilfe.security.JwtHandshakeInterceptor;
 import com.amalitech.hilfe.security.StompSubscriptionAuthorizationInterceptor;
+import com.amalitech.hilfe.services.ConfidentialIncidentAccess;
 import com.amalitech.hilfe.services.TokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -18,6 +20,8 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final TokenService tokenService;
+    private final IncidentRepository incidentRepository;
+    private final ConfidentialIncidentAccess confidentialIncidentAccess;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -45,6 +49,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Bean
     public StompSubscriptionAuthorizationInterceptor subscriptionAuthorizationInterceptor() {
-        return new StompSubscriptionAuthorizationInterceptor();
+        return new StompSubscriptionAuthorizationInterceptor(incidentRepository, confidentialIncidentAccess);
     }
 }

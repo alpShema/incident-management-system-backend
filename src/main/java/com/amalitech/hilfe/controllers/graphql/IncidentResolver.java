@@ -40,9 +40,10 @@ public class IncidentResolver {
             @Argument Instant fromDate,
             @Argument Instant toDate,
             @Argument String query,
-            @Argument PageInput page) {
+            @Argument PageInput page,
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
         return PageInput.toPageResponse(
-                incidentService.queryAllIncidents(query, orEmpty(filter),
+                incidentService.queryAllIncidents(principal.userId(), query, orEmpty(filter),
                         toDateFilter(fromDate, toDate), PageInput.toPageable(page))
         );
     }
