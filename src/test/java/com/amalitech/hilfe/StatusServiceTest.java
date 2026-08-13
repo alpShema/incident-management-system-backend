@@ -1,14 +1,11 @@
 package com.amalitech.hilfe;
 
 import com.amalitech.hilfe.dto.StatusLookupResponse;
-import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.StatusRepository;
 import com.amalitech.hilfe.services.StatusService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -30,7 +27,7 @@ class StatusServiceTest {
         Status closed = Status.builder().id("status-closed").name("Closed").description("Resolved").build();
         when(statusRepository.findAll()).thenReturn(List.of(open, closed));
 
-        List<StatusLookupResponse> result = statusService.listStatuses(RoleCode.CLIENT);
+        List<StatusLookupResponse> result = statusService.listStatuses();
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).id()).isEqualTo("status-open");
@@ -39,40 +36,32 @@ class StatusServiceTest {
         assertThat(result.get(1).name()).isEqualTo("Closed");
     }
 
+    // HV-1653: the statuses lookup must always include Unassigned, with no role-based
+    // special-casing -- it is sourced straight from StatusRepository like every other status.
     @Test
-    void listStatuses_agentRole_excludesUnassignedStatus() {
+    void listStatuses_includesUnassignedStatus() {
         Status open = Status.builder().id("status-open").name("Open").build();
-        Status unassigned = Status.builder().id("status-unassigned").name("Unassigned").build();
+        Status unassigned = Status.builder().id("status-unassigned").name("Unassigned").description("Incident has not yet been assigned to an agent.").build();
         Status closed = Status.builder().id("status-closed").name("Closed").build();
         when(statusRepository.findAll()).thenReturn(List.of(open, unassigned, closed));
 
-        List<StatusLookupResponse> result = statusService.listStatuses(RoleCode.AGENT);
-
-        assertThat(result).hasSize(2);
-        assertThat(result).extracting(StatusLookupResponse::id).doesNotContain("status-unassigned");
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = RoleCode.class, names = {"CLIENT", "ADMIN", "ADMIN_AGENT", "SUPER_ADMIN"})
-    void listStatuses_nonAgentRoles_includeUnassignedStatus(RoleCode role) {
-        Status open = Status.builder().id("status-open").name("Open").build();
-        Status unassigned = Status.builder().id("status-unassigned").name("Unassigned").build();
-        Status closed = Status.builder().id("status-closed").name("Closed").build();
-        when(statusRepository.findAll()).thenReturn(List.of(open, unassigned, closed));
-
-        List<StatusLookupResponse> result = statusService.listStatuses(role);
+        List<StatusLookupResponse> result = statusService.listStatuses();
 
         assertThat(result).hasSize(3);
-        assertThat(result).extracting(StatusLookupResponse::id).contains("status-unassigned");
+        assertThat(result).extracting(StatusLookupResponse::id)
+                .containsExactly("status-open", "status-unassigned", "status-closed");
+        assertThat(result).filteredOn(s -> s.id().equals("status-unassigned"))
+                .singleElement()
+                .satisfies(s -> {
+                    assertThat(s.name()).isEqualTo("Unassigned");
+                    assertThat(s.description()).isEqualTo("Incident has not yet been assigned to an agent.");
+                });
     }
 
     @Test
-    void listStatuses_nullRole_includesUnassignedStatus() {
-        Status unassigned = Status.builder().id("status-unassigned").name("Unassigned").build();
-        when(statusRepository.findAll()).thenReturn(List.of(unassigned));
+    void listStatuses_repositoryEmpty_returnsEmptyList() {
+        when(statusRepository.findAll()).thenReturn(List.of());
 
-        List<StatusLookupResponse> result = statusService.listStatuses(null);
-
-        assertThat(result).extracting(StatusLookupResponse::id).contains("status-unassigned");
+        assertThat(statusService.listStatuses()).isEmpty();
     }
 }

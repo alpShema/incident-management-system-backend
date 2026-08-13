@@ -11,6 +11,8 @@ import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.StatusService;
 import com.amalitech.hilfe.services.TokenService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -37,64 +39,45 @@ class StatusControllerTest {
     @MockitoBean StatusService statusService;
     @MockitoBean TokenService tokenService;
 
-    private JwtTokenService.AuthPrincipal clientPrincipal() {
-        return new JwtTokenService.AuthPrincipal("user-1", "user@test.com", RoleCode.CLIENT);
-    }
+    private static final List<StatusLookupResponse> FULL_STATUS_LIST = List.of(
+            new StatusLookupResponse("status-open", "Open", "Open status"),
+            new StatusLookupResponse("status-pending", "Pending", "Pending status"),
+            new StatusLookupResponse("status-resolved", "Resolved", "Resolved status"),
+            new StatusLookupResponse("status-closed", "Closed", "Closed status"),
+            new StatusLookupResponse("status-unassigned", "Unassigned", "Unassigned status")
+    );
 
-    private JwtTokenService.AuthPrincipal agentPrincipal() {
-        return new JwtTokenService.AuthPrincipal("agent-user-1", "agent@test.com", RoleCode.AGENT);
-    }
-
-    private JwtTokenService.AuthPrincipal adminPrincipal() {
-        return new JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
+    private JwtTokenService.AuthPrincipal principalFor(RoleCode role) {
+        return new JwtTokenService.AuthPrincipal("user-1", "user@test.com", role);
     }
 
     @Test
     void listStatuses_returns200WithData() throws Exception {
-        when(statusService.listStatuses(RoleCode.CLIENT)).thenReturn(List.of(
-                new StatusLookupResponse("status-1", "Open", "Open status"),
-                new StatusLookupResponse("status-2", "Pending", "Pending status"),
-                new StatusLookupResponse("status-3", "Resolved", "Resolved status"),
-                new StatusLookupResponse("status-4", "Closed", "Closed status")
-        ));
+        when(statusService.listStatuses()).thenReturn(FULL_STATUS_LIST);
 
         mvc.perform(get("/statuses")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
-                                clientPrincipal(), null, List.of(() -> "ROLE_CLIENT")))))
+                                principalFor(RoleCode.CLIENT), null, List.of(() -> "ROLE_CLIENT")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Statuses retrieved successfully"))
-                .andExpect(jsonPath("$.data.length()").value(4))
+                .andExpect(jsonPath("$.data.length()").value(5))
                 .andExpect(jsonPath("$.data[0].name").value("Open"))
                 .andExpect(jsonPath("$.data[0].description").value("Open status"));
 
-        verify(statusService).listStatuses(RoleCode.CLIENT);
+        verify(statusService).listStatuses();
     }
 
-    @Test
-    void listStatuses_agentPrincipal_passesAgentRoleToService() throws Exception {
-        when(statusService.listStatuses(RoleCode.AGENT)).thenReturn(List.of(
-                new StatusLookupResponse("status-open", "Open", "Open status")
-        ));
+    // HV-1653: Unassigned must come back for every role -- there is no role-based filtering
+    // left in this endpoint.
+    @ParameterizedTest
+    @EnumSource(RoleCode.class)
+    void listStatuses_includesUnassignedRegardlessOfRole(RoleCode role) throws Exception {
+        when(statusService.listStatuses()).thenReturn(FULL_STATUS_LIST);
 
         mvc.perform(get("/statuses")
                         .with(authentication(new UsernamePasswordAuthenticationToken(
-                                agentPrincipal(), null, List.of(() -> "ROLE_AGENT")))))
-                .andExpect(status().isOk());
-
-        verify(statusService).listStatuses(RoleCode.AGENT);
-    }
-
-    @Test
-    void listStatuses_adminPrincipal_passesAdminRoleToService() throws Exception {
-        when(statusService.listStatuses(RoleCode.ADMIN)).thenReturn(List.of(
-                new StatusLookupResponse("status-unassigned", "Unassigned", "Unassigned status")
-        ));
-
-        mvc.perform(get("/statuses")
-                        .with(authentication(new UsernamePasswordAuthenticationToken(
-                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
-                .andExpect(status().isOk());
-
-        verify(statusService).listStatuses(RoleCode.ADMIN);
+                                principalFor(role), null, List.of(() -> "ROLE_" + role)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.id=='status-unassigned')]").exists());
     }
 }
