@@ -2102,6 +2102,24 @@ class IncidentServiceTest {
         verify(incidentRepository, never()).save(any(Incident.class));
     }
 
+    @Test
+    void updateSeverity_confidentialIncident_inGroupAdminAgentWithUpdateAnyNotAssignee_throws403() {
+        // HV-1666: same bypass as assignIncident -- group membership plus update.any must not
+        // let a non-assignee (even an in-group admin-agent) act on a confidential incident.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("in-group-admin-agent", incident)).thenReturn(true);
+
+        UpdateIncidentSeverityRequest request = new UpdateIncidentSeverityRequest("sev-high");
+        assertThatThrownBy(() -> incidentService.updateSeverity("in-group-admin-agent", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+    }
+
     // ── assignIncident ────────────────────────────────────────────────────────
 
     @Test
@@ -2271,6 +2289,26 @@ class IncidentServiceTest {
 
         verify(incidentRepository, never()).save(any(Incident.class));
         verify(agentRepository, never()).findById(any());
+    }
+
+    @Test
+    void assignIncident_confidentialIncident_inGroupAdminAgentWithUpdateAnyNotAssignee_throws403() {
+        // HV-1666: an admin-agent inside the topic's linked agent group passes the group-
+        // membership check (canAccess=true) and holds update.any -- but for a confidential
+        // incident that must NOT be enough to bypass the "must be the assigned agent" rule.
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1", agent userId = "actor-1"
+        incident.setIncidentType(buildConfidentialIncidentType());
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("in-group-admin-agent", incident)).thenReturn(true);
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() -> incidentService.assignIncident("in-group-admin-agent", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You do not have permission to reassign this incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
     }
 
     @Test
@@ -2685,7 +2723,7 @@ class IncidentServiceTest {
 
         IncidentResponse row = result.getContent().get(0);
         assertThat(row.confidential()).isTrue();
-        assertThat(row.title()).isNull();
+        assertThat(row.title()).isEqualTo("**********");
         assertThat(row.createdBy()).isNull();
         assertThat(row.assignedTo()).isNull();
         assertThat(row.incidentTopic()).isNull();
@@ -2805,8 +2843,8 @@ class IncidentServiceTest {
 
         IncidentResponse row = result.getContent().get(0);
         assertThat(row.confidential()).isTrue();
-        assertThat(row.title()).isNull();
-        assertThat(row.description()).isNull();
+        assertThat(row.title()).isEqualTo("**********");
+        assertThat(row.description()).isEqualTo("**********");
         assertThat(row.createdBy()).isNull();
         assertThat(row.assignedTo()).isNull();
         assertThat(row.incidentTopic()).isNull();
