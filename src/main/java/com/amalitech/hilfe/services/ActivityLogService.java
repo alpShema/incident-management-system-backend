@@ -5,6 +5,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.ActivityLog;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.IncidentType;
+import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
@@ -13,10 +14,12 @@ import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.DepartmentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.security.authorization.CurrentUserAuthority;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,7 @@ public class ActivityLogService {
     private static final String UNKNOWN = "Unknown";
     private static final String SYSTEM = "System";
     private static final String NOTE_ID_META_PREFIX = "{\"noteId\":\"";
+    private static final String FROM = " from ";
     private static final String AS_HEAD_OF_DEPARTMENT = " as head of department ";
     private static final String ACTION_INCIDENT_VIEWED = "INCIDENT_VIEWED";
     private static final String ACTION_UNAUTHORIZED_CONFIDENTIAL_ACCESS = "UNAUTHORIZED_CONFIDENTIAL_ACCESS";
@@ -51,6 +55,7 @@ public class ActivityLogService {
     private final AgentGroupMemberRepository agentGroupMemberRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
+    private final LocationRepository locationRepository;
     private final ConfidentialIncidentAccess confidentialIncidentAccess;
 
     public Page<ActivityLogResponse> getActivityLogs(Pageable pageable) {
@@ -189,7 +194,7 @@ public class ActivityLogService {
     }
 
     private String buildRoleChangeDescription(String actorName, String targetName, String previousRoleName, String newRoleName) {
-        return actorName + " changed role for " + targetName + " from " + previousRoleName
+        return actorName + " changed role for " + targetName + FROM + previousRoleName
                 + " to " + newRoleName;
     }
 
@@ -470,6 +475,50 @@ public class ActivityLogService {
 
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logLocationTimezoneChanged(String actorUserId, String locationId, String previousTimezone, String newTimezone) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String locationName = resolveLocationName(locationId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("LOCATION_TIMEZONE_CHANGED")
+                    .subjectType("LOCATION")
+                    .subjectId(locationId)
+                    .description(actorName + " changed the timezone of " + locationName + FROM
+                            + previousTimezone + " to " + newTimezone)
+                    .metadata("{\"previousTimezone\":\"" + previousTimezone + "\",\"newTimezone\":\"" + newTimezone + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log timezone change for location {}", locationId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logLocationBusinessHoursChanged(
+            String actorUserId, String locationId,
+            LocalTime previousStart, LocalTime previousEnd,
+            LocalTime newStart, LocalTime newEnd) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String locationName = resolveLocationName(locationId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action("LOCATION_BUSINESS_HOURS_CHANGED")
+                    .subjectType("LOCATION")
+                    .subjectId(locationId)
+                    .description(actorName + " changed the business hours of " + locationName + FROM
+                            + previousStart + "-" + previousEnd + " to " + newStart + "-" + newEnd)
+                    .metadata("{\"previousStart\":\"" + previousStart + "\",\"previousEnd\":\"" + previousEnd
+                            + "\",\"newStart\":\"" + newStart + "\",\"newEnd\":\"" + newEnd + "\"}")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log business hours change for location {}", locationId, ex);
+        }
+    }
+
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logInternalNoteCreated(String actorUserId, String incidentId, String noteId) {
         try {
             String actorName = resolveUserName(actorUserId);
@@ -536,6 +585,13 @@ public class ActivityLogService {
         if (departmentId == null) return UNKNOWN;
         return departmentRepository.findById(departmentId)
                 .map(d -> d.getName())
+                .orElse(UNKNOWN);
+    }
+
+    private String resolveLocationName(String locationId) {
+        if (locationId == null) return UNKNOWN;
+        return locationRepository.findById(locationId)
+                .map(Location::getName)
                 .orElse(UNKNOWN);
     }
 

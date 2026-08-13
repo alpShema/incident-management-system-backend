@@ -6,6 +6,7 @@ import com.amalitech.hilfe.dto.UpdateLocationRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.repositories.LocationRepository;
+import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.LocationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +30,7 @@ import static org.mockito.Mockito.*;
 class LocationServiceTest {
 
     @Mock LocationRepository locationRepository;
+    @Mock ActivityLogService activityLogService;
     @InjectMocks LocationService locationService;
 
     private Location loc(String id, String name, boolean status) {
@@ -128,7 +131,7 @@ class LocationServiceTest {
         when(locationRepository.findByNameIgnoreCase("  New Name  ")).thenReturn(Optional.empty());
         when(locationRepository.save(existing)).thenReturn(existing);
 
-        locationService.updateLocation("loc-1", new UpdateLocationRequest("  New Name  ", null, null, null, null));
+        locationService.updateLocation("user-1", "loc-1", new UpdateLocationRequest("  New Name  ", null, null, null, null));
 
         assertThat(existing.getName()).isEqualTo("New Name");
     }
@@ -141,7 +144,7 @@ class LocationServiceTest {
         when(locationRepository.findByNameIgnoreCase("New")).thenReturn(Optional.of(conflict));
 
         var updateRequest = new UpdateLocationRequest("New", null, null, null, null);
-        assertThatThrownBy(() -> locationService.updateLocation("loc-1", updateRequest))
+        assertThatThrownBy(() -> locationService.updateLocation("user-1", "loc-1", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
@@ -154,7 +157,7 @@ class LocationServiceTest {
         when(locationRepository.findByNameIgnoreCase("Accra")).thenReturn(Optional.of(existing));
         when(locationRepository.save(existing)).thenReturn(existing);
 
-        locationService.updateLocation("loc-1", new UpdateLocationRequest("Accra", null, null, null, null));
+        locationService.updateLocation("user-1", "loc-1", new UpdateLocationRequest("Accra", null, null, null, null));
 
         verify(locationRepository).save(existing);
     }
@@ -165,7 +168,7 @@ class LocationServiceTest {
         when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
         when(locationRepository.save(existing)).thenReturn(existing);
 
-        locationService.updateLocation("loc-1", new UpdateLocationRequest(null, "  Branch office  ", null, null, null));
+        locationService.updateLocation("user-1", "loc-1", new UpdateLocationRequest(null, "  Branch office  ", null, null, null));
 
         assertThat(existing.getDescription()).isEqualTo("Branch office");
     }
@@ -175,10 +178,79 @@ class LocationServiceTest {
         when(locationRepository.findById("missing")).thenReturn(Optional.empty());
 
         var updateRequest = new UpdateLocationRequest("X", null, null, null, null);
-        assertThatThrownBy(() -> locationService.updateLocation("missing", updateRequest))
+        assertThatThrownBy(() -> locationService.updateLocation("user-1", "missing", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
+    }
+
+    @Test
+    void updateLocation_descriptionOnly_logsNoActivity() {
+        Location existing = loc("loc-1", "Accra", true);
+        when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
+        when(locationRepository.save(existing)).thenReturn(existing);
+
+        locationService.updateLocation("user-1", "loc-1", new UpdateLocationRequest(null, "  Branch office  ", null, null, null));
+
+        verifyNoInteractions(activityLogService);
+    }
+
+    @Test
+    void updateLocation_timezoneChanged_logsTimezoneChangeOnly() {
+        Location existing = loc("loc-1", "Accra", true);
+        existing.setTimezone("Africa/Accra");
+        when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
+        when(locationRepository.save(existing)).thenReturn(existing);
+
+        locationService.updateLocation("user-1", "loc-1", new UpdateLocationRequest(null, null, "Africa/Kigali", null, null));
+
+        verify(activityLogService).logLocationTimezoneChanged("user-1", "loc-1", "Africa/Accra", "Africa/Kigali");
+        verify(activityLogService, never()).logLocationBusinessHoursChanged(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateLocation_businessHoursChanged_logsBusinessHoursChangeOnly() {
+        Location existing = loc("loc-1", "Accra", true);
+        existing.setBusinessHoursStart(LocalTime.of(8, 0));
+        existing.setBusinessHoursEnd(LocalTime.of(17, 30));
+        when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
+        when(locationRepository.save(existing)).thenReturn(existing);
+
+        locationService.updateLocation("user-1", "loc-1",
+                new UpdateLocationRequest(null, null, null, LocalTime.of(9, 0), null));
+
+        verify(activityLogService).logLocationBusinessHoursChanged(
+                "user-1", "loc-1", LocalTime.of(8, 0), LocalTime.of(17, 30), LocalTime.of(9, 0), LocalTime.of(17, 30));
+        verify(activityLogService, never()).logLocationTimezoneChanged(any(), any(), any(), any());
+    }
+
+    @Test
+    void updateLocation_timezoneAndHoursChanged_logsBothDistinctly() {
+        Location existing = loc("loc-1", "Accra", true);
+        existing.setTimezone("Africa/Accra");
+        existing.setBusinessHoursStart(LocalTime.of(8, 0));
+        existing.setBusinessHoursEnd(LocalTime.of(17, 30));
+        when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
+        when(locationRepository.save(existing)).thenReturn(existing);
+
+        locationService.updateLocation("user-1", "loc-1",
+                new UpdateLocationRequest(null, null, "Africa/Kigali", LocalTime.of(9, 0), LocalTime.of(18, 0)));
+
+        verify(activityLogService).logLocationTimezoneChanged("user-1", "loc-1", "Africa/Accra", "Africa/Kigali");
+        verify(activityLogService).logLocationBusinessHoursChanged(
+                "user-1", "loc-1", LocalTime.of(8, 0), LocalTime.of(17, 30), LocalTime.of(9, 0), LocalTime.of(18, 0));
+    }
+
+    @Test
+    void updateLocation_resubmittingSameTimezone_logsNothing() {
+        Location existing = loc("loc-1", "Accra", true);
+        existing.setTimezone("Africa/Accra");
+        when(locationRepository.findById("loc-1")).thenReturn(Optional.of(existing));
+        when(locationRepository.save(existing)).thenReturn(existing);
+
+        locationService.updateLocation("user-1", "loc-1", new UpdateLocationRequest(null, null, "Africa/Accra", null, null));
+
+        verifyNoInteractions(activityLogService);
     }
 
     @Test

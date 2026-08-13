@@ -7,6 +7,7 @@ import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateLocationRequest;
 import com.amalitech.hilfe.dto.UpdateLocationStatusRequest;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Locations", description = "Location lifecycle management")
@@ -63,10 +65,11 @@ public class LocationController {
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.LOCATION_UPDATE + "')")
     public ResponseEntity<ApiResponse<LocationResponse>> updateLocation(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
             @PathVariable String id,
             @Valid @RequestBody UpdateLocationRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(UPDATED_MSG, locationService.updateLocation(id, request)));
+        return ResponseEntity.ok(ApiResponse.success(UPDATED_MSG, locationService.updateLocation(principal.userId(), id, request)));
     }
 
     @Operation(summary = "Update location status", description = "Set status to true to activate or false to deactivate.")

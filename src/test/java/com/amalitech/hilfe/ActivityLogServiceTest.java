@@ -5,6 +5,7 @@ import com.amalitech.hilfe.models.ActivityLog;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.Agent;
+import com.amalitech.hilfe.models.Location;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
@@ -12,6 +13,7 @@ import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.LocationRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.ActivityLogService;
@@ -31,6 +33,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,6 +53,7 @@ class ActivityLogServiceTest {
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock AgentGroupRepository agentGroupRepository;
     @Mock RoleRepository roleRepository;
+    @Mock LocationRepository locationRepository;
     @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
     @InjectMocks ActivityLogService activityLogService;
 
@@ -341,5 +345,42 @@ class ActivityLogServiceTest {
         assertThat(captor.getValue().getAction()).isEqualTo("INCIDENT_VIEWED");
         assertThat(captor.getValue().getSubjectId()).isEqualTo("inc-1");
         assertThat(captor.getValue().getDescription()).contains("Alice");
+    }
+
+    // ── logLocationTimezoneChanged ──────────────────────────────────────────
+
+    @Test
+    void logLocationTimezoneChanged_savesActivityLogWithOldAndNewValues() {
+        when(userRepository.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").fullName("Alice").build()));
+        when(locationRepository.findById("loc-1")).thenReturn(Optional.of(Location.builder().id("loc-1").name("Accra").build()));
+        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        activityLogService.logLocationTimezoneChanged("actor", "loc-1", "Africa/Accra", "Africa/Kigali");
+
+        ArgumentCaptor<ActivityLog> captor = ArgumentCaptor.forClass(ActivityLog.class);
+        verify(activityLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo("LOCATION_TIMEZONE_CHANGED");
+        assertThat(captor.getValue().getSubjectId()).isEqualTo("loc-1");
+        assertThat(captor.getValue().getDescription()).contains("Alice", "Accra", "Africa/Accra", "Africa/Kigali");
+        assertThat(captor.getValue().getMetadata()).contains("Africa/Accra", "Africa/Kigali");
+    }
+
+    // ── logLocationBusinessHoursChanged ─────────────────────────────────────
+
+    @Test
+    void logLocationBusinessHoursChanged_savesActivityLogWithOldAndNewValues() {
+        when(userRepository.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").fullName("Alice").build()));
+        when(locationRepository.findById("loc-1")).thenReturn(Optional.of(Location.builder().id("loc-1").name("Accra").build()));
+        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        activityLogService.logLocationBusinessHoursChanged(
+                "actor", "loc-1", LocalTime.of(8, 0), LocalTime.of(17, 30), LocalTime.of(9, 0), LocalTime.of(18, 0));
+
+        ArgumentCaptor<ActivityLog> captor = ArgumentCaptor.forClass(ActivityLog.class);
+        verify(activityLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo("LOCATION_BUSINESS_HOURS_CHANGED");
+        assertThat(captor.getValue().getSubjectId()).isEqualTo("loc-1");
+        assertThat(captor.getValue().getDescription()).contains("Alice", "Accra", "08:00", "17:30", "09:00", "18:00");
+        assertThat(captor.getValue().getMetadata()).contains("08:00", "17:30", "09:00", "18:00");
     }
 }

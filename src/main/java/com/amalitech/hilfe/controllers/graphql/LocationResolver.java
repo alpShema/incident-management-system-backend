@@ -5,6 +5,7 @@ import com.amalitech.hilfe.dto.CreateLocationRequest;
 import com.amalitech.hilfe.dto.LocationResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateLocationRequest;
+import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.LocationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
 @Controller
@@ -42,9 +44,12 @@ public class LocationResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('location.update')")
-    public LocationResponse updateLocation(@Argument String id, @Valid @Argument UpdateLocationRequest input) {
+    public LocationResponse updateLocation(
+            @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal,
+            @Argument String id,
+            @Valid @Argument UpdateLocationRequest input) {
         GraphQlResponseMessage.set("Location updated successfully");
-        return locationService.updateLocation(id, input);
+        return locationService.updateLocation(principal.userId(), id, input);
     }
 
     @MutationMapping
