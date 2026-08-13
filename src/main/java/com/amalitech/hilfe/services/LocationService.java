@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -23,6 +24,7 @@ public class LocationService {
     private static final String INVALID_BUSINESS_HOURS_MESSAGE = "Business hours start must be before business hours end.";
 
     private final LocationRepository locationRepository;
+    private final ActivityLogService activityLogService;
 
     public PageResponse<LocationResponse> listLocations(String query, Boolean status, Pageable pageable) {
         return PageResponse.from(
@@ -60,8 +62,12 @@ public class LocationService {
     }
 
     @Transactional
-    public LocationResponse updateLocation(String id, UpdateLocationRequest request) {
+    public LocationResponse updateLocation(String actorUserId, String id, UpdateLocationRequest request) {
         Location location = findById(id);
+        String previousTimezone = location.getTimezone();
+        LocalTime previousStart = location.getBusinessHoursStart();
+        LocalTime previousEnd = location.getBusinessHoursEnd();
+
         if (request.name() != null && !request.name().isBlank()) {
             locationRepository.findByNameIgnoreCase(request.name()).ifPresent(existing -> {
                 if (!existing.getId().equals(id)) {
@@ -83,7 +89,21 @@ public class LocationService {
             location.setBusinessHoursEnd(request.businessHoursEnd());
         }
         validateBusinessHours(location.getBusinessHoursStart(), location.getBusinessHoursEnd());
-        return LocationResponse.from(locationRepository.save(location));
+        LocationResponse response = LocationResponse.from(locationRepository.save(location));
+        logLocationChanges(actorUserId, id, previousTimezone, previousStart, previousEnd, location);
+        return response;
+    }
+
+    private void logLocationChanges(String actorUserId, String locationId,
+            String previousTimezone, LocalTime previousStart, LocalTime previousEnd, Location updated) {
+        if (!Objects.equals(previousTimezone, updated.getTimezone())) {
+            activityLogService.logLocationTimezoneChanged(actorUserId, locationId, previousTimezone, updated.getTimezone());
+        }
+        if (!Objects.equals(previousStart, updated.getBusinessHoursStart()) || !Objects.equals(previousEnd, updated.getBusinessHoursEnd())) {
+            activityLogService.logLocationBusinessHoursChanged(
+                    actorUserId, locationId, previousStart, previousEnd,
+                    updated.getBusinessHoursStart(), updated.getBusinessHoursEnd());
+        }
     }
 
     private void validateBusinessHours(LocalTime start, LocalTime end) {
