@@ -1,5 +1,6 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.crypto.FieldEncryptionService;
 import com.amalitech.hilfe.dto.AttachmentRef;
 import com.amalitech.hilfe.dto.MediaResponse;
 import com.amalitech.hilfe.dto.MessageResponse;
@@ -59,6 +60,7 @@ class MessageServiceTest {
     @Mock NotificationEventPublisher notificationEventPublisher;
     @Mock IncidentService incidentService;
     @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
+    @Mock FieldEncryptionService fieldEncryptionService;
     @InjectMocks MessageService messageService;
 
     private Incident confidentialIncident(String userId, String assignedToId) {
@@ -228,6 +230,33 @@ class MessageServiceTest {
         assertThat(result.id()).isEqualTo("msg-1");
         verify(slaService).onAgentMessageSent(incident, "u-assignee");
         verify(messagingTemplate).convertAndSend(eq("/topic/incidents/inc-1/messages"), any(MessageResponse.class));
+        // Non-confidential incident -- content is stored in plaintext, encryption never touched.
+        verifyNoInteractions(fieldEncryptionService);
+    }
+
+    // Messages on a confidential incident are exactly the kind of detail HV-1619 hides
+    // elsewhere, so they're encrypted at rest the same way the incident's own title/description
+    // are.
+    @Test
+    void sendMessage_confidentialIncident_encryptsContent() {
+        Incident incident = confidentialIncident("u1", null);
+        User sender = User.builder().id("u1").fullName("Jane").email("jane@test.com").build();
+        Message saved = Message.builder()
+                .id("msg-1").incidentId("inc-1").senderId("u1").content("v1:hello")
+                .createdAt(FIXED_NOW).updatedAt(FIXED_NOW).build();
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(confidentialIncidentAccess.canAccess("u1", incident)).thenReturn(true);
+        when(userRepository.findById("u1")).thenReturn(Optional.of(sender));
+        when(fieldEncryptionService.encrypt("hello")).thenReturn("v1:hello");
+        when(messageRepository.save(any(Message.class))).thenReturn(saved);
+
+        messageService.sendMessage("u1", "CLIENT", "inc-1", "hello", List.of());
+
+        var messageCaptor = org.mockito.ArgumentCaptor.forClass(Message.class);
+        verify(messageRepository).save(messageCaptor.capture());
+        assertThat(messageCaptor.getValue().getContent()).isEqualTo("v1:hello");
+        verify(fieldEncryptionService).encrypt("hello");
     }
 
     @Test

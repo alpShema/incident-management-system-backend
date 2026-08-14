@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.crypto.FieldEncryptionService;
 import com.amalitech.hilfe.dto.AttachmentRef;
 import com.amalitech.hilfe.dto.MessageResponse;
 import com.amalitech.hilfe.dto.PresignedUrlRequest;
@@ -52,6 +53,7 @@ public class MessageService {
     private final NotificationEventPublisher notificationEventPublisher;
     private final IncidentService incidentService;
     private final ConfidentialIncidentAccess confidentialIncidentAccess;
+    private final FieldEncryptionService fieldEncryptionService;
 
     public PresignedUrlResponse generateMessagePresignedUrl(String userId, String role, String incidentId, PresignedUrlRequest request) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
@@ -74,11 +76,18 @@ public class MessageService {
         User sender = userRepository.findById(userId)
                 .orElseThrow(() -> new ArmsAuthException("User not found", 404));
 
+        // Messages on a confidential incident are exactly the kind of detail HV-1619 hides
+        // elsewhere -- encrypted at rest the same way the incident's own title/description are.
+        String trimmedContent = trimToNull(content);
+        String storedContent = requiresConfidentialAccess(incident)
+                ? fieldEncryptionService.encrypt(trimmedContent)
+                : trimmedContent;
+
         Message saved = messageRepository.save(Message.builder()
                 .id(UUID.randomUUID().toString())
                 .senderId(userId)
                 .incidentId(incidentId)
-                .content(trimToNull(content))
+                .content(storedContent)
                 .build());
 
         List<MessageMedia> media = List.of();

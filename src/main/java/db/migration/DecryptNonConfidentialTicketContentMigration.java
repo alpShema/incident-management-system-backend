@@ -13,41 +13,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Flyway migration V80: one-time encryption of ticket content (Incident.title/description,
- * InternalNote.body, Message.content) belonging to confidential incidents, written before
- * field-level encryption existed. Scoped to confidential incidents only, matching
- * IncidentService/InternalNoteService/MessageService's write-time behavior -- see
- * {@link com.amalitech.hilfe.crypto.EncryptedStringConverter}'s Javadoc for why that decision
- * can't live in a JPA converter. Idempotent and resumable: any value already carrying
- * {@link AesGcmCipher#VERSION_PREFIX} is excluded from the SELECT, so a partial run picks up
- * exactly where it left off on the next attempt. Raw JDBC only -- this runs before the Spring
- * context/EntityManagerFactory exists, so it can't use the JPA converter.
+ * Flyway migration V81: remediation for environments that already ran an earlier version of V80
+ * ({@link EncryptExistingTicketContentMigration}), which unconditionally encrypted every
+ * incident's title/description/note body/message content instead of only confidential ones.
+ * Decrypts any such value back to plaintext -- {@code v1:}-prefixed AND belonging to a
+ * non-confidential incident. Because that earlier V80 has a {@code null} checksum, Flyway can't
+ * detect that its logic changed, so already-migrated environments never re-run it; this migration
+ * is what actually fixes them.
  * <p>
- * Implements {@link JavaMigration} directly (rather than extending {@code BaseJavaMigration})
- * specifically so the class name doesn't have to follow Flyway's {@code V<version>__<description>}
- * convention -- version/description are supplied explicitly below instead. Flyway discovers Java
- * migrations by scanning for classes assignable to {@link JavaMigration} within the configured
- * locations, not by parsing class names, so this is picked up the same way V79 or a
- * BaseJavaMigration subclass would be.
- * <p>
- * This migration's checksum is {@code null} (see {@link #getChecksum}), so Flyway has no way to
- * detect that this file changed after being applied -- any environment that already ran an
- * earlier version of this class (which unconditionally encrypted every incident) will NOT re-run
- * it just because this file changed. That's exactly the gap the separate V81 remediation
- * migration exists to close.
+ * Safe everywhere else too: on an environment where the corrected V80 already ran (or where V80
+ * hasn't run yet), this matches zero rows and is a no-op.
  */
-public class EncryptExistingTicketContentMigration implements JavaMigration {
+public class DecryptNonConfidentialTicketContentMigration implements JavaMigration {
 
     private static final int BATCH_SIZE = 500;
 
     @Override
     public MigrationVersion getVersion() {
-        return MigrationVersion.fromVersion("80");
+        return MigrationVersion.fromVersion("81");
     }
 
     @Override
     public String getDescription() {
-        return "Encrypt existing ticket content";
+        return "Decrypt non-confidential ticket content";
     }
 
     @Override
@@ -69,42 +57,43 @@ public class EncryptExistingTicketContentMigration implements JavaMigration {
         AesGcmCipher cipher = AesGcmCipher.fromPassphrase(fieldKey);
         Connection connection = context.getConnection();
 
-        encryptColumn(connection, cipher,
+        decryptColumn(connection, cipher,
                 """
                 SELECT i.id, i.title FROM "Incident" i
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
-                WHERE it.confidential = true AND i.title IS NOT NULL AND i.title NOT LIKE 'v1:%'
+                WHERE it.confidential = false AND i.title LIKE 'v1:%'
                 ORDER BY i.id LIMIT """ + BATCH_SIZE,
                 "UPDATE \"Incident\" SET title = ? WHERE id = ?");
-        encryptColumn(connection, cipher,
+        decryptColumn(connection, cipher,
                 """
                 SELECT i.id, i.description FROM "Incident" i
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
-                WHERE it.confidential = true AND i.description IS NOT NULL AND i.description NOT LIKE 'v1:%'
+                WHERE it.confidential = false AND i.description LIKE 'v1:%'
                 ORDER BY i.id LIMIT """ + BATCH_SIZE,
                 "UPDATE \"Incident\" SET description = ? WHERE id = ?");
-        encryptColumn(connection, cipher,
+        decryptColumn(connection, cipher,
                 """
                 SELECT n.id, n.body FROM "InternalNote" n
                 JOIN "Incident" i ON i.id = n.incident_id
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
-                WHERE it.confidential = true AND n.body IS NOT NULL AND n.body NOT LIKE 'v1:%'
+                WHERE it.confidential = false AND n.body LIKE 'v1:%'
                 ORDER BY n.id LIMIT """ + BATCH_SIZE,
                 "UPDATE \"InternalNote\" SET body = ? WHERE id = ?");
-        encryptColumn(connection, cipher,
+        decryptColumn(connection, cipher,
                 """
                 SELECT m.id, m.content FROM "Message" m
                 JOIN "Incident" i ON i.id = m.incident_id
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
-                WHERE it.confidential = true AND m.content IS NOT NULL AND m.content NOT LIKE 'v1:%'
+                WHERE it.confidential = false AND m.content LIKE 'v1:%'
                 ORDER BY m.id LIMIT """ + BATCH_SIZE,
                 "UPDATE \"Message\" SET content = ? WHERE id = ?");
     }
 
-    // Repeats the same bounded SELECT/UPDATE pair until a batch comes back empty. Each batch only
-    // ever sees still-unencrypted rows (the SELECT excludes anything already "v1:"-prefixed), so
-    // this naturally converges and is safe to interrupt and re-run.
-    private void encryptColumn(Connection connection, AesGcmCipher cipher, String selectSql, String updateSql) throws SQLException {
+    // Mirror of EncryptExistingTicketContentMigration#encryptColumn, decrypting instead. Each
+    // batch only ever sees still-encrypted rows on non-confidential incidents (the SELECT already
+    // filters to v1:-prefixed values), so this naturally converges and is safe to interrupt and
+    // re-run.
+    private void decryptColumn(Connection connection, AesGcmCipher cipher, String selectSql, String updateSql) throws SQLException {
         while (true) {
             List<String[]> rows = new ArrayList<>();
             try (PreparedStatement select = connection.prepareStatement(selectSql);
@@ -118,7 +107,7 @@ public class EncryptExistingTicketContentMigration implements JavaMigration {
             }
             try (PreparedStatement update = connection.prepareStatement(updateSql)) {
                 for (String[] row : rows) {
-                    update.setString(1, cipher.encrypt(row[1]));
+                    update.setString(1, cipher.decrypt(row[1]));
                     update.setString(2, row[0]);
                     update.addBatch();
                 }
