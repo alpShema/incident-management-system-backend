@@ -977,7 +977,12 @@ public class IncidentService {
         for (Incident incident : openIncidents) {
             resetToUnassigned(incident);
             incidentRepository.save(incident);
-            activityLogService.logIncidentUnassignment(actorUserId, incident.getId(), agentId);
+        }
+        // One batched submission instead of one per incident -- an agent can have thousands of
+        // open incidents, and submitting that many individual @Async tasks can overrun
+        // applicationTaskExecutor's bounded queue and abort the whole deactivation.
+        if (!openIncidents.isEmpty()) {
+            activityLogService.logIncidentUnassignmentBatch(actorUserId, openIncidents, agentId);
         }
     }
 
