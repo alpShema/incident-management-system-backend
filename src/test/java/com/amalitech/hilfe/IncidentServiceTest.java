@@ -41,6 +41,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -2049,8 +2050,7 @@ class IncidentServiceTest {
         assertThat(pendingIncident.getStatusId()).isEqualTo("status-unassigned");
         verify(slaService).resetFirstResponse("inc-open", "loc-1");
         verify(slaService).resetFirstResponse("inc-pending", "loc-1");
-        verify(activityLogService).logIncidentUnassignment("admin-1", "inc-open", "agent-1");
-        verify(activityLogService).logIncidentUnassignment("admin-1", "inc-pending", "agent-1");
+        verify(activityLogService).logIncidentUnassignmentBatch("admin-1", List.of(openIncident, pendingIncident), "agent-1");
     }
 
     @Test
@@ -2062,7 +2062,7 @@ class IncidentServiceTest {
 
         verify(incidentRepository, never()).save(any(Incident.class));
         verify(slaService, never()).resetFirstResponse(any(), any());
-        verify(activityLogService, never()).logIncidentUnassignment(any(), any(), any());
+        verify(activityLogService, never()).logIncidentUnassignmentBatch(any(), any(), any());
     }
 
     @Test
@@ -2077,7 +2077,31 @@ class IncidentServiceTest {
         incidentService.unassignAllForDeactivatedAgent("agent-1", null);
 
         assertThat(incident.getStatusId()).isEqualTo("status-unassigned");
-        verify(activityLogService).logIncidentUnassignment(null, "inc-1", "agent-1");
+        verify(activityLogService).logIncidentUnassignmentBatch(null, List.of(incident), "agent-1");
+    }
+
+    @Test
+    void unassignAllForDeactivatedAgent_manyIncidents_logsInOneBatchNotOnePerIncident() {
+        // Regression test: an agent deactivation used to fire one @Async log submission per
+        // incident, which could overrun applicationTaskExecutor's bounded queue when an agent
+        // had a large number of open incidents (this happened in practice with 2000+ incidents
+        // assigned to a single agent) and abort the whole deactivation with a
+        // RejectedExecutionException. There must be exactly one batched call, regardless of count.
+        List<Incident> manyIncidents = new ArrayList<>();
+        for (int i = 0; i < 500; i++) {
+            Incident incident = buildAssignedIncident();
+            incident.setId("inc-" + i);
+            incident.setStatusId("status-open");
+            manyIncidents.add(incident);
+        }
+        when(incidentRepository.findByAssignedToIdAndStatusIdNotIn("agent-1", List.of("status-resolved", "status-closed")))
+                .thenReturn(manyIncidents);
+        when(incidentRepository.save(any(Incident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        incidentService.unassignAllForDeactivatedAgent("agent-1", "admin-1");
+
+        verify(incidentRepository, times(500)).save(any(Incident.class));
+        verify(activityLogService, times(1)).logIncidentUnassignmentBatch(eq("admin-1"), anyList(), eq("agent-1"));
     }
 
     // ── updateSeverity ────────────────────────────────────────────────────────

@@ -378,6 +378,35 @@ public class ActivityLogService {
         }
     }
 
+    // An agent deactivation can carry an arbitrarily large number of open incidents -- looping
+    // logIncidentUnassignment above (one @Async submission per incident) can overrun
+    // applicationTaskExecutor's bounded queue and throw RejectedExecutionException on the
+    // caller's thread, aborting the whole deactivation. One batched submission preserves the
+    // same per-incident audit trail (each incident still gets its own ActivityLog row) without
+    // spamming the executor.
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logIncidentUnassignmentBatch(String actorUserId, List<Incident> incidents, String previousAgentId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String agentName = resolveAgentName(previousAgentId);
+            String metadata = "{\"previousAgentId\":\"" + previousAgentId + "\"}";
+            List<ActivityLog> logs = incidents.stream()
+                    .map(incident -> ActivityLog.builder()
+                            .actorUserId(actorUserId)
+                            .action("INCIDENT_UNASSIGNED")
+                            .subjectType(SUBJECT_INCIDENT)
+                            .subjectId(incident.getId())
+                            .description("Incident #" + incident.getIncidentNo() + " unassigned from " + agentName + " (agent inactive) by " + actorName)
+                            .metadata(metadata)
+                            .build())
+                    .toList();
+            activityLogRepository.saveAll(logs);
+        } catch (RuntimeException ex) {
+            log.error("Failed to log bulk unassignment for agent {}", previousAgentId, ex);
+        }
+    }
+
     @Async("applicationTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logIncidentSlaBreached(String incidentId, String slaType, long minutesOverdue) {
