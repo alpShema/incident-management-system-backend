@@ -114,19 +114,7 @@ public class IncidentService {
 
     @Transactional
     public IncidentResponse createIncident(String userId, CreateIncidentRequest request) {
-        List<String> notFound = new java.util.ArrayList<>();
-        IncidentType incidentType = incidentTypeRepository.findById(request.incidentTypeId()).orElse(null);
-        if (incidentType == null) {
-            notFound.add("Incident type with the provided ID could not be found.");
-        } else if (!Boolean.TRUE.equals(incidentType.getStatus())) {
-            notFound.add("Incident type with the provided ID is not currently active.");
-        }
-        if (!locationRepository.existsById(request.locationId())) {
-            notFound.add("Location with the provided ID could not be found.");
-        }
-        if (!notFound.isEmpty()) {
-            throw new ArmsAuthException(String.join(" ", notFound), 404);
-        }
+        IncidentType incidentType = validateAndResolveIncidentType(request);
 
         String title = request.title() == null ? null : request.title().trim();
         String description = request.description() == null ? null : request.description().trim();
@@ -156,34 +144,57 @@ public class IncidentService {
         entityManager.flush();
         slaService.onIncidentCreated(saved);
 
-        int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
-        String incidentId = saved.getId();
-        String assignedToId = saved.getAssignedToId();
-        String agentUserId = resolveAgentUserId(assignedToId);
-        List<String> adminUserIds = assignedToId == null ? resolveEscalationRecipientUserIds(incidentType) : List.of();
-
-        if (assignedToId != null) {
-            String assigneeName = resolveAgentFullName(assignedToId);
-            notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo, "System"));
-            notificationEventPublisher.publish(new IncidentAutoAssignedClientEvent(userId, incidentId, incidentNo, assigneeName));
-            activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
-        } else {
-            for (String adminId : adminUserIds) {
-                notificationEventPublisher.publish(new IncidentEscalatedEvent(adminId, incidentId, incidentNo));
-            }
-        }
-
-        List<MediaResponse> mediaResponses = List.of();
-        if (request.attachments() != null && !request.attachments().isEmpty()) {
-            List<Media> mediaList = mediaService.createMediaForIncident(saved.getId(), request.attachments());
-            mediaResponses = mediaService.toMediaResponses(mediaList);
-        }
+        publishIncidentCreationNotifications(userId, saved, incidentType);
+        List<MediaResponse> mediaResponses = attachRequestMedia(saved.getId(), request.attachments());
 
         entityManager.flush();
         entityManager.clear();
         return slaService.toIncidentResponse(
                 incidentRepository.findByIdWithDetails(saved.getId()).orElseThrow(),
                 mediaResponses);
+    }
+
+    private IncidentType validateAndResolveIncidentType(CreateIncidentRequest request) {
+        List<String> notFound = new ArrayList<>();
+        IncidentType incidentType = incidentTypeRepository.findById(request.incidentTypeId()).orElse(null);
+        if (incidentType == null) {
+            notFound.add("Incident type with the provided ID could not be found.");
+        } else if (!Boolean.TRUE.equals(incidentType.getStatus())) {
+            notFound.add("Incident type with the provided ID is not currently active.");
+        }
+        if (!locationRepository.existsById(request.locationId())) {
+            notFound.add("Location with the provided ID could not be found.");
+        }
+        if (!notFound.isEmpty()) {
+            throw new ArmsAuthException(String.join(" ", notFound), 404);
+        }
+        return incidentType;
+    }
+
+    private void publishIncidentCreationNotifications(String userId, Incident saved, IncidentType incidentType) {
+        int incidentNo = saved.getIncidentNo() != null ? saved.getIncidentNo() : 0;
+        String incidentId = saved.getId();
+        String assignedToId = saved.getAssignedToId();
+
+        if (assignedToId != null) {
+            String agentUserId = resolveAgentUserId(assignedToId);
+            String assigneeName = resolveAgentFullName(assignedToId);
+            notificationEventPublisher.publish(new IncidentAssignedEvent(agentUserId, incidentId, incidentNo, "System"));
+            notificationEventPublisher.publish(new IncidentAutoAssignedClientEvent(userId, incidentId, incidentNo, assigneeName));
+            activityLogService.logIncidentAutoAssignment(incidentId, assignedToId);
+        } else {
+            for (String adminId : resolveEscalationRecipientUserIds(incidentType)) {
+                notificationEventPublisher.publish(new IncidentEscalatedEvent(adminId, incidentId, incidentNo));
+            }
+        }
+    }
+
+    private List<MediaResponse> attachRequestMedia(String incidentId, List<AttachmentRef> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return List.of();
+        }
+        List<Media> mediaList = mediaService.createMediaForIncident(incidentId, attachments);
+        return mediaService.toMediaResponses(mediaList);
     }
 
     public Page<IncidentResponse> queryIncidents(
