@@ -1,9 +1,11 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.crypto.FieldEncryptionService;
 import com.amalitech.hilfe.dto.InternalNoteRequest;
 import com.amalitech.hilfe.dto.InternalNoteResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Incident;
+import com.amalitech.hilfe.models.IncidentType;
 import com.amalitech.hilfe.models.InternalNote;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.repositories.IncidentRepository;
@@ -43,6 +45,7 @@ class InternalNoteServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock ActivityLogService activityLogService;
     @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
+    @Mock FieldEncryptionService fieldEncryptionService;
     @Mock EntityManager entityManager;
     @InjectMocks InternalNoteService noteService;
 
@@ -51,10 +54,17 @@ class InternalNoteServiceTest {
         // Default: none of these incidents are confidential, and canAccess is itself always
         // true for those -- keeps the existing non-confidential tests unaffected.
         lenient().when(confidentialIncidentAccess.canAccess(any(), any())).thenReturn(true);
+        lenient().when(fieldEncryptionService.encrypt(any())).thenAnswer(inv -> "v1:" + inv.getArgument(0));
     }
 
     private Incident incident(String id) {
         return Incident.builder().id(id).build();
+    }
+
+    private Incident confidentialIncident(String id) {
+        Incident inc = Incident.builder().id(id).build();
+        inc.setIncidentType(IncidentType.builder().id("type-1").name("Topic").confidential(true).build());
+        return inc;
     }
 
     private User author(String userId) {
@@ -90,6 +100,25 @@ class InternalNoteServiceTest {
         assertThat(result.body()).isEqualTo("test body");
         assertThat(result.isOwner()).isTrue();
         verify(activityLogService).logInternalNoteCreated(eq("u1"), eq("inc-1"), anyString());
+        // Non-confidential incident -- body is stored in plaintext, encryption never touched.
+        verifyNoInteractions(fieldEncryptionService);
+    }
+
+    // Notes on a confidential incident are exactly the kind of detail HV-1619 hides elsewhere,
+    // so they're encrypted at rest the same way the incident's own title/description are.
+    @Test
+    void createNote_confidentialIncident_encryptsBody() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(confidentialIncident("inc-1")));
+        InternalNote saved = note("n1", "inc-1", "u1");
+        when(noteRepository.save(any(InternalNote.class))).thenReturn(saved);
+        when(noteRepository.findByIdWithAuthor(any())).thenReturn(Optional.of(saved));
+
+        noteService.createNote("u1", "inc-1", new InternalNoteRequest("test body"));
+
+        var noteCaptor = org.mockito.ArgumentCaptor.forClass(InternalNote.class);
+        verify(noteRepository).save(noteCaptor.capture());
+        assertThat(noteCaptor.getValue().getBody()).isEqualTo("v1:test body");
+        verify(fieldEncryptionService).encrypt("test body");
     }
 
     @Test
@@ -201,6 +230,20 @@ class InternalNoteServiceTest {
 
         assertThat(result.body()).isEqualTo("updated body");
         verify(activityLogService).logInternalNoteUpdated("u1", "inc-1", "n1");
+        verifyNoInteractions(fieldEncryptionService);
+    }
+
+    @Test
+    void updateNote_confidentialIncident_encryptsBody() {
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(confidentialIncident("inc-1")));
+        InternalNote n = note("n1", "inc-1", "u1");
+        when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
+        when(noteRepository.save(n)).thenReturn(n);
+
+        noteService.updateNote("u1", "inc-1", "n1", new InternalNoteRequest("updated body"));
+
+        assertThat(n.getBody()).isEqualTo("v1:updated body");
+        verify(fieldEncryptionService).encrypt("updated body");
     }
 
     @Test

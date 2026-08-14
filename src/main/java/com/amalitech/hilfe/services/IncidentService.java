@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.constants.ApiMessages;
+import com.amalitech.hilfe.crypto.FieldEncryptionService;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
@@ -47,11 +48,13 @@ public class IncidentService {
     private static final String STATUS_NAME_IN_PROGRESS = "In Progress";
     private static final String IN_PROGRESS_NOT_CONFIGURED = "Default 'In Progress' status not configured";
 
-    // Title/description are encrypted at rest (see com.amalitech.hilfe.crypto) and can no longer be
-    // matched with a SQL LIKE or ORDER BY, so a search term or a title sort routes through a
-    // capped, unpaginated-at-the-DB "candidates" fetch that gets decrypted and filtered/sorted/
-    // paginated here instead. This cap bounds that in-memory work -- results are only guaranteed
-    // complete within the most recent SEARCH_CANDIDATE_CAP structurally-scoped rows (ordered by
+    // Confidential incidents' title/description are encrypted at rest (see
+    // com.amalitech.hilfe.crypto), so a single SQL LIKE/ORDER BY can't cleanly match or order a
+    // result set that mixes plaintext (non-confidential) and ciphertext (confidential) rows. A
+    // search term or a title sort therefore always routes through a capped, unpaginated-at-the-DB
+    // "candidates" fetch that gets decrypted (a no-op for the non-confidential majority) and
+    // filtered/sorted/paginated here instead. This cap bounds that in-memory work -- results are
+    // only guaranteed complete within the most recent SEARCH_CANDIDATE_CAP structurally-scoped rows (ordered by
     // createdAt DESC); a match older than that won't surface. Not a regression from the previous
     // unindexed LIKE scan, but worth revisiting (e.g. as a config value) if incident volume grows.
     private static final int SEARCH_CANDIDATE_CAP = 5000;
@@ -104,6 +107,7 @@ public class IncidentService {
     private final ConfidentialEscalationResolver confidentialEscalationResolver;
     private final ConfidentialIncidentAccess confidentialIncidentAccess;
     private final ConfidentialIncidentMasker confidentialIncidentMasker;
+    private final FieldEncryptionService fieldEncryptionService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -126,11 +130,18 @@ public class IncidentService {
 
         String title = request.title() == null ? null : request.title().trim();
         String description = request.description() == null ? null : request.description().trim();
+        // Encryption is per-incident (confidential topics only), not automatic on every save --
+        // see EncryptedStringConverter's Javadoc for why this can't be decided inside the
+        // converter itself. Title/description are set once at creation and never edited
+        // afterward, so this is the only place that needs to make the call.
+        boolean confidential = incidentType != null && incidentType.isConfidential();
+        String storedTitle = confidential ? fieldEncryptionService.encrypt(title) : title;
+        String storedDescription = confidential ? fieldEncryptionService.encrypt(description) : description;
 
         Incident incident = Incident.builder()
                 .id(UUID.randomUUID().toString())
-                .title(title)
-                .description(description)
+                .title(storedTitle)
+                .description(storedDescription)
                 .userId(userId)
                 .locationId(request.locationId())
                 .incidentTypeId(request.incidentTypeId())
@@ -521,8 +532,8 @@ public class IncidentService {
         }
     }
 
-    // Title/description search moved here from SQL because both are encrypted at rest (see
-    // SEARCH_CANDIDATE_CAP above for why). candidates is already structurally scoped (department/
+    // Title/description search moved here from SQL because confidential incidents' values are
+    // ciphertext (see SEARCH_CANDIDATE_CAP above for why). candidates is already structurally scoped (department/
     // user/agent/status/date-range) by the repository query that produced it -- this only adds the
     // free-text filter, the full requested sort, and pagination. Matching/sorting logic itself
     // lives in IncidentContentMatcher, shared with DashboardService.getIncidents which has the

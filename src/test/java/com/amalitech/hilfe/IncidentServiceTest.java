@@ -1,5 +1,6 @@
 package com.amalitech.hilfe;
 
+import com.amalitech.hilfe.crypto.FieldEncryptionService;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
@@ -68,6 +69,7 @@ class IncidentServiceTest {
     @Mock IncidentCategoryRepository incidentCategoryRepository;
     @Mock ConfidentialEscalationResolver confidentialEscalationResolver;
     @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
+    @Mock FieldEncryptionService fieldEncryptionService;
     @Mock EntityManager entityManager;
     @InjectMocks IncidentService incidentService;
 
@@ -96,6 +98,9 @@ class IncidentServiceTest {
         // this suite aren't confidential, and ConfidentialIncidentAccess#canAccess is itself
         // always true for those, so this keeps existing non-confidential tests unaffected.
         lenient().when(confidentialIncidentAccess.canAccess(any(), any())).thenReturn(true);
+        // Deterministic stand-in so confidential-topic tests can assert the stored value came
+        // from encrypt(); non-confidential tests never call this at all (see createIncident).
+        lenient().when(fieldEncryptionService.encrypt(any())).thenAnswer(inv -> "v1:" + inv.getArgument(0));
     }
 
     @AfterEach
@@ -181,6 +186,51 @@ class IncidentServiceTest {
         assertThat(incidentCaptor.getValue().getSeverityId()).isEqualTo("sev-low");
         verify(entityManager, times(2)).flush();
         verify(slaService).onIncidentCreated(incident);
+    }
+
+    // Encryption is scoped to confidential incidents only -- a non-confidential incident's
+    // title/description must be stored in plaintext, never touching FieldEncryptionService.
+    @Test
+    void createIncident_nonConfidentialTopic_storesPlaintext() {
+        Incident incident = buildIncident();
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(buildIncidentType()));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        var incidentCaptor = forClass(Incident.class);
+        verify(incidentRepository).save(incidentCaptor.capture());
+        assertThat(incidentCaptor.getValue().getTitle()).isEqualTo("Test Incident");
+        assertThat(incidentCaptor.getValue().getDescription()).isEqualTo("Test description");
+        verifyNoInteractions(fieldEncryptionService);
+    }
+
+    // Confidential incidents are the one case where title/description get encrypted before save.
+    @Test
+    void createIncident_confidentialTopic_encryptsTitleAndDescription() {
+        IncidentType confidentialType = buildIncidentType();
+        confidentialType.setConfidential(true);
+        Incident incident = buildIncident();
+
+        when(incidentTypeRepository.findById("type-1")).thenReturn(Optional.of(confidentialType));
+        when(locationRepository.existsById("loc-1")).thenReturn(true);
+        when(severityRepository.findByNameIgnoreCase("Low")).thenReturn(Optional.of(buildSeverity("sev-low", "Low")));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+        when(incidentRepository.findByIdWithDetails(incident.getId())).thenReturn(Optional.of(incident));
+
+        incidentService.createIncident("user-1", new CreateIncidentRequest(
+                "Test Incident", "Test description", "type-1", "loc-1", null, null));
+
+        var incidentCaptor = forClass(Incident.class);
+        verify(incidentRepository).save(incidentCaptor.capture());
+        assertThat(incidentCaptor.getValue().getTitle()).isEqualTo("v1:Test Incident");
+        assertThat(incidentCaptor.getValue().getDescription()).isEqualTo("v1:Test description");
+        verify(fieldEncryptionService).encrypt("Test Incident");
+        verify(fieldEncryptionService).encrypt("Test description");
     }
 
     @Test

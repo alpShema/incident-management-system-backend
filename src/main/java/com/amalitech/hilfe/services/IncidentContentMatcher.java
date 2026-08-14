@@ -6,9 +6,10 @@ import org.springframework.data.domain.Sort;
 import java.util.Comparator;
 
 /**
- * Shared by IncidentService and DashboardService: both list incidents whose title/description are
- * encrypted at rest (see com.amalitech.hilfe.crypto) and so can no longer be matched or ordered via
- * SQL -- both decrypt a structurally-scoped candidate set and filter/sort it here instead.
+ * Shared by IncidentService and DashboardService: both list incidents, and confidential incidents'
+ * title/description are encrypted at rest (see com.amalitech.hilfe.crypto), so a result set mixing
+ * plaintext and ciphertext rows can no longer be matched or ordered with a single SQL query --
+ * both decrypt a structurally-scoped candidate set and filter/sort it here instead.
  */
 final class IncidentContentMatcher {
 

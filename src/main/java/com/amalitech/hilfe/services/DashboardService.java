@@ -134,10 +134,12 @@ public class DashboardService {
         return new DashboardCharts(byStatus, trends);
     }
 
-    // Title/description are encrypted at rest (see com.amalitech.hilfe.crypto), so a search term
-    // can no longer be pushed down as a SQL LIKE -- it now fetches a capped, date-scoped candidate
-    // set and filters/sorts it in memory via IncidentContentMatcher (shared with IncidentService,
-    // which has the same problem for its own incident list/search endpoints).
+    // Confidential incidents' title/description are encrypted at rest (see
+    // com.amalitech.hilfe.crypto), so a search term can no longer be pushed down as a single SQL
+    // LIKE across a result set that mixes plaintext and ciphertext rows -- it now fetches a
+    // capped, date-scoped candidate set and filters/sorts it in memory via IncidentContentMatcher
+    // (shared with IncidentService, which has the same problem for its own incident list/search
+    // endpoints).
     private static final int SEARCH_CANDIDATE_CAP = 5000;
 
     public Page<IncidentResponse> getIncidents(

@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.crypto.FieldEncryptionService;
 import com.amalitech.hilfe.dto.InternalNoteRequest;
 import com.amalitech.hilfe.dto.InternalNoteResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -27,18 +28,20 @@ public class InternalNoteService {
     private final IncidentRepository incidentRepository;
     private final ActivityLogService activityLogService;
     private final ConfidentialIncidentAccess confidentialIncidentAccess;
+    private final FieldEncryptionService fieldEncryptionService;
     private final EntityManager entityManager;
 
     @Transactional
     public InternalNoteResponse createNote(String userId, String incidentId, InternalNoteRequest request) {
-        requireConfidentialAccess(userId, incidentId);
+        Incident incident = requireConfidentialAccess(userId, incidentId);
         String noteId = UUID.randomUUID().toString();
+        String body = request.body().trim();
         InternalNote saved = noteRepository.save(InternalNote.builder()
                 .id(noteId)
                 .incidentId(incidentId)
 
                 .authorId(userId)
-                .body(request.body().trim())
+                .body(isConfidential(incident) ? fieldEncryptionService.encrypt(body) : body)
                 .build());
         // flush + detach so the subsequent JOIN FETCH query hits the DB instead of returning
         // the 1st-level cached entity (which has author=null on a freshly built object)
@@ -58,7 +61,7 @@ public class InternalNoteService {
 
     @Transactional
     public InternalNoteResponse updateNote(String userId, String incidentId, String noteId, InternalNoteRequest request) {
-        requireConfidentialAccess(userId, incidentId);
+        Incident incident = requireConfidentialAccess(userId, incidentId);
         InternalNote note = noteRepository.findByIdWithAuthor(noteId)
                 .orElseThrow(() -> new ArmsAuthException(NOTE_NOT_FOUND, 404));
         if (!note.getIncidentId().equals(incidentId)) {
@@ -67,7 +70,8 @@ public class InternalNoteService {
         if (!note.getAuthorId().equals(userId)) {
             throw new ArmsAuthException("You can only edit your own notes", 403);
         }
-        note.setBody(request.body().trim());
+        String body = request.body().trim();
+        note.setBody(isConfidential(incident) ? fieldEncryptionService.encrypt(body) : body);
         noteRepository.save(note);
         activityLogService.logInternalNoteUpdated(userId, incidentId, noteId);
         return toResponse(note, userId);
@@ -94,12 +98,20 @@ public class InternalNoteService {
     // read/write notes on any incident by ID, department or assignment notwithstanding) --
     // confidential incidents are the one place that must still be restricted to the topic's
     // linked owner, since notes are exactly the kind of detail this feature hides elsewhere.
-    private void requireConfidentialAccess(String userId, String incidentId) {
+    private Incident requireConfidentialAccess(String userId, String incidentId) {
         Incident incident = incidentRepository.findByIdWithDetails(incidentId)
                 .orElseThrow(() -> new ArmsAuthException("Incident not found", 404));
         if (!confidentialIncidentAccess.canAccess(userId, incident)) {
             throw new ArmsAuthException("You do not have permission to access this incident.", 403);
         }
+        return incident;
+    }
+
+    // Notes on a confidential incident are exactly the kind of detail HV-1619 hides elsewhere
+    // (see requireConfidentialAccess above), so they're encrypted at rest the same way the
+    // incident's own title/description are.
+    private boolean isConfidential(Incident incident) {
+        return incident.getIncidentType() != null && incident.getIncidentType().isConfidential();
     }
 
     private InternalNoteResponse toResponse(InternalNote note, String currentUserId) {
