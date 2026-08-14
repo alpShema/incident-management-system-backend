@@ -28,12 +28,21 @@ public record MessageResponse(
     }
 
     public static MessageResponse from(Message m, User sender) {
+        return from(m, sender, m.getContent());
+    }
+
+    // Used right after a send, where m.getContent() is whatever was just written for
+    // persistence (ciphertext, for a confidential incident) rather than the plaintext the
+    // sender typed -- see MessageService#sendMessage. Everywhere else the entity is freshly
+    // loaded from the DB (decrypted by EncryptedStringConverter on read), so m.getContent()
+    // is already correct and the two-arg overload above is what's used.
+    public static MessageResponse from(Message m, User sender, String content) {
         SenderInfo senderInfo = new SenderInfo(
                 m.getSenderId(),
                 sender != null ? sender.getFullName() : null,
                 sender != null ? sender.getProfileImg() : null
         );
-        return new MessageResponse(m.getId(), m.getIncidentId(), senderInfo, m.getContent(), List.of(), m.getCreatedAt(), m.getUpdatedAt());
+        return new MessageResponse(m.getId(), m.getIncidentId(), senderInfo, content, List.of(), m.getCreatedAt(), m.getUpdatedAt());
     }
 
     public static MessageResponse withAttachments(MessageResponse base, List<MediaResponse> attachments) {

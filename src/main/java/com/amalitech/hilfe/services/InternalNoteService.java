@@ -74,7 +74,10 @@ public class InternalNoteService {
         note.setBody(isConfidential(incident) ? fieldEncryptionService.encrypt(body) : body);
         noteRepository.save(note);
         activityLogService.logInternalNoteUpdated(userId, incidentId, noteId);
-        return toResponse(note, userId);
+        // note.getBody() now holds whatever was just set above -- ciphertext on a confidential
+        // incident, since the entity is never re-fetched after the write. Use the plaintext we
+        // already have instead of reading it back off the entity.
+        return toResponse(note, userId, body);
     }
 
     @Transactional
@@ -115,13 +118,17 @@ public class InternalNoteService {
     }
 
     private InternalNoteResponse toResponse(InternalNote note, String currentUserId) {
+        return toResponse(note, currentUserId, note.getBody());
+    }
+
+    private InternalNoteResponse toResponse(InternalNote note, String currentUserId, String body) {
         User author = note.getAuthor();
         // author is never null: "author_id" has ON DELETE RESTRICT on the DB FK.
         // If that constraint is ever relaxed, add a null guard here before accessing author fields.
         return new InternalNoteResponse(
                 note.getId(),
                 note.getIncidentId(),
-                note.getBody(),
+                body,
                 new InternalNoteResponse.AuthorInfo(author.getId(), author.getFullName(), author.getProfileImg()),
                 note.getAuthorId().equals(currentUserId),
                 note.getCreatedAt(),
