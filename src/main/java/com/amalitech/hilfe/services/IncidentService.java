@@ -10,6 +10,8 @@ import com.amalitech.hilfe.notifications.events.*;
 import com.amalitech.hilfe.repositories.*;
 import com.amalitech.hilfe.security.authorization.CurrentUserAuthority;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
+import com.amalitech.hilfe.utils.BusinessHoursCalculator;
+import com.amalitech.hilfe.utils.BusinessHoursCalculator.BusinessHours;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
 
@@ -108,6 +111,8 @@ public class IncidentService {
     private final ConfidentialIncidentAccess confidentialIncidentAccess;
     private final ConfidentialIncidentMasker confidentialIncidentMasker;
     private final FieldEncryptionService fieldEncryptionService;
+    private final BusinessHoursResolver businessHoursResolver;
+    private final Clock clock;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -1066,15 +1071,25 @@ public class IncidentService {
                 .orElse(false);
     }
 
+    /**
+     * HV-1674: the reopen window counts down in business hours, the same as SLA response/
+     * resolution timers (see SlaService), not plain calendar time -- an incident resolved late
+     * Friday must not have its window quietly expire over the weekend before the client is back
+     * at work. windowSeconds is rounded up to whole minutes (BusinessHoursCalculator's unit)
+     * rather than truncated, so a sub-minute configured window is never shortened.
+     */
     private void enforceReopenWindow(Incident incident, Status newStatus) {
         if (!STATUS_REOPENED.equals(newStatus.getId())) return;
         if (incident.getResolvedAt() == null) return;
 
         int windowSeconds = autoCloseService.readDurationSeconds();
-        Instant deadline = incident.getResolvedAt().plusSeconds(windowSeconds);
-        if (Instant.now().isAfter(deadline)) {
+        long windowMinutes = Math.ceilDiv(windowSeconds, 60);
+        BusinessHours hours = businessHoursResolver.resolveByLocationId(incident.getLocationId());
+        Instant deadline = BusinessHoursCalculator.addBusinessMinutes(incident.getResolvedAt(), windowMinutes, hours);
+        if (clock.instant().isAfter(deadline)) {
             throw new ArmsAuthException(
-                    "Reopen window has expired. Incidents must be reopened within " + windowSeconds + " seconds of resolution.",
+                    "Reopen window has expired. Incidents must be reopened within " + windowSeconds
+                            + " seconds (business hours) of resolution.",
                     403);
         }
     }
