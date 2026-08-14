@@ -11,12 +11,14 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AutoCloseService;
+import com.amalitech.hilfe.services.BusinessHoursResolver;
 import com.amalitech.hilfe.services.ConfidentialEscalationResolver;
 import com.amalitech.hilfe.services.ConfidentialIncidentAccess;
 import com.amalitech.hilfe.services.ConfidentialIncidentMasker;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.services.MediaService;
 import com.amalitech.hilfe.services.SlaService;
+import com.amalitech.hilfe.utils.BusinessHoursCalculator.BusinessHours;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +37,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,6 +54,8 @@ import static org.mockito.Mockito.*;
 class IncidentServiceTest {
 
     private static final Instant FIXED_NOW = Instant.parse("2026-01-15T10:30:00Z");
+    private static final BusinessHours DEFAULT_HOURS =
+            new BusinessHours(ZoneId.of("UTC"), LocalTime.of(8, 0), LocalTime.of(17, 30));
 
     @Mock IncidentRepository incidentRepository;
     @Mock IncidentTypeRepository incidentTypeRepository;
@@ -71,6 +78,8 @@ class IncidentServiceTest {
     @Mock ConfidentialIncidentAccess confidentialIncidentAccess;
     @Mock FieldEncryptionService fieldEncryptionService;
     @Mock EntityManager entityManager;
+    @Mock BusinessHoursResolver businessHoursResolver;
+    @Mock Clock clock;
     @InjectMocks IncidentService incidentService;
 
     @BeforeEach
@@ -101,6 +110,10 @@ class IncidentServiceTest {
         // Deterministic stand-in so confidential-topic tests can assert the stored value came
         // from encrypt(); non-confidential tests never call this at all (see createIncident).
         lenient().when(fieldEncryptionService.encrypt(any())).thenAnswer(inv -> "v1:" + inv.getArgument(0));
+        // HV-1674: default "now"/business-hours for the reopen-window check -- only exercised
+        // when a test transitions a resolved incident to Reopened, so most tests never touch these.
+        lenient().when(clock.instant()).thenReturn(FIXED_NOW);
+        lenient().when(businessHoursResolver.resolveByLocationId(any())).thenReturn(DEFAULT_HOURS);
     }
 
     @AfterEach
@@ -1671,6 +1684,62 @@ class IncidentServiceTest {
         when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
         when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
         when(autoCloseService.readDurationSeconds()).thenReturn(Integer.MAX_VALUE); // window = 72h, resolved 1h ago → within window
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.updateStatus("actor-1", RoleCode.AGENT, false, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
+
+        verify(incidentRepository, atLeastOnce()).save(any(Incident.class));
+    }
+
+    // ── HV-1674: reopen window counts down in business hours, not calendar time ────────────────
+
+    @Test
+    void updateStatus_toReopened_afterBusinessHoursWindowExpired_throws403() {
+        Status resolvedStatus = buildStatus("status-resolved", "Resolved");
+        Status reopenedStatus = buildStatus("status-reopened", "Reopened");
+
+        // Resolved Friday 16:00 UTC with a 120-minute (7200s) window: 90 business minutes remain
+        // that day (16:00-17:30), the other 30 roll into Monday -- the true deadline is Monday
+        // 08:30 UTC. "Now" here is just past that deadline.
+        Incident incident = buildIncident();
+        incident.setUserId("actor-1"); // creator
+        incident.setStatus(resolvedStatus);
+        incident.setResolvedAt(Instant.parse("2026-01-16T16:00:00Z"));
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
+        when(autoCloseService.readDurationSeconds()).thenReturn(7200);
+        when(clock.instant()).thenReturn(Instant.parse("2026-01-19T08:45:00Z"));
+
+        UpdateIncidentStatusRequest request = new UpdateIncidentStatusRequest("status-reopened", "Issue recurred");
+        assertThatThrownBy(() -> incidentService.updateStatus("actor-1", RoleCode.AGENT, false, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessageContaining("Reopen window has expired")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+    }
+
+    @Test
+    void updateStatus_toReopened_resolvedFridayEvening_stillWithinBusinessHoursWindowMondayMorning_returns200() {
+        // Same incident/window as above, but "now" is still before the Monday 08:30 UTC
+        // business-hours deadline. A pure-calendar deadline (Friday 18:00) would already have
+        // rejected this over the weekend -- this is exactly the bug HV-1674 fixes.
+        Status resolvedStatus   = buildStatus("status-resolved",    "Resolved");
+        Status reopenedStatus   = buildStatus("status-reopened",    "Reopened");
+        Status inProgressStatus = buildStatus("status-in-progress", "In Progress");
+
+        Incident incident = buildIncident();
+        incident.setUserId("actor-1"); // creator
+        incident.setStatus(resolvedStatus);
+        incident.setResolvedAt(Instant.parse("2026-01-16T16:00:00Z"));
+
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(statusRepository.findById("status-reopened")).thenReturn(Optional.of(reopenedStatus));
+        when(statusRepository.findByNameIgnoreCase("In Progress")).thenReturn(Optional.of(inProgressStatus));
+        when(autoCloseService.readDurationSeconds()).thenReturn(7200);
+        when(clock.instant()).thenReturn(Instant.parse("2026-01-19T08:15:00Z"));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.updateStatus("actor-1", RoleCode.AGENT, false, "inc-1", new UpdateIncidentStatusRequest("status-reopened", "Issue recurred"));
