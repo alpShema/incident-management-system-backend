@@ -6,6 +6,7 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Notification;
 import com.amalitech.hilfe.repositories.NotificationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,10 +20,14 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
 
     public PageResponse<NotificationResponse> getNotifications(String userId, Pageable pageable) {
-        return PageResponse.from(
-                notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
-                        .map(NotificationResponse::from)
-        );
+        return getNotifications(userId, pageable, null);
+    }
+
+    public PageResponse<NotificationResponse> getNotifications(String userId, Pageable pageable, Boolean read) {
+        Page<Notification> notifications = read == null
+                ? notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                : notificationRepository.findByUserIdAndReadOrderByCreatedAtDesc(userId, read, pageable);
+        return PageResponse.from(notifications.map(NotificationResponse::from));
     }
 
     public long getUnreadCount(String userId) {

@@ -993,7 +993,8 @@ type Query {
   slaReport(from: Instant, to: Instant, severityId: String): SlaReport
 
   # Notifications
-  notifications(page: PageInput): NotificationPage
+  # `read` filters by read status: omit/null for all, false for unread only, true for read only.
+  notifications(page: PageInput, read: Boolean): NotificationPage
   unreadNotificationCount: Long
 
   # Activities

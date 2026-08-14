@@ -25,8 +25,9 @@ public class NotificationResolver {
     @QueryMapping
     public PageResponse<NotificationResponse> notifications(
             @Argument PageInput page,
+            @Argument Boolean read,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
-        return notificationService.getNotifications(principal.userId(), PageInput.toPageable(page));
+        return notificationService.getNotifications(principal.userId(), PageInput.toPageable(page), read);
     }
 
     @QueryMapping

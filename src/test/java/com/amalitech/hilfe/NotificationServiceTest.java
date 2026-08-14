@@ -55,6 +55,46 @@ class NotificationServiceTest {
     }
 
     @Test
+    void getNotifications_nullReadFilter_returnsAllNotifications() {
+        Notification n = notification("n1", "u1", false);
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        when(notificationRepository.findByUserIdOrderByCreatedAtDesc("u1", pageable))
+                .thenReturn(new PageImpl<>(List.of(n), pageable, 1));
+
+        PageResponse<NotificationResponse> result = notificationService.getNotifications("u1", pageable, null);
+
+        assertThat(result.items()).hasSize(1);
+        verify(notificationRepository, never()).findByUserIdAndReadOrderByCreatedAtDesc(any(), anyBoolean(), any());
+    }
+
+    @Test
+    void getNotifications_readFalse_returnsOnlyUnreadNotifications() {
+        Notification unread = notification("n1", "u1", false);
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        when(notificationRepository.findByUserIdAndReadOrderByCreatedAtDesc("u1", false, pageable))
+                .thenReturn(new PageImpl<>(List.of(unread), pageable, 1));
+
+        PageResponse<NotificationResponse> result = notificationService.getNotifications("u1", pageable, false);
+
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.items().getFirst().read()).isFalse();
+        verify(notificationRepository, never()).findByUserIdOrderByCreatedAtDesc(any(), any());
+    }
+
+    @Test
+    void getNotifications_readTrue_returnsOnlyReadNotifications() {
+        Notification read = notification("n1", "u1", true);
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        when(notificationRepository.findByUserIdAndReadOrderByCreatedAtDesc("u1", true, pageable))
+                .thenReturn(new PageImpl<>(List.of(read), pageable, 1));
+
+        PageResponse<NotificationResponse> result = notificationService.getNotifications("u1", pageable, true);
+
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.items().getFirst().read()).isTrue();
+    }
+
+    @Test
     void getUnreadCount_delegatesToRepository() {
         when(notificationRepository.countByUserIdAndReadFalse("u1")).thenReturn(4L);
         assertThat(notificationService.getUnreadCount("u1")).isEqualTo(4L);
