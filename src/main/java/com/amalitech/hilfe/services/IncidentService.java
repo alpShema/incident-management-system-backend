@@ -730,20 +730,29 @@ public class IncidentService {
     // Compares the *target* agent's department against the topic's linked group's department --
     // unlike isSameDepartmentAsAssignedAgent (which compares two agents), the current assignee
     // is about to be replaced, so the topic itself is the department source of truth here.
+    //
+    // The target's groups come from AgentGroupMember (an agent can belong to several groups),
+    // NOT Agent.agentGroupId -- that's a legacy single-group column that's unpopulated for
+    // almost every agent in practice, and reading it here would make this check reject any
+    // agent who doesn't happen to have it set, regardless of their real department.
     private boolean isTargetInTopicDepartment(Incident incident, Agent targetAgent) {
         IncidentType topic = incident.getIncidentType();
         if (topic == null || topic.getAgentGroupId() == null || topic.getAgentGroupId().isBlank()) {
             return true;
         }
-        if (targetAgent.getAgentGroupId() == null || targetAgent.getAgentGroupId().isBlank()) {
+        List<String> targetGroupIds = agentGroupMemberRepository.findAgentGroupIdsByAgentId(targetAgent.getId());
+        if (targetGroupIds.isEmpty()) {
             return false;
         }
-        List<String> topicDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(List.of(topic.getAgentGroupId()));
-        List<String> targetDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(List.of(targetAgent.getAgentGroupId()));
-        if (topicDeptIds.isEmpty() || targetDeptIds.isEmpty()) {
-            // No department hierarchy -- fall back to direct group overlap.
-            return topic.getAgentGroupId().equals(targetAgent.getAgentGroupId());
+        if (targetGroupIds.contains(topic.getAgentGroupId())) {
+            return true;
         }
+        List<String> topicDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(List.of(topic.getAgentGroupId()));
+        if (topicDeptIds.isEmpty()) {
+            // No department hierarchy -- fall back to direct group membership (already checked above).
+            return false;
+        }
+        List<String> targetDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(targetGroupIds);
         return targetDeptIds.stream().anyMatch(topicDeptIds::contains);
     }
 

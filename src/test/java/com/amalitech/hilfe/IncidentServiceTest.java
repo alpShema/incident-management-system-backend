@@ -2413,8 +2413,34 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(assignee));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(target));
         when(agentRepository.hasActiveGroup("group-2", "agent-2")).thenReturn(true);
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-2")).thenReturn(List.of("group-2"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of("dept-A"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-2"))).thenReturn(List.of("dept-A"));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("actor-1", false, "inc-1", new AssignIncidentRequest("agent-2"));
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
+        verify(activityLogService).logIncidentAssignment("actor-1", "inc-1", "agent-2");
+    }
+
+    @Test
+    void assignIncident_confidentialAvailableAssignee_targetInDifferentGroupSameDepartment_succeeds() {
+        // The real-world shape of the bug this regression-tests: the target agent has no
+        // legacy Agent.agentGroupId set at all (true for the vast majority of agents in
+        // practice -- that column is effectively dead), but is a member of a *different*
+        // group than the topic's, which happens to share the topic's department via the
+        // AgentGroupMember join table. Must still be allowed.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType()); // agentGroupId = "group-1", dept-A
+        Agent assignee = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        Agent target = Agent.builder().id("agent-2").userId("target-user").status(true).build(); // no agentGroupId
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(assignee));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(target));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-2")).thenReturn(List.of("group-hr"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of("dept-A"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-hr"))).thenReturn(List.of("dept-A"));
         when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
 
         incidentService.assignIncident("actor-1", false, "inc-1", new AssignIncidentRequest("agent-2"));
@@ -2433,6 +2459,7 @@ class IncidentServiceTest {
         when(agentRepository.findById("agent-1")).thenReturn(Optional.of(assignee));
         when(agentRepository.findById("agent-2")).thenReturn(Optional.of(target));
         when(agentRepository.hasActiveGroup("group-2", "agent-2")).thenReturn(true);
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("agent-2")).thenReturn(List.of("group-2"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of("dept-A"));
         when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-2"))).thenReturn(List.of("dept-B"));
 
