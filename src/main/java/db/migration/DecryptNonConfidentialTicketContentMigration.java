@@ -62,14 +62,14 @@ public class DecryptNonConfidentialTicketContentMigration implements JavaMigrati
                 SELECT i.id, i.title FROM "Incident" i
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = false AND i.title LIKE 'v1:%'
-                ORDER BY i.id LIMIT """ + BATCH_SIZE,
+                ORDER BY i.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"Incident\" SET title = ? WHERE id = ?");
         decryptColumn(connection, cipher,
                 """
                 SELECT i.id, i.description FROM "Incident" i
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = false AND i.description LIKE 'v1:%'
-                ORDER BY i.id LIMIT """ + BATCH_SIZE,
+                ORDER BY i.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"Incident\" SET description = ? WHERE id = ?");
         decryptColumn(connection, cipher,
                 """
@@ -77,7 +77,7 @@ public class DecryptNonConfidentialTicketContentMigration implements JavaMigrati
                 JOIN "Incident" i ON i.id = n.incident_id
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = false AND n.body LIKE 'v1:%'
-                ORDER BY n.id LIMIT """ + BATCH_SIZE,
+                ORDER BY n.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"InternalNote\" SET body = ? WHERE id = ?");
         decryptColumn(connection, cipher,
                 """
@@ -85,7 +85,7 @@ public class DecryptNonConfidentialTicketContentMigration implements JavaMigrati
                 JOIN "Incident" i ON i.id = m.incident_id
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = false AND m.content LIKE 'v1:%'
-                ORDER BY m.id LIMIT """ + BATCH_SIZE,
+                ORDER BY m.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"Message\" SET content = ? WHERE id = ?");
     }
 

@@ -46,6 +46,7 @@ public class ActivityLogService {
     private static final String AS_HEAD_OF_DEPARTMENT = " as head of department ";
     private static final String ACTION_INCIDENT_VIEWED = "INCIDENT_VIEWED";
     private static final String ACTION_UNAUTHORIZED_CONFIDENTIAL_ACCESS = "UNAUTHORIZED_CONFIDENTIAL_ACCESS";
+    private static final String ACTION_UNAUTHORIZED_CONFIDENTIAL_UPDATE = "UNAUTHORIZED_CONFIDENTIAL_UPDATE";
 
     private final ActivityLogRepository activityLogRepository;
     private final UserRepository userRepository;
@@ -273,6 +274,30 @@ public class ActivityLogService {
                     .build());
         } catch (RuntimeException ex) {
             log.error("Failed to log unauthorized confidential access attempt for incident {}", incidentId, ex);
+        }
+    }
+
+    // HV-1669: an unauthorized reassignment/severity-change attempt on a confidential incident
+    // -- e.g. a non-assignee while the assigned agent is available, an out-of-group agent while
+    // they're unavailable, or an in-group agent trying to hand it to someone other than
+    // themselves during the self-claim fallback window. Kept separate from
+    // logUnauthorizedConfidentialAccess above, which is about *viewing* rather than *acting on*
+    // the incident.
+    @Async("applicationTaskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logUnauthorizedConfidentialUpdate(String actorUserId, String incidentId) {
+        try {
+            String actorName = resolveUserName(actorUserId);
+            String incidentLabel = resolveIncidentLabel(incidentId);
+            activityLogRepository.save(ActivityLog.builder()
+                    .actorUserId(actorUserId)
+                    .action(ACTION_UNAUTHORIZED_CONFIDENTIAL_UPDATE)
+                    .subjectType(SUBJECT_INCIDENT)
+                    .subjectId(incidentId)
+                    .description(actorName + " attempted to update confidential " + incidentLabel + " without authorization")
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("Failed to log unauthorized confidential update attempt for incident {}", incidentId, ex);
         }
     }
 

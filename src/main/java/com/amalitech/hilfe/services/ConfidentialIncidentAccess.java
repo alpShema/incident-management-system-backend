@@ -44,6 +44,22 @@ public class ConfidentialIncidentAccess {
         return isMemberOfTopicOwner(agent, topic);
     }
 
+    /**
+     * HV-1669: true if userId is specifically a member of the confidential topic's linked
+     * agent group (or the legacy single agent) -- unlike {@link #canAccess}, this does NOT
+     * also return true for the incident's creator or current assignee. Used by the
+     * availability-aware update fallback, which needs "is this actor eligible to act as a
+     * fallback group member" kept separate from "is this actor the assignee."
+     */
+    public boolean isGroupMember(String userId, Incident incident) {
+        IncidentType topic = incident.getIncidentType();
+        if (topic == null || !topic.isConfidential()) {
+            return false;
+        }
+        Optional<Agent> agent = userId == null ? Optional.empty() : agentRepository.findByUserId(userId);
+        return isMemberOfTopicOwner(agent, topic);
+    }
+
     private boolean isMemberOfTopicOwner(Optional<Agent> agent, IncidentType topic) {
         if (StringUtils.hasText(topic.getAgentGroupId())) {
             return agent.map(a -> agentGroupMemberRepository.findAgentGroupIdsByAgentId(a.getId()))
