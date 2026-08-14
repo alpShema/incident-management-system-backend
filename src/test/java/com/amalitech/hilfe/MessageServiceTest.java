@@ -251,12 +251,19 @@ class MessageServiceTest {
         when(fieldEncryptionService.encrypt("hello")).thenReturn("v1:hello");
         when(messageRepository.save(any(Message.class))).thenReturn(saved);
 
-        messageService.sendMessage("u1", "CLIENT", "inc-1", "hello", List.of());
+        MessageResponse response = messageService.sendMessage("u1", "CLIENT", "inc-1", "hello", List.of());
 
         var messageCaptor = org.mockito.ArgumentCaptor.forClass(Message.class);
         verify(messageRepository).save(messageCaptor.capture());
         assertThat(messageCaptor.getValue().getContent()).isEqualTo("v1:hello");
         verify(fieldEncryptionService).encrypt("hello");
+        // The entity's content is ciphertext (never re-fetched after the write above), but the
+        // live response/broadcast must carry the plaintext the sender actually typed -- not the
+        // "v1:..." ciphertext that was just persisted.
+        assertThat(response.content()).isEqualTo("hello");
+        var broadcastCaptor = org.mockito.ArgumentCaptor.forClass(MessageResponse.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/incidents/inc-1/messages"), broadcastCaptor.capture());
+        assertThat(broadcastCaptor.getValue().content()).isEqualTo("hello");
     }
 
     @Test
