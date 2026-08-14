@@ -2170,6 +2170,46 @@ class IncidentServiceTest {
         verify(incidentRepository, never()).save(any(Incident.class));
     }
 
+    @Test
+    void updateSeverity_confidentialUnavailableAssignee_inGroupAgentCanUpdate_succeeds() {
+        // HV-1669: once the assigned agent is unavailable, the "only the assignee" rule
+        // relaxes to "any member of the topic's linked group" -- role has no bearing (this
+        // actor is an admin-agent), only group membership does.
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        incident.setIncidentType(buildConfidentialIncidentType()); // agentGroupId = "group-1"
+        Agent unavailableAssignee = Agent.builder().id("agent-1").userId("actor-1").status(false).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAssignee));
+        when(confidentialIncidentAccess.isGroupMember("in-group-admin-agent", incident)).thenReturn(true);
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        UpdateIncidentSeverityRequest request = new UpdateIncidentSeverityRequest("sev-high");
+        incidentService.updateSeverity("in-group-admin-agent", false, "inc-1", request);
+
+        assertThat(incident.getSeverityId()).isEqualTo("sev-high");
+        verify(activityLogService).logIncidentSeverityChange("in-group-admin-agent", "inc-1", "none", "sev-high");
+    }
+
+    @Test
+    void updateSeverity_confidentialUnavailableAssignee_outsideGroupAgent_throws403() {
+        // Availability doesn't open the incident up to everyone -- only members of the
+        // topic's linked agent group get the fallback.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        Agent unavailableAssignee = Agent.builder().id("agent-1").userId("actor-1").status(false).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAssignee));
+        when(confidentialIncidentAccess.isGroupMember("outside-agent", incident)).thenReturn(false);
+
+        UpdateIncidentSeverityRequest request = new UpdateIncidentSeverityRequest("sev-high");
+        assertThatThrownBy(() -> incidentService.updateSeverity("outside-agent", false, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+    }
+
     // ── assignIncident ────────────────────────────────────────────────────────
 
     @Test
@@ -2353,6 +2393,140 @@ class IncidentServiceTest {
 
         AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
         assertThatThrownBy(() -> incidentService.assignIncident("in-group-admin-agent", true, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("You do not have permission to reassign this incident.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+    }
+
+    @Test
+    void assignIncident_confidentialAvailableAssignee_reassignsWithinDepartment_succeeds() {
+        // HV-1669: while the assignee is available, they may reassign -- but only to a
+        // target in the same department as the topic itself.
+        Incident incident = buildAssignedIncident(); // assignedToId = "agent-1"
+        incident.setIncidentType(buildConfidentialIncidentType()); // agentGroupId = "group-1"
+        Agent assignee = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        Agent target = Agent.builder().id("agent-2").userId("target-user").status(true).agentGroupId("group-2").build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(assignee));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(target));
+        when(agentRepository.hasActiveGroup("group-2", "agent-2")).thenReturn(true);
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of("dept-A"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-2"))).thenReturn(List.of("dept-A"));
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("actor-1", false, "inc-1", new AssignIncidentRequest("agent-2"));
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
+        verify(activityLogService).logIncidentAssignment("actor-1", "inc-1", "agent-2");
+    }
+
+    @Test
+    void assignIncident_confidentialAvailableAssignee_reassignsOutsideDepartment_throws403() {
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        Agent assignee = Agent.builder().id("agent-1").userId("actor-1").status(true).build();
+        Agent target = Agent.builder().id("agent-2").userId("target-user").status(true).agentGroupId("group-2").build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(assignee));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(target));
+        when(agentRepository.hasActiveGroup("group-2", "agent-2")).thenReturn(true);
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-1"))).thenReturn(List.of("dept-A"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("group-2"))).thenReturn(List.of("dept-B"));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() -> incidentService.assignIncident("actor-1", false, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Confidential incidents can only be reassigned to an agent in the topic's department.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+        verify(agentRepository, never()).save(any());
+    }
+
+    @Test
+    void assignIncident_confidentialUnavailableAssignee_inGroupAgentSelfClaims_succeeds() {
+        // HV-1669: once unavailable, an in-group agent (here an admin-agent, to confirm role
+        // has no bearing) may claim the incident for themselves.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        Agent unavailableAssignee = Agent.builder().id("agent-1").userId("actor-1").status(false).build();
+        Agent claimer = Agent.builder().id("agent-2").userId("in-group-admin-agent").status(true).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAssignee));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(claimer));
+        when(confidentialIncidentAccess.isGroupMember("in-group-admin-agent", incident)).thenReturn(true);
+        when(incidentRepository.save(any(Incident.class))).thenReturn(incident);
+
+        incidentService.assignIncident("in-group-admin-agent", false, "inc-1", new AssignIncidentRequest("agent-2"));
+
+        assertThat(incident.getAssignedToId()).isEqualTo("agent-2");
+        verify(activityLogService).logIncidentAssignment("in-group-admin-agent", "inc-1", "agent-2");
+    }
+
+    @Test
+    void assignIncident_confidentialUnavailableAssignee_inGroupAgentTargetsSomeoneElse_throws403() {
+        // Self-claim only -- an in-group agent can take the incident for themselves, but
+        // can't hand it to a third party, even another group member.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        Agent unavailableAssignee = Agent.builder().id("agent-1").userId("actor-1").status(false).build();
+        Agent otherTarget = Agent.builder().id("agent-2").userId("other-user").status(true).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAssignee));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(otherTarget));
+        when(confidentialIncidentAccess.isGroupMember("in-group-user", incident)).thenReturn(true);
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-2");
+        assertThatThrownBy(() -> incidentService.assignIncident("in-group-user", false, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("While the assigned agent is unavailable, you may only claim this confidential incident for yourself.")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+        verify(agentRepository, never()).save(any());
+    }
+
+    @Test
+    void assignIncident_confidentialUnavailableAssignee_outsideGroupAgent_throws403() {
+        // Availability doesn't open reassignment up to everyone -- only members of the
+        // topic's linked agent group get the self-claim fallback, regardless of target.
+        Incident incident = buildAssignedIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        Agent unavailableAssignee = Agent.builder().id("agent-1").userId("actor-1").status(false).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-1")).thenReturn(Optional.of(unavailableAssignee));
+        when(confidentialIncidentAccess.isGroupMember("outside-agent", incident)).thenReturn(false);
+
+        AssignIncidentRequest request = new AssignIncidentRequest("outside-agent");
+        assertThatThrownBy(() -> incidentService.assignIncident("outside-agent", false, "inc-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+
+        verify(incidentRepository, never()).save(any(Incident.class));
+        // The assigned agent's own record is read to check availability, but the *target*
+        // ("outside-agent") is never looked up -- authorization fails before reaching it.
+        verify(agentRepository, never()).findById("outside-agent");
+    }
+
+    @Test
+    void assignIncident_confidentialReassignedAwayAgent_availableAgain_notReauthorized_throws403() {
+        // HV-1669: rights are based on who is CURRENTLY assigned, not history -- an agent who
+        // was reassigned away (even after coming back online) doesn't regain authorization.
+        Incident incident = buildIncident();
+        incident.setIncidentType(buildConfidentialIncidentType());
+        incident.setAssignedToId("agent-2"); // now assigned to someone else
+        Agent currentAssignee = Agent.builder().id("agent-2").userId("current-actor").status(true).build();
+        when(incidentRepository.findByIdWithDetails("inc-1")).thenReturn(Optional.of(incident));
+        when(agentRepository.findById("agent-2")).thenReturn(Optional.of(currentAssignee));
+
+        AssignIncidentRequest request = new AssignIncidentRequest("agent-3");
+        assertThatThrownBy(() -> incidentService.assignIncident("actor-1", false, "inc-1", request))
                 .isInstanceOf(ArmsAuthException.class)
                 .hasMessage("You do not have permission to reassign this incident.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())

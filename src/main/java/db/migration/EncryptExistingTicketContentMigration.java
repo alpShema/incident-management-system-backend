@@ -74,14 +74,14 @@ public class EncryptExistingTicketContentMigration implements JavaMigration {
                 SELECT i.id, i.title FROM "Incident" i
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = true AND i.title IS NOT NULL AND i.title NOT LIKE 'v1:%'
-                ORDER BY i.id LIMIT """ + BATCH_SIZE,
+                ORDER BY i.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"Incident\" SET title = ? WHERE id = ?");
         encryptColumn(connection, cipher,
                 """
                 SELECT i.id, i.description FROM "Incident" i
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = true AND i.description IS NOT NULL AND i.description NOT LIKE 'v1:%'
-                ORDER BY i.id LIMIT """ + BATCH_SIZE,
+                ORDER BY i.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"Incident\" SET description = ? WHERE id = ?");
         encryptColumn(connection, cipher,
                 """
@@ -89,7 +89,7 @@ public class EncryptExistingTicketContentMigration implements JavaMigration {
                 JOIN "Incident" i ON i.id = n.incident_id
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = true AND n.body IS NOT NULL AND n.body NOT LIKE 'v1:%'
-                ORDER BY n.id LIMIT """ + BATCH_SIZE,
+                ORDER BY n.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"InternalNote\" SET body = ? WHERE id = ?");
         encryptColumn(connection, cipher,
                 """
@@ -97,7 +97,7 @@ public class EncryptExistingTicketContentMigration implements JavaMigration {
                 JOIN "Incident" i ON i.id = m.incident_id
                 JOIN "IncidentType" it ON it.id = i.incident_type_id
                 WHERE it.confidential = true AND m.content IS NOT NULL AND m.content NOT LIKE 'v1:%'
-                ORDER BY m.id LIMIT """ + BATCH_SIZE,
+                ORDER BY m.id LIMIT\s""" + BATCH_SIZE,
                 "UPDATE \"Message\" SET content = ? WHERE id = ?");
     }
 

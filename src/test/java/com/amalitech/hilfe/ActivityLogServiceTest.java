@@ -347,6 +347,24 @@ class ActivityLogServiceTest {
         assertThat(captor.getValue().getDescription()).contains("Alice");
     }
 
+    // ── logUnauthorizedConfidentialUpdate ────────────────────────────────────
+
+    @Test
+    void logUnauthorizedConfidentialUpdate_savesActivityLogWithCorrectAction() {
+        when(userRepository.findById("actor")).thenReturn(Optional.of(User.builder().id("actor").fullName("Alice").build()));
+        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(
+                Incident.builder().id("inc-1").incidentNo(11).build()));
+        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        activityLogService.logUnauthorizedConfidentialUpdate("actor", "inc-1");
+
+        ArgumentCaptor<ActivityLog> captor = ArgumentCaptor.forClass(ActivityLog.class);
+        verify(activityLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getAction()).isEqualTo("UNAUTHORIZED_CONFIDENTIAL_UPDATE");
+        assertThat(captor.getValue().getSubjectId()).isEqualTo("inc-1");
+        assertThat(captor.getValue().getDescription()).contains("Alice");
+    }
+
     // ── logLocationTimezoneChanged ──────────────────────────────────────────
 
     @Test

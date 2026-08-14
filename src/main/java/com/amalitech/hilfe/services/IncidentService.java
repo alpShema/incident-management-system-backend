@@ -460,19 +460,7 @@ public class IncidentService {
             throw new ArmsAuthException("You cannot reassign a Resolved incident.", 400);
         }
 
-        Agent agent = agentRepository.findById(request.agentId())
-                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
-        if (!Boolean.TRUE.equals(agent.getStatus())) {
-            throw new ArmsAuthException("This incident cannot be assigned to an unavailable agent.", 400);
-        }
-        if (agent.getAgentGroupId() != null && !agentRepository.hasActiveGroup(agent.getAgentGroupId(), agent.getId())) {
-            throw new ArmsAuthException("This incident cannot be assigned to an agent in a deactivated group.", 400);
-        }
-        // HV-1623: an incident can never be assigned to its own creator, regardless of who
-        // performs the assignment or what role the creator holds (agent, admin-agent, or admin).
-        if (agent.getUserId() != null && agent.getUserId().equals(incident.getUserId())) {
-            throw new ArmsAuthException("An incident cannot be assigned to its own creator.", 400);
-        }
+        Agent agent = validateReassignmentTarget(actorUserId, incident, request);
 
         agent.setLastAssignedAt(Instant.now());
         agentRepository.save(agent);
@@ -525,6 +513,30 @@ public class IncidentService {
         entityManager.flush();
         entityManager.clear();
         return slaService.toIncidentResponse(incidentRepository.findByIdWithDetails(incidentId).orElseThrow());
+    }
+
+    // Everything that must hold true about the *target* agent before a reassignment can proceed:
+    // they exist, are available, aren't in a deactivated group, aren't the incident's own creator
+    // (HV-1623), and -- for a confidential incident -- satisfy the department/self-claim rule
+    // (HV-1669). Split out of assignIncident to keep that method's cognitive complexity in check.
+    private Agent validateReassignmentTarget(String actorUserId, Incident incident, AssignIncidentRequest request) {
+        Agent agent = agentRepository.findById(request.agentId())
+                .orElseThrow(() -> new ArmsAuthException("Agent not found", 404));
+        if (!Boolean.TRUE.equals(agent.getStatus())) {
+            throw new ArmsAuthException("This incident cannot be assigned to an unavailable agent.", 400);
+        }
+        if (agent.getAgentGroupId() != null && !agentRepository.hasActiveGroup(agent.getAgentGroupId(), agent.getId())) {
+            throw new ArmsAuthException("This incident cannot be assigned to an agent in a deactivated group.", 400);
+        }
+        // HV-1623: an incident can never be assigned to its own creator, regardless of who
+        // performs the assignment or what role the creator holds (agent, admin-agent, or admin).
+        if (agent.getUserId() != null && agent.getUserId().equals(incident.getUserId())) {
+            throw new ArmsAuthException("An incident cannot be assigned to its own creator.", 400);
+        }
+        if (incident.getIncidentType() != null && incident.getIncidentType().isConfidential()) {
+            enforceConfidentialReassignmentTarget(actorUserId, incident, agent);
+        }
+        return agent;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -655,10 +667,84 @@ public class IncidentService {
         if (hasUpdateAny && !confidential) {
             return;
         }
+        if (confidential) {
+            enforceConfidentialUpdateAuthorization(actorUserId, incident, deniedMessage);
+            return;
+        }
         String assignedAgentUserId = resolveAgentUserId(incident.getAssignedToId());
         if (actorUserId == null || !actorUserId.equals(assignedAgentUserId)) {
             throw new ArmsAuthException(deniedMessage, 403);
         }
+    }
+
+    // HV-1669: while the assigned agent is available, only they may act on the confidential
+    // incident (unchanged from HV-1666). Once they go unavailable, acting on it at all --
+    // reassigning, changing severity -- falls to any member of the topic's linked agent group.
+    // assignIncident layers an additional self-claim-only restriction on top of this via
+    // enforceConfidentialReassignmentTarget, for the specific question of *who* it may be
+    // reassigned to; this method only answers "is the actor allowed to act at all."
+    private void enforceConfidentialUpdateAuthorization(String actorUserId, Incident incident, String deniedMessage) {
+        boolean authorized = isAssignedAgentAvailable(incident.getAssignedToId())
+                ? actorUserId != null && actorUserId.equals(resolveAgentUserId(incident.getAssignedToId()))
+                : confidentialIncidentAccess.isGroupMember(actorUserId, incident);
+        if (!authorized) {
+            activityLogService.logUnauthorizedConfidentialUpdate(actorUserId, incident.getId());
+            throw new ArmsAuthException(deniedMessage, 403);
+        }
+    }
+
+    // HV-1669: an incident's assigned agent may be unassigned or have no recorded status --
+    // ambiguous availability defaults to "available" per the ticket's acceptance criteria, so
+    // the stricter exclusive-ownership rule is what applies by default.
+    private boolean isAssignedAgentAvailable(String assignedToId) {
+        if (assignedToId == null) {
+            return true;
+        }
+        return agentRepository.findById(assignedToId)
+                .map(a -> !Boolean.FALSE.equals(a.getStatus()))
+                .orElse(true);
+    }
+
+    // HV-1669: guards *who a confidential incident may be reassigned to*, layered on top of
+    // enforceConfidentialUpdateAuthorization's "is the actor allowed to act at all." While the
+    // assigned agent is available, the target must be in the topic's own department. Once
+    // they're unavailable, the actor (already confirmed to be a group member above) may only
+    // claim the incident for themselves -- never hand it to a different agent, even another
+    // group member.
+    private void enforceConfidentialReassignmentTarget(String actorUserId, Incident incident, Agent targetAgent) {
+        if (isAssignedAgentAvailable(incident.getAssignedToId())) {
+            if (!isTargetInTopicDepartment(incident, targetAgent)) {
+                activityLogService.logUnauthorizedConfidentialUpdate(actorUserId, incident.getId());
+                throw new ArmsAuthException(
+                        "Confidential incidents can only be reassigned to an agent in the topic's department.", 403);
+            }
+            return;
+        }
+        if (actorUserId == null || !actorUserId.equals(targetAgent.getUserId())) {
+            activityLogService.logUnauthorizedConfidentialUpdate(actorUserId, incident.getId());
+            throw new ArmsAuthException(
+                    "While the assigned agent is unavailable, you may only claim this confidential incident for yourself.", 403);
+        }
+    }
+
+    // Compares the *target* agent's department against the topic's linked group's department --
+    // unlike isSameDepartmentAsAssignedAgent (which compares two agents), the current assignee
+    // is about to be replaced, so the topic itself is the department source of truth here.
+    private boolean isTargetInTopicDepartment(Incident incident, Agent targetAgent) {
+        IncidentType topic = incident.getIncidentType();
+        if (topic == null || topic.getAgentGroupId() == null || topic.getAgentGroupId().isBlank()) {
+            return true;
+        }
+        if (targetAgent.getAgentGroupId() == null || targetAgent.getAgentGroupId().isBlank()) {
+            return false;
+        }
+        List<String> topicDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(List.of(topic.getAgentGroupId()));
+        List<String> targetDeptIds = agentGroupRepository.findDepartmentIdsByGroupIds(List.of(targetAgent.getAgentGroupId()));
+        if (topicDeptIds.isEmpty() || targetDeptIds.isEmpty()) {
+            // No department hierarchy -- fall back to direct group overlap.
+            return topic.getAgentGroupId().equals(targetAgent.getAgentGroupId());
+        }
+        return targetDeptIds.stream().anyMatch(topicDeptIds::contains);
     }
 
     private void applyTopicAssignment(Incident incident, IncidentType incidentType, String creatorAgentId) {
