@@ -240,10 +240,13 @@ class InternalNoteServiceTest {
         when(noteRepository.findByIdWithAuthor("n1")).thenReturn(Optional.of(n));
         when(noteRepository.save(n)).thenReturn(n);
 
-        noteService.updateNote("u1", "inc-1", "n1", new InternalNoteRequest("updated body"));
+        InternalNoteResponse result = noteService.updateNote("u1", "inc-1", "n1", new InternalNoteRequest("updated body"));
 
         assertThat(n.getBody()).isEqualTo("v1:updated body");
         verify(fieldEncryptionService).encrypt("updated body");
+        // The entity's body is ciphertext (never re-fetched after the write above), but the
+        // response must carry the plaintext the author actually typed -- not "v1:updated body".
+        assertThat(result.body()).isEqualTo("updated body");
     }
 
     @Test

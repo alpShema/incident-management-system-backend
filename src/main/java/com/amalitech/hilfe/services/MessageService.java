@@ -100,8 +100,12 @@ public class MessageService {
         if (firstResponse) {
             incidentService.onFirstAgentResponse(incident, userId);
         }
+        // saved.getContent() is whatever was just written to the entity for persistence --
+        // ciphertext on a confidential incident, since EncryptedStringConverter only decrypts on
+        // read and this entity was never re-fetched. Use the plaintext we already have instead of
+        // reading it back off the entity, so the live response/broadcast isn't ciphertext.
         MessageResponse response = MessageResponse.withAttachments(
-                MessageResponse.from(saved, sender),
+                MessageResponse.from(saved, sender, trimmedContent),
                 mediaService.toMediaResponsesForMessage(media)
         );
 
