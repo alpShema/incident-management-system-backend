@@ -3,7 +3,10 @@ package com.amalitech.hilfe.controllers;
 import com.amalitech.hilfe.dto.ApiResponse;
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqBulkUploadResult;
+import com.amalitech.hilfe.dto.FaqInspectionResult;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.FaqRowStatus;
+import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
@@ -31,6 +34,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Tag(name = "FAQs", description = "Admin FAQ management")
 public class FaqController {
 
+    private static final String FAQ_UPDATED_MESSAGE = "FAQ updated successfully";
+
     private final FaqService faqService;
 
     @GetMapping
@@ -38,26 +43,32 @@ public class FaqController {
     @Operation(summary = "List FAQs", description = "Paginated, filterable list of all FAQ entries")
     public ResponseEntity<ApiResponse<PageResponse<FaqResponse>>> listFaqs(
             @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(ApiResponse.success("FAQs retrieved", faqService.listFaqs(active, pageable)));
+        return ResponseEntity.ok(ApiResponse.success("FAQs retrieved successfully", faqService.listFaqs(active, search, pageable)));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_READ + "')")
     @Operation(summary = "Get FAQ", description = "Retrieve a single FAQ by ID")
     public ResponseEntity<ApiResponse<FaqResponse>> getFaq(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success("FAQ retrieved", faqService.getFaq(id)));
+        return ResponseEntity.ok(ApiResponse.success("FAQ retrieved successfully", faqService.getFaq(id)));
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
-    @Operation(summary = "Create FAQ", description = "Add a new FAQ entry. Triggers embedding generation.")
+    @Operation(summary = "Create or update FAQ",
+            description = "Add a new FAQ entry, or update the existing FAQ with a matching question. "
+                    + "Returns 201 when a new FAQ is created, 200 when an existing one is updated. "
+                    + "Triggers embedding generation.")
     public ResponseEntity<ApiResponse<FaqResponse>> createFaq(@Valid @RequestBody CreateFaqRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("FAQ created", faqService.createFaq(request)));
+        FaqUpsertResult result = faqService.createFaq(request);
+        HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
+        String message = result.created() ? "FAQ created successfully" : FAQ_UPDATED_MESSAGE;
+        return ResponseEntity.status(status).body(ApiResponse.success(message, result.faq()));
     }
 
     @PatchMapping("/{id}")
@@ -67,7 +78,7 @@ public class FaqController {
             @PathVariable String id,
             @Valid @RequestBody UpdateFaqRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success("FAQ updated", faqService.updateFaq(id, request)));
+        return ResponseEntity.ok(ApiResponse.success(FAQ_UPDATED_MESSAGE, faqService.updateFaq(id, request)));
     }
 
     @PatchMapping("/{id}/active")
@@ -78,7 +89,7 @@ public class FaqController {
             @RequestParam boolean active
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                active ? "FAQ activated" : "FAQ deactivated",
+                active ? "FAQ activated successfully" : "FAQ deactivated successfully",
                 faqService.toggleActive(id, active)
         ));
     }
@@ -88,14 +99,14 @@ public class FaqController {
     @Operation(summary = "Delete FAQ", description = "Permanently remove a FAQ entry")
     public ResponseEntity<ApiResponse<Void>> deleteFaq(@PathVariable String id) {
         faqService.deleteFaq(id);
-        return ResponseEntity.ok(ApiResponse.success("FAQ deleted", null));
+        return ResponseEntity.ok(ApiResponse.success("FAQ deleted successfully", null));
     }
 
     @GetMapping("/template")
     @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
     @Operation(summary = "Download CSV template", description = "Returns a blank CSV file with the required headers (question, answer) for bulk upload")
     public ResponseEntity<Resource> downloadTemplate() {
-        byte[] csvBytes = "question,answer\n".getBytes();
+        byte[] csvBytes = FaqService.CSV_IMPORT_TEMPLATE.getBytes();
         ByteArrayResource resource = new ByteArrayResource(csvBytes);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv"))
@@ -111,20 +122,49 @@ public class FaqController {
     public ResponseEntity<ApiResponse<FaqBulkUploadResult>> bulkUpload(
             @RequestParam("file") MultipartFile file
     ) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.success("Uploaded file is empty", null));
-        }
-        String filename = file.getOriginalFilename();
-        if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.success("Only CSV files are accepted", null));
+        String fileError = validateCsvFile(file);
+        if (fileError != null) {
+            return ResponseEntity.badRequest().body(ApiResponse.success(fileError, null));
         }
         FaqBulkUploadResult result = faqService.bulkImport(file);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
-                        result.created() + " FAQ(s) created, " + result.failed() + " row(s) skipped",
+                        result.created() + " FAQ(s) created, " + result.updated() + " updated, "
+                                + result.failed() + " row(s) skipped.",
                         result
                 ));
+    }
+
+    @PostMapping("/inspect")
+    @PreAuthorize("hasAuthority('" + RbacPermissions.FAQ_CREATE + "')")
+    @Operation(summary = "Inspect a bulk FAQ CSV",
+            description = "Parses a CSV file and previews every row without creating or modifying any FAQs. "
+                    + "Returns a summary of rows ready to import vs. rows needing attention (missing question "
+                    + "and/or answer), plus the paginated rows themselves. Pass `status=NEEDS_ATTENTION` to "
+                    + "return only the rows with issues, or `status=READY` for only the importable ones.")
+    public ResponseEntity<ApiResponse<FaqInspectionResult>> inspect(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) FaqRowStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        String fileError = validateCsvFile(file);
+        if (fileError != null) {
+            return ResponseEntity.badRequest().body(ApiResponse.success(fileError, null));
+        }
+        var pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(ApiResponse.success(
+                "CSV file inspected successfully", faqService.inspectBulkImport(file, status, pageable)));
+    }
+
+    private String validateCsvFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            return "The uploaded file is empty. Please choose a file and try again.";
+        }
+        String filename = file.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
+            return "Only CSV files are accepted. Please upload a file with a .csv extension.";
+        }
+        return null;
     }
 }

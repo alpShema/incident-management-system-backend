@@ -10,8 +10,21 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface FaqRepository extends JpaRepository<Faq, String> {
+
+    // Matches case-insensitively, ignoring surrounding/collapsed whitespace and a
+    // trailing "?", "!" or "." — mirrors the unique index added in
+    // V61__add_faq_question_unique_index.sql so app-level duplicate detection and
+    // the DB-level constraint agree on what counts as "the same question".
+    @Query(value = """
+            SELECT * FROM "Faq"
+            WHERE LOWER(TRIM(TRAILING '?!.' FROM REGEXP_REPLACE(TRIM(question), '\\s+', ' ', 'g')))
+                = LOWER(TRIM(TRAILING '?!.' FROM REGEXP_REPLACE(TRIM(:question), '\\s+', ' ', 'g')))
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Faq> findByNormalizedQuestion(@Param("question") String question);
 
     @Query(value = "SELECT * FROM \"Faq\" WHERE embedding IS NULL", nativeQuery = true)
     List<Faq> findAllWithoutEmbedding();
@@ -19,9 +32,12 @@ public interface FaqRepository extends JpaRepository<Faq, String> {
     @Query("""
             SELECT f FROM Faq f
             WHERE (:active IS NULL OR f.active = :active)
+            AND (:search IS NULL OR LOWER(f.question) LIKE :search
+                                 OR LOWER(f.answer)   LIKE :search)
             """)
     Page<Faq> findAllFiltered(
             @Param("active") Boolean active,
+            @Param("search") String search,
             Pageable pageable
     );
 

@@ -1,13 +1,12 @@
 package com.amalitech.hilfe.services;
 
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Permission;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.models.RolePermission;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.PermissionRepository;
 import com.amalitech.hilfe.repositories.RolePermissionRepository;
 import com.amalitech.hilfe.repositories.RoleRepository;
@@ -19,28 +18,31 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class RoleService {
-    private static final Set<String> PROTECTED_ROLES = Set.of("CLIENT", "AGENT", "ADMIN", "SUPER_ADMIN");
+    private static final Set<String> PROTECTED_ROLES = Set.of("CLIENT", "AGENT", "ADMIN", "ADMIN_AGENT", "SUPER_ADMIN");
     private static final String ROLE_NOT_FOUND = "Role not found";
+    private static final String ROLE_ALREADY_EXISTS_MESSAGE = "A role with this name already exists. Please choose a different name.";
+    private static final String INVALID_PERMISSIONS_MESSAGE = "One or more of the selected permissions are invalid.";
+    private static final String AT_LEAST_ONE_USER_MESSAGE = "At least one user must be selected.";
+    private static final String USERS_NOT_FOUND_MESSAGE = "One or more selected users could not be found.";
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final UserRepository userRepository;
-    private final AgentRepository agentRepository;
+    private final RoleAccessSyncService roleAccessSyncService;
 
     @Transactional
     public RoleResponse createRole(CreateRoleRequest request) {
         String code = generateRoleCode(request.name());
         if (PROTECTED_ROLES.contains(code) || roleRepository.existsByCode(code)) {
-            throw new ArmsAuthException("Role already exists", 409);
+            throw new ArmsAuthException(ROLE_ALREADY_EXISTS_MESSAGE, 409);
         }
         if (roleRepository.existsByNameIgnoreCase(request.name())) {
-            throw new ArmsAuthException("Role name already exists", 409);
+            throw new ArmsAuthException(ROLE_ALREADY_EXISTS_MESSAGE, 409);
         }
 
         List<String> normalizedPermissionCodes = request.permissionCodes().stream()
@@ -50,7 +52,7 @@ public class RoleService {
                 .toList();
         List<Permission> permissions = permissionRepository.findByCodeIn(normalizedPermissionCodes);
         if (permissions.size() != normalizedPermissionCodes.size()) {
-            throw new ArmsAuthException("One or more permission codes are invalid", 400);
+            throw new ArmsAuthException(INVALID_PERMISSIONS_MESSAGE, 400);
         }
 
         Role role = roleRepository.save(Role.builder()
@@ -96,19 +98,18 @@ public class RoleService {
                 .distinct()
                 .toList();
         if (userIds.isEmpty()) {
-            throw new ArmsAuthException("userIds must not be empty", 400);
+            throw new ArmsAuthException(AT_LEAST_ONE_USER_MESSAGE, 400);
         }
 
         List<User> users = userRepository.findAllById(userIds);
         if (users.size() != userIds.size()) {
-            Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
-            List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
-            throw new ArmsAuthException("Users not found: " + String.join(", ", missing), 404);
+            throw new ArmsAuthException(USERS_NOT_FOUND_MESSAGE, 404);
         }
 
         users.forEach(user -> {
             user.setRoleCode(role.getCode());
-            ensureAgentRecordIfNeeded(user, role.getCode());
+            roleAccessSyncService.syncAgentRecord(user, role.getCode());
+            roleAccessSyncService.syncAdminRecord(user, role.getCode());
         });
         userRepository.saveAll(users);
         return new BulkAssignRoleResponse(role.getCode(), users.size(), users.stream().map(User::getId).toList());
@@ -121,16 +122,16 @@ public class RoleService {
                 .orElseThrow(() -> new ArmsAuthException(ROLE_NOT_FOUND, 404));
 
         if (Boolean.TRUE.equals(role.getSystemDefined())) {
-            throw new ArmsAuthException("System-defined roles cannot be modified", 403);
+            throw new ArmsAuthException("System-defined roles cannot be modified.", 403);
         }
 
         if (request.name() != null) {
             String trimmedName = request.name().trim();
             if (trimmedName.isBlank()) {
-                throw new ArmsAuthException("Role name must not be blank", 400);
+                throw new ArmsAuthException("Role name must not be blank.", 400);
             }
             if (roleRepository.existsByNameIgnoreCaseAndCodeNot(trimmedName, normalizedCode)) {
-                throw new ArmsAuthException("Role name already exists", 409);
+                throw new ArmsAuthException(ROLE_ALREADY_EXISTS_MESSAGE, 409);
             }
             role.setName(trimmedName);
         }
@@ -147,7 +148,7 @@ public class RoleService {
                     .toList();
             List<Permission> permissions = permissionRepository.findByCodeIn(normalizedCodes);
             if (permissions.size() != normalizedCodes.size()) {
-                throw new ArmsAuthException("One or more permission codes are invalid", 400);
+                throw new ArmsAuthException(INVALID_PERMISSIONS_MESSAGE, 400);
             }
             rolePermissionRepository.deleteByRoleCode(normalizedCode);
             List<RolePermission> links = permissions.stream()
@@ -178,20 +179,22 @@ public class RoleService {
                 .distinct()
                 .toList();
         if (userIds.isEmpty()) {
-            throw new ArmsAuthException("userIds must not be empty", 400);
+            throw new ArmsAuthException(AT_LEAST_ONE_USER_MESSAGE, 400);
         }
 
         List<User> users = userRepository.findAllById(userIds);
         if (users.size() != userIds.size()) {
-            Set<String> found = users.stream().map(User::getId).collect(Collectors.toSet());
-            List<String> missing = userIds.stream().filter(id -> !found.contains(id)).toList();
-            throw new ArmsAuthException("Users not found: " + String.join(", ", missing), 404);
+            throw new ArmsAuthException(USERS_NOT_FOUND_MESSAGE, 404);
         }
 
         List<User> toUpdate = users.stream()
                 .filter(u -> normalizedCode.equals(u.getRoleCode()))
                 .map(u -> { u.setRoleCode(null); return u; })
                 .toList();
+        toUpdate.forEach(user -> {
+            roleAccessSyncService.syncAgentRecord(user, null);
+            roleAccessSyncService.syncAdminRecord(user, null);
+        });
         userRepository.saveAll(toUpdate);
         return new BulkAssignRoleResponse(normalizedCode, toUpdate.size(), toUpdate.stream().map(User::getId).toList());
     }
@@ -265,22 +268,9 @@ public class RoleService {
 
     private String normalizeRoleCode(String roleCode) {
         if (roleCode == null || roleCode.isBlank()) {
-            throw new ArmsAuthException("roleCode is required", 400);
+            throw new ArmsAuthException(ApiMessages.ROLE_REQUIRED, 400);
         }
         return roleCode.trim().toUpperCase();
     }
 
-    private void ensureAgentRecordIfNeeded(User user, String roleCode) {
-        if (!"AGENT".equalsIgnoreCase(roleCode)) {
-            return;
-        }
-        if (agentRepository.findByUserId(user.getId()).isPresent()) {
-            return;
-        }
-        agentRepository.save(Agent.builder()
-                .id(UUID.randomUUID().toString())
-                .userId(user.getId())
-                .status(true)
-                .build());
-    }
 }

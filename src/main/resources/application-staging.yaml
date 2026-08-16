@@ -1,0 +1,88 @@
+# ──────────────────────────────────────────
+# Staging profile overrides
+# Loaded only when spring.profiles.active includes "staging". Staging runs
+# behind HTTPS (see nginx-host-backend-staging.conf), so cookies default to
+# Secure/Lax, and there's no dev-style localhost fallback for ARMS/CORS —
+# those must be provided explicitly via environment variables on the staging
+# host, so a missing value fails fast at startup instead of silently
+# defaulting to something insecure.
+# ──────────────────────────────────────────
+
+# ──────────────────────────────────────────
+# ARMS SSO Integration
+# ──────────────────────────────────────────
+arms:
+  sso-url: ${ARMS_SSO_URL}
+  sso-public-key: ${ARMS_SSO_PUBLIC_KEY}
+
+# ──────────────────────────────────────────
+# Cookie
+# ──────────────────────────────────────────
+cookie:
+  secure: ${COOKIE_SECURE:true}
+  same-site: ${COOKIE_SAME_SITE:Lax}
+
+# ──────────────────────────────────────────
+# CORS
+# ──────────────────────────────────────────
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  extra-allowed-origins: ${CORS_EXTRA_ALLOWED_ORIGINS:}
+
+# ──────────────────────────────────────────
+# Slack Bot Integration
+# frontend-success-url/frontend-error-url have no dev-domain fallback here —
+# staging must point at its own frontend, not the Testing environment's.
+# ──────────────────────────────────────────
+slack:
+  enabled: ${SLACK_ENABLED:false}
+  signing-secret: ${SLACK_SIGNING_SECRET:}
+  bot-token: ${SLACK_BOT_TOKEN:}
+  client-id: ${SLACK_CLIENT_ID:}
+  client-secret: ${SLACK_CLIENT_SECRET:}
+  redirect-uri: ${SLACK_REDIRECT_URI:}
+  frontend-connect-url: ${SLACK_FRONTEND_CONNECT_URL:}
+  frontend-success-url: ${SLACK_FRONTEND_SUCCESS_URL:}
+  frontend-error-url: ${SLACK_FRONTEND_ERROR_URL:}
+  app-id: ${SLACK_APP_ID:}
+  notifications-enabled: ${SLACK_NOTIFICATIONS_ENABLED:false}
+  agent-features-enabled: ${SLACK_AGENT_FEATURES_ENABLED:false}
+  rate-limit:
+    requests-per-minute: ${SLACK_RATE_LIMIT_RPM:60}
+    burst-size: ${SLACK_RATE_LIMIT_BURST:10}
+
+# ──────────────────────────────────────────
+# Flyway (Database Migration)
+# Keeps the Department/Category/Topic taxonomy, seeded "System" user, and
+# seeded "Super Admin" role catalog entry empty/absent here — seeded
+# placeholder values were driving incorrect incident routing (and cluttering
+# admin-facing config) on staging. Apply the same override to a "production"
+# profile before go-live.
+#
+# Email (SMTP) — same Mailtrap sandbox as dev for now; swap MAIL_HOST when a
+# real ESP is provisioned for staging.
+# ──────────────────────────────────────────
+spring:
+  flyway:
+    placeholders:
+      seedDemoTaxonomy: "false"
+      seedDemoData: "false"
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: true
+
+mail:
+  enabled: ${MAIL_ENABLED}
+  from-address: ${MAIL_FROM_ADDRESS}
+  from-name: ${MAIL_FROM_NAME}
+  # Mailtrap's free Testing plan enforces a strict emails/second cap — keep this conservative.
+  rate-limit:
+    emails-per-second: ${MAIL_RATE_LIMIT_PER_SECOND:2}

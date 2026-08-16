@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -206,7 +207,7 @@ class InternalNoteControllerTest {
 
     @Test
     void deleteNote_serviceThrows403_returns403() throws Exception {
-        org.mockito.Mockito.doThrow(new ArmsAuthException("You can only delete your own notes", 403))
+        doThrow(new ArmsAuthException("You can only delete your own notes", 403))
                 .when(noteService).deleteNote(anyString(), anyString(), eq("inc-1"), eq("n1"));
 
         mvc.perform(delete("/incidents/inc-1/notes/n1")

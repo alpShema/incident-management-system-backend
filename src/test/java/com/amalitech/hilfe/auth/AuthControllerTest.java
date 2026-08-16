@@ -42,12 +42,9 @@ class AuthControllerTest {
     @MockitoBean TokenService tokenService;
 
     @Test
-    void login_validRequest_returns200WithSessionAndThreeCookies() throws Exception {
+    void login_validRequest_returns200WithSessionAndOneCookie() throws Exception {
         AuthResult authResult = new AuthResult(
-                AuthTokens.builder()
-                .accessToken("access-jwt").refreshToken("refresh-jwt")
-                .accessTokenExpiresIn(3600L).refreshTokenExpiresIn(86400L)
-                .build(),
+                7200L,
                 AuthSessionResponse.builder()
                         .userId("u1")
                         .email("john@test.com")
@@ -69,11 +66,9 @@ class AuthControllerTest {
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies)
-                .hasSize(3)
-                .anyMatch(c -> c.startsWith("access_token="))
-                .anyMatch(c -> c.startsWith("refresh_token="))
-                .anyMatch(c -> c.startsWith("arms_token="))
-                .allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=None"));
+                .hasSize(1)
+                .anyMatch(c -> c.startsWith("access_token=arms-token"))
+                .allSatisfy(c -> assertThat(c).contains("HttpOnly").contains("SameSite=None").contains("Max-Age=7200"));
     }
 
     @Test
@@ -97,41 +92,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void refresh_validRequest_returns200WithUpdatedCookies() throws Exception {
-        AuthResult authResult = new AuthResult(
-                AuthTokens.builder()
-                        .accessToken("new-access")
-                        .refreshToken("new-refresh")
-                        .accessTokenExpiresIn(3600L)
-                        .refreshTokenExpiresIn(1800L)
-                        .build(),
-                AuthSessionResponse.builder()
-                        .userId("u1")
-                        .email("john@test.com")
-                        .fullName("John Doe")
-                        .build()
-        );
-        when(authService.refresh(any(), any())).thenReturn(authResult);
-
-        var result = mvc.perform(post("/auth/refresh-token")
-                        .cookie(new MockCookie("refresh_token", "rt"))
-                        .cookie(new MockCookie("arms_token", "arms-cookie-token")))
-                        .andExpectAll(
-                                status().isOk(),
-                                jsonPath("$.message").value("Token refreshed successfully"),
-                                jsonPath("$.data.userId").value("u1"))
-                        .andReturn();
-
-        var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies)
-                .hasSize(3)
-                .anyMatch(c -> c.startsWith("access_token="))
-                .anyMatch(c -> c.startsWith("refresh_token="))
-                .anyMatch(c -> c.startsWith("arms_token=arms-cookie-token"));
-    }
-
-    @Test
-    void logout_validRequest_returns204AndClearsCookies() throws Exception {
+    void logout_validRequest_returns204AndClearsCookie() throws Exception {
         var result = mvc.perform(post("/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNoContent())
@@ -139,17 +100,17 @@ class AuthControllerTest {
 
         var cookies = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies)
-                .hasSize(3)
-                .allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
+                .hasSize(1)
+                .allSatisfy(c -> assertThat(c).contains("access_token=").contains("Max-Age=0"));
     }
 
     @Test
-    void logout_withRefreshCookie_passesTokenToService() throws Exception {
+    void logout_withSessionCookie_passesTokenToService() throws Exception {
         mvc.perform(post("/auth/logout")
-                        .cookie(new MockCookie("refresh_token", "rt-value")))
+                        .cookie(new MockCookie("access_token", "arms-token-value")))
                 .andExpect(status().isNoContent());
 
-        verify(authService).logout("rt-value");
+        verify(authService).logout("arms-token-value");
     }
 
     @Test

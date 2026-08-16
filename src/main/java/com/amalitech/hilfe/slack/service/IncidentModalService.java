@@ -7,6 +7,7 @@ import com.amalitech.hilfe.dto.IncidentFilterParams;
 import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
+import com.amalitech.hilfe.repositories.specifications.IncidentCategorySpecifications;
 import com.amalitech.hilfe.services.IncidentService;
 import com.amalitech.hilfe.slack.client.SlackClient;
 import com.amalitech.hilfe.slack.exception.SlackNotConnectedException;
@@ -19,10 +20,12 @@ import com.slack.api.model.view.ViewSubmit;
 import com.slack.api.model.view.ViewClose;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,7 +58,8 @@ public class IncidentModalService {
     private static final String MODAL             = "modal";
     private static final String PLAIN_TEXT        = "plain_text";
 
-    private static final String HILFE_WEB_URL = "https://hilfe-pro-frontend.amalitech-dev.net";
+    @Value("${app.frontend-url}")
+    private String hilfeWebUrl;
 
     private record ModalState(
             String title,
@@ -90,7 +94,7 @@ public class IncidentModalService {
         SlackUserMapping mapping = oauthService.findBySlackUserId(slackUserId)
                 .orElseThrow(SlackNotConnectedException::new);
 
-        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(true);
+        List<IncidentCategory> categories = fetchSelectableCategories();
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
@@ -173,7 +177,7 @@ public class IncidentModalService {
         String currentSeverityName = stateValues.path(SEVERITY_BLOCK).path(ACTION_SEVERITY)
                 .path(SELECTED_OPTION).path("text").path("text").asText(null);
 
-        List<IncidentCategory> categories = incidentCategoryRepository.findByStatus(true);
+        List<IncidentCategory> categories = fetchSelectableCategories();
         List<Location> locations = locationRepository.findAll().stream()
                 .filter(l -> Boolean.TRUE.equals(l.getStatus()))
                 .toList();
@@ -225,7 +229,7 @@ public class IncidentModalService {
                     "*ID:* " + incident.incidentNo() + "\n" +
                     "*Title:* " + incident.title() + "\n" +
                     "*Status:* " + incident.status().name() + "\n\n" +
-                    "<" + HILFE_WEB_URL + "/incidents/" + incident.id() + "|View in HILFE>");
+                    "<" + hilfeWebUrl + "/incidents/" + incident.id() + "|View in HILFE>");
 
             auditLogService.log("INCIDENT_CREATED_VIA_SLACK", slackUserId, mapping.getHilfeUserId(),
                     "INCIDENT", incident.id(), Map.of("incidentNo", incident.incidentNo()));
@@ -235,6 +239,15 @@ public class IncidentModalService {
             log.error("Failed to create incident via Slack", e);
             return buildValidationErrorResponse(Map.of(TITLE_BLOCK, "Failed to create incident: " + e.getMessage()));
         }
+    }
+
+    // ── Category lookup ──────────────────────────────────────────────────────
+
+    private List<IncidentCategory> fetchSelectableCategories() {
+        Specification<IncidentCategory> spec = Specification
+                .where(IncidentCategorySpecifications.isActiveCategory())
+                .and(IncidentCategorySpecifications.hasActiveTopics());
+        return incidentCategoryRepository.findAll(spec);
     }
 
     // ── Modal builders ───────────────────────────────────────────────────────
@@ -278,6 +291,10 @@ public class IncidentModalService {
 
     private LayoutBlock buildCategoryBlock(List<IncidentCategory> categories,
                                             String selectedCategoryId, String selectedCategoryName) {
+        if (categories.isEmpty()) {
+            return context(c -> c.elements(List.of(markdownText(
+                    "_No incident categories are currently available. Please contact an administrator._"))));
+        }
         return input(i -> i
                 .blockId(CATEGORY_BLOCK)
                 .dispatchAction(true)
@@ -380,11 +397,11 @@ public class IncidentModalService {
                     "_You haven't created any incidents yet._\n\nUse `/hilfe new` to create one."))));
         } else {
             for (IncidentResponse incident : incidents) {
-                blocks.add(buildIncidentBlock(incident));
+                blocks.addAll(buildIncidentBlock(incident));
             }
         }
 
-        addPaginationBlocks(blocks, page, totalPages, "my_incidents_prev", "my_incidents_next");
+        addPaginationBlocks(blocks, page, totalPages, totalElements, "my_incidents_prev", "my_incidents_next");
 
         return View.builder()
                 .type(MODAL)
@@ -405,11 +422,11 @@ public class IncidentModalService {
             blocks.add(section(s -> s.text(markdownText("_You don't have any assigned incidents._"))));
         } else {
             for (IncidentResponse incident : incidents) {
-                blocks.add(buildIncidentBlock(incident));
+                blocks.addAll(buildIncidentBlock(incident));
             }
         }
 
-        addPaginationBlocks(blocks, page, totalPages, "assigned_incidents_prev", "assigned_incidents_next");
+        addPaginationBlocks(blocks, page, totalPages, totalElements, "assigned_incidents_prev", "assigned_incidents_next");
 
         return View.builder()
                 .type(MODAL)
@@ -421,38 +438,50 @@ public class IncidentModalService {
     }
 
     private void addPaginationBlocks(List<LayoutBlock> blocks, int page, int totalPages,
-                                     String prevActionId, String nextActionId) {
-        if (totalPages <= 1) return;
+                                     long totalElements, String prevActionId, String nextActionId) {
+        if (totalElements == 0) return;
 
-        List<com.slack.api.model.block.element.BlockElement> navButtons = new ArrayList<>();
-        if (page > 0) {
-            int prevPage = page - 1;
-            navButtons.add(button(b -> b.text(plainText("← Previous"))
-                    .actionId(prevActionId)
-                    .value(String.valueOf(prevPage))));
+        if (totalPages > 1) {
+            List<com.slack.api.model.block.element.BlockElement> navButtons = new ArrayList<>();
+            if (page > 0) {
+                int prevPage = page - 1;
+                navButtons.add(button(b -> b.text(plainText("Previous"))
+                        .actionId(prevActionId)
+                        .value(String.valueOf(prevPage))));
+            }
+            if (page < totalPages - 1) {
+                int nextPage = page + 1;
+                navButtons.add(button(b -> b.text(plainText("Next"))
+                        .actionId(nextActionId)
+                        .value(String.valueOf(nextPage))));
+            }
+            if (!navButtons.isEmpty()) {
+                blocks.add(actions(a -> a.elements(navButtons)));
+            }
+            long from = (long) page * 10 + 1;
+            long to   = Math.min((long)(page + 1) * 10, totalElements);
+            String pageInfo = "Showing *" + from + "* to *" + to + "* of *" + totalElements + "* Incidents";
+            blocks.add(context(c -> c.elements(List.of(markdownText(pageInfo)))));
         }
-        if (page < totalPages - 1) {
-            int nextPage = page + 1;
-            navButtons.add(button(b -> b.text(plainText("Next →"))
-                    .actionId(nextActionId)
-                    .value(String.valueOf(nextPage))));
-        }
-        if (!navButtons.isEmpty()) {
-            blocks.add(actions(a -> a.elements(navButtons)));
-        }
-        blocks.add(section(s -> s.text(markdownText("_Page " + (page + 1) + " of " + totalPages + "_"))));
     }
 
-    private LayoutBlock buildIncidentBlock(IncidentResponse incident) {
-        String statusName  = incident.status() != null ? incident.status().name() : "Unknown";
-        String statusEmoji = getStatusEmoji(statusName);
-        String priority    = incident.priority() != null ? incident.priority().name() : "N/A";
+    private List<LayoutBlock> buildIncidentBlock(IncidentResponse incident) {
+        String statusName   = incident.status()   != null ? incident.status().name()   : "Unknown";
+        String priorityName = incident.priority() != null ? incident.priority().name() : "N/A";
+        String url          = hilfeWebUrl + "/incidents/" + incident.id();
 
-        return section(s -> s.text(markdownText(
-                "*#" + incident.incidentNo() + "* — " + incident.title() + "\n" +
-                statusEmoji + " " + statusName + "  ·  Priority: " + priority + "\n" +
-                "<" + HILFE_WEB_URL + "/incidents/" + incident.id() + "|View in HILFE>"
-        )));
+        StringBuilder text = new StringBuilder();
+        text.append("*<").append(url).append("|#").append(incident.incidentNo()).append("  ")
+                .append(incident.title()).append(">*\n");
+        text.append("Status: *").append(statusName).append("*");
+        text.append("   Priority: *").append(priorityName).append("*");
+        if (incident.assignedTo() != null && incident.assignedTo().fullName() != null) {
+            text.append("   Assigned to: *").append(incident.assignedTo().fullName()).append("*");
+        }
+
+        LayoutBlock incidentSection = section(s -> s.text(markdownText(text.toString())));
+
+        return List.of(incidentSection, divider());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -504,18 +533,8 @@ public class IncidentModalService {
         return stateValues.path(blockId).path(actionId).path(SELECTED_OPTION).path(VALUE_FIELD).asText(null);
     }
 
-    private String getStatusEmoji(String statusName) {
-        return switch (statusName.toLowerCase()) {
-            case "open"        -> ":red_circle:";
-            case "in progress" -> ":large_yellow_circle:";
-            case "resolved"    -> ":large_green_circle:";
-            case "closed"      -> ":black_circle:";
-            default            -> ":white_circle:";
-        };
-    }
-
     private boolean isAgent(User user) {
         String roleCode = user.getRoleCode();
-        return "AGENT".equalsIgnoreCase(roleCode) || "ADMIN".equalsIgnoreCase(roleCode);
+        return "AGENT".equalsIgnoreCase(roleCode) || "ADMIN".equalsIgnoreCase(roleCode) || "ADMIN_AGENT".equalsIgnoreCase(roleCode);
     }
 }

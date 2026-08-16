@@ -1,5 +1,6 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.AddAgentGroupMemberRequest;
 import com.amalitech.hilfe.dto.AgentGroupMemberResponse;
 import com.amalitech.hilfe.dto.AgentGroupRequest;
@@ -8,6 +9,7 @@ import com.amalitech.hilfe.dto.LookupResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.services.AgentGroupService;
 import com.amalitech.hilfe.services.JwtTokenService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -67,13 +69,15 @@ public class AgentGroupResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('agent-group.create')")
-    public AgentGroupResponse createAgentGroup(@Argument AgentGroupRequest input) {
+    public AgentGroupResponse createAgentGroup(@Valid @Argument AgentGroupRequest input) {
+        GraphQlResponseMessage.set("Agent group created successfully");
         return agentGroupService.createAgentGroup(input);
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('agent-group.update')")
-    public AgentGroupResponse updateAgentGroup(@Argument String id, @Argument AgentGroupRequest input) {
+    public AgentGroupResponse updateAgentGroup(@Argument String id, @Valid @Argument AgentGroupRequest input) {
+        GraphQlResponseMessage.set("Agent group updated successfully");
         return agentGroupService.updateAgentGroup(id, input);
     }
 
@@ -81,14 +85,16 @@ public class AgentGroupResolver {
     @PreAuthorize("hasAuthority('agent-group.delete')")
     public AgentGroupResponse updateAgentGroupStatus(
             @Argument String id,
-            @Argument UpdateAgentGroupStatusInput input,
+            @Valid @Argument UpdateAgentGroupStatusInput input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal) {
+        GraphQlResponseMessage.set("Agent group status updated successfully");
         return agentGroupService.updateAgentGroupStatus(principal.userId(), id, input.status());
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('agent-group.update')")
-    public AgentGroupMemberResponse addAgentGroupMember(@Argument String id, @Argument AddAgentGroupMemberRequest input) {
+    public AgentGroupMemberResponse addAgentGroupMember(@Argument String id, @Valid @Argument AddAgentGroupMemberRequest input) {
+        GraphQlResponseMessage.set("Agent group member added successfully");
         return agentGroupService.addMember(id, input.agentId());
     }
 

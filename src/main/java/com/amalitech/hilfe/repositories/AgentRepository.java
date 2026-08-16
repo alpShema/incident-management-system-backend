@@ -22,7 +22,11 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
             LEFT JOIN FETCH u.location l
-            WHERE (:queryPattern IS NULL OR (
+            WHERE u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+            AND u.status = true
+            AND (:available IS NULL OR a.status = :available)
+            AND (:locationId IS NULL OR u.locationId = :locationId)
+            AND (:queryPattern IS NULL OR (
                 LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
@@ -32,19 +36,31 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             SELECT COUNT(a) FROM Agent a
             LEFT JOIN a.user u
             LEFT JOIN u.location l
-            WHERE (:queryPattern IS NULL OR (
+            WHERE u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+            AND u.status = true
+            AND (:available IS NULL OR a.status = :available)
+            AND (:locationId IS NULL OR u.locationId = :locationId)
+            AND (:queryPattern IS NULL OR (
                 LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
             ))
             """)
-    Page<Agent> findAllWithUserAndQuery(@Param("queryPattern") String queryPattern, Pageable pageable);
+    Page<Agent> findAllWithUserAndQuery(
+            @Param("queryPattern") String queryPattern,
+            @Param("available") Boolean available,
+            @Param("locationId") String locationId,
+            Pageable pageable
+    );
 
     @Query(value = """
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
             LEFT JOIN FETCH u.location l
             WHERE a.status = true
+            AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+            AND (:available IS NULL OR a.status = :available)
+            AND (:locationId IS NULL OR u.locationId = :locationId)
             AND (:queryPattern IS NULL OR (
                 LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
                 OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
@@ -54,18 +70,26 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             countQuery = """
             SELECT COUNT(a) FROM Agent a
             WHERE a.status = true
-            AND (:queryPattern IS NULL OR EXISTS (
+            AND (:available IS NULL OR a.status = :available)
+            AND EXISTS (
                 SELECT 1 FROM User u
                 LEFT JOIN u.location l
                 WHERE u.id = a.userId
-                AND (
+                AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+                AND (:locationId IS NULL OR u.locationId = :locationId)
+                AND (:queryPattern IS NULL OR (
                     LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
                     OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
                     OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
-                )
-            ))
+                ))
+            )
             """)
-    Page<Agent> findAllActiveWithUserAndQuery(@Param("queryPattern") String queryPattern, Pageable pageable);
+    Page<Agent> findAllActiveWithUserAndQuery(
+            @Param("queryPattern") String queryPattern,
+            @Param("available") Boolean available,
+            @Param("locationId") String locationId,
+            Pageable pageable
+    );
 
     @Query(
             value = """
@@ -80,6 +104,10 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.status = true
                     )
                     AND a.status = true
+                    AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+                    AND u.status = true
+                    AND (:available IS NULL OR a.status = :available)
+                    AND (:locationId IS NULL OR u.locationId = :locationId)
                     AND (:queryPattern IS NULL OR (
                         LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
                         OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
@@ -96,21 +124,27 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
                           AND g.status = true
                     )
                     AND a.status = true
-                    AND (:queryPattern IS NULL OR EXISTS (
+                    AND (:available IS NULL OR a.status = :available)
+                    AND EXISTS (
                         SELECT 1 FROM User u
                         LEFT JOIN u.location l
                         WHERE u.id = a.userId
-                        AND (
+                        AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
+                        AND u.status = true
+                        AND (:locationId IS NULL OR u.locationId = :locationId)
+                        AND (:queryPattern IS NULL OR (
                             LOWER(u.fullName) LIKE :queryPattern ESCAPE '!'
                             OR LOWER(u.email) LIKE :queryPattern ESCAPE '!'
                             OR LOWER(l.name) LIKE :queryPattern ESCAPE '!'
-                        )
-                    ))
+                        ))
+                    )
                     """
     )
     Page<Agent> findByDepartmentIdWithUserAndQuery(
             @Param("departmentId") String departmentId,
             @Param("queryPattern") String queryPattern,
+            @Param("available") Boolean available,
+            @Param("locationId") String locationId,
             Pageable pageable
     );
 
@@ -181,6 +215,8 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
             WHERE a.status = true
+            AND u.status = true
+            AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
             AND EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 JOIN m.agentGroup g
@@ -200,6 +236,8 @@ public interface AgentRepository extends JpaRepository<Agent, String> {
             SELECT a FROM Agent a
             LEFT JOIN FETCH a.user u
             WHERE a.status = true
+            AND u.status = true
+            AND u.roleCode IN ('AGENT', 'ADMIN_AGENT')
             AND EXISTS (
                 SELECT 1 FROM AgentGroupMember m
                 JOIN m.agentGroup g

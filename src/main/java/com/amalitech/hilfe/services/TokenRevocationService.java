@@ -9,7 +9,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 
 @Slf4j
 @Service
@@ -19,34 +23,37 @@ public class TokenRevocationService {
     private final SessionRepository sessionRepository;
 
     /**
-     * Stores the JTI in the Session table to mark the refresh token as revoked.
-     * Safe to call concurrently — a duplicate JTI (PK conflict) is silently ignored.
+     * Stores a hash of the raw ARMS token in the Session table to mark it as revoked (logout).
+     * ARMS tokens have no jti claim, so the token itself is hashed to form the row id.
+     * Safe to call concurrently — a duplicate hash (PK conflict) is silently ignored.
      */
     @Transactional
-    public void revoke(String jti, String userId, Instant expiresAt) {
+    public void revoke(String rawArmsToken, String userId, Instant expiresAt) {
+        String hash = hash(rawArmsToken);
         try {
             Session session = Session.builder()
-                    .id(jti)
-                    .sid(jti)
+                    .id(hash)
+                    .sid(hash)
                     .data(userId)
                     .expiresAt(expiresAt)
                     .build();
             sessionRepository.save(session);
-            log.debug("Revoked refresh token jti={} for userId={}", jti, userId);
+            log.debug("Revoked ARMS token for userId={}", userId);
         } catch (DataIntegrityViolationException e) {
-            log.debug("Refresh token jti={} already revoked, ignoring duplicate", jti);
+            log.debug("ARMS token already revoked for userId={}, ignoring duplicate", userId);
         }
     }
 
     /**
-     * Returns true if the JTI is null (legacy token with no JTI) or found in the revocation store.
+     * Returns true if the token is null/blank (nothing to trust) or its hash is found in the
+     * revocation store.
      */
     @Transactional(readOnly = true)
-    public boolean isRevoked(String jti) {
-        if (jti == null) {
+    public boolean isRevoked(String rawArmsToken) {
+        if (rawArmsToken == null || rawArmsToken.isBlank()) {
             return true;
         }
-        return sessionRepository.existsById(jti);
+        return sessionRepository.existsById(hash(rawArmsToken));
     }
 
     /**
@@ -58,5 +65,15 @@ public class TokenRevocationService {
     public void purgeExpiredTokens() {
         int deleted = sessionRepository.deleteByExpiresAtBefore(Instant.now());
         log.info("Purged {} expired revoked token records", deleted);
+    }
+
+    private static String hash(String rawArmsToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(rawArmsToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashBytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 }

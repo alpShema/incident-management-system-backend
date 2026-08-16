@@ -82,6 +82,16 @@ public class IncidentSla {
     @Column(name = "resolution_remaining_ms_on_resolve")
     private Long resolutionRemainingMsOnResolve;
 
+    // Materialized snapshot of SlaService.computeResponseStatus/computeResolutionStatus — one of
+    // NOT_TRACKED, MET, BREACHED, AT_RISK, ON_TRACK. Kept in sync at every point those are recomputed
+    // (creation, first response, resolution/reopen, pause/resume, and the per-minute scheduler scan)
+    // so incident list queries can filter by SLA status without recomputing due-date arithmetic in SQL.
+    @Column(name = "response_status")
+    private String responseStatus;
+
+    @Column(name = "resolution_status")
+    private String resolutionStatus;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

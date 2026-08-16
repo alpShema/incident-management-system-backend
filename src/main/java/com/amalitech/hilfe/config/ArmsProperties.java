@@ -7,6 +7,7 @@ public record ArmsProperties(
         String ssoUrl,
         String authUrl,
         String employeeInfoUrl,
-        String apiKey
+        String apiKey,
+        String ssoPublicKey
 ) {
 }

@@ -9,9 +9,11 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.Incident;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.StatusRepository;
 import com.amalitech.hilfe.services.DashboardService;
 import com.amalitech.hilfe.services.SlaService;
 import org.junit.jupiter.api.Test;
@@ -39,11 +41,29 @@ class DashboardServiceTest {
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
     @Mock AgentGroupMemberRepository agentGroupMemberRepository;
+    @Mock StatusRepository statusRepository;
     @Mock SlaService slaService;
     @InjectMocks DashboardService dashboardService;
 
     private Agent buildAgent(String agentId) {
         return Agent.builder().id(agentId).userId("user-1").build();
+    }
+
+    private List<Status> allStatuses() {
+        return List.of(
+                Status.builder().id("status-open").name("Open").build(),
+                Status.builder().id("status-pending").name("Pending").build(),
+                Status.builder().id("status-in-progress").name("In Progress").build(),
+                Status.builder().id("status-resolved").name("Resolved").build(),
+                Status.builder().id("status-closed").name("Closed").build(),
+                // Reopened is a real seeded Status row (transition trigger, never a resting state —
+                // see IncidentService.applyReopenTransition) and must never surface in dashboard charts.
+                Status.builder().id("status-reopened").name("Reopened").build()
+        );
+    }
+
+    private void givenAllStatuses() {
+        when(statusRepository.findAll()).thenReturn(allStatuses());
     }
 
     // ── getStats ──────────────────────────────────────────────────────────────
@@ -127,6 +147,7 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_adminRole_noPeriod_returnsAllIncidentsTrendSeries() {
+        givenAllStatuses();
         List<Object[]> statusData = new java.util.ArrayList<>();
         statusData.add(new Object[]{"Open", 10L});
         when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
@@ -140,6 +161,7 @@ class DashboardServiceTest {
 
     @Test
     void getCharts_agentRole_agentFound_returnsTwoTrendSeries() {
+        givenAllStatuses();
         Agent agent = buildAgent("agent-1");
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
         when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
@@ -154,13 +176,17 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getCharts_agentRole_agentNotFound_returnsEmptyByStatusAndSeries() {
+    void getCharts_agentRole_agentNotFound_returnsAllStatusesWithZeroCount() {
+        givenAllStatuses();
         when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
         when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
 
         DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
 
-        assertThat(charts.byStatus()).isEmpty();
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
+                .noneMatch(label -> label.equalsIgnoreCase("Reopened"));
+        assertThat(charts.byStatus()).allMatch(lc -> lc.count() == 0);
         assertThat(charts.trends()).hasSize(2);
         assertThat(charts.trends().get(0).label()).isEqualTo("My Incidents");
         assertThat(charts.trends().get(0).data()).isNotEmpty();
@@ -168,6 +194,124 @@ class DashboardServiceTest {
         assertThat(charts.trends().get(1).label()).isEqualTo("My Assigned Incidents");
         assertThat(charts.trends().get(1).data()).isNotEmpty();
         charts.trends().get(1).data().forEach(mc -> assertThat(mc.count()).isZero());
+    }
+
+    @Test
+    void getCharts_adminRole_noPeriod_trendCoversExactlySixCalendarMonths() {
+        givenAllStatuses();
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 10L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
+        org.mockito.ArgumentCaptor<Instant> sinceCaptor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        when(incidentRepository.countByMonthSince(sinceCaptor.capture())).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, null);
+
+        java.time.YearMonth currentMonth = java.time.YearMonth.now(java.time.ZoneOffset.UTC);
+        java.time.YearMonth expectedStartMonth = currentMonth.minusMonths(5);
+        java.time.format.DateTimeFormatter fmt =
+                java.time.format.DateTimeFormatter.ofPattern("MMM yyyy", java.util.Locale.ENGLISH);
+
+        java.time.YearMonth capturedStartMonth =
+                java.time.YearMonth.from(sinceCaptor.getValue().atZone(java.time.ZoneOffset.UTC));
+        assertThat(capturedStartMonth).isEqualTo(expectedStartMonth);
+
+        List<com.amalitech.hilfe.dto.dashboard.MonthlyCount> data = charts.trends().get(0).data();
+        assertThat(data).hasSize(6);
+        assertThat(data.get(0).month()).isEqualTo(expectedStartMonth.format(fmt));
+        assertThat(data.get(5).month()).isEqualTo(currentMonth.format(fmt));
+    }
+
+    @Test
+    void getCharts_agentRole_noPeriod_bothTrendsCoverExactlySixCalendarMonths() {
+        givenAllStatuses();
+        Agent agent = buildAgent("agent-1");
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
+        org.mockito.ArgumentCaptor<Instant> userSinceCaptor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        org.mockito.ArgumentCaptor<Instant> agentSinceCaptor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        when(incidentRepository.countByMonthForUser(eq("user-1"), userSinceCaptor.capture())).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgent(eq("agent-1"), agentSinceCaptor.capture())).thenReturn(List.of());
+
+        DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
+
+        java.time.YearMonth currentMonth = java.time.YearMonth.now(java.time.ZoneOffset.UTC);
+        java.time.YearMonth expectedStartMonth = currentMonth.minusMonths(5);
+
+        assertThat(java.time.YearMonth.from(userSinceCaptor.getValue().atZone(java.time.ZoneOffset.UTC)))
+                .isEqualTo(expectedStartMonth);
+        assertThat(java.time.YearMonth.from(agentSinceCaptor.getValue().atZone(java.time.ZoneOffset.UTC)))
+                .isEqualTo(expectedStartMonth);
+
+        assertThat(charts.trends().get(0).data()).hasSize(6);
+        assertThat(charts.trends().get(1).data()).hasSize(6);
+    }
+
+    @Test
+    void getCharts_adminRole_noPeriod_includesZeroCountStatuses() {
+        givenAllStatuses();
+        when(incidentRepository.countByStatusGlobal()).thenReturn(List.of(
+                new Object[]{"Open", 10L},
+                new Object[]{"Closed", 5L}
+        ));
+        when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, null);
+
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(charts.byStatus()).extracting(com.amalitech.hilfe.dto.dashboard.LabelCount::label)
+                .noneMatch(label -> label.equalsIgnoreCase("Reopened"));
+        assertThat(countFor(charts.byStatus(), "Open")).isEqualTo(10);
+        assertThat(countFor(charts.byStatus(), "Closed")).isEqualTo(5);
+        assertThat(countFor(charts.byStatus(), "Pending")).isZero();
+        assertThat(countFor(charts.byStatus(), "In Progress")).isZero();
+        assertThat(countFor(charts.byStatus(), "Resolved")).isZero();
+    }
+
+    @Test
+    void getCharts_adminRole_withPeriod_includesZeroCountStatuses() {
+        givenAllStatuses();
+        when(incidentRepository.countByStatusSince(any(Instant.class))).thenReturn(List.<Object[]>of(
+                new Object[]{"In Progress", 3L}
+        ));
+        when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("admin-1", RoleCode.ADMIN, "7d");
+
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(countFor(charts.byStatus(), "In Progress")).isEqualTo(3);
+        assertThat(countFor(charts.byStatus(), "Open")).isZero();
+        assertThat(countFor(charts.byStatus(), "Pending")).isZero();
+        assertThat(countFor(charts.byStatus(), "Resolved")).isZero();
+        assertThat(countFor(charts.byStatus(), "Closed")).isZero();
+    }
+
+    @Test
+    void getCharts_agentRole_includesZeroCountStatuses() {
+        givenAllStatuses();
+        Agent agent = buildAgent("agent-1");
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agent));
+        when(incidentRepository.countByStatusForAgentSince(eq("agent-1"), any(Instant.class))).thenReturn(List.<Object[]>of(
+                new Object[]{"Resolved", 1L}
+        ));
+        when(incidentRepository.countByMonthForUser(eq("user-1"), any(Instant.class))).thenReturn(List.of());
+        when(incidentRepository.countByMonthForAgent(eq("agent-1"), any(Instant.class))).thenReturn(List.of());
+
+        DashboardCharts charts = dashboardService.getCharts("user-1", RoleCode.AGENT, null);
+
+        assertThat(charts.byStatus()).hasSize(5);
+        assertThat(countFor(charts.byStatus(), "Resolved")).isEqualTo(1);
+        assertThat(countFor(charts.byStatus(), "Open")).isZero();
+        assertThat(countFor(charts.byStatus(), "Pending")).isZero();
+        assertThat(countFor(charts.byStatus(), "In Progress")).isZero();
+        assertThat(countFor(charts.byStatus(), "Closed")).isZero();
+    }
+
+    private int countFor(List<com.amalitech.hilfe.dto.dashboard.LabelCount> list, String statusName) {
+        return list.stream()
+                .filter(lc -> lc.label().equalsIgnoreCase(statusName))
+                .mapToInt(com.amalitech.hilfe.dto.dashboard.LabelCount::count)
+                .sum();
     }
 
     @Test
@@ -220,6 +364,47 @@ class DashboardServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getTotalElements()).isZero();
+    }
+
+    @Test
+    void getStats_adminAgentRole_callsCountByStatusGlobal() {
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 4L});
+        statusData.add(new Object[]{"Closed", 2L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
+
+        DashboardStats stats = dashboardService.getStats("aa-1", RoleCode.ADMIN_AGENT);
+
+        assertThat(stats.totalIncidents()).isEqualTo(6L);
+        verify(incidentRepository).countByStatusGlobal();
+    }
+
+    @Test
+    void getCharts_adminAgentRole_returnsAllIncidentsTrendSeries() {
+        givenAllStatuses();
+        List<Object[]> statusData = new java.util.ArrayList<>();
+        statusData.add(new Object[]{"Open", 2L});
+        when(incidentRepository.countByStatusGlobal()).thenReturn(statusData);
+        when(incidentRepository.countByMonthSince(any(Instant.class))).thenReturn(List.<Object[]>of());
+
+        DashboardCharts charts = dashboardService.getCharts("aa-1", RoleCode.ADMIN_AGENT, null);
+
+        assertThat(charts.trends()).hasSize(1);
+        assertThat(charts.trends().get(0).label()).isEqualTo("All Incidents");
+    }
+
+    @Test
+    void getIncidents_adminAgentRole_callsFindAllUnified() {
+        Page<Incident> page = new PageImpl<>(List.of());
+        when(incidentRepository.findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class)))
+                .thenReturn(page);
+        when(slaService.toIncidentResponsePage(page)).thenReturn(new PageImpl<>(List.of()));
+
+        Page<IncidentResponse> result = dashboardService.getIncidents(
+                "aa-1", RoleCode.ADMIN_AGENT, null, new IncidentFilterParams(null, null, null, null, null), Pageable.unpaged());
+
+        assertThat(result).isNotNull();
+        verify(incidentRepository).findAllUnified(isNull(), any(IncidentFilterParams.class), any(IncidentDateFilter.class), any(Pageable.class));
     }
 
     // ── getMyIncidents ────────────────────────────────────────────────────────

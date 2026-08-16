@@ -8,6 +8,7 @@ import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.AgentService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,12 +23,15 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/agents")
 @RequiredArgsConstructor
 public class AgentController {
+    private static final String STATUS_UPDATED_MESSAGE = "Agent status updated successfully";
+
     private final AgentService agentService;
 
     @Operation(
             summary = "List all agents",
             description = "Returns a paginated list of agents for operational use. "
                     + "Accepts an optional `query` keyword that searches across full name, email, and office location. "
+                    + "Accepts optional `status` and `locationId` filters that can be combined with each other and with `query`/`departmentId`. "
                     + "When `departmentId` is omitted, returns active agents only. "
                     + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
                     + "Both `query` and `departmentId` can be supplied together to narrow results simultaneously. "
@@ -42,17 +46,20 @@ public class AgentController {
     public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAgents(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String departmentId,
+            @Parameter(description = "Filter by availability status") @RequestParam(value = "status", required = false) Boolean available,
+            @Parameter(description = "Filter by office location ID") @RequestParam(required = false) String locationId,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Agents retrieved successfully",
-                PageResponse.from(agentService.listAgents(departmentId, query, pageable))));
+                PageResponse.from(agentService.listAgents(departmentId, query, available, locationId, pageable))));
     }
 
     @Operation(
             summary = "List all agents regardless of status",
             description = "Returns a paginated list of agents including both active and inactive records. "
                     + "Accepts an optional `query` keyword that searches across full name, email, and office location. "
+                    + "Accepts optional `status` and `locationId` filters that can be combined with each other and with `query`/`departmentId`. "
                     + "When `departmentId` is omitted, all agents are returned regardless of status. "
                     + "When `departmentId` is provided, filters by agent-group membership under that department and includes both active and inactive agents. "
                     + "Both `query` and `departmentId` can be supplied together to narrow results simultaneously. "
@@ -67,11 +74,13 @@ public class AgentController {
     public ResponseEntity<ApiResponse<PageResponse<AgentResponse>>> listAllAgents(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String departmentId,
+            @Parameter(description = "Filter by availability status") @RequestParam(value = "status", required = false) Boolean available,
+            @Parameter(description = "Filter by office location ID") @RequestParam(required = false) String locationId,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Agents retrieved successfully",
-                PageResponse.from(agentService.listAllAgents(departmentId, query, pageable))));
+                PageResponse.from(agentService.listAllAgents(departmentId, query, available, locationId, pageable))));
     }
 
     @Operation(
@@ -88,7 +97,7 @@ public class AgentController {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status retrieved",
+                "Agent status retrieved successfully",
                 agentService.getStatus(principal.userId())
         ));
     }
@@ -109,7 +118,7 @@ public class AgentController {
             @Valid @RequestBody UpdateAvailabilityRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status updated",
+                STATUS_UPDATED_MESSAGE,
                 agentService.updateAvailability(principal.userId(), request.available())
         ));
     }
@@ -130,7 +139,7 @@ public class AgentController {
             @Valid @RequestBody UpdateAvailabilityRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Status updated",
+                STATUS_UPDATED_MESSAGE,
                 agentService.updateAvailabilityById(agentId, request.available())
         ));
     }

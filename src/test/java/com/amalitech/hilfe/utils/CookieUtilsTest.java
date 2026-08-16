@@ -1,6 +1,5 @@
 package com.amalitech.hilfe.utils;
 
-import com.amalitech.hilfe.dto.AuthTokens;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -14,62 +13,36 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CookieUtilsTest {
 
     @Test
-    void addAuthCookies_setsAccessAndRefreshCookieHeaders() {
+    void addSessionCookie_setsSingleAccessTokenCookie() {
         MockHttpServletResponse response = new MockHttpServletResponse();
-        AuthTokens tokens = AuthTokens.builder()
-                .accessToken("at-value").refreshToken("rt-value")
-                .accessTokenExpiresIn(3600L).refreshTokenExpiresIn(86400L)
-                .build();
 
-        CookieUtils.addAuthCookies(response, tokens, false, "Lax");
+        CookieUtils.addSessionCookie(response, "arms-token-val", 3600L, false, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(2);
-        assertThat(cookies.get(0)).contains("access_token=at-value")
+        assertThat(cookies).hasSize(1);
+        assertThat(cookies.get(0)).contains("access_token=arms-token-val")
                 .contains("HttpOnly").contains("SameSite=Lax").contains("Max-Age=3600");
-        assertThat(cookies.get(1)).contains("refresh_token=rt-value")
-                .contains("HttpOnly").contains("SameSite=Lax").contains("Max-Age=86400");
     }
 
     @Test
-    void addAuthCookies_secureFlag_setsCookieWithSecure() {
+    void addSessionCookie_secureFlag_setsCookieWithSecure() {
         MockHttpServletResponse response = new MockHttpServletResponse();
-        AuthTokens tokens = AuthTokens.builder()
-                .accessToken("at").refreshToken("rt")
-                .accessTokenExpiresIn(3600L).refreshTokenExpiresIn(86400L)
-                .build();
 
-        CookieUtils.addAuthCookies(response, tokens, true, "Lax");
+        CookieUtils.addSessionCookie(response, "arms-token-val", 3600L, true, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
         assertThat(cookies).isNotEmpty().allSatisfy(c -> assertThat(c).contains("Secure"));
     }
 
     @Test
-    void addArmsTokenCookie_setsArmsTokenHeader() {
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
-        CookieUtils.addArmsTokenCookie(response, "arms-token-val", false, "Lax", 3600L);
-
-        List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(1);
-        assertThat(cookies.get(0)).contains("arms_token=arms-token-val")
-                .contains("HttpOnly").contains("SameSite=Lax").contains("Max-Age=3600");
-    }
-
-    @Test
-    void clearAuthCookies_setsAllThreeCookiesToExpired() {
+    void clearAuthCookies_setsAccessTokenCookieToExpired() {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         CookieUtils.clearAuthCookies(response, false, "Lax");
 
         List<String> cookies = response.getHeaders(HttpHeaders.SET_COOKIE);
-        assertThat(cookies)
-                .hasSize(3)
-                .allSatisfy(c -> assertThat(c).contains("Max-Age=0"));
-        assertThat(cookies.get(0)).contains("access_token=");
-        assertThat(cookies.get(1)).contains("refresh_token=");
-        assertThat(cookies.get(2)).contains("arms_token=");
+        assertThat(cookies).hasSize(1);
+        assertThat(cookies.get(0)).contains("access_token=").contains("Max-Age=0");
     }
 
     @Test

@@ -3,10 +3,15 @@
 # Runs the Spring Boot backend and PostgreSQL database.
 #
 # Required environment variables (set by Jenkins or in .env):
+#   SPRING_PROFILES_ACTIVE — active Spring profile, e.g. dev or prod
 #   BACKEND_IMAGE   — full ECR image URL for the backend
 #   DB_NAME         — PostgreSQL database name
 #   DB_USER         — PostgreSQL username
 #   DB_PASSWORD     — PostgreSQL password (store in Jenkins credentials, never in plaintext)
+#   APP_BASE_URL    — public backend base URL, e.g. https://hilfe-pro-service.amalitech-dev.net
+#   APP_FRONTEND_URL — public frontend URL used in Slack/email links, e.g. https://hilfe-pro-frontend.amalitech-dev.net
+#   MAIL_ENABLED, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD,
+#   MAIL_FROM_ADDRESS, MAIL_FROM_NAME — SMTP config, no defaults in yaml
 
 services:
 
@@ -47,18 +52,15 @@ services:
     ports:
       - "8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       DB_URL:      jdbc:postgresql://db:5432/${DB_NAME}
       DB_USERNAME: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}  # For signing JWTs; set in Jenkins credentials
       ARMS_SSO_URL: ${ARMS_SSO_URL}  # ARMS SSO base URL, e.g. https://sso.amalitech-dev.net
+      ARMS_SSO_PUBLIC_KEY: ${ARMS_SSO_PUBLIC_KEY}  # RSA public key ARMS signs SSO tokens with (RS256), PEM with newlines escaped as \n
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}  # Comma-separated list of allowed CORS origins, e.g. https://hilfe.amalitech-dev.net
       COOKIE_SECURE: ${COOKIE_SECURE}  # "true" or "false" to set the Secure flag on cookies
       COOKIE_SAME_SITE: ${COOKIE_SAME_SITE}  # "Strict", "Lax", or "None" for the SameSite attribute on cookies
-      JWT_ISSUER: ${JWT_ISSUER}  # Optional: set the issuer claim in JWTs, e.g. "hilfe-pro-service"
-      JWT_AUDIENCE: ${JWT_AUDIENCE}  # Optional: set the audience claim in JWTs, e.g. "hilfe-pro-frontend"
-      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS}  # Access token time-to-live in seconds, e.g. 900 for 15 minutes
-      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS}  # Refresh token time
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
@@ -86,7 +88,15 @@ services:
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
-      APP_BASE_URL: ${APP_BASE_URL:-https://hilfe-pro-service.amalitech-dev.net}
+      APP_BASE_URL: ${APP_BASE_URL}
+      APP_FRONTEND_URL: ${APP_FRONTEND_URL}
+      MAIL_ENABLED: ${MAIL_ENABLED}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
     depends_on:
       db:
         condition: service_healthy

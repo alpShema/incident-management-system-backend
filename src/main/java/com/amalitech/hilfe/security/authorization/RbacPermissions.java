@@ -6,12 +6,18 @@ public final class RbacPermissions {
     public static final String INCIDENT_CREATE = "incident.create";
     public static final String INCIDENT_READ_OWN = "incident.read.own";
     public static final String INCIDENT_READ_ASSIGNED = "incident.read.assigned";
+    public static final String INCIDENT_READ_ALL = "incident.read.all";
+    public static final String INCIDENT_READ_DEPARTMENT = "incident.read.department";
     public static final String INCIDENT_ASSIGN = "incident.assign";
+    public static final String INCIDENT_ASSIGNEE = "incident.assignee";
     public static final String INCIDENT_STATUS_CHANGE = "incident.status.change";
     public static final String INCIDENT_SEVERITY_CHANGE = "incident.severity.change";
+    public static final String INCIDENT_UPDATE_ANY = "incident.update.any";
+    public static final String INCIDENT_FORCECLOSE = "incident.forceclose";
     public static final String AGENT_CREATE = "agent.create";
     public static final String AGENT_READ = "agent.read";
     public static final String AGENT_UPDATE = "agent.update";
+    public static final String ADMIN_AVAILABILITY_UPDATE = "admin.availability.update";
     public static final String AGENT_AVAILABILITY_UPDATE = "agent.availability.update";
     public static final String AGENT_AVAILABILITY_UPDATE_ANY = "agent.availability.update.any";
     public static final String AGENT_DELETE = "agent.delete";
@@ -63,7 +69,9 @@ public final class RbacPermissions {
 
     public static final List<String> AGENT_DEFAULTS = List.of(
             INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_DEPARTMENT,
             INCIDENT_ASSIGN,
+            INCIDENT_ASSIGNEE,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
             AGENT_READ,
@@ -75,9 +83,12 @@ public final class RbacPermissions {
 
     public static final List<String> ADMIN_DEFAULTS = List.of(
             INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_ALL,
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
+            INCIDENT_UPDATE_ANY,
+            INCIDENT_FORCECLOSE,
             AGENT_CREATE,
             AGENT_READ,
             AGENT_UPDATE,
@@ -118,11 +129,71 @@ public final class RbacPermissions {
             CHATBOT_INTERACTIONS_READ
     );
 
+    public static final List<String> ADMIN_AGENT_DEFAULTS = List.of(
+            INCIDENT_CREATE,
+            INCIDENT_READ_OWN,
+            INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_ALL,
+            INCIDENT_READ_DEPARTMENT,
+            INCIDENT_ASSIGN,
+            INCIDENT_ASSIGNEE,
+            INCIDENT_STATUS_CHANGE,
+            INCIDENT_SEVERITY_CHANGE,
+            INCIDENT_UPDATE_ANY,
+            INCIDENT_FORCECLOSE,
+            AGENT_CREATE,
+            AGENT_READ,
+            AGENT_UPDATE,
+            AGENT_DELETE,
+            ADMIN_AVAILABILITY_UPDATE,
+            AGENT_AVAILABILITY_UPDATE,
+            AGENT_AVAILABILITY_UPDATE_ANY,
+            AGENT_GROUP_READ,
+            AGENT_GROUP_CREATE,
+            AGENT_GROUP_UPDATE,
+            AGENT_GROUP_DELETE,
+            DEPARTMENT_READ,
+            DEPARTMENT_CREATE,
+            DEPARTMENT_UPDATE,
+            DEPARTMENT_DELETE,
+            STATUS_CREATE,
+            STATUS_UPDATE,
+            STATUS_DELETE,
+            SEVERITY_CREATE,
+            SEVERITY_UPDATE,
+            SEVERITY_DELETE,
+            LOCATION_CREATE,
+            LOCATION_UPDATE,
+            LOCATION_DELETE,
+            INCIDENT_CATEGORY_CREATE,
+            INCIDENT_CATEGORY_UPDATE,
+            INCIDENT_CATEGORY_DELETE,
+            INCIDENT_TYPE_CREATE,
+            INCIDENT_TYPE_UPDATE,
+            INCIDENT_TYPE_DELETE,
+            RBAC_ROLE_READ,
+            RBAC_ROLE_UPDATE,
+            RBAC_USER_ROLE_UPDATE,
+            RBAC_PERMISSION_READ,
+            DASHBOARD_ADMIN,
+            SYSTEM_CONFIG_READ,
+            SYSTEM_CONFIG_UPDATE,
+            FAQ_READ,
+            FAQ_CREATE,
+            FAQ_UPDATE,
+            FAQ_DELETE,
+            CHATBOT_QUERY,
+            CHATBOT_INTERACTIONS_READ
+    );
+
     public static final List<String> SUPER_ADMIN_DEFAULTS = List.of(
             INCIDENT_READ_ASSIGNED,
+            INCIDENT_READ_ALL,
             INCIDENT_ASSIGN,
             INCIDENT_STATUS_CHANGE,
             INCIDENT_SEVERITY_CHANGE,
+            INCIDENT_UPDATE_ANY,
+            INCIDENT_FORCECLOSE,
             AGENT_CREATE,
             AGENT_READ,
             AGENT_UPDATE,

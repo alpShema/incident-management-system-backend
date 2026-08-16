@@ -1,5 +1,6 @@
 scalar Instant
 scalar Long
+scalar Upload
 
 # ──────────────────────────────────────
 # SHARED TYPES
@@ -83,6 +84,8 @@ type IncidentSla {
   responseStatus: String
   resolutionStatus: String
   paused: Boolean!
+  responseElapsedMs: Long
+  resolutionElapsedMs: Long
 }
 
 type Incident {
@@ -415,6 +418,11 @@ type Faq {
   updatedAt: Instant
 }
 
+type FaqUpsertResult {
+  faq: Faq!
+  created: Boolean!
+}
+
 type FaqPage {
   items: [Faq!]!
   page: Int!
@@ -423,6 +431,53 @@ type FaqPage {
   totalPages: Int!
   hasNext: Boolean!
   hasPrevious: Boolean!
+}
+
+enum FaqRowStatus {
+  READY
+  NEEDS_ATTENTION
+}
+
+type FaqRowError {
+  row: Int!
+  reason: String!
+}
+
+type FaqBulkUploadResult {
+  created: Int!
+  updated: Int!
+  failed: Int!
+  errors: [FaqRowError!]!
+}
+
+type FaqInspectionSummary {
+  totalRows: Int!
+  readyCount: Int!
+  needsAttentionCount: Int!
+}
+
+type FaqInspectionRow {
+  row: Int!
+  question: String
+  answer: String
+  questionMissing: Boolean!
+  answerMissing: Boolean!
+  status: FaqRowStatus!
+}
+
+type FaqInspectionRowPage {
+  items: [FaqInspectionRow!]!
+  page: Int!
+  size: Int!
+  totalElements: Long!
+  totalPages: Int!
+  hasNext: Boolean!
+  hasPrevious: Boolean!
+}
+
+type FaqInspectionResult {
+  summary: FaqInspectionSummary!
+  rows: FaqInspectionRowPage!
 }
 
 # ──────────────────────────────────────
@@ -561,6 +616,13 @@ type ChatbotResult {
   outcome: String
 }
 
+type ChatbotAnswerChunk {
+  delta: String
+  done: Boolean!
+  confidence: Float
+  outcome: String
+}
+
 type ChatbotInteraction {
   id: ID!
   userId: ID
@@ -597,9 +659,26 @@ type SlaConfig {
 # INPUT TYPES
 # ══════════════════════════════════════
 
+enum SortDirection {
+  ASC
+  DESC
+}
+
+# Combined per-incident SLA status — the worst-of the response and resolution SLA timers
+# (BREACHED > AT_RISK > ON_TRACK > MET). Incidents with no tracked SLA on either timer match none
+# of these values.
+enum SlaStatus {
+  MET
+  ON_TRACK
+  AT_RISK
+  BREACHED
+}
+
 input PageInput {
   page: Int = 0
   size: Int = 20
+  sortBy: String
+  sortDirection: SortDirection = DESC
 }
 
 input LoginInput {
@@ -612,6 +691,7 @@ input IncidentFilterInput {
   incidentTypeId: String
   categoryId: String
   locationId: String
+  slaStatus: SlaStatus
 }
 
 input AttachmentInput {
@@ -831,9 +911,12 @@ type Query {
   location(id: ID!): Location
 
   # Agents
-  agents(departmentId: String, query: String, page: PageInput): AgentPage
-  allAgents(departmentId: String, query: String, page: PageInput): AgentPage
+  agents(departmentId: String, query: String, status: Boolean, locationId: String, page: PageInput): AgentPage
+  allAgents(departmentId: String, query: String, status: Boolean, locationId: String, page: PageInput): AgentPage
   myAgentStatus: Agent
+
+  # Admins
+  adminAgentAccess(userId: ID!): Agent
 
   # Agent groups
   agentGroups(query: String, departmentId: String, page: PageInput): AgentGroupPage
@@ -843,16 +926,20 @@ type Query {
   agentGroupsByCategory(categoryId: ID!): [Lookup!]
 
   # Incident categories
-  incidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
-  allIncidentCategories(status: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  incidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  allIncidentCategories(status: Boolean, hasActiveTopics: Boolean, query: String, page: PageInput): IncidentCategoryPage
+  # HV-1493: departmentId required — GraphQL rejects the query at validation time if omitted.
+  incidentCategoriesByDepartment(departmentId: String!, status: Boolean, query: String, page: PageInput): IncidentCategoryPage
   categoryTopics(categoryId: ID!, status: Boolean): [IncidentTopic!]
 
   # Incident topics
   incidentTopics(categoryId: String, departmentId: String, agentGroupId: String, status: Boolean, query: String, page: PageInput): IncidentTopicPage
 
   # FAQs
-  faqs(active: Boolean, page: PageInput): FaqPage
+  faqs(active: Boolean, search: String, page: PageInput): FaqPage
   faq(id: ID!): Faq
+  inspectFaqImport(file: Upload!, status: FaqRowStatus, page: PageInput): FaqInspectionResult!
+  faqImportTemplate: String!
 
   # Severities
   severities: [Severity!]
@@ -888,7 +975,6 @@ type Query {
 type Mutation {
   # Auth
   login(input: LoginInput!): AuthSession
-  refreshToken: AuthSession
   logout: Boolean
 
   # Incidents
@@ -939,6 +1025,10 @@ type Mutation {
   updateMyAgentStatus(input: UpdateAvailabilityInput!): Agent
   updateAgentStatus(agentId: ID!, input: UpdateAvailabilityInput!): Agent
 
+  # Admins
+  grantAdminAgentAccess(userId: ID!): Agent
+  revokeAdminAgentAccess(userId: ID!): Agent
+
   # Agent groups
   createAgentGroup(input: AgentGroupInput!): AgentGroup
   updateAgentGroup(id: ID!, input: AgentGroupInput!): AgentGroup
@@ -958,11 +1048,12 @@ type Mutation {
   updateTopicStatus(id: ID!, input: UpdateTopicStatusInput!): IncidentTopic
 
   # FAQs
-  createFaq(input: CreateFaqInput!): Faq
+  createFaq(input: CreateFaqInput!): FaqUpsertResult
   updateFaq(id: ID!, input: UpdateFaqInput!): Faq
   toggleFaqActive(id: ID!, active: Boolean!): Faq
   deleteFaq(id: ID!): Boolean
   reEmbedFaqs: Int!
+  bulkImportFaqs(file: Upload!): FaqBulkUploadResult!
 
   # Severities
   createSeverity(input: SeverityInput!): Severity
@@ -978,4 +1069,13 @@ type Mutation {
   # System config
   updateAutoCloseConfig(input: UpdateAutoCloseConfigInput!): AutoCloseConfig
   updateSlaConfig(input: UpdateSlaConfigInput!): SlaConfig
+}
+
+# ══════════════════════════════════════
+# SUBSCRIPTION TYPE
+# ══════════════════════════════════════
+
+type Subscription {
+  # Chatbot
+  chatbotAnswerStream(input: ChatbotQueryInput!): ChatbotAnswerChunk!
 }

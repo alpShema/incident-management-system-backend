@@ -16,6 +16,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
@@ -39,6 +40,8 @@ class SlackNotificationBroadcasterTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(broadcaster, "hilfeWebUrl", "https://hilfe.example.com");
+
         notification = Notification.builder()
                 .id("notif-1")
                 .userId("hilfe-user-1")

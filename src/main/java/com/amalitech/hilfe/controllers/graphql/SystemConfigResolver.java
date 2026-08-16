@@ -1,11 +1,13 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.AutoCloseConfigResponse;
 import com.amalitech.hilfe.dto.SlaConfigResponse;
 import com.amalitech.hilfe.dto.UpdateAutoCloseConfigRequest;
 import com.amalitech.hilfe.dto.UpdateSlaConfigRequest;
 import com.amalitech.hilfe.services.AutoCloseService;
 import com.amalitech.hilfe.services.SlaService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -34,13 +36,15 @@ public class SystemConfigResolver {
 
     @MutationMapping
     @PreAuthorize("hasAuthority('system.config.update')")
-    public AutoCloseConfigResponse updateAutoCloseConfig(@Argument UpdateAutoCloseConfigRequest input) {
+    public AutoCloseConfigResponse updateAutoCloseConfig(@Valid @Argument UpdateAutoCloseConfigRequest input) {
+        GraphQlResponseMessage.set("Auto-close configuration updated successfully");
         return autoCloseService.updateConfig(input.durationSeconds());
     }
 
     @MutationMapping
     @PreAuthorize("hasAuthority('system.config.update')")
-    public SlaConfigResponse updateSlaConfig(@Argument UpdateSlaConfigRequest input) {
+    public SlaConfigResponse updateSlaConfig(@Valid @Argument UpdateSlaConfigRequest input) {
+        GraphQlResponseMessage.set("SLA configuration updated successfully");
         return slaService.updateConfig(input);
     }
 }

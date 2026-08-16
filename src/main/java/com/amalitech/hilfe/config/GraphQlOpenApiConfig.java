@@ -233,19 +233,19 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
                                 K_SEVERITY_ID, SEVERITY_UUID)))));
 
         ex.put("[incidents] updateIncidentStatus", ex(
-                "Update incident status — requires: incident.status.change",
+                "Update incident status — requires: incident.status.change (force-closing an incident out of its normal lifecycle requires incident.forceclose)",
                 "Transitions an incident to a new lifecycle status.",
                 q("mutation UpdateStatus($id: ID!, $input: UpdateIncidentStatusInput!) {\n  updateIncidentStatus(id: $id, input: $input) {\n    id incidentNo status { name } statusReason updatedAt\n  }\n}",
                         vars(K_ID, INCIDENT_UUID, K_INPUT, vars("statusId", "status-resolved", "reason", "Issue resolved by replacing the projector bulb.")))));
 
         ex.put("[incidents] updateIncidentSeverity", ex(
-                "Update incident severity — requires: incident.severity.change",
+                "Update incident severity — requires: incident.severity.change (cross-incident updates also require incident.update.any)",
                 null,
                 q("mutation UpdateSeverity($id: ID!, $input: UpdateIncidentSeverityInput!) {\n  updateIncidentSeverity(id: $id, input: $input) {\n    id incidentNo priority { name } updatedAt\n  }\n}",
                         vars(K_ID, INCIDENT_UUID, K_INPUT, vars(K_SEVERITY_ID, SEVERITY_UUID)))));
 
         ex.put("[incidents] assignIncident", ex(
-                "Assign incident to agent — requires: incident.assign",
+                "Assign incident to agent — requires: incident.assign (reassigning incidents not already assigned to you also requires incident.update.any)",
                 null,
                 q("mutation AssignIncident($id: ID!, $input: AssignIncidentInput!) {\n  assignIncident(id: $id, input: $input) {\n    id incidentNo assignedTo { fullName email } updatedAt\n  }\n}",
                         vars(K_ID, INCIDENT_UUID, K_INPUT, vars(K_AGENT_ID, AGENT_UUID)))));
@@ -481,11 +481,17 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
                 q("query IncidentCategories($query: String, $page: PageInput) {\n  incidentCategories(status: true, query: $query, page: $page) {\n    items { id name description department { name } status }\n    totalElements\n  }\n}",
                         vars(K_QUERY, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
 
+        ex.put("[categories] list (active with active topics)", ex(
+                "List active incident categories that have at least one active topic",
+                "Combines the status and hasActiveTopics filters.",
+                q("query IncidentCategories($query: String, $page: PageInput) {\n  incidentCategories(status: true, hasActiveTopics: true, query: $query, page: $page) {\n    items { id name description department { name } status }\n    totalElements\n  }\n}",
+                        vars(K_QUERY, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
+
         ex.put("[categories] allCategories (admin)", ex(
                 "List all categories — requires: ADMIN or SUPER_ADMIN",
-                "Includes both active and inactive categories.",
-                q("query AllCategories($status: Boolean, $page: PageInput) {\n  allIncidentCategories(status: $status, page: $page) {\n    items { id name status department { name } updatedAt }\n    totalElements\n  }\n}",
-                        vars(K_STATUS, null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
+                "Includes both active and inactive categories. Status and hasActiveTopics filters are independent.",
+                q("query AllCategories($status: Boolean, $hasActiveTopics: Boolean, $page: PageInput) {\n  allIncidentCategories(status: $status, hasActiveTopics: $hasActiveTopics, page: $page) {\n    items { id name status department { name } updatedAt }\n    totalElements\n  }\n}",
+                        vars(K_STATUS, null, "hasActiveTopics", null, K_PAGE, vars(K_PAGE, 0, K_SIZE, 20)))));
 
         ex.put("[categories] topics", ex(
                 "List topics in a category — open to authenticated users",
@@ -554,7 +560,7 @@ public class GraphQlOpenApiConfig implements OpenApiCustomizer {
         ex.put("[faqs] create", ex(
                 "Create a FAQ — requires: faq.create",
                 null,
-                q("mutation CreateFaq($input: CreateFaqInput!) {\n  createFaq(input: $input) {\n    id question answer active createdAt\n  }\n}",
+                q("mutation CreateFaq($input: CreateFaqInput!) {\n  createFaq(input: $input) {\n    created\n    faq { id question answer active createdAt }\n  }\n}",
                         vars(K_INPUT, vars("question", "How do I reset my password?", "answer", "Contact the IT helpdesk to request a password reset.")))));
 
         ex.put("[faqs] toggleActive", ex(

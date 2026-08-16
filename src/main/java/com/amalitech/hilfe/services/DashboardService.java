@@ -6,9 +6,11 @@ import com.amalitech.hilfe.dto.IncidentResponse;
 import com.amalitech.hilfe.dto.dashboard.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.models.Status;
 import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
+import com.amalitech.hilfe.repositories.StatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -25,15 +27,32 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
 
+    private static final String NO_DASHBOARD_PERMISSION_MESSAGE = "You do not have permission to view this dashboard.";
+
+    private static final String STATUS_OPEN = "open";
+    private static final String STATUS_PENDING = "pending";
+    private static final String STATUS_IN_PROGRESS = "in progress";
+    private static final String STATUS_RESOLVED = "resolved";
+    private static final String STATUS_CLOSED = "closed";
+
+    // Reopened is a transition trigger (IncidentService.applyReopenTransition immediately flips it
+    // back to In Progress within the same transaction), never a resting status — excluded here so
+    // dashboard charts don't surface a permanent zero-count "Reopened" entry.
+    private static final Set<String> DASHBOARD_STATUS_NAMES = Set.of(
+            STATUS_OPEN, STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_RESOLVED, STATUS_CLOSED
+    );
+
     private final IncidentRepository incidentRepository;
     private final AgentRepository agentRepository;
     private final AgentGroupMemberRepository agentGroupMemberRepository;
+    private final StatusRepository statusRepository;
     private final SlaService slaService;
 
     public DashboardStats getStats(String userId, RoleCode role) {
@@ -43,37 +62,37 @@ public class DashboardService {
                         List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusForAgent(agent.getId()));
                         long total = byStatus.stream().mapToLong(LabelCount::count).sum();
                         return new DashboardStats(total,
-                                countFor(byStatus, "open"), countFor(byStatus, "pending"),
-                                countFor(byStatus, "in progress"),
-                                countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+                                countFor(byStatus, STATUS_OPEN), countFor(byStatus, STATUS_PENDING),
+                                countFor(byStatus, STATUS_IN_PROGRESS),
+                                countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED));
                     })
                     .orElse(new DashboardStats(0, 0, 0, 0, 0, 0));
         }
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
             List<LabelCount> byStatus = toLabel(incidentRepository.countByStatusGlobal());
             long total = byStatus.stream().mapToLong(LabelCount::count).sum();
             return new DashboardStats(total,
-                    countFor(byStatus, "open"), countFor(byStatus, "pending"),
-                    countFor(byStatus, "in progress"),
-                    countFor(byStatus, "closed"), countFor(byStatus, "resolved"));
+                    countFor(byStatus, STATUS_OPEN), countFor(byStatus, STATUS_PENDING),
+                    countFor(byStatus, STATUS_IN_PROGRESS),
+                    countFor(byStatus, STATUS_CLOSED), countFor(byStatus, STATUS_RESOLVED));
         }
 
-        throw new ArmsAuthException("Dashboard not available for this role", 403);
+        throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
     }
 
     public DashboardCharts getCharts(String userId, RoleCode role, String period) {
         Instant since      = resolvePeriod(period);
-        Instant trendSince = since != null ? since : Instant.now().minus(180, ChronoUnit.DAYS);
+        Instant trendSince = since != null ? since : sixMonthWindowStart();
 
         List<LabelCount> byStatus;
         List<TrendSeries> trends;
 
         switch (role) {
-            case ADMIN, SUPER_ADMIN -> {
-                byStatus = toLabel(since != null
+            case ADMIN, ADMIN_AGENT, SUPER_ADMIN -> {
+                byStatus = fillStatusGaps(toLabel(since != null
                         ? incidentRepository.countByStatusSince(since)
-                        : incidentRepository.countByStatusGlobal());
+                        : incidentRepository.countByStatusGlobal()));
                 List<MonthlyCount> allTrend = fillMonthGaps(
                         toMonthlyCount(incidentRepository.countByMonthSince(trendSince)),
                         trendSince);
@@ -81,9 +100,9 @@ public class DashboardService {
             }
             case AGENT -> {
                 var agentOpt = agentRepository.findByUserId(userId);
-                byStatus = agentOpt.map(agent -> toLabel(
-                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince)))
-                        .orElse(List.of());
+                byStatus = agentOpt.map(agent -> fillStatusGaps(toLabel(
+                        incidentRepository.countByStatusForAgentSince(agent.getId(), trendSince))))
+                        .orElseGet(this::allStatusesZero);
                 List<MonthlyCount> myTrend = fillMonthGaps(
                         toMonthlyCount(incidentRepository.countByMonthForUser(userId, trendSince)),
                         trendSince);
@@ -96,7 +115,7 @@ public class DashboardService {
                         new TrendSeries("My Incidents", myTrend),
                         new TrendSeries("My Assigned Incidents", assignedTrend));
             }
-            default -> throw new ArmsAuthException("Dashboard not available for this role", 403);
+            default -> throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
         }
 
         return new DashboardCharts(byStatus, trends);
@@ -118,7 +137,7 @@ public class DashboardService {
         }
         final String finalQueryPattern = queryPattern;
 
-        if (role == RoleCode.ADMIN || role == RoleCode.SUPER_ADMIN) {
+        if (role == RoleCode.ADMIN || role == RoleCode.ADMIN_AGENT || role == RoleCode.SUPER_ADMIN) {
             return slaService.toIncidentResponsePage(
                     incidentRepository.findAllUnified(finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)
             );
@@ -130,7 +149,7 @@ public class DashboardService {
                             .findByDepartmentUnified(agentGroupIds, finalQueryPattern, filters, new IncidentDateFilter(null, null), pageable)))
                     .orElse(new PageImpl<>(List.of(), pageable, 0));
         }
-        throw new ArmsAuthException("Dashboard not available for this role", 403);
+        throw new ArmsAuthException(NO_DASHBOARD_PERMISSION_MESSAGE, 403);
     }
 
 
@@ -166,6 +185,10 @@ public class DashboardService {
         };
     }
 
+    private Instant sixMonthWindowStart() {
+        return YearMonth.now(ZoneOffset.UTC).minusMonths(5).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
     private long countFor(List<LabelCount> list, String statusName) {
         return list.stream()
                 .filter(l -> l.label() != null && l.label().equalsIgnoreCase(statusName))
@@ -198,5 +221,28 @@ public class DashboardService {
             cursor = cursor.plusMonths(1);
         }
         return full;
+    }
+
+    private List<String> dashboardStatusNames() {
+        return statusRepository.findAll().stream()
+                .map(Status::getName)
+                .filter(name -> name != null && DASHBOARD_STATUS_NAMES.contains(name.toLowerCase()))
+                .sorted()
+                .toList();
+    }
+
+    private List<LabelCount> fillStatusGaps(List<LabelCount> counted) {
+        Map<String, Integer> countByName = counted.stream()
+                .filter(c -> c.label() != null)
+                .collect(Collectors.toMap(c -> c.label().toLowerCase(), LabelCount::count));
+        return dashboardStatusNames().stream()
+                .map(name -> new LabelCount(name, countByName.getOrDefault(name.toLowerCase(), 0)))
+                .toList();
+    }
+
+    private List<LabelCount> allStatusesZero() {
+        return dashboardStatusNames().stream()
+                .map(name -> new LabelCount(name, 0))
+                .toList();
     }
 }

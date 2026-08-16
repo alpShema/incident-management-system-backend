@@ -7,6 +7,7 @@ import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.models.Role;
 import com.amalitech.hilfe.repositories.ActivityLogRepository;
+import com.amalitech.hilfe.repositories.AgentGroupMemberRepository;
 import com.amalitech.hilfe.repositories.AgentGroupRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.IncidentRepository;
@@ -43,6 +44,7 @@ class ActivityLogServiceTest {
     @Mock UserRepository userRepository;
     @Mock IncidentRepository incidentRepository;
     @Mock AgentRepository agentRepository;
+    @Mock AgentGroupMemberRepository agentGroupMemberRepository;
     @Mock AgentGroupRepository agentGroupRepository;
     @Mock RoleRepository roleRepository;
     @InjectMocks ActivityLogService activityLogService;
@@ -156,6 +158,54 @@ class ActivityLogServiceTest {
         verify(activityLogRepository).findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class));
     }
 
+    @Test
+    void getActivityLogs_sameDepartmentAgent_allowedForIncidentHistoryView() {
+        Agent actor = Agent.builder().id("actor-agent").userId("u-actor").build();
+        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
+        when(agentRepository.findByUserId("u-actor")).thenReturn(Optional.of(actor));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("actor-agent")).thenReturn(List.of("g1"));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("assigned-agent")).thenReturn(List.of("g2"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("g1"))).thenReturn(List.of("d1"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("g2"))).thenReturn(List.of("d1"));
+        when(activityLogRepository.findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        activityLogService.getActivityLogs("inc-1", PageRequest.of(0, 10), "u-actor", "AGENT");
+
+        verify(activityLogRepository).findActivityLogResponsesByIncidentId(eq("inc-1"), any(Pageable.class));
+    }
+
+    @Test
+    void getActivityLogs_crossDepartmentAgent_throws403() {
+        Agent actor = Agent.builder().id("actor-agent").userId("u-actor").build();
+        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
+        when(agentRepository.findByUserId("u-actor")).thenReturn(Optional.of(actor));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("actor-agent")).thenReturn(List.of("g1"));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("assigned-agent")).thenReturn(List.of("g2"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("g1"))).thenReturn(List.of("d1"));
+        when(agentGroupRepository.findDepartmentIdsByGroupIds(List.of("g2"))).thenReturn(List.of("d2"));
+
+        var pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> activityLogService.getActivityLogs("inc-1", pageable, "u-actor", "AGENT"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void getActivityLogs_agentWithNoGroupOrDepartment_throws403() {
+        Agent actor = Agent.builder().id("actor-agent").userId("u-actor").build();
+        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(incident("inc-1", "owner", "assigned-agent")));
+        when(agentRepository.findByUserId("u-actor")).thenReturn(Optional.of(actor));
+        when(agentGroupMemberRepository.findAgentGroupIdsByAgentId("actor-agent")).thenReturn(List.of());
+
+        var pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> activityLogService.getActivityLogs("inc-1", pageable, "u-actor", "AGENT"))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(403);
+    }
+
     // ── logUserRoleChange ────────────────────────────────────────────────────
 
     @Test
@@ -190,6 +240,21 @@ class ActivityLogServiceTest {
         verify(activityLogRepository).save(captor.capture());
         assertThat(captor.getValue().getAction()).isEqualTo("INCIDENT_STATUS_CHANGED");
         assertThat(captor.getValue().getSubjectId()).isEqualTo("inc-1");
+    }
+
+    @Test
+    void logIncidentStatusChange_nullActor_attributesChangeToSystem() {
+        when(incidentRepository.findById("inc-1")).thenReturn(Optional.of(
+                Incident.builder().id("inc-1").incidentNo(42).build()));
+        when(activityLogRepository.save(any(ActivityLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        activityLogService.logIncidentStatusChange(null, "inc-1", "Resolved", "Closed");
+
+        ArgumentCaptor<ActivityLog> captor = ArgumentCaptor.forClass(ActivityLog.class);
+        verify(activityLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getActorUserId()).isNull();
+        assertThat(captor.getValue().getDescription()).contains("by System").doesNotContain("Unknown");
+        verifyNoInteractions(userRepository);
     }
 
     // ── logIncidentAssignment ────────────────────────────────────────────────

@@ -1,10 +1,11 @@
 package com.amalitech.hilfe.auth.impl;
 
+import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.RoleCode;
-import com.amalitech.hilfe.models.User;
 import com.amalitech.hilfe.security.authorization.UserAuthorityService;
 import com.amalitech.hilfe.services.JwtTokenService;
-import com.amalitech.hilfe.services.TokenService;
+import com.amalitech.hilfe.services.TokenRevocationService;
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,7 +14,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PublicKey;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,51 +30,61 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class JwtTokenServiceTest {
 
-    private static final String SECRET = "test-secret-must-be-at-least-32-bytes-long!";
-    private static final long ACCESS_TTL_SECONDS = 3600L;
-    private static final long REFRESH_TTL_SECONDS = 86400L;
+    @Mock UserAuthorityService userAuthorityService;
+    @Mock TokenRevocationService tokenRevocationService;
 
-    @Mock
-    UserAuthorityService userAuthorityService;
-
+    KeyPair keyPair;
     JwtTokenService tokenService;
-    User testUser;
 
     @BeforeEach
-    void setUp() {
-        tokenService = new JwtTokenService(
-                SECRET,
-                "hilfe",
-                "hilfe-web",
-                ACCESS_TTL_SECONDS,
-                REFRESH_TTL_SECONDS,
-                userAuthorityService
-        );
-        testUser = User.builder()
-            .id("u1")
-            .email("john@test.com")
-            .fullName("John Doe")
-            .roleCode(RoleCode.CLIENT)
-            .build();
+    void setUp() throws Exception {
+        keyPair = generateKeyPair();
+        tokenService = new JwtTokenService(toPem(keyPair.getPublic()), userAuthorityService, tokenRevocationService);
+    }
+
+    private static KeyPair generateKeyPair() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        return generator.generateKeyPair();
+    }
+
+    private static String toPem(PublicKey key) {
+        return "-----BEGIN PUBLIC KEY-----\n"
+                + Base64.getEncoder().encodeToString(key.getEncoded())
+                + "\n-----END PUBLIC KEY-----";
+    }
+
+    private String signedToken(KeyPair signingKeyPair, String userId, Instant expiry) {
+        var builder = Jwts.builder()
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(Date.from(expiry));
+        if (userId != null) {
+            builder.claim("user_id", userId);
+        }
+        return builder.signWith(signingKeyPair.getPrivate(), Jwts.SIG.RS256).compact();
+    }
+
+    private String signedToken(String userId, Instant expiry) {
+        return signedToken(keyPair, userId, expiry);
+    }
+
+    private void mockRevoked(String token, boolean revoked) {
+        when(tokenRevocationService.isRevoked(token)).thenReturn(revoked);
+    }
+
+    private void mockResolvedAuthorities(String userId, String email, RoleCode roleCode, String... authorities) {
+        List<SimpleGrantedAuthority> grantedAuthorities = List.of(authorities).stream()
+                .map(SimpleGrantedAuthority::new)
+                .toList();
+        when(userAuthorityService.resolveByUserId(userId)).thenReturn(Optional.of(
+                new UserAuthorityService.ResolvedAuthorities(userId, email, roleCode, grantedAuthorities, 1)
+        ));
     }
 
     @Test
-    void generateAccessToken_producesNonBlankToken() {
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String token = tokenService.generateAccessToken(testUser);
-        assertThat(token).isNotBlank();
-    }
-
-    @Test
-    void generateRefreshToken_producesNonBlankToken() {
-        String token = tokenService.generateRefreshToken(testUser);
-        assertThat(token).isNotBlank();
-    }
-
-    @Test
-    void authenticateAccessToken_validToken_returnsAuthenticationWithCorrectPrincipal() {
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String token = tokenService.generateAccessToken(testUser);
+    void authenticateAccessToken_validSignatureAndClaims_returnsAuthenticationWithCorrectPrincipal() {
+        String token = signedToken("u1", Instant.now().plusSeconds(3600));
+        mockRevoked(token, false);
         mockResolvedAuthorities("u1", "john@test.com", RoleCode.CLIENT, "ROLE_CLIENT");
 
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
@@ -82,18 +98,8 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    void authenticateAccessToken_refreshTokenPresentedAsAccess_returnsEmpty() {
-        String refreshToken = tokenService.generateRefreshToken(testUser);
-
-        Optional<Authentication> auth = tokenService.authenticateAccessToken(refreshToken);
-
-        assertThat(auth).isEmpty();
-    }
-
-    @Test
     void authenticateAccessToken_tamperedToken_returnsEmpty() {
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String token = tokenService.generateAccessToken(testUser) + "x";
+        String token = signedToken("u1", Instant.now().plusSeconds(3600)) + "x";
 
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
@@ -101,17 +107,9 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    void authenticateAccessToken_tokenSignedWithDifferentKey_returnsEmpty() {
-        JwtTokenService otherService = new JwtTokenService(
-            "different-secret-also-at-least-32-bytes-!",
-            "hilfe",
-            "hilfe-web",
-            ACCESS_TTL_SECONDS,
-            REFRESH_TTL_SECONDS,
-            userAuthorityService
-        );
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String foreignToken = otherService.generateAccessToken(testUser);
+    void authenticateAccessToken_tokenSignedWithDifferentKey_returnsEmpty() throws Exception {
+        KeyPair otherKeyPair = generateKeyPair();
+        String foreignToken = signedToken(otherKeyPair, "u1", Instant.now().plusSeconds(3600));
 
         Optional<Authentication> auth = tokenService.authenticateAccessToken(foreignToken);
 
@@ -120,126 +118,65 @@ class JwtTokenServiceTest {
 
     @Test
     void authenticateAccessToken_expiredToken_returnsEmpty() {
-        JwtTokenService shortLived = new JwtTokenService(
-                SECRET,
-                "hilfe",
-                "hilfe-web",
-                -1L,
-                REFRESH_TTL_SECONDS,
-                userAuthorityService
-        );
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String token = shortLived.generateAccessToken(testUser);
+        String token = signedToken("u1", Instant.now().minusSeconds(10));
 
-        Optional<Authentication> auth = shortLived.authenticateAccessToken(token);
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
         assertThat(auth).isEmpty();
     }
 
     @Test
-    void getAccessTokenTtlSeconds_returnsTtlMsDividedBy1000() {
-        assertThat(tokenService.getAccessTokenTtlSeconds()).isEqualTo(ACCESS_TTL_SECONDS);
+    void authenticateAccessToken_missingUserIdClaim_returnsEmpty() {
+        String token = signedToken(null, Instant.now().plusSeconds(3600));
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
     }
 
     @Test
-    void getRefreshTokenTtlSeconds_returns86400() {
-        assertThat(tokenService.getRefreshTokenTtlSeconds()).isEqualTo(REFRESH_TTL_SECONDS);
+    void authenticateAccessToken_revokedToken_returnsEmpty() {
+        String token = signedToken("u1", Instant.now().plusSeconds(3600));
+        mockRevoked(token, true);
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
     }
 
     @Test
-    void shortSecret_throwsAtConstruction() {
-        assertThatThrownBy(() -> new JwtTokenService(
-            "short",
-            "hilfe",
-            "hilfe-web",
-            ACCESS_TTL_SECONDS,
-            REFRESH_TTL_SECONDS,
-            userAuthorityService
-        ))
-                .isInstanceOf(Exception.class);
+    void authenticateAccessToken_userMissingFromAuthorityService_returnsEmpty() {
+        String token = signedToken("u4", Instant.now().plusSeconds(3600));
+        mockRevoked(token, false);
+        when(userAuthorityService.resolveByUserId("u4")).thenReturn(Optional.empty());
+
+        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+
+        assertThat(auth).isEmpty();
     }
-
-    // ── authenticateRefreshToken ───────────────────────────────────────────────
-
-    @Test
-    void authenticateRefreshToken_validToken_returnsRefreshPrincipalWithJtiAndExpiry() {
-        String token = tokenService.generateRefreshToken(testUser);
-
-        Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(token);
-
-        assertThat(result).isPresent();
-        assertThat(result.get().userId()).isEqualTo("u1");
-        assertThat(result.get().email()).isEqualTo("john@test.com");
-        assertThat(result.get().jti()).isNotBlank();
-        assertThat(result.get().expiresAt()).isAfter(Instant.now());
-    }
-
-    @Test
-    void authenticateRefreshToken_twoTokensProduceDifferentJtis() {
-        String token1 = tokenService.generateRefreshToken(testUser);
-        String token2 = tokenService.generateRefreshToken(testUser);
-
-        String jti1 = tokenService.authenticateRefreshToken(token1).orElseThrow().jti();
-        String jti2 = tokenService.authenticateRefreshToken(token2).orElseThrow().jti();
-
-        assertThat(jti1).isNotEqualTo(jti2);
-    }
-
-    @Test
-    void authenticateRefreshToken_accessTokenPresentedAsRefresh_returnsEmpty() {
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String accessToken = tokenService.generateAccessToken(testUser);
-
-        Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(accessToken);
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void authenticateRefreshToken_tamperedToken_returnsEmpty() {
-        String token = tokenService.generateRefreshToken(testUser) + "x";
-
-        Optional<TokenService.RefreshPrincipal> result = tokenService.authenticateRefreshToken(token);
-
-        assertThat(result).isEmpty();
-    }
-
-    // ── authority resolution ───────────────────────────────────────────────────
 
     @Test
     void authenticateAccessToken_userWithAgentRole_returnsRoleAgent() {
-        User userWithAgentRole = User.builder()
-            .id("u2")
-            .email("agent@test.com")
-            .fullName("Agent User")
-            .roleCode(RoleCode.AGENT)
-            .build();
-
-        mockResolvedRole(userWithAgentRole, RoleCode.AGENT);
-        String token = tokenService.generateAccessToken(userWithAgentRole);
+        String token = signedToken("u2", Instant.now().plusSeconds(3600));
+        mockRevoked(token, false);
         mockResolvedAuthorities("u2", "agent@test.com", RoleCode.AGENT, "ROLE_AGENT", "incident.assign");
+
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
         assertThat(auth).isPresent();
         JwtTokenService.AuthPrincipal principal = (JwtTokenService.AuthPrincipal) auth.get().getPrincipal();
         assertThat(principal.roleCode()).isEqualTo("AGENT");
         assertThat(auth.get().getAuthorities())
-            .extracting(Object::toString)
-            .contains("ROLE_AGENT", "incident.assign");
+                .extracting(Object::toString)
+                .contains("ROLE_AGENT", "incident.assign");
     }
 
     @Test
     void authenticateAccessToken_userWithAdminRole_returnsRoleAdmin() {
-        User userWithAdminRole = User.builder()
-            .id("u3")
-            .email("admin@test.com")
-            .fullName("Admin User")
-            .roleCode(RoleCode.ADMIN)
-            .build();
-
-        mockResolvedRole(userWithAdminRole, RoleCode.ADMIN);
-        String token = tokenService.generateAccessToken(userWithAdminRole);
+        String token = signedToken("u3", Instant.now().plusSeconds(3600));
+        mockRevoked(token, false);
         mockResolvedAuthorities("u3", "admin@test.com", RoleCode.ADMIN, "ROLE_ADMIN", "agent.create");
+
         Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
 
         assertThat(auth).isPresent();
@@ -248,97 +185,31 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    void authenticateAccessToken_userMissingFromAuthorityService_returnsEmpty() {
-        User user = User.builder()
-            .id("u4")
-            .email("u4@test.com")
-            .fullName("Missing User")
-            .roleCode(RoleCode.CLIENT)
-            .build();
+    void getArmsTokenRemainingSeconds_validToken_returnsRemainingLifetime() {
+        String token = signedToken("u1", Instant.now().plusSeconds(7200));
 
-        mockResolvedRole(user, RoleCode.CLIENT);
-        String token = tokenService.generateAccessToken(user);
-        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
+        long remaining = tokenService.getArmsTokenRemainingSeconds(token);
 
-        assertThat(auth).isEmpty();
+        assertThat(remaining).isGreaterThan(7000L).isLessThanOrEqualTo(7200L);
     }
 
     @Test
-    void authenticateAccessToken_staleTokenVersion_returnsEmpty() {
-        // token issued with version=1; DB now reports version=2 (post-logout increment)
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String token = tokenService.generateAccessToken(testUser);
-        mockResolvedAuthorities("u1", "john@test.com", RoleCode.CLIENT, 2, "ROLE_CLIENT");
+    void getArmsTokenRemainingSeconds_expiredToken_throwsArmsAuthException() {
+        String token = signedToken("u1", Instant.now().minusSeconds(10));
 
-        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
-
-        assertThat(auth).isEmpty();
+        assertThatThrownBy(() -> tokenService.getArmsTokenRemainingSeconds(token))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(401);
     }
 
     @Test
-    void authenticateAccessToken_matchingTokenVersion_returnsAuthentication() {
-        // token issued with version=1; DB also reports version=1 — valid
-        mockResolvedRole(testUser, RoleCode.CLIENT);
-        String token = tokenService.generateAccessToken(testUser);
-        mockResolvedAuthorities("u1", "john@test.com", RoleCode.CLIENT, 1, "ROLE_CLIENT");
+    void getArmsTokenRemainingSeconds_tamperedToken_throwsArmsAuthException() {
+        String token = signedToken("u1", Instant.now().plusSeconds(3600)) + "x";
 
-        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
-
-        assertThat(auth).isPresent();
-    }
-
-    @Test
-    void authenticateAccessToken_mismatchedRoleClaim_returnsEmpty() {
-        User userWithAdminRole = User.builder()
-            .id("u5")
-            .email("u5@test.com")
-            .fullName("Role Drift User")
-            .roleCode(RoleCode.ADMIN)
-            .build();
-
-        mockResolvedRole(userWithAdminRole, RoleCode.ADMIN);
-        String token = tokenService.generateAccessToken(userWithAdminRole);
-        mockResolvedAuthorities("u5", "u5@test.com", RoleCode.AGENT, "ROLE_AGENT");
-
-        Optional<Authentication> auth = tokenService.authenticateAccessToken(token);
-
-        assertThat(auth).isEmpty();
-    }
-
-    private void mockResolvedAuthorities(
-        String userId,
-        String email,
-        RoleCode roleCode,
-        String... authorities
-    ) {
-        mockResolvedAuthorities(userId, email, roleCode, 1, authorities);
-    }
-
-    private void mockResolvedAuthorities(
-        String userId,
-        String email,
-        RoleCode roleCode,
-        int tokenVersion,
-        String... authorities
-    ) {
-        List<SimpleGrantedAuthority> grantedAuthorities = List.of(authorities).stream()
-            .map(SimpleGrantedAuthority::new)
-            .toList();
-
-        when(userAuthorityService.resolveByUserId(userId)).thenReturn(Optional.of(
-            new UserAuthorityService.ResolvedAuthorities(userId, email, roleCode, grantedAuthorities, tokenVersion)
-        ));
-    }
-
-    private void mockResolvedRole(User user, RoleCode roleCode) {
-        when(userAuthorityService.resolve(user)).thenReturn(
-            new UserAuthorityService.ResolvedAuthorities(
-                user.getId(),
-                user.getEmail(),
-                roleCode,
-                List.of(new SimpleGrantedAuthority("ROLE_" + roleCode.name())),
-                user.getTokenVersion()
-            )
-        );
+        assertThatThrownBy(() -> tokenService.getArmsTokenRemainingSeconds(token))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(401);
     }
 }

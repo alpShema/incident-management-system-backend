@@ -1,10 +1,12 @@
 package com.amalitech.hilfe.controllers.graphql;
 
+import com.amalitech.hilfe.config.GraphQlResponseMessage;
 import com.amalitech.hilfe.dto.InternalNoteRequest;
 import com.amalitech.hilfe.dto.InternalNoteResponse;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.services.InternalNoteService;
 import com.amalitech.hilfe.services.JwtTokenService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -35,9 +37,10 @@ public class InternalNoteResolver {
     @PreAuthorize("hasAnyRole('AGENT', 'ADMIN', 'SUPER_ADMIN')")
     public InternalNoteResponse createInternalNote(
             @Argument String incidentId,
-            @Argument InternalNoteRequest input,
+            @Valid @Argument InternalNoteRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
+        GraphQlResponseMessage.set("Note created successfully");
         return noteService.createNote(principal.userId(), incidentId, input);
     }
 
@@ -46,9 +49,10 @@ public class InternalNoteResolver {
     public InternalNoteResponse updateInternalNote(
             @Argument String incidentId,
             @Argument String noteId,
-            @Argument InternalNoteRequest input,
+            @Valid @Argument InternalNoteRequest input,
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
+        GraphQlResponseMessage.set("Note updated successfully");
         return noteService.updateNote(principal.userId(), incidentId, noteId, input);
     }
 
@@ -60,6 +64,7 @@ public class InternalNoteResolver {
             @AuthenticationPrincipal JwtTokenService.AuthPrincipal principal
     ) {
         noteService.deleteNote(principal.userId(), principal.roleCode(), incidentId, noteId);
+        GraphQlResponseMessage.set("Note deleted successfully");
         return true;
     }
 }

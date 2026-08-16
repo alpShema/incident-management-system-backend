@@ -26,6 +26,7 @@ import java.util.List;
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
+    private final RequestIdFilter requestIdFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final Http401AuthenticationEntryPoint authenticationEntryPoint;
 
@@ -44,15 +45,17 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/login", "/auth/refresh-token", "/auth/logout").permitAll()
+                        .requestMatchers("/auth/login", "/auth/logout").permitAll()
+                        .requestMatchers("/permissions/all").permitAll()
                         .requestMatchers("/actuator/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/graphiql/**", "/graphql").permitAll()
+                        .requestMatchers("/graphiql/**", "/graphql", "/graphql/upload").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/slack/**").permitAll() // Slack endpoints use signature validation
                         .requestMatchers("/images/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(requestIdFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

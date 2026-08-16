@@ -37,7 +37,7 @@ class ArmsClientImplTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         ArmsProperties properties = new ArmsProperties(
-                SSO_URL, "http://auth", "http://emp", "api-key");
+                SSO_URL, "http://auth", "http://emp", "api-key", "test-public-key");
         client = new ArmsClientImpl(builder.build(), properties);
     }
 
@@ -80,7 +80,7 @@ class ArmsClientImplTest {
         assertThat(info.firstName()).isEqualTo("John");
         assertThat(info.lastName()).isEqualTo("Doe");
         assertThat(info.otherName()).isEqualTo("K");
-        assertThat(info.email()).isEqualTo("john@test.com");
+        assertThat(info.email()).isEqualTo("john@work.test");
         assertThat(info.profileImage()).isEqualTo("http://img.png");
         assertThat(info.positionName()).isEqualTo("Engineer");
         assertThat(info.officeName()).isEqualTo("Accra Office");

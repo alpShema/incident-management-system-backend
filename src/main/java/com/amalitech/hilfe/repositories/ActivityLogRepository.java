@@ -15,7 +15,7 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
     @Query("""
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
                 al.id,
-                actor.fullName,
+                CASE WHEN al.actorUserId IS NULL THEN 'System' ELSE actor.fullName END,
                 actor.profileImg,
                 target.fullName,
                 al.action,
@@ -35,7 +35,7 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
     @Query("""
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
                 al.id,
-                actor.fullName,
+                CASE WHEN al.actorUserId IS NULL THEN 'System' ELSE actor.fullName END,
                 actor.profileImg,
                 target.fullName,
                 al.action,
@@ -56,7 +56,7 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
     @Query("""
             SELECT new com.amalitech.hilfe.dto.ActivityLogResponse(
                 al.id,
-                actor.fullName,
+                CASE WHEN al.actorUserId IS NULL THEN 'System' ELSE actor.fullName END,
                 actor.profileImg,
                 target.fullName,
                 al.action,

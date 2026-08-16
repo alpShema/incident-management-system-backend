@@ -4,6 +4,7 @@ import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.*;
 import com.amalitech.hilfe.repositories.*;
+import com.amalitech.hilfe.services.RoleAccessSyncService;
 import com.amalitech.hilfe.services.RoleService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +29,7 @@ class RoleServiceTest {
     @Mock PermissionRepository permissionRepository;
     @Mock RolePermissionRepository rolePermissionRepository;
     @Mock UserRepository userRepository;
-    @Mock AgentRepository agentRepository;
+    @Mock RoleAccessSyncService roleAccessSyncService;
     @InjectMocks RoleService roleService;
 
     private Permission perm(String code) {
@@ -76,7 +77,7 @@ class RoleServiceTest {
         var request = new CreateRoleRequest("Sales", "d", List.of("incident.create"));
         assertThatThrownBy(() -> roleService.createRole(request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Role already exists")
+                .hasMessageContaining("A role with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -89,7 +90,7 @@ class RoleServiceTest {
         var request = new CreateRoleRequest("Sales Team", "d", List.of("incident.create"));
         assertThatThrownBy(() -> roleService.createRole(request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Role name already exists")
+                .hasMessageContaining("A role with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -181,7 +182,8 @@ class RoleServiceTest {
         assertThat(response.roleCode()).isEqualTo("CUSTOM");
         assertThat(response.updatedCount()).isEqualTo(1);
         assertThat(user.getRoleCode()).isEqualTo("CUSTOM");
-        verify(agentRepository, never()).findByUserId(any());
+        verify(roleAccessSyncService).syncAgentRecord(user, "CUSTOM");
+        verify(roleAccessSyncService).syncAdminRecord(user, "CUSTOM");
     }
 
     @Test
@@ -203,13 +205,13 @@ class RoleServiceTest {
         var request = new BulkAssignRoleRequest(List.of("  "));
         assertThatThrownBy(() -> roleService.bulkAssignRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("must not be empty")
+                .hasMessageContaining("At least one user must be selected")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
 
     @Test
-    void bulkAssignRole_missingUsers_throws404ListingIds() {
+    void bulkAssignRole_missingUsers_throws404() {
         Role r = role("r1", "CUSTOM", "Custom");
         when(roleRepository.findByCode("CUSTOM")).thenReturn(Optional.of(r));
         when(userRepository.findAllById(anyList())).thenReturn(List.of()); // none found
@@ -217,38 +219,37 @@ class RoleServiceTest {
         var request = new BulkAssignRoleRequest(List.of("u1", "u2"));
         assertThatThrownBy(() -> roleService.bulkAssignRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("u1")
+                .hasMessageContaining("could not be found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
     }
 
     @Test
-    void bulkAssignRole_agentRole_createsAgentRecordForNewAgent() {
+    void bulkAssignRole_agentRole_delegatesToRoleAccessSyncService() {
         Role r = role("r1", "AGENT", "Agent");
         User user = User.builder().id("u1").fullName("Bob").build();
         when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(r));
         when(userRepository.findAllById(anyList())).thenReturn(List.of(user));
         when(userRepository.saveAll(anyList())).thenReturn(List.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.empty());
-        when(agentRepository.save(any(Agent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         roleService.bulkAssignRole("AGENT", new BulkAssignRoleRequest(List.of("u1")));
 
-        verify(agentRepository).save(argThat(a -> "u1".equals(a.getUserId()) && Boolean.TRUE.equals(a.getStatus())));
+        verify(roleAccessSyncService).syncAgentRecord(user, "AGENT");
+        verify(roleAccessSyncService).syncAdminRecord(user, "AGENT");
     }
 
     @Test
-    void bulkAssignRole_agentRoleExistingAgent_doesNotCreateDuplicate() {
-        Role r = role("r1", "AGENT", "Agent");
+    void bulkAssignRole_adminAgentRole_delegatesToRoleAccessSyncService() {
+        Role r = role("r1", "ADMIN_AGENT", "Admin Agent");
         User user = User.builder().id("u1").fullName("Bob").build();
-        when(roleRepository.findByCode("AGENT")).thenReturn(Optional.of(r));
+        when(roleRepository.findByCode("ADMIN_AGENT")).thenReturn(Optional.of(r));
         when(userRepository.findAllById(anyList())).thenReturn(List.of(user));
         when(userRepository.saveAll(anyList())).thenReturn(List.of(user));
-        when(agentRepository.findByUserId("u1")).thenReturn(Optional.of(Agent.builder().id("a1").build()));
 
-        roleService.bulkAssignRole("AGENT", new BulkAssignRoleRequest(List.of("u1")));
+        roleService.bulkAssignRole("ADMIN_AGENT", new BulkAssignRoleRequest(List.of("u1")));
 
-        verify(agentRepository, never()).save(any(Agent.class));
+        verify(roleAccessSyncService).syncAgentRecord(user, "ADMIN_AGENT");
+        verify(roleAccessSyncService).syncAdminRecord(user, "ADMIN_AGENT");
     }
 
     @Test
@@ -302,7 +303,7 @@ class RoleServiceTest {
 
         assertThatThrownBy(() -> roleService.updateRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("Role name already exists")
+                .hasMessageContaining("A role with this name already exists")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -419,6 +420,8 @@ class RoleServiceTest {
         assertThat(response.roleCode()).isEqualTo("CUSTOM");
         assertThat(response.updatedCount()).isEqualTo(1);
         assertThat(response.updatedUserIds()).containsExactly("u1");
+        verify(roleAccessSyncService).syncAgentRecord(user, null);
+        verify(roleAccessSyncService).syncAdminRecord(user, null);
     }
 
     @Test
@@ -441,7 +444,7 @@ class RoleServiceTest {
 
         assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("u1")
+                .hasMessageContaining("could not be found")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(404);
         verify(userRepository, never()).saveAll(anyList());
@@ -455,7 +458,7 @@ class RoleServiceTest {
 
         assertThatThrownBy(() -> roleService.removeUsersFromRole("CUSTOM", request))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessageContaining("must not be empty")
+                .hasMessageContaining("At least one user must be selected")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(400);
     }
@@ -477,6 +480,8 @@ class RoleServiceTest {
         assertThat(userInOtherRole.getRoleCode()).isEqualTo("OTHER");
         assertThat(response.updatedCount()).isEqualTo(1);
         assertThat(response.updatedUserIds()).containsExactly("u1");
+        verify(roleAccessSyncService).syncAgentRecord(userInRole, null);
+        verify(roleAccessSyncService, never()).syncAgentRecord(userInOtherRole, null);
     }
 
     // ── permissionCatalog ─────────────────────────────────────────────────────

@@ -27,8 +27,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
 import java.util.Optional;
@@ -38,7 +42,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -107,75 +113,223 @@ class IncidentCategoryServiceTest {
     // ── listCategories ────────────────────────────────────────────────────────
 
     @Test
-    void listCategories_returnsMappedList() {
+    @SuppressWarnings("unchecked")
+    void listCategories_statusTrue_returnsMappedList() {
         IncidentCategory cat = buildCategory();
-        when(categoryRepository.findByStatusWithDepartmentAndQueryPaged(true, null, PageRequest.of(0, 20)))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(cat), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listCategories(true, null, PageRequest.of(0, 20));
+        var result = categoryService.listCategories(true, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
         assertThat(result.getContent().get(0).name()).isEqualTo("Facility");
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategories_statusFalse_returnsMappedList() {
+        IncidentCategory inactive = IncidentCategory.builder()
+                .id("cat-2")
+                .name("Archived")
+                .status(false)
+                .build();
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listCategories(false, null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategories_hasActiveTopicsOnly_returnsAllCategoriesWithActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listCategories(null, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategories_bothFilters_appliesStatusAndActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listCategories(true, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategories_noFilters_defaultsToActive() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listCategories(null, null, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     // ── listAllCategories ─────────────────────────────────────────────────────
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_noStateFilter_passesNullStatusToRepository() {
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(null, null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, null, PageRequest.of(0, 20));
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_stateAll_passesNullStatusToRepository() {
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        categoryService.listAllCategories(null, null, PageRequest.of(0, 20));
+        categoryService.listAllCategories(null, null, null, PageRequest.of(0, 20));
 
-        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, null, PageRequest.of(0, 20));
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_statusTrue_filtersToActiveOnly() {
         IncidentCategory active = buildCategory();
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(true), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(active), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(true, null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(true, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).status()).isTrue();
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_statusFalse_filtersToInactiveOnly() {
         IncidentCategory inactive = IncidentCategory.builder()
                 .id("cat-2").name("Old Category").status(false).build();
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(false), eq(null), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(inactive), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(false, null, PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(false, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).status()).isFalse();
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void listAllCategories_withQuery_buildsQueryPattern() {
-        when(categoryRepository.findAllWithDepartmentAndQueryPaged(eq(null), eq("%facility%"), any()))
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
 
-        var result = categoryService.listAllCategories(null, "facility", PageRequest.of(0, 20));
+        var result = categoryService.listAllCategories(null, null, "facility", PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
-        verify(categoryRepository).findAllWithDepartmentAndQueryPaged(null, "%facility%", PageRequest.of(0, 20));
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listAllCategories_hasActiveTopicsOnly_returnsAllCategoriesWithActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listAllCategories(null, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listAllCategories_bothFilters_appliesStatusAndActiveTopics() {
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        categoryService.listAllCategories(true, true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    // ── listCategoriesByDepartment ────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategoriesByDepartment_validDepartment_returnsMappedPage() {
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
+
+        var result = categoryService.listCategoriesByDepartment("dept-1", null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).id()).isEqualTo("cat-1");
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategoriesByDepartment_noStatusFilter_doesNotDefaultToActiveOnly() {
+        // Unlike listCategories, omitting status here must NOT restrict to active-only —
+        // matches "fetch all categories, filter by department client-side" per HV-1493.
+        IncidentCategory inactive = IncidentCategory.builder().id("cat-2").name("Archived").departmentId("dept-1").status(false).build();
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(buildCategory(), inactive), PageRequest.of(0, 20), 2));
+
+        var result = categoryService.listCategoriesByDepartment("dept-1", null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(2);
+    }
+
+    @Test
+    void listCategoriesByDepartment_inactiveDepartment_stillAllowed() {
+        // findDepartmentOrThrow only checks existence, unlike the stricter active-only
+        // validateDepartment used for create/update — matches /departments/{id}/categories today.
+        Department inactiveDept = Department.builder().id("dept-1").name("Facilities").status(false).build();
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(inactiveDept));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        var result = categoryService.listCategoriesByDepartment("dept-1", null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
+    void listCategoriesByDepartment_departmentNotFound_throws404() {
+        when(departmentRepository.findById("missing")).thenReturn(Optional.empty());
+        Pageable pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> categoryService.listCategoriesByDepartment("missing", null, null, pageable))
+                .isInstanceOf(ArmsAuthException.class)
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(404);
+        verifyNoInteractions(categoryRepository);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listCategoriesByDepartment_statusFilterApplied_returnsOnlyMatching() {
+        when(departmentRepository.findById("dept-1")).thenReturn(Optional.of(buildDepartment()));
+        when(categoryRepository.findAll(any(Specification.class), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(buildCategory()), PageRequest.of(0, 20), 1));
+
+        categoryService.listCategoriesByDepartment("dept-1", true, null, PageRequest.of(0, 20));
+
+        verify(categoryRepository).findAll(any(Specification.class), eq(PageRequest.of(0, 20)));
     }
 
     // ── createCategory ────────────────────────────────────────────────────────
@@ -221,7 +375,7 @@ class IncidentCategoryServiceTest {
         IncidentCategoryRequest createRequest = new IncidentCategoryRequest("Facility", "Description", "dept-1");
         assertThatThrownBy(() -> categoryService.createCategory(createRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Incident category with this name already exists")
+                .hasMessage("An incident category with this name already exists. Please choose a different name.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -239,7 +393,7 @@ class IncidentCategoryServiceTest {
 
         categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null));
+                new UpdateTopicRequest("  New Name  ", "  New desc  ", null, null, null, null));
 
         assertThat(topic.getName()).isEqualTo("New Name");
         assertThat(topic.getDescription()).isEqualTo("New desc");
@@ -258,10 +412,47 @@ class IncidentCategoryServiceTest {
 
         IncidentTopicResponse response = categoryService.updateTopic(
                 "cat-1", "type-1",
-                new UpdateTopicRequest("New Name", "New desc", null, "group-1", false));
+                new UpdateTopicRequest("New Name", "New desc", null, "group-1", null, false));
 
         assertThat(response).isNotNull();
         verify(typeRepository).save(any(IncidentType.class));
+    }
+
+    @Test
+    void updateTopic_removeAgentGroup_clearsAssignment() {
+        IncidentCategory category = buildCategory();
+        IncidentType topic = buildType();
+        assertThat(topic.getAgentGroupId()).isEqualTo("group-1");
+
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+        when(typeRepository.save(any(IncidentType.class))).thenReturn(topic);
+        when(typeRepository.findByIdWithDetails("type-1")).thenReturn(Optional.of(buildHydratedType()));
+
+        categoryService.updateTopic(
+                "cat-1", "type-1",
+                new UpdateTopicRequest(null, null, null, null, true, null));
+
+        assertThat(topic.getAgentGroupId()).isNull();
+        verify(agentGroupRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateTopic_removeAgentGroupAndProvideNewGroup_throws400() {
+        IncidentCategory category = buildCategory();
+        IncidentType topic = buildType();
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(category));
+        when(typeRepository.findById("type-1")).thenReturn(Optional.of(topic));
+
+        UpdateTopicRequest request = new UpdateTopicRequest(null, null, null, "group-2", true, null);
+        assertThatThrownBy(() -> categoryService.updateTopic("cat-1", "type-1", request))
+                .isInstanceOf(ArmsAuthException.class)
+                .hasMessage("Cannot remove and reassign the agent group in the same request")
+                .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
+                .isEqualTo(400);
+
+        assertThat(topic.getAgentGroupId()).isEqualTo("group-1");
+        verify(typeRepository, never()).save(any(IncidentType.class));
     }
 
     @Test
@@ -285,7 +476,7 @@ class IncidentCategoryServiceTest {
         UpdateIncidentCategoryRequest updateRequest = new UpdateIncidentCategoryRequest("Other Name", "Desc", "dept-1");
         assertThatThrownBy(() -> categoryService.updateCategory("cat-1", updateRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("Incident category with this name already exists")
+                .hasMessage("An incident category with this name already exists. Please choose a different name.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -360,6 +551,21 @@ class IncidentCategoryServiceTest {
 
         assertThat(cat.getStatus()).isFalse();
         verify(categoryRepository).save(cat);
+    }
+
+    @Test
+    void updateCategoryStatus_deactivate_cascadesToActiveTopics() {
+        IncidentCategory cat = buildCategory();
+        IncidentType topic = buildType();
+        topic.setStatus(true);
+        when(categoryRepository.findById("cat-1")).thenReturn(Optional.of(cat));
+        when(typeRepository.findByCategoryId("cat-1")).thenReturn(List.of(topic));
+
+        categoryService.updateCategoryStatus("cat-1", false);
+
+        assertThat(cat.getStatus()).isFalse();
+        assertThat(topic.getStatus()).isFalse();
+        verify(typeRepository).saveAll(List.of(topic));
     }
 
     @Test
@@ -455,7 +661,7 @@ class IncidentCategoryServiceTest {
         CreateTopicRequest dupTopicRequest = new CreateTopicRequest("Projector", "Projector issues", "group-1", true);
         assertThatThrownBy(() -> categoryService.createTopic("cat-1", "admin-1", dupTopicRequest))
                 .isInstanceOf(ArmsAuthException.class)
-                .hasMessage("A topic with this name already exists")
+                .hasMessage("A topic with this name already exists. Please choose a different name.")
                 .extracting(e -> ((ArmsAuthException) e).getHttpStatus())
                 .isEqualTo(409);
     }
@@ -537,8 +743,9 @@ class IncidentCategoryServiceTest {
     @Test
     void listTopics_noStatusFilter_returnsAllTopics() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+        var defaultSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "name"));
+        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, defaultSort))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), defaultSort, 1));
 
         var result = categoryService.listTopics(null, null, null, null, null, pageable);
 
@@ -546,30 +753,64 @@ class IncidentCategoryServiceTest {
         IncidentTopicListResponse row = result.getContent().get(0);
         assertThat(row.category()).isNotNull();
         assertThat(row.agentGroup()).isNotNull();
-        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, pageable);
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, defaultSort);
     }
 
     @Test
     void listTopics_statusAll_passesNullToRepository() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        var defaultSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "name"));
+        when(typeRepository.findAllTopicsFiltered(null, null, null, null, null, defaultSort))
+                .thenReturn(new PageImpl<>(List.of(), defaultSort, 0));
 
         categoryService.listTopics(null, null, null, null, null, pageable);
 
-        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, pageable);
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, null, null, defaultSort);
     }
 
     @Test
     void listTopics_statusActive_filtersActiveTopics() {
         var pageable = PageRequest.of(0, 20);
-        when(typeRepository.findAllTopicsFiltered(null, null, null, true, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), pageable, 1));
+        var defaultSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "name"));
+        when(typeRepository.findAllTopicsFiltered(null, null, null, true, null, defaultSort))
+                .thenReturn(new PageImpl<>(List.of(buildHydratedType()), defaultSort, 1));
 
         var result = categoryService.listTopics(null, null, null, true, null, pageable);
 
         assertThat(result.getTotalElements()).isEqualTo(1);
-        verify(typeRepository).findAllTopicsFiltered(null, null, null, true, null, pageable);
+        verify(typeRepository).findAllTopicsFiltered(null, null, null, true, null, defaultSort);
+    }
+
+    @Test
+    void listTopics_sortByCategoryAlias_translatesToCategoryNamePath() {
+        Page<IncidentType> page = new PageImpl<>(List.of());
+        when(typeRepository.findAllTopicsFiltered(any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        var categorySort = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "category"));
+        categoryService.listTopics(null, null, null, null, null, categorySort);
+
+        var captor = forClass(org.springframework.data.domain.Pageable.class);
+        verify(typeRepository).findAllTopicsFiltered(any(), any(), any(), any(), any(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("category.name")).isNotNull();
+        assertThat(captured.getOrderFor("category")).isNull();
+    }
+
+    @Test
+    void listTopics_sortByUnknownField_fallsBackToDefaultNameSort() {
+        Page<IncidentType> page = new PageImpl<>(List.of());
+        when(typeRepository.findAllTopicsFiltered(any(), any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
+        var unknownSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "bogusField"));
+        categoryService.listTopics(null, null, null, null, null, unknownSort);
+
+        var captor = forClass(org.springframework.data.domain.Pageable.class);
+        verify(typeRepository).findAllTopicsFiltered(any(), any(), any(), any(), any(), captor.capture());
+        Sort captured = captor.getValue().getSort();
+        assertThat(captured.getOrderFor("name")).isNotNull();
+        assertThat(captured.getOrderFor("bogusField")).isNull();
     }
 
     // ── listTopicsByCategory ──────────────────────────────────────────────────

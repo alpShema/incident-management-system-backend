@@ -4,7 +4,6 @@ import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
 import com.amalitech.hilfe.models.RoleCode;
 import com.amalitech.hilfe.models.User;
-import com.amalitech.hilfe.repositories.AdminRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import com.amalitech.hilfe.services.AdminService;
@@ -27,7 +26,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AdminServiceTest {
 
-    @Mock AdminRepository adminRepository;
     @Mock UserRepository userRepository;
     @Mock AgentRepository agentRepository;
     @InjectMocks AdminService adminService;
@@ -140,6 +138,34 @@ class AdminServiceTest {
 
         verify(agentRepository).save(any(Agent.class));
         assertThat(result).isNotNull();
+    }
+
+    @Test
+    void grantAgentAccess_adminAgentRole_isAllowed() {
+        var adminAgent = User.builder().id("user-1").email("aa@test.com").fullName("Admin Agent User").roleCode(RoleCode.ADMIN_AGENT).build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(adminAgent));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+        when(agentRepository.findByUserIdWithUser("user-1")).thenReturn(Optional.of(agentWithUser(true)));
+
+        var result = adminService.grantAgentAccess("user-1");
+
+        verify(agentRepository).save(any(Agent.class));
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void revokeAgentAccess_adminAgentRole_isAllowed() {
+        var adminAgent = User.builder().id("user-1").email("aa@test.com").fullName("Admin Agent User").roleCode(RoleCode.ADMIN_AGENT).build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(adminAgent));
+        when(agentRepository.findByUserId("user-1")).thenReturn(Optional.of(agentWithUser(true)));
+        when(agentRepository.findByUserIdWithUser("user-1")).thenReturn(Optional.of(agentWithUser(false)));
+
+        var result = adminService.revokeAgentAccess("user-1");
+
+        var captor = ArgumentCaptor.forClass(Agent.class);
+        verify(agentRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isFalse();
+        assertThat(result.status()).isFalse();
     }
 
     // ── revokeAgentAccess ─────────────────────────────────────────────────────

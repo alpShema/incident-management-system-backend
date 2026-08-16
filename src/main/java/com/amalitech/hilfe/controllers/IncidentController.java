@@ -2,6 +2,7 @@ package com.amalitech.hilfe.controllers;
 
 import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.security.authorization.CurrentUserAuthority;
 import com.amalitech.hilfe.security.authorization.RbacPermissions;
 import com.amalitech.hilfe.services.ActivityLogService;
 import com.amalitech.hilfe.services.IncidentService;
@@ -105,13 +106,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAllIncidents(
                 query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
@@ -138,13 +140,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success(MSG_INCIDENTS_RETRIEVED, PageResponse.from(page)));
@@ -175,13 +178,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryDeptIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Department incidents retrieved successfully", PageResponse.from(page)));
@@ -212,13 +216,14 @@ public class IncidentController {
             @Parameter(description = "Filter by incident type (topic) ID") @RequestParam(required = false) String incidentTypeId,
             @Parameter(description = "Filter by incident category ID") @RequestParam(required = false) String categoryId,
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) String locationId,
+            @Parameter(description = "Filter by SLA status. Admin-only.") @RequestParam(required = false) SlaStatus slaStatus,
             @Parameter(description = "Filter from date (inclusive). Returns incidents created on or after this timestamp.", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) Instant fromDate,
             @Parameter(description = "Filter to date (exclusive). Returns incidents created before this timestamp.", example = "2026-02-01T00:00:00Z") @RequestParam(required = false) Instant toDate,
             Pageable pageable
     ) {
         Page<IncidentResponse> page = incidentService.queryAssignedIncidents(
                 principal.userId(), query,
-                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId),
+                new IncidentFilterParams(statusId, severityId, incidentTypeId, categoryId, locationId, slaStatus),
                 new IncidentDateFilter(fromDate, toDate),
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Assigned incidents retrieved successfully", PageResponse.from(page)));
@@ -264,7 +269,7 @@ public class IncidentController {
         description = "Changes the incident status following the role-based lifecycle. "
                     + "Agents: In Progress → Pending/Resolved, Pending → In Progress. "
                     + "Clients: Resolved → Closed/Reopened. "
-                    + "Admins: any → Closed (override). "
+                    + "Holders of `incident.forceclose`: any → Closed (override). "
                     + "Invalid transitions are rejected with HTTP 422. Requires `incident.status.change` permission."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status updated")
@@ -278,13 +283,15 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id,
             @Valid @RequestBody UpdateIncidentStatusRequest request
     ) {
+        boolean hasForceClose = CurrentUserAuthority.has(RbacPermissions.INCIDENT_FORCECLOSE);
         return ResponseEntity.ok(ApiResponse.success("Incident status updated successfully",
-                incidentService.updateStatus(principal.userId(), parseRoleCode(principal.roleCode()), id, request)));
+                incidentService.updateStatus(principal.userId(), parseRoleCode(principal.roleCode()), hasForceClose, id, request)));
     }
 
     @Operation(
         summary = "Update incident severity",
-        description = "Sets the priority/severity level of an incident. Requires `incident.severity.change` permission."
+        description = "Sets the priority/severity level of an incident. Requires `incident.severity.change` permission. "
+                    + "Callers without `incident.update.any` may only update incidents assigned to them."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Severity updated")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
@@ -296,13 +303,15 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id,
             @Valid @RequestBody UpdateIncidentSeverityRequest request
     ) {
+        boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
         return ResponseEntity.ok(ApiResponse.success("Incident severity updated successfully",
-                incidentService.updateSeverity(principal.userId(), id, request)));
+                incidentService.updateSeverity(principal.userId(), hasUpdateAny, id, request)));
     }
 
     @Operation(
         summary = "Assign incident to an agent",
-        description = "Assigns the incident to a specific agent by their agent ID. Requires `incident.assign` permission."
+        description = "Assigns the incident to a specific agent by their agent ID. Requires `incident.assign` permission. "
+                    + "Callers without `incident.update.any` may only reassign incidents already assigned to them."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Incident assigned")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
@@ -314,8 +323,9 @@ public class IncidentController {
             @Parameter(description = "Incident ID") @PathVariable String id,
             @Valid @RequestBody AssignIncidentRequest request
     ) {
+        boolean hasUpdateAny = CurrentUserAuthority.has(RbacPermissions.INCIDENT_UPDATE_ANY);
         return ResponseEntity.ok(ApiResponse.success("Incident assigned successfully",
-                incidentService.assignIncident(principal.userId(), principal.roleCode(), id, request)));
+                incidentService.assignIncident(principal.userId(), hasUpdateAny, id, request)));
     }
 
     @Operation(

@@ -32,6 +32,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -79,6 +80,30 @@ class SlaServiceTest {
     }
 
     @Test
+    void onIncidentCreated_materializesInitialResponseAndResolutionStatus() {
+        Instant createdAt = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .severityId("sev-1")
+                .createdAt(createdAt)
+                .build();
+        Severity severity = Severity.builder()
+                .id("sev-1")
+                .name("High")
+                .responseTimeMinutes(60)
+                .resolutionTimeMinutes(480)
+                .build();
+        when(severityRepository.findById("sev-1")).thenReturn(Optional.of(severity));
+
+        slaService.onIncidentCreated(incident);
+
+        ArgumentCaptor<IncidentSla> captor = ArgumentCaptor.forClass(IncidentSla.class);
+        verify(incidentSlaRepository).save(captor.capture());
+        assertThat(captor.getValue().getResponseStatus()).isIn("ON_TRACK", "AT_RISK");
+        assertThat(captor.getValue().getResolutionStatus()).isIn("ON_TRACK", "AT_RISK");
+    }
+
+    @Test
     void onAgentMessageSent_assignedAgentStopsResponseTimer() {
         Incident incident = Incident.builder()
                 .id("inc-1")
@@ -97,6 +122,7 @@ class SlaServiceTest {
         verify(incidentSlaRepository).save(sla);
         assertThat(sla.getFirstResponseAt()).isNotNull();
         assertThat(sla.getResponseElapsedMs()).isNotNull();
+        assertThat(sla.getResponseStatus()).isEqualTo("NOT_TRACKED");
     }
 
     @Test
@@ -138,6 +164,10 @@ class SlaServiceTest {
         assertThat(sla.getResolvedAtSnapshot()).isNotNull();
         assertThat(sla.getResolutionBreachedAt()).isEqualTo(sla.getResolutionDueAt());
         assertThat(sla.getResolutionRemainingMsOnResolve()).isZero();
+        // resolutionThresholdMinutes isn't set on this fixture, so the materialized status is
+        // NOT_TRACKED even though a breach timestamp exists — matches computeResolutionStatus's
+        // existing (unchanged) precedence, now just persisted rather than computed on read only.
+        assertThat(sla.getResolutionStatus()).isEqualTo("NOT_TRACKED");
     }
 
     @Test
@@ -177,6 +207,106 @@ class SlaServiceTest {
     }
 
     @Test
+    void onStatusChanged_forceClosedBeforeFirstResponse_freezesResponseElapsedWithoutBreach() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofMinutes(5))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.plus(Duration.ofMinutes(25)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResponseElapsedMs()).isNotNull();
+        assertThat(sla.getResponseBreachedAt()).isNull();
+    }
+
+    @Test
+    void onStatusChanged_forceClosedAfterResponseDeadlinePassed_marksResponseBreached() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(1))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.minus(Duration.ofMinutes(10)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResponseBreachedAt()).isEqualTo(sla.getResponseDueAt());
+        assertThat(sla.getResponseElapsedMs()).isNotNull();
+    }
+
+    @Test
+    void onStatusChanged_forceClosedAfterAgentAlreadyResponded_doesNotOverwriteExistingResponseElapsed() {
+        Instant now = FIXED_NOW;
+        Instant firstResponseAt = now.minus(Duration.ofMinutes(20));
+        Incident incident = Incident.builder().id("inc-1").createdAt(now.minus(Duration.ofHours(1))).build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.minus(Duration.ofMinutes(30)))
+                .firstResponseAt(firstResponseAt)
+                .responseElapsedMs(123_456L)
+                .resolutionDueAt(now.plus(Duration.ofMinutes(10)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        slaService.onStatusChanged(incident, "status-in-progress", "status-closed");
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResponseElapsedMs()).isEqualTo(123_456L);
+    }
+
+    @Test
+    void scanAndNotify_frozenResponseAndResolutionTimers_neverPublishesNotification() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder().id("inc-1").incidentNo(7).build();
+        IncidentSla responseSla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(30)
+                .responseDueAt(now.minus(Duration.ofMinutes(10)))
+                .resolvedAtSnapshot(now.minus(Duration.ofMinutes(1)))
+                .build();
+        IncidentSla resolutionSla = IncidentSla.builder()
+                .incidentId("inc-2")
+                .incident(incident)
+                .resolutionThresholdMinutes(60)
+                .resolutionDueAt(now.minus(Duration.ofMinutes(5)))
+                .resolvedAtSnapshot(now.minus(Duration.ofMinutes(1)))
+                .build();
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(responseSla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of(resolutionSla));
+
+        slaService.scanAndNotify();
+
+        verify(notificationEventPublisher, never()).publish(any());
+        verify(incidentSlaRepository, never()).save(any());
+    }
+
+    @Test
+    void getIncidentSlaResponse_forceClosedBeforeResponseDueDate_reportsResponseStatusMet() {
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .responseThresholdMinutes(60)
+                .responseDueAt(FIXED_NOW.plus(Duration.ofMinutes(30)))
+                .resolvedAtSnapshot(FIXED_NOW.minus(Duration.ofMinutes(1)))
+                .build();
+        when(incidentSlaRepository.findById("inc-1")).thenReturn(Optional.of(sla));
+
+        IncidentSlaResponse response = slaService.getIncidentSlaResponse("inc-1");
+
+        assertThat(response).isNotNull();
+        assertThat(response.responseStatus()).isEqualTo("MET");
+    }
+
+    @Test
     void scanAndNotify_responseAtRisk_publishesNotificationsOnce() {
         Instant now = FIXED_NOW;
         Incident incident = Incident.builder()
@@ -204,9 +334,38 @@ class SlaServiceTest {
         verify(notificationEventPublisher, times(2)).publish(captor.capture());
         verify(incidentSlaRepository).save(sla);
         assertThat(sla.getResponseAtRiskNotifiedAt()).isNotNull();
+        assertThat(sla.getResponseStatus()).isEqualTo("AT_RISK");
         assertThat(captor.getAllValues())
                 .extracting(IncidentSlaAtRiskEvent::recipientUserId)
                 .containsExactlyInAnyOrder("agent-user-1", "admin-1");
+    }
+
+    @Test
+    void scanAndNotify_responseBreached_materializesBreachedStatus() {
+        Instant now = FIXED_NOW;
+        Incident incident = Incident.builder()
+                .id("inc-1")
+                .incidentNo(16)
+                .build();
+        IncidentSla sla = IncidentSla.builder()
+                .incidentId("inc-1")
+                .incident(incident)
+                .responseThresholdMinutes(60)
+                .responseDueAt(now.minus(Duration.ofMinutes(5)))
+                .responseStatus("AT_RISK")
+                .build();
+
+        when(systemConfigRepository.findById(SlaService.SLA_AT_RISK_PCT_KEY))
+                .thenReturn(Optional.of(SystemConfig.builder().key(SlaService.SLA_AT_RISK_PCT_KEY).value("20").build()));
+        when(incidentSlaRepository.findActiveResponseTimers()).thenReturn(List.of(sla));
+        when(incidentSlaRepository.findActiveResolutionTimers()).thenReturn(List.of());
+        when(userRepository.findActiveAdminUserIds()).thenReturn(List.of("admin-1"));
+
+        slaService.scanAndNotify();
+
+        verify(incidentSlaRepository).save(sla);
+        assertThat(sla.getResponseBreachedAt()).isNotNull();
+        assertThat(sla.getResponseStatus()).isEqualTo("BREACHED");
     }
 
     @Test

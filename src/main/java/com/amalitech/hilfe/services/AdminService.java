@@ -3,7 +3,6 @@ package com.amalitech.hilfe.services;
 import com.amalitech.hilfe.dto.AgentResponse;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.models.Agent;
-import com.amalitech.hilfe.repositories.AdminRepository;
 import com.amalitech.hilfe.repositories.AgentRepository;
 import com.amalitech.hilfe.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,17 +14,20 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class AdminService {
-    private final AdminRepository adminRepository;
+    private static final String USER_NOT_FOUND = "User not found";
+    private static final String NOT_AN_ADMIN = "User is not an admin";
+    private static final String NO_AGENT_ACCESS = "Admin has no agent access";
+
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
 
     @Transactional
     public AgentResponse grantAgentAccess(String adminUserId) {
         var user = userRepository.findById(adminUserId)
-                .orElseThrow(() -> new ArmsAuthException("User not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(USER_NOT_FOUND, 404));
 
         if (!isAdmin(user.getRoleCode())) {
-            throw new ArmsAuthException("User is not an admin", 400);
+            throw new ArmsAuthException(NOT_AN_ADMIN, 400);
         }
 
         agentRepository.findByUserId(adminUserId).ifPresentOrElse(
@@ -50,14 +52,14 @@ public class AdminService {
     @Transactional
     public AgentResponse revokeAgentAccess(String adminUserId) {
         var user = userRepository.findById(adminUserId)
-                .orElseThrow(() -> new ArmsAuthException("User not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(USER_NOT_FOUND, 404));
 
         if (!isAdmin(user.getRoleCode())) {
-            throw new ArmsAuthException("User is not an admin", 400);
+            throw new ArmsAuthException(NOT_AN_ADMIN, 400);
         }
 
         var agent = agentRepository.findByUserId(adminUserId)
-                .orElseThrow(() -> new ArmsAuthException("Admin has no agent access", 404));
+                .orElseThrow(() -> new ArmsAuthException(NO_AGENT_ACCESS, 404));
 
         if (Boolean.TRUE.equals(agent.getStatus())) {
             agent.setStatus(false);
@@ -71,18 +73,20 @@ public class AdminService {
 
     public AgentResponse getAgentAccess(String adminUserId) {
         var user = userRepository.findById(adminUserId)
-                .orElseThrow(() -> new ArmsAuthException("User not found", 404));
+                .orElseThrow(() -> new ArmsAuthException(USER_NOT_FOUND, 404));
 
         if (!isAdmin(user.getRoleCode())) {
-            throw new ArmsAuthException("User is not an admin", 400);
+            throw new ArmsAuthException(NOT_AN_ADMIN, 400);
         }
 
         return agentRepository.findByUserIdWithUser(adminUserId)
                 .map(AgentResponse::from)
-                .orElseThrow(() -> new ArmsAuthException("Admin has no agent access", 404));
+                .orElseThrow(() -> new ArmsAuthException(NO_AGENT_ACCESS, 404));
     }
 
     private boolean isAdmin(String roleCode) {
-        return "ADMIN".equalsIgnoreCase(roleCode) || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
+        return "ADMIN".equalsIgnoreCase(roleCode)
+                || "ADMIN_AGENT".equalsIgnoreCase(roleCode)
+                || "SUPER_ADMIN".equalsIgnoreCase(roleCode);
     }
 }

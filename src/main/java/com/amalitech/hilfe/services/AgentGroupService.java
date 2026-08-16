@@ -37,6 +37,7 @@ public class AgentGroupService {
     private final ActivityLogService activityLogService;
 
     private static final String TOPIC_NOT_FOUND_PREFIX = "Topic not found: ";
+    private static final String GROUP_ALREADY_EXISTS_MESSAGE = "An agent group with this name already exists. Please choose a different name.";
 
     public Page<AgentGroupResponse> listAgentGroups(String query, String departmentId, Pageable pageable) {
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
@@ -45,6 +46,9 @@ public class AgentGroupService {
     }
 
     public Page<AgentGroupResponse> listAllAgentGroups(Boolean status, String query, String departmentId, Pageable pageable) {
+        if (!isBlank(departmentId)) {
+            findDepartmentOrThrow(departmentId);
+        }
         String queryPattern = (query == null || query.isBlank()) ? null : "%" + query.toLowerCase() + "%";
         return agentGroupRepository.listAllAgentGroups(status, queryPattern, departmentId, pageable)
                 .map(this::toResponse);
@@ -72,10 +76,10 @@ public class AgentGroupService {
             throw new ArmsAuthException("Agent group name is required", 400);
         }
         if (isBlank(request.departmentId())) {
-            throw new ArmsAuthException("departmentId is required", 400);
+            throw new ArmsAuthException("A department must be selected for this agent group.", 400);
         }
         if (agentGroupRepository.existsByNameIgnoreCase(name)) {
-            throw new ArmsAuthException("Agent group with this name already exists", 409);
+            throw new ArmsAuthException(GROUP_ALREADY_EXISTS_MESSAGE, 409);
         }
         if (request.agentIds() == null || request.agentIds().isEmpty()) {
             throw new ArmsAuthException("At least one agent is required", 400);
@@ -123,11 +127,11 @@ public class AgentGroupService {
         String name = trimOrNull(request.name());
         String description = trimOrNull(request.description());
 
-        AgentGroup group = findActiveAgentGroupOrThrow(id);
+        AgentGroup group = findAgentGroupByIdOrThrow(id);
         if (!isBlank(name)) {
             if (!group.getName().equalsIgnoreCase(name)
                     && agentGroupRepository.existsByNameIgnoreCase(name)) {
-                throw new ArmsAuthException("Agent group with this name already exists", 409);
+                throw new ArmsAuthException(GROUP_ALREADY_EXISTS_MESSAGE, 409);
             }
             group.setName(name);
         }
@@ -151,8 +155,13 @@ public class AgentGroupService {
         }
 
         if (request.topicIds() != null) {
-            validateTopicsForDepartment(request.topicIds(), group.getDepartmentId());
+            // Clear before validating/re-linking: clearAgentGroupId is a bulk update that
+            // bypasses the persistence context, so any topic entity already loaded beforehand
+            // would keep a stale in-memory agentGroupId. If that stale value happened to equal
+            // the id being re-set (an already-linked topic resubmitted unchanged), Hibernate's
+            // dirty checking would see no change and silently skip re-linking it.
             incidentTypeRepository.clearAgentGroupId(id);
+            validateTopicsForDepartment(request.topicIds(), group.getDepartmentId());
             for (String topicId : request.topicIds()) {
                 IncidentType topic = incidentTypeRepository.findById(topicId)
                         .orElseThrow(() -> new ArmsAuthException(TOPIC_NOT_FOUND_PREFIX + topicId, 404));
@@ -195,6 +204,9 @@ public class AgentGroupService {
     public AgentGroupMemberResponse addMember(String agentGroupId, String agentId) {
         ensureActiveAgentGroupExists(agentGroupId);
         Agent agent = findAgentWithUser(agentId);
+        if (!Boolean.TRUE.equals(agent.getStatus())) {
+            throw new ArmsAuthException("Cannot add an inactive agent to a group", 400);
+        }
         addMembership(agentId, agentGroupId);
         return AgentGroupMemberResponse.from(agent);
     }
@@ -258,6 +270,14 @@ public class AgentGroupService {
     private Department findActiveDepartment(String departmentId) {
         return departmentRepository.findById(departmentId)
                 .filter(department -> Boolean.TRUE.equals(department.getStatus()))
+                .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
+    }
+
+    // Existence-only check for read-side department filtering (HV-1498) — unlike
+    // findActiveDepartment (used for create/update), listing shouldn't reject an inactive
+    // department; it should just scope to whatever agent groups exist under it.
+    private void findDepartmentOrThrow(String departmentId) {
+        departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new ArmsAuthException("Department not found", 404));
     }
 

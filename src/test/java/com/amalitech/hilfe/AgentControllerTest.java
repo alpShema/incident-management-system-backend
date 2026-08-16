@@ -65,7 +65,7 @@ class AgentControllerTest {
 
     @Test
     void listAgents_withoutDepartment_returns200() throws Exception {
-        when(agentService.listAgents(isNull(), isNull(), any())).thenReturn(
+        when(agentService.listAgents(isNull(), isNull(), isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -82,7 +82,7 @@ class AgentControllerTest {
 
     @Test
     void listAgents_withDepartment_returns200() throws Exception {
-        when(agentService.listAgents(anyString(), isNull(), any())).thenReturn(
+        when(agentService.listAgents(anyString(), isNull(), isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(false)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -97,7 +97,7 @@ class AgentControllerTest {
 
     @Test
     void listAllAgents_returns200() throws Exception {
-        when(agentService.listAllAgents(isNull(), isNull(), any())).thenReturn(
+        when(agentService.listAllAgents(isNull(), isNull(), isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(true), stubAgentResponse(false)), PageRequest.of(0, 20), 2));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -112,7 +112,7 @@ class AgentControllerTest {
 
     @Test
     void listAllAgents_withDepartment_returns200() throws Exception {
-        when(agentService.listAllAgents(anyString(), isNull(), any())).thenReturn(
+        when(agentService.listAllAgents(anyString(), isNull(), isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(false)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -127,7 +127,7 @@ class AgentControllerTest {
 
     @Test
     void listAgents_withQuery_returns200AndForwardsQuery() throws Exception {
-        when(agentService.listAgents(isNull(), eq("farida"), any())).thenReturn(
+        when(agentService.listAgents(isNull(), eq("farida"), isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -139,12 +139,12 @@ class AgentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].officeLocation").value("Takoradi"));
 
-        verify(agentService).listAgents(isNull(), eq("farida"), any());
+        verify(agentService).listAgents(isNull(), eq("farida"), isNull(), isNull(), any());
     }
 
     @Test
     void listAllAgents_withQuery_returns200AndForwardsQuery() throws Exception {
-        when(agentService.listAllAgents(isNull(), eq("farida"), any())).thenReturn(
+        when(agentService.listAllAgents(isNull(), eq("farida"), isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -155,12 +155,12 @@ class AgentControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk());
 
-        verify(agentService).listAllAgents(isNull(), eq("farida"), any());
+        verify(agentService).listAllAgents(isNull(), eq("farida"), isNull(), isNull(), any());
     }
 
     @Test
     void listAgents_withDepartmentAndQuery_returns200AndForwardsBoth() throws Exception {
-        when(agentService.listAgents(eq("dept-1"), eq("takoradi"), any())).thenReturn(
+        when(agentService.listAgents(eq("dept-1"), eq("takoradi"), isNull(), isNull(), any())).thenReturn(
                 new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
 
         var auth = new UsernamePasswordAuthenticationToken(
@@ -172,7 +172,78 @@ class AgentControllerTest {
                         .with(authentication(auth)))
                 .andExpect(status().isOk());
 
-        verify(agentService).listAgents(eq("dept-1"), eq("takoradi"), any());
+        verify(agentService).listAgents(eq("dept-1"), eq("takoradi"), isNull(), isNull(), any());
+    }
+
+    // ── availability & office location filters (HV-1436) ───────────────────────
+
+    @Test
+    void listAllAgents_withAvailableFilter_forwardsAvailableToService() throws Exception {
+        when(agentService.listAllAgents(isNull(), isNull(), eq(true), isNull(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .param("status", "true")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
+        verify(agentService).listAllAgents(isNull(), isNull(), eq(true), isNull(), any());
+    }
+
+    @Test
+    void listAllAgents_withUnavailableFilter_forwardsAvailableToService() throws Exception {
+        when(agentService.listAllAgents(isNull(), isNull(), eq(false), isNull(), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(false)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .param("status", "false")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
+        verify(agentService).listAllAgents(isNull(), isNull(), eq(false), isNull(), any());
+    }
+
+    @Test
+    void listAllAgents_withLocationFilter_forwardsLocationIdToService() throws Exception {
+        when(agentService.listAllAgents(isNull(), isNull(), isNull(), eq("loc-1"), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .param("locationId", "loc-1")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
+        verify(agentService).listAllAgents(isNull(), isNull(), isNull(), eq("loc-1"), any());
+    }
+
+    @Test
+    void listAllAgents_withAvailableAndLocationFilters_forwardsBothToService() throws Exception {
+        when(agentService.listAllAgents(isNull(), isNull(), eq(true), eq("loc-1"), any())).thenReturn(
+                new PageImpl<>(List.of(stubAgentResponse(true)), PageRequest.of(0, 20), 1));
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                agentPrincipal(), null, List.of(() -> "agent.read"));
+
+        mvc.perform(get("/agents/all")
+                        .param("status", "true")
+                        .param("locationId", "loc-1")
+                        .with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
+        verify(agentService).listAllAgents(isNull(), isNull(), eq(true), eq("loc-1"), any());
     }
 
     // ── GET /agents/status ────────────────────────────────────────────────────
@@ -187,7 +258,7 @@ class AgentControllerTest {
         mvc.perform(get("/agents/status")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Status retrieved"))
+                .andExpect(jsonPath("$.message").value("Agent status retrieved successfully"))
                 .andExpect(jsonPath("$.data.status").value(true));
     }
 
@@ -230,7 +301,7 @@ class AgentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"available\": false}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Status updated"))
+                .andExpect(jsonPath("$.message").value("Agent status updated successfully"))
                 .andExpect(jsonPath("$.data.status").value(false));
     }
 

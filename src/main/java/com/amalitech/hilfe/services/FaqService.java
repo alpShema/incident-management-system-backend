@@ -2,7 +2,12 @@ package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.dto.CreateFaqRequest;
 import com.amalitech.hilfe.dto.FaqBulkUploadResult;
+import com.amalitech.hilfe.dto.FaqInspectionResult;
+import com.amalitech.hilfe.dto.FaqInspectionRow;
+import com.amalitech.hilfe.dto.FaqInspectionSummary;
 import com.amalitech.hilfe.dto.FaqResponse;
+import com.amalitech.hilfe.dto.FaqRowStatus;
+import com.amalitech.hilfe.dto.FaqUpsertResult;
 import com.amalitech.hilfe.dto.PageResponse;
 import com.amalitech.hilfe.dto.UpdateFaqRequest;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -13,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,32 +29,38 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class FaqService {
 
+    private static final String CSV_READ_ERROR_MESSAGE =
+            "The uploaded CSV file could not be read. Please check the file format and try again.";
+    private static final String QUESTION_COLUMN = "question";
+    private static final String ANSWER_COLUMN = "answer";
+
+    // Single source of truth for the downloadable CSV template, shared by the REST
+    // (FaqController) and GraphQL (FaqResolver) surfaces so they can't drift apart.
+    public static final String CSV_IMPORT_TEMPLATE = QUESTION_COLUMN + "," + ANSWER_COLUMN + "\n";
+
     private final FaqRepository faqRepository;
     private final FaqEmbeddingService faqEmbeddingService;
 
+    // A submitted question that matches an existing FAQ (see findByNormalizedQuestion)
+    // updates that FAQ in place instead of creating a duplicate entry for the question.
     @Transactional
-    public FaqResponse createFaq(CreateFaqRequest request) {
-        Faq faq = Faq.builder()
-                .id(UUID.randomUUID().toString())
-                .question(sanitize(request.question()))
-                .answer(sanitize(request.answer()))
-                .active(true)
-                .build();
-
-        faq = faqRepository.save(faq);
-        scheduleEmbedAfterCommit(faq);
-        return FaqResponse.from(faq);
+    public FaqUpsertResult createFaq(CreateFaqRequest request) {
+        UpsertOutcome outcome = upsertByQuestion(request.question(), request.answer());
+        scheduleEmbedAfterCommit(outcome.faq());
+        return new FaqUpsertResult(FaqResponse.from(outcome.faq()), outcome.created());
     }
 
     @Transactional
@@ -85,9 +98,11 @@ public class FaqService {
         return FaqResponse.from(findOrThrow(id));
     }
 
-    public PageResponse<FaqResponse> listFaqs(Boolean active, Pageable pageable) {
+    public PageResponse<FaqResponse> listFaqs(Boolean active, String search, Pageable pageable) {
+        String searchPattern = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%" : null;
         return PageResponse.from(
-                faqRepository.findAllFiltered(active, pageable).map(FaqResponse::from)
+                faqRepository.findAllFiltered(active, searchPattern, pageable).map(FaqResponse::from)
         );
     }
 
@@ -109,61 +124,217 @@ public class FaqService {
         return succeeded;
     }
 
-    @Transactional
+    // Intentionally not @Transactional: each row is saved and embedded through its
+    // own independently-transactional repository/service calls (like reEmbedAll()),
+    // so one bad row rolls back only itself instead of aborting the whole Postgres
+    // transaction and taking down every other row's commit (and the CSV file as a
+    // whole) with it.
     public FaqBulkUploadResult bulkImport(MultipartFile file) {
         List<FaqBulkUploadResult.RowError> errors = new ArrayList<>();
         int created = 0;
+        int updated = 0;
+        boolean anyRows = false;
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+        try (BufferedReader reader = openCsvReader(file);
              CSVParser csvParser = CSVFormat.DEFAULT.builder()
                      .setHeader()
                      .setSkipHeaderRecord(true)
                      .setTrim(true)
                      .setIgnoreEmptyLines(true)
+                     .setIgnoreHeaderCase(true)
                      .build()
                      .parse(reader)) {
+
+            validateHeaders(csvParser.getHeaderNames());
+
+            int rowNumber = 1;
+            for (CSVRecord csvRecord : csvParser) {
+                anyRows = true;
+                rowNumber++;
+                String question = extractField(csvRecord, QUESTION_COLUMN);
+                String answer = extractField(csvRecord, ANSWER_COLUMN);
+                String validationError = validateRow(question, answer);
+                if (validationError != null) {
+                    errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
+                    continue;
+                }
+                switch (saveOrUpdateRow(question, answer, rowNumber, errors)) {
+                    case CREATED -> created++;
+                    case UPDATED -> updated++;
+                    case FAILED -> { /* error already recorded */ }
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
+        }
+
+        if (!anyRows) {
+            throw new IllegalArgumentException("The provided CSV has no data rows to import.");
+        }
+
+        return new FaqBulkUploadResult(created, updated, errors.size(), errors);
+    }
+
+    // Parses the same CSV shape as bulkImport() but only previews it: every row is
+    // reported back with its own missing-question/missing-answer flags instead of
+    // being saved, so the caller can show a "ready vs. needs attention" preview
+    // before committing to the actual import.
+    public FaqInspectionResult inspectBulkImport(MultipartFile file, FaqRowStatus statusFilter, Pageable pageable) {
+        List<FaqInspectionRow> allRows = new ArrayList<>();
+
+        try (BufferedReader reader = openCsvReader(file);
+             CSVParser csvParser = CSVFormat.DEFAULT.builder()
+                     .setHeader()
+                     .setSkipHeaderRecord(true)
+                     .setTrim(true)
+                     .setIgnoreEmptyLines(true)
+                     .setIgnoreHeaderCase(true)
+                     .build()
+                     .parse(reader)) {
+
+            validateHeaders(csvParser.getHeaderNames());
+            validateNoExtraHeaders(csvParser.getHeaderNames());
 
             int rowNumber = 1;
             for (CSVRecord csvRecord : csvParser) {
                 rowNumber++;
-                String question = csvRecord.isMapped("question") ? csvRecord.get("question") : "";
-                String answer = csvRecord.isMapped("answer") ? csvRecord.get("answer") : "";
-                String validationError = validateRow(question, answer);
-                if (validationError != null) {
-                    errors.add(new FaqBulkUploadResult.RowError(rowNumber, validationError));
-                } else {
-                    created += saveRow(question, answer, rowNumber, errors);
-                }
+                String question = extractField(csvRecord, QUESTION_COLUMN);
+                String answer = extractField(csvRecord, ANSWER_COLUMN);
+                boolean questionMissing = !StringUtils.hasText(question);
+                boolean answerMissing = !StringUtils.hasText(answer);
+                FaqRowStatus status = (questionMissing || answerMissing) ? FaqRowStatus.NEEDS_ATTENTION : FaqRowStatus.READY;
+                allRows.add(new FaqInspectionRow(
+                        rowNumber, blankToNull(question), blankToNull(answer), questionMissing, answerMissing, status));
             }
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Could not parse CSV file: " + e.getMessage());
+            throw new IllegalArgumentException(CSV_READ_ERROR_MESSAGE);
         }
 
-        return new FaqBulkUploadResult(created, errors.size(), errors);
+        if (allRows.isEmpty()) {
+            throw new IllegalArgumentException("The provided CSV has no data rows to inspect.");
+        }
+
+        int needsAttentionCount = (int) allRows.stream().filter(row -> row.status() == FaqRowStatus.NEEDS_ATTENTION).count();
+        FaqInspectionSummary summary = new FaqInspectionSummary(
+                allRows.size(), allRows.size() - needsAttentionCount, needsAttentionCount);
+
+        List<FaqInspectionRow> filteredRows = statusFilter == null
+                ? allRows
+                : allRows.stream().filter(row -> row.status() == statusFilter).toList();
+
+        return new FaqInspectionResult(summary, PageResponse.from(paginate(filteredRows, pageable)));
+    }
+
+    private static final List<String> REQUIRED_CSV_HEADERS = List.of(QUESTION_COLUMN, ANSWER_COLUMN);
+
+    // Excel/Sheets CSV exports commonly prepend a UTF-8 BOM, which decodes to a
+    // leading U+FEFF character that would otherwise glue itself onto the first
+    // header name (e.g. "question" becoming "<BOM>question") and make a
+    // legitimately-headed file look headerless to validateHeaders().
+    private BufferedReader openCsvReader(MultipartFile file) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+        reader.mark(1);
+        if (reader.read() != 0xFEFF) {
+            reader.reset();
+        }
+        return reader;
+    }
+
+    // Without this check, a CSV missing its header row (or with unrecognized column
+    // names) has its first data row silently consumed as the header by the CSV
+    // parser, producing a bogus column mapping instead of a clear error.
+    private void validateHeaders(List<String> headerNames) {
+        boolean missingAny = REQUIRED_CSV_HEADERS.stream()
+                .anyMatch(required -> headerNames.stream().noneMatch(h -> h != null && h.trim().equalsIgnoreCase(required)));
+        if (missingAny) {
+            throw new IllegalArgumentException(
+                    "The provided CSV is missing required headers. Expected columns: question, answer.");
+        }
+    }
+
+    // Only enforced by inspectBulkImport(): unlike bulkImport(), which deliberately
+    // tolerates real-world spreadsheet exports with extra columns (see
+    // bulkImport_capitalizedHeadersWithExtraColumn_stillMapsQuestionAndAnswer), the
+    // inspect endpoint exists specifically to validate a CSV's shape before import, so a
+    // column beyond question/answer must be rejected rather than silently ignored.
+    private void validateNoExtraHeaders(List<String> headerNames) {
+        boolean hasUnexpectedHeader = headerNames.stream()
+                .anyMatch(h -> h == null || REQUIRED_CSV_HEADERS.stream().noneMatch(required -> h.trim().equalsIgnoreCase(required)));
+        if (hasUnexpectedHeader || headerNames.size() != REQUIRED_CSV_HEADERS.size()) {
+            throw new IllegalArgumentException(
+                    "Invalid CSV format. The file must contain only the following columns: question, answer.");
+        }
+    }
+
+    private String extractField(CSVRecord csvRecord, String column) {
+        return csvRecord.isMapped(column) ? csvRecord.get(column) : "";
+    }
+
+    private String blankToNull(String value) {
+        return StringUtils.hasText(value) ? value : null;
+    }
+
+    private Page<FaqInspectionRow> paginate(List<FaqInspectionRow> items, Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return new PageImpl<>(items, pageable, items.size());
+        }
+        int start = (int) pageable.getOffset();
+        if (start >= items.size()) {
+            return new PageImpl<>(List.of(), pageable, items.size());
+        }
+        int end = Math.min(start + pageable.getPageSize(), items.size());
+        return new PageImpl<>(items.subList(start, end), pageable, items.size());
     }
 
     private String validateRow(String question, String answer) {
-        if (!StringUtils.hasText(question)) return "question is blank";
-        if (!StringUtils.hasText(answer)) return "answer is blank";
+        if (!StringUtils.hasText(question)) return "Question is required.";
+        if (!StringUtils.hasText(answer)) return "Answer is required.";
         return null;
     }
 
-    private int saveRow(String question, String answer, int rowNumber, List<FaqBulkUploadResult.RowError> errors) {
+    private enum RowOutcome { CREATED, UPDATED, FAILED }
+
+    private RowOutcome saveOrUpdateRow(String question, String answer, int rowNumber, List<FaqBulkUploadResult.RowError> errors) {
         try {
-            Faq faq = Faq.builder()
-                    .id(UUID.randomUUID().toString())
-                    .question(sanitize(question))
-                    .answer(sanitize(answer))
-                    .active(true)
-                    .build();
-            faq = faqRepository.save(faq);
-            faqEmbeddingService.embedAndStore(faq);
-            return 1;
+            UpsertOutcome outcome = upsertByQuestion(question, answer);
+            faqEmbeddingService.embedAndStore(outcome.faq());
+            return outcome.created() ? RowOutcome.CREATED : RowOutcome.UPDATED;
         } catch (Exception e) {
-            log.warn("Failed to create FAQ at row {}: {}", rowNumber, e.getMessage());
-            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "failed to save: " + e.getMessage()));
-            return 0;
+            log.warn("Failed to save FAQ at row {}: {}", rowNumber, e.getMessage());
+            errors.add(new FaqBulkUploadResult.RowError(rowNumber, "This row could not be saved. Please check the data and try again."));
+            return RowOutcome.FAILED;
         }
+    }
+
+    private record UpsertOutcome(Faq faq, boolean created) {}
+
+    // Shared by single-FAQ creation and bulk CSV import: a question that matches an
+    // existing FAQ (case- and punctuation-insensitively, see findByNormalizedQuestion)
+    // is updated in place rather than duplicated. If two requests for the same new
+    // question race past the lookup at once, the unique index from
+    // V61__add_faq_question_unique_index.sql rejects the loser's insert (surfaced via
+    // the flush below) instead of allowing a duplicate row; that failure is already
+    // translated into a 409 by GlobalExceptionHandler/GraphQlExceptionResolver.
+    private UpsertOutcome upsertByQuestion(String question, String answer) {
+        String sanitizedQuestion = sanitize(question);
+        Faq existing = faqRepository.findByNormalizedQuestion(sanitizedQuestion).orElse(null);
+
+        if (existing != null) {
+            existing.setAnswer(sanitize(answer));
+            return new UpsertOutcome(faqRepository.save(existing), false);
+        }
+
+        Faq faq = Faq.builder()
+                .id(UUID.randomUUID().toString())
+                .question(sanitizedQuestion)
+                .answer(sanitize(answer))
+                .active(true)
+                .build();
+        return new UpsertOutcome(faqRepository.saveAndFlush(faq), true);
     }
 
     // Registers the embedding update to run after the current transaction commits,
@@ -186,12 +357,27 @@ public class FaqService {
 
     private Faq findOrThrow(String id) {
         return faqRepository.findById(id)
-                .orElseThrow(() -> new ArmsAuthException("FAQ not found: " + id, 404));
+                .orElseThrow(() -> new ArmsAuthException("FAQ not found.", 404));
     }
+
+    private static final Pattern CSV_FORMULA_PREFIX = Pattern.compile("^[=+\\-@]");
 
     private String sanitize(String input) {
         if (input == null) return null;
         // Strip HTML/script tags to prevent XSS stored in FAQ content
-        return input.replaceAll("<[^>]*>", "").trim();
+        String cleaned = input.replaceAll("<[^>]*>", "").trim();
+        // Neutralize CSV/formula injection: if this text is ever exported back to CSV/XLSX
+        // (e.g. a future FAQ export, or an admin backup dump) and opened in Excel/Sheets/
+        // LibreOffice, a leading =, +, -, or @ would be interpreted as a live formula rather
+        // than literal text — letting attacker-supplied FAQ content run formulas (data
+        // exfiltration via HYPERLINK, or legacy DDE command execution) on whoever opens
+        // that export. Prefixing with a single quote is the standard mitigation:
+        // spreadsheet applications treat a leading apostrophe as "force text". (A leading
+        // tab/CR is also a known trigger, but trim() above already removes those, so they
+        // can never reach this check.)
+        if (CSV_FORMULA_PREFIX.matcher(cleaned).find()) {
+            cleaned = "'" + cleaned;
+        }
+        return cleaned;
     }
 }

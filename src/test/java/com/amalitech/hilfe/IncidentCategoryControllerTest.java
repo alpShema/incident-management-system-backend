@@ -5,6 +5,9 @@ import com.amalitech.hilfe.dto.*;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
 import com.amalitech.hilfe.exceptions.GlobalExceptionHandler;
 import com.amalitech.hilfe.models.RoleCode;
+import com.amalitech.hilfe.security.Http401AuthenticationEntryPoint;
+import com.amalitech.hilfe.security.JwtAuthenticationFilter;
+import com.amalitech.hilfe.security.SecurityConfig;
 import com.amalitech.hilfe.services.IncidentCategoryService;
 import com.amalitech.hilfe.services.JwtTokenService;
 import com.amalitech.hilfe.services.TokenService;
@@ -26,6 +29,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -34,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(IncidentCategoryController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class, Http401AuthenticationEntryPoint.class})
 @TestPropertySource(properties = "cors.allowed-origins=http://localhost")
 class IncidentCategoryControllerTest {
 
@@ -45,6 +49,10 @@ class IncidentCategoryControllerTest {
 
     private JwtTokenService.AuthPrincipal adminPrincipal() {
         return new JwtTokenService.AuthPrincipal("admin-1", "admin@test.com", RoleCode.ADMIN);
+    }
+
+    private JwtTokenService.AuthPrincipal adminAgentPrincipal() {
+        return new JwtTokenService.AuthPrincipal("admin-agent-1", "admin-agent@test.com", RoleCode.ADMIN_AGENT);
     }
 
     private IncidentCategoryResponse stubCategory() {
@@ -66,7 +74,7 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listCategories_returns200WithList() throws Exception {
-        when(categoryService.listCategories(any(), any(), any()))
+        when(categoryService.listCategories(any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
 
         mvc.perform(get("/incident-categories")
@@ -79,12 +87,40 @@ class IncidentCategoryControllerTest {
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
+    @Test
+    void listCategories_withNoFilter_passesNullFiltersToService() throws Exception {
+        when(categoryService.listCategories(isNull(), isNull(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-categories")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
+        verify(categoryService).listCategories(isNull(), isNull(), any(), any());
+    }
+
+    @Test
+    void listCategories_withHasActiveTopicsFilter_passesHasActiveTopicsToService() throws Exception {
+        when(categoryService.listCategories(isNull(), eq(true), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/incident-categories?hasActiveTopics=true")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        verify(categoryService).listCategories(isNull(), eq(true), any(), any());
+    }
+
     // ── GET /incident-categories/all ─────────────────────────────────────────
 
     @Test
     void listAllCategories_adminWithNoFilter_returns200WithAllCategories() throws Exception {
         IncidentCategoryResponse inactive = new IncidentCategoryResponse("cat-2", "Old", "desc", null, false, null);
-        when(categoryService.listAllCategories(any(), any(), any()))
+        when(categoryService.listAllCategories(any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(stubCategory(), inactive), PageRequest.of(0, 20), 2));
 
         mvc.perform(get("/incident-categories/all")
@@ -99,7 +135,7 @@ class IncidentCategoryControllerTest {
 
     @Test
     void listAllCategories_withStatusFilter_passesStatusToService() throws Exception {
-        when(categoryService.listAllCategories(eq(false), any(), any()))
+        when(categoryService.listAllCategories(eq(Boolean.FALSE), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mvc.perform(get("/incident-categories/all?status=false")
@@ -108,7 +144,112 @@ class IncidentCategoryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalElements").value(0));
 
-        verify(categoryService).listAllCategories(eq(false), any(), any());
+        verify(categoryService).listAllCategories(eq(Boolean.FALSE), any(), any(), any());
+    }
+
+    @Test
+    void listAllCategories_withHasActiveTopicsFilter_passesHasActiveTopicsToService() throws Exception {
+        when(categoryService.listAllCategories(any(), eq(Boolean.TRUE), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/incident-categories/all?hasActiveTopics=true")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        verify(categoryService).listAllCategories(any(), eq(Boolean.TRUE), any(), any());
+    }
+
+    @Test
+    void listAllCategories_withBothFilters_passesBothToService() throws Exception {
+        when(categoryService.listAllCategories(eq(Boolean.TRUE), eq(Boolean.TRUE), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mvc.perform(get("/incident-categories/all?status=true&hasActiveTopics=true")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_ADMIN")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(0));
+
+        verify(categoryService).listAllCategories(eq(Boolean.TRUE), eq(Boolean.TRUE), any(), any());
+    }
+
+    @Test
+    void listAllCategories_adminAgent_returns200WithAllCategories() throws Exception {
+        when(categoryService.listAllCategories(any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-categories/all")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminAgentPrincipal(), null, List.of(() -> "ROLE_ADMIN_AGENT")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void listAllCategories_agentRole_returns403() throws Exception {
+        mvc.perform(get("/incident-categories/all")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_AGENT")))))
+                .andExpect(status().isForbidden());
+    }
+
+    // ── GET /incident-categories/by-department ───────────────────────────────
+
+    @Test
+    void listCategoriesByDepartment_validRequest_returns200WithList() throws Exception {
+        when(categoryService.listCategoriesByDepartment(eq("dept-1"), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-categories/by-department?departmentId=dept-1")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Incident categories retrieved successfully"))
+                .andExpect(jsonPath("$.data.items[0].id").value("cat-1"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void listCategoriesByDepartment_missingDepartmentId_returns400() throws Exception {
+        mvc.perform(get("/incident-categories/by-department")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listCategoriesByDepartment_departmentNotFound_returns404() throws Exception {
+        when(categoryService.listCategoriesByDepartment(eq("missing"), any(), any(), any()))
+                .thenThrow(new ArmsAuthException("Department not found", 404));
+
+        mvc.perform(get("/incident-categories/by-department?departmentId=missing")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Department not found"));
+    }
+
+    @Test
+    void listCategoriesByDepartment_withoutDepartmentReadAuthority_returns403() throws Exception {
+        mvc.perform(get("/incident-categories/by-department?departmentId=dept-1")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "ROLE_AGENT")))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listCategoriesByDepartment_withStatusFilter_passesStatusToService() throws Exception {
+        when(categoryService.listCategoriesByDepartment(eq("dept-1"), eq(Boolean.TRUE), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(stubCategory()), PageRequest.of(0, 20), 1));
+
+        mvc.perform(get("/incident-categories/by-department?departmentId=dept-1&status=true")
+                        .with(authentication(new UsernamePasswordAuthenticationToken(
+                                adminPrincipal(), null, List.of(() -> "department.read")))))
+                .andExpect(status().isOk());
+
+        verify(categoryService).listCategoriesByDepartment(eq("dept-1"), eq(Boolean.TRUE), any(), any());
     }
 
     // ── POST /incident-categories ─────────────────────────────────────────────
@@ -193,7 +334,7 @@ class IncidentCategoryControllerTest {
                                 new UpdateIncidentCategoryRequest("Facility", "Updated description", "dept-1")))
                         .with(authentication(auth)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("A record with this value already exists"));
+                .andExpect(jsonPath("$.message").value("A record with this value already exists. Please use a different value."));
     }
 
     // ── PATCH /incident-categories/{id}/status ─────────────────────────────

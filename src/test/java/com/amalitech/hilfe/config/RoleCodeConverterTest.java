@@ -15,6 +15,7 @@ class RoleCodeConverterTest {
         assertThat(converter.convert("CLIENT")).isEqualTo(RoleCode.CLIENT);
         assertThat(converter.convert("AGENT")).isEqualTo(RoleCode.AGENT);
         assertThat(converter.convert("ADMIN")).isEqualTo(RoleCode.ADMIN);
+        assertThat(converter.convert("ADMIN_AGENT")).isEqualTo(RoleCode.ADMIN_AGENT);
     }
 
     @Test
@@ -27,6 +28,6 @@ class RoleCodeConverterTest {
     void convert_invalidCode_throwsIllegalArgumentExceptionWithMessage() {
         assertThatThrownBy(() -> converter.convert("INVALID"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid role code: 'INVALID'");
+                .hasMessageContaining("'INVALID' is not a valid role");
     }
 }

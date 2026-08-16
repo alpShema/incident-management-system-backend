@@ -1,6 +1,7 @@
 package com.amalitech.hilfe.services;
 
 import com.amalitech.hilfe.config.ArmsProperties;
+import com.amalitech.hilfe.constants.ApiMessages;
 import com.amalitech.hilfe.dto.ArmsEmployeeInfo;
 import com.amalitech.hilfe.dto.ArmsUserInfo;
 import com.amalitech.hilfe.exceptions.ArmsAuthException;
@@ -27,6 +28,9 @@ public class ArmsClientImpl implements ArmsClient {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String API_KEY_HEADER = "x-api-key";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    private static final String AUTH_SERVICE_UNAVAILABLE_MESSAGE =
+            "The authentication service is temporarily unavailable. Please try again shortly.";
 
     private static final String GET_EMPLOYEE_ACTIVE_INFO_QUERY = """
                 query GetEmployeeActiveInfo($userId: ID!) {
@@ -152,7 +156,7 @@ public class ArmsClientImpl implements ArmsClient {
                 UserByIdResponse.class
             );
             log.debug("ARMS getUserById response for user {}: {}", userId, response);
-            return toArmsUserInfo(requireUserById(response, userId));
+            return toArmsUserInfo(requireUserById(response));
         } catch (HttpClientErrorException | HttpServerErrorException | ResourceAccessException exception) {
             throw handleApiKeyRequestFailure("user lookup request", exception);
         }
@@ -191,11 +195,11 @@ public class ArmsClientImpl implements ArmsClient {
     private EmployeeActiveInfo requireEmployeeActiveInfo(EmployeeActiveInfoResponse response, String userId) {
         if (response != null && response.errors() != null && !response.errors().isEmpty()) {
             log.warn("ARMS rejected token for user {}: {}", userId, response.errors().get(0).message());
-            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
+            throw new ArmsAuthException(ApiMessages.SESSION_EXPIRED, 401);
         }
         if (response == null || response.data() == null || response.data().activeInfo() == null) {
             log.warn("ARMS returned no employee data for user {}", userId);
-            throw new ArmsAuthException("Invalid or expired ARMS token", 401);
+            throw new ArmsAuthException(ApiMessages.SESSION_EXPIRED, 401);
         }
         return response.data().activeInfo();
     }
@@ -205,14 +209,14 @@ public class ArmsClientImpl implements ArmsClient {
             || response.data() == null
             || response.data().listEmployeeInfosWithFilters() == null
             || response.data().listEmployeeInfosWithFilters().employeeInfo() == null) {
-            throw new ArmsAuthException("ARMS returned empty employee list");
+            throw new ArmsAuthException("Unable to retrieve the employee list at this time. Please try again later.");
         }
         return response.data().listEmployeeInfosWithFilters().employeeInfo();
     }
 
-    private UserByIdRaw requireUserById(UserByIdResponse response, String userId) {
+    private UserByIdRaw requireUserById(UserByIdResponse response) {
         if (response == null || response.data() == null || response.data().user() == null) {
-            throw new ArmsAuthException("User not found in ARMS: " + userId);
+            throw new ArmsAuthException("The requested user could not be found.");
         }
         return response.data().user();
     }
@@ -220,8 +224,8 @@ public class ArmsClientImpl implements ArmsClient {
     private ArmsUserInfo toArmsUserInfo(EmployeeActiveInfo activeInfo, EmployeeContact contact) {
         EmployeeActiveUser user = activeInfo.user();
         String email = firstNonBlank(
-                contact != null ? contact.personalEmail() : null,
                 contact != null ? contact.workEmail() : null,
+                contact != null ? contact.personalEmail() : null,
                 user != null ? user.email() : null
         );
         return new ArmsUserInfo(
@@ -264,7 +268,7 @@ public class ArmsClientImpl implements ArmsClient {
         try {
             String[] parts = token.split("\\.");
             if (parts.length < 2) {
-                throw new ArmsAuthException("Invalid ARMS token: expected JWT format", 401);
+                throw new ArmsAuthException(ApiMessages.SESSION_UNVERIFIABLE, 401);
             }
 
             byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]); // NOSONAR java:S5659 - reading user_id from ARMS token only; signature verification is the ARMS server's responsibility
@@ -272,44 +276,41 @@ public class ArmsClientImpl implements ArmsClient {
             String userId = claims.path("user_id").asText(null);
 
             if (userId == null || userId.isBlank()) {
-                throw new ArmsAuthException("ARMS token is missing user_id claim", 401);
+                throw new ArmsAuthException(ApiMessages.SESSION_UNVERIFIABLE, 401);
             }
             return userId;
         } catch (ArmsAuthException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new ArmsAuthException("Failed to decode ARMS token", 401, exception);
+            throw new ArmsAuthException(ApiMessages.SESSION_UNVERIFIABLE, 401, exception);
         }
     }
 
     private ArmsAuthException handleTokenRequestFailure(String userId, RuntimeException exception) {
         if (exception instanceof HttpClientErrorException clientErrorException) {
             log.error("ARMS rejected request for user {}: {}", userId, clientErrorException.getMessage());
-            return new ArmsAuthException("Invalid or expired ARMS token", 401, clientErrorException);
+            return new ArmsAuthException(ApiMessages.SESSION_EXPIRED, 401, clientErrorException);
         }
-        if (exception instanceof HttpServerErrorException serverErrorException) {
-            log.error("ARMS service error: {}", serverErrorException.getMessage());
-            return new ArmsAuthException("ARMS service is unavailable", serverErrorException);
-        }
-
-        ResourceAccessException resourceAccessException = (ResourceAccessException) exception;
-        log.error("ARMS service unreachable: {}", resourceAccessException.getMessage());
-        return new ArmsAuthException("ARMS service is unreachable", resourceAccessException);
+        return handleServiceUnreachable(exception);
     }
 
     private ArmsAuthException handleApiKeyRequestFailure(String requestName, RuntimeException exception) {
         if (exception instanceof HttpClientErrorException clientErrorException) {
             log.error("ARMS rejected {}: {}", requestName, clientErrorException.getMessage());
-            return new ArmsAuthException("ARMS rejected the " + requestName, clientErrorException);
+            return new ArmsAuthException("The request could not be completed. Please try again later.", clientErrorException);
         }
+        return handleServiceUnreachable(exception);
+    }
+
+    private ArmsAuthException handleServiceUnreachable(RuntimeException exception) {
         if (exception instanceof HttpServerErrorException serverErrorException) {
             log.error("ARMS service error: {}", serverErrorException.getMessage());
-            return new ArmsAuthException("ARMS service is unavailable", serverErrorException);
+            return new ArmsAuthException(AUTH_SERVICE_UNAVAILABLE_MESSAGE, serverErrorException);
         }
 
         ResourceAccessException resourceAccessException = (ResourceAccessException) exception;
         log.error("ARMS service unreachable: {}", resourceAccessException.getMessage());
-        return new ArmsAuthException("ARMS service is unreachable", resourceAccessException);
+        return new ArmsAuthException(AUTH_SERVICE_UNAVAILABLE_MESSAGE, resourceAccessException);
     }
 
     private record GraphQlRequest(String query, Object variables) {
