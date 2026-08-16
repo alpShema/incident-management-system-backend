@@ -1,6 +1,6 @@
-# Hilfe
+# Incident management
 
-HILFE is a help-desk / incident-ticketing backend for Amalitech Services. It allows regular users (employees) to raise incident tickets, which are routed to agents for resolution. Admins configure the system (agent groups, incident types, severities, statuses, locations) and govern what agents can do. User identity is **federated to an external ARMS SSO** — the system does not manage its own credential store for login.
+Incident management system is a help-desk / incident-ticketing backend for Amalitech Services. It allows regular users (employees) to raise incident tickets, which are routed to agents for resolution. Admins configure the system (agent groups, incident types, severities, statuses, locations) and govern what agents can do. User identity is **federated to an external ARMS SSO** — the system does not manage its own credential store for login.
 
 **Core domain objects:** Incident · IncidentType · Agent · AgentGroup · Status · Severity · Location · Message · Media · IncidentLog · IncidentReportLog
 
